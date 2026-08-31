@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.channel.api.ApprovalPrompt;
@@ -21,6 +22,7 @@ import com.amsha.common.util.LogUtil;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
+import org.apache.camel.component.telegram.model.OutgoingAudioMessage;
 import org.apache.camel.component.telegram.model.OutgoingTextMessage;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -33,6 +35,24 @@ public class TelegramChannelSender implements ChannelSender {
 
     private static final String TELEGRAM_BOTS_ENDPOINT = "telegram:bots";
     private static final int DEFAULT_MAX_LENGTH = 4096;
+
+    /**
+     * MIME type → safe file extension. Only the formats V1 can emit are meaningful, but a few
+     * common audio types are recognised so a future provider that returns a different format still
+     * gets a sane, non-executable attachment name. Unknown or blank MIME falls back to {@code .wav}.
+     */
+    private static final Map<String, String> MIME_TO_EXT = Map.ofEntries(
+            Map.entry("audio/wav", ".wav"),
+            Map.entry("audio/x-wav", ".wav"),
+            Map.entry("audio/wave", ".wav"),
+            Map.entry("audio/mpeg", ".mp3"),
+            Map.entry("audio/mp3", ".mp3"),
+            Map.entry("audio/ogg", ".ogg"),
+            Map.entry("audio/opus", ".opus"),
+            Map.entry("audio/flac", ".flac"),
+            Map.entry("audio/aac", ".aac"),
+            Map.entry("audio/x-m4a", ".m4a"),
+            Map.entry("audio/webm", ".weba"));
 
     private final ProducerTemplate producerTemplate;
     private final TelegramMarkdownV2Renderer renderer;
@@ -109,6 +129,56 @@ public class TelegramChannelSender implements ChannelSender {
         log.infof("TELEGRAM-SEND to=%s textLength=%d", recipient.channelId(), text != null ? text.length() : 0);
 
         sendRawToChatId(recipient.channelId(), text); // ← was platformId()
+    }
+
+    /**
+     * Delivers synthesized speech as a Telegram audio message, separate from any text reply.
+     *
+     * <p>Telegram's {@link OutgoingAudioMessage} has no caption field, so the contract's "separate
+     * message" expectation is exactly its native shape: the audio is sent on its own and the text
+     * answer (if any) is delivered independently by the caller. The file extension is derived purely
+     * from the declared {@code mimeType}; the caller-supplied {@code fileName} is untrusted and never
+     * used, preventing a crafted name from influencing the attachment.
+     *
+     * <p>Returns {@code false} (never throws) when the recipient, chat, or payload is invalid, or
+     * when the Camel send fails, so the caller's text fallback always applies.
+     */
+    @Override
+    public boolean sendAudio(ChannelUser recipient, byte[] audio, String mimeType, String fileName) {
+        if (recipient == null
+                || recipient.channelId() == null
+                || recipient.channelId().isBlank()) {
+            log.warn("TELEGRAM-SENDAUDIO: recipient or channelId is null - dropping");
+            return false;
+        }
+        if (audio == null || audio.length == 0) {
+            log.warn("TELEGRAM-SENDAUDIO: empty audio payload - dropping");
+            return false;
+        }
+        String chatId = recipient.channelId();
+        String safeName = deriveAudioFileName(mimeType);
+        OutgoingAudioMessage msg = new OutgoingAudioMessage();
+        msg.setAudio(audio);
+        msg.setFilenameWithExtension(safeName);
+        try {
+            log.infof("TELEGRAM-SENDAUDIO to=%s bytes=%d name=%s", chatId, audio.length, safeName);
+            producerTemplate.sendBodyAndHeader(TELEGRAM_BOTS_ENDPOINT, msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+            return true;
+        } catch (Exception e) {
+            log.warnf("TELEGRAM-SENDAUDIO failed for chat %s: %s", chatId, LogUtil.rootMessage(e));
+            return false;
+        }
+    }
+
+    /** Derives a safe attachment name from the declared MIME type; untrusted fileName is ignored. */
+    private static String deriveAudioFileName(String mimeType) {
+        if (mimeType != null && !mimeType.isBlank()) {
+            String ext = MIME_TO_EXT.get(mimeType.trim().toLowerCase(Locale.ROOT));
+            if (ext != null) {
+                return "amsha-reply" + ext;
+            }
+        }
+        return "amsha-reply.wav";
     }
 
     /**

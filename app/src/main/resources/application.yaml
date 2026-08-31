@@ -634,6 +634,21 @@ amsha:
     max-bytes: ${AMSHA_STT_MAX_BYTES:26214400}
     max-transcript-chars: ${AMSHA_STT_MAX_TRANSCRIPT_CHARS:12000}
     ffmpeg-path: ${AMSHA_STT_FFMPEG_PATH:ffmpeg}
+  tts:
+    # P8 speech synthesis (Issue 12). Output-only; disabled by default. V1 supports only the
+    # directly verified WAV format from the OMLX Qwen3-TTS model — any other response_format is
+    # reported UNSUPPORTED rather than attempted. Never shares routing with P7 audio input.
+    enabled: ${AMSHA_TTS_ENABLED:false}
+    model: ${AMSHA_TTS_MODEL:Qwen3-TTS-12Hz-1.7B-Base-bf16}
+    voice: ${AMSHA_TTS_VOICE:}
+    response-format: ${AMSHA_TTS_RESPONSE_FORMAT:wav}
+    timeout: ${AMSHA_TTS_TIMEOUT:PT120S}
+    max-input-chars: ${AMSHA_TTS_MAX_INPUT_CHARS:1200}
+    max-bytes: ${AMSHA_TTS_MAX_BYTES:8388608}
+    max-concurrent: ${AMSHA_TTS_MAX_CONCURRENT:1}
+    # Resolved output mode for inbound-audio turns when the user gives no explicit directive.
+    # One of TEXT_ONLY | TEXT_AND_AUDIO | AUDIO_ONLY. Default TEXT_ONLY (fail closed).
+    default-output-mode: ${AMSHA_TTS_DEFAULT_OUTPUT_MODE:TEXT_ONLY}
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}

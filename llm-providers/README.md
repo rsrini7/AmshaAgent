@@ -107,3 +107,33 @@ governed media download and before the Whisper request** — never inside the Te
   in a `finally` block. ffmpeg stderr is drained on a background thread to avoid a pipe deadlock.
 * If `ffmpeg` is missing or the transcode fails, the turn degrades safely to its text fallback
   rather than sending an undecodable payload to Whisper.
+
+## Governed Speech Synthesis (P8 / Issue 12) — DISABLED by default
+
+`OmlxSpeechSynthesisProvider` implements the `SpeechSynthesisPort` execution seam for
+text-to-speech served by OMLX (Qwen3-TTS). It is output-only: never a chat-model
+capability, never an `AUDIO` route profile, never persisted, and never shares routing
+with P7 audio input. V1 only emits the directly verified WAV format from the OMLX
+Qwen3-TTS model — any other `response_format` is reported `UNSUPPORTED` rather than
+attempted. All egress is governed through `GovernedTransportService` with HITL never
+bypassed. The actor is resolved from the session (`WorkspaceContext.getUserIdOrUnknown()`).
+
+| Property | Environment variable | Default |
+|---|---|---|
+| `amsha.tts.enabled` | `AMSHA_TTS_ENABLED` | `false` |
+| `amsha.tts.model` | `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` |
+| `amsha.tts.voice` | `AMSHA_TTS_VOICE` | *(empty — field omitted)* |
+| `amsha.tts.response-format` | `AMSHA_TTS_RESPONSE_FORMAT` | `wav` |
+| `amsha.tts.timeout` | `AMSHA_TTS_TIMEOUT` | `PT120S` |
+| `amsha.tts.max-input-chars` | `AMSHA_TTS_MAX_INPUT_CHARS` | `1200` |
+| `amsha.tts.max-bytes` | `AMSHA_TTS_MAX_BYTES` | `8388608` |
+| `amsha.tts.max-concurrent` | `AMSHA_TTS_MAX_CONCURRENT` | `1` |
+| `amsha.tts.default-output-mode` | `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` |
+
+The OMLX API key and base URL are reused from `AMSHA_OMLX_API_KEY` and
+`AMSHA_OMLX_BASE_URL` (the key is optional — `not-needed` is treated as absent). The
+response stream is capped at `amsha.tts.max-bytes` by `BoundedAudioSubscriber`, which
+cancels upstream the moment the bound is exceeded (no post-allocation check). The
+`default-output-mode` and `max-input-chars` keys are consumed by `amsha-core`
+(`SpeechOutputPolicy` / `SpeechReplyService`); see the core module README for the
+resolution precedence.

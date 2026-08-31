@@ -110,20 +110,26 @@ P7 therefore remains open pending repeatable live Telegram evidence showing
 status captured for any fallback case. This observation does not change the ADR boundary or
 authorize an unmanaged provider/model dependency.
 
-## P8 Speech output decision (2026-08-31)
+## P8 Speech output decision (2026-08-30)
 
 Speech synthesis is a separate, optional output capability and is not an
 extension of P7 audio-input routing. The reasoning model continues to produce
 the final text answer; a separate `SpeechSynthesisPort` may render that answer
 as bounded audio after reasoning completes.
 
-The ownership and model roles are fixed:
+**Status: Proposed — implemented, awaiting the live Telegram ↔ OMLX round-trip exit gate.**
+All build-time and unit/architecture gates pass (see the evidence report). The
+one open item is a live, credentialed round-trip that only a running Telegram
+bot plus a reachable OMLX Qwen3-TTS endpoint can confirm.
+
+The decision fixes ownership and model roles:
 
 - `SpeechSynthesisPort`, `SpeechSynthesisRequest`, and
   `SpeechSynthesisResult` belong to `llm-provider-api` under
   `com.amsha.llm.api.audio`.
 - The OMLX Qwen3-TTS adapter belongs to `llm-providers` and all provider egress
-  uses `GovernedTransportService` with `OutboundPurpose.PROVIDER_API_CALL`.
+  uses `GovernedTransportService` with `OutboundPurpose.PROVIDER_API_CALL`
+  (`preApproved=false`; HITL is never bypassed).
 - Output-mode resolution and speakable-text projection belong to `amsha-core`.
 - Channel delivery uses the channel API; Telegram maps the bounded result to
   Camel `OutgoingAudioMessage`.
@@ -132,29 +138,39 @@ Qwen3-TTS is output-only. It must never be added to the P7 model-profile or
 `AUDIO` chat-routing matrix. Whisper remains input-only, and Nemotron remains
 retired because OMLX cannot load its `nemotron_voicechat` model type.
 
-V1 supports `TEXT_ONLY`, `TEXT_AND_AUDIO`, and `AUDIO_ONLY`. The default is
-`TEXT_ONLY`; an explicit current-turn request overrides the configured default.
-Setting `AMSHA_TTS_DEFAULT_OUTPUT_MODE=TEXT_AND_AUDIO` enables automatic text
-plus audio for successfully transcribed audio turns. No persisted user
-preference is introduced in V1.
+### Invariants (authoritative spec)
 
-Speech is an enhancement and must fail closed to the existing text answer. A
-disabled, unsupported, oversized, timed-out, policy-denied, HITL-required, or
-failed synthesis, or a channel that cannot deliver audio, must never fail the
-agent turn. Text and audio are separate Telegram messages; V1 does not promise
-Telegram voice bubbles or streaming audio.
+The full invariant set, output-policy precedence, slab plan, configuration, and
+acceptance criteria live in
+[`Issue 12`](../../.scratch/lc4j-capability-adoption/issues/12-p8-speech-synthesis-output.md)
+§2–§6. The binding invariants are:
 
-The port and adapter enforce bounded text, response bytes, timeout, and
-concurrency. Provider and channel I/O execute off the Vert.x event loop, use
-the actual `Context.isOnEventLoopThread()` assertion, and emit only categorical
-payload-safe metrics. The final answer is projected to speakable plain text;
-reasoning traces, tool output, raw transcripts, Markdown syntax, and internal
-metadata are never synthesized.
+1. Execution port, not persistence — no SQLite/PostgreSQL/filesystem state.
+2. Amsha-owned seam — core consumes only the port via `Instance<SpeechSynthesisPort>`.
+3. Governed provider egress with `preApproved=false`; HITL never bypassed.
+4. Fail closed to text for every disabled/unsupported/oversized/timed-out/denied/failed case.
+5. Bounded memory, time, bytes, and concurrency; bounded streaming body handler.
+6. Speakable projection — no reasoning traces, tool output, transcripts, or metadata synthesized.
+7. Final-result-only synthesis — never approval, intermediate, or failed results.
+8. Channel safety — separate Telegram message; MIME→extension mapping; untrusted file names ignored.
+9. Thread safety — synthesis runs off the Vert.x event loop (worker thread via
+   `TurnDispatchService.dispatchAsync`); the in-service guard fails closed.
+10. Payload-safe observability — categorical `[a-z0-9_]{1,64}` failure reasons only.
 
-P8 remains **Proposed — not started** until the Issue 12 unit, architecture,
-native-image, JAR/native, governance, and live Telegram exit gates pass. The
-backend OMLX TTS endpoint has been proven separately; that evidence does not
-claim Amsha integration is complete.
+### Exit gate
+
+P8 moves to Accepted once the live gate in
+[Issue 12 §6.2](../../.scratch/lc4j-capability-adoption/issues/12-p8-speech-synthesis-output.md#62-live-exit-gate)
+passes: a text request with an explicit audio directive yields text plus
+playable audio, an audio-input turn yields text plus audio when configured, and
+both paths safely return text when TTS is disabled or unavailable — verified in
+JAR and native modes with categorical-only metrics.
+
+### Evidence
+
+Implementation, test inventory, gate results, and the Telegram live-test steps
+are recorded in
+[`evidence/10-speech-synthesis-output/README.md`](../../.scratch/lc4j-capability-adoption/evidence/10-speech-synthesis-output/README.md).
 
 ## Priority and sequencing
 

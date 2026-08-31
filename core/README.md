@@ -301,6 +301,31 @@ execution port and is **never** registered as an `AUDIO` chat profile. Text-to-s
 (`Qwen3-TTS-12Hz-1.7B-Base-bf16`) is a separate future output capability and is out of scope for
 the audio-input routing matrix.
 
+## Speech Output Policy (P8 / Issue 12)
+
+When `amsha.tts.enabled=true` and `SpeechSynthesisPort` is resolvable, `SpeechReplyService`
+synthesizes an optional audio reply for *finished* agent turns only. Approval prompts,
+intermediate statuses, and failures are never synthesized — they are delivered as text.
+Synthesis and channel delivery run off the Vert.x event loop; an event-loop call fails
+closed to text rather than blocking.
+
+`SpeechOutputPolicy.resolve(...)` decides the `OutputMode` for one turn, highest precedence first:
+
+1. **Explicit directive** in the user's request text — positive ("reply with audio",
+   "audio reply", "read aloud") or negative ("text only", "don't send audio"). An incidental
+   mention of "audio" (e.g. "how do audio codecs work?") stays `TEXT_ONLY`.
+2. **`amsha.tts.default-output-mode`** (below), applied only to inbound-audio turns.
+3. **`TEXT_ONLY`** safe fallback.
+
+| Property | Environment variable | Default | Description |
+|---|---|---|---|
+| `amsha.tts.default-output-mode` | `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` | Mode for inbound-audio turns with no explicit directive: `TEXT_ONLY`, `TEXT_AND_AUDIO`, `AUDIO_ONLY`. |
+| `amsha.tts.max-input-chars` | `AMSHA_TTS_MAX_INPUT_CHARS` | `1200` | Max speakable chars projected before synthesis; longer answers are truncated at a sentence boundary. |
+
+`TEXT_AND_AUDIO` sends the text first, then the audio as a separate message. `AUDIO_ONLY`
+sends audio and falls back to text if synthesis or delivery fails. The channel `sendAudio`
+contract returns `false` (never throws) so the caller always keeps a text fallback.
+
 On every startup with the seeder enabled it logs the post-condition on `[MODALITY-SEEDER]`:
 
 ```text

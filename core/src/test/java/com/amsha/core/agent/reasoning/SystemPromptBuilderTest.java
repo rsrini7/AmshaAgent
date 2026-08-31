@@ -128,6 +128,19 @@ class SystemPromptBuilderTest {
     }
 
     @Test
+    void testBuildSystemPromptExplainsApplicationManagedSpeechOutput() {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+
+        String result =
+                builder.build(createCtx("speech-session"), "coordinator", "speech-session", "reply with audio", false);
+
+        assertTrue(result.contains("Audio delivery is handled by the application"));
+        assertTrue(result.contains("do not claim that you can only respond in text"));
+    }
+
+    @Test
     void testBuildSystemPrompt_sectionOrderIsPreserved() {
         // Arrange
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");

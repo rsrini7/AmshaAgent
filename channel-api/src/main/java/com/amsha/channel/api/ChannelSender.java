@@ -30,4 +30,22 @@ public interface ChannelSender {
     default void sendBySession(String sessionId, String text) {
         // no-op by default
     }
+
+    /**
+     * Delivers synthesized audio as a message separate from any text reply.
+     *
+     * <p>The default returns {@code false} so channels without audio support stay unchanged and
+     * callers can detect the unsupported case. A {@code false} return, or a thrown exception, means
+     * the caller must fall back to the text answer; the default must never report silent success.
+     *
+     * @param recipient the target user
+     * @param audio the encoded audio bytes
+     * @param mimeType declared audio MIME type; implementations derive a safe file extension from
+     *                 this value and must not trust {@code fileName}
+     * @param fileName a caller-supplied base file name, treated as untrusted input
+     * @return true only when the audio message was actually delivered
+     */
+    default boolean sendAudio(ChannelUser recipient, byte[] audio, String mimeType, String fileName) {
+        return false;
+    }
 }

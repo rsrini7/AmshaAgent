@@ -1,29 +1,36 @@
 package com.amsha.core.pipeline.handlers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
 import com.amsha.channel.api.ApprovalPrompt;
+import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
+import com.amsha.channel.api.MediaAttachment;
 import com.amsha.channel.api.ReplyNode;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentLoop;
@@ -36,6 +43,10 @@ import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.SessionContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.skill.SkillRegistry;
+import com.amsha.core.speech.OutputMode;
+import com.amsha.core.speech.OutputPolicyContext;
+import com.amsha.core.speech.SpeechOutputPolicy;
+import com.amsha.core.speech.SpeechReplyService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.TimeContextInjector;
 import com.amsha.security.api.AutonomyLevel;
@@ -72,6 +83,12 @@ class AgentDispatchHandlerTest {
     @Mock
     IntentClassificationService intentClassifier;
 
+    @Mock
+    SpeechOutputPolicy speechOutputPolicy;
+
+    @Mock
+    SpeechReplyService speechReplyService;
+
     @InjectMocks
     AgentDispatchHandler handler;
 
@@ -85,6 +102,13 @@ class AgentDispatchHandlerTest {
         lenient().when(intentClassifier.isResumeCommand(anyString())).thenReturn(false);
         lenient().when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.empty());
         lenient().when(agentStore.markResuming(anyString())).thenReturn(true);
+        // Speech output is off by default so existing text-only dispatch paths are unaffected.
+        lenient()
+                .when(speechOutputPolicy.resolve(any(OutputPolicyContext.class)))
+                .thenReturn(OutputMode.TEXT_ONLY);
+        lenient()
+                .when(speechReplyService.deliver(any(), any(), any(), anyString()))
+                .thenReturn(false);
         handler.defaultTimezone = "Asia/Kolkata";
     }
 
@@ -311,9 +335,121 @@ class AgentDispatchHandlerTest {
         assertInstanceOf(ApprovalPrompt.class, captor.getValue().getFirst());
     }
 
-    private MessageContext createTestContext(AutonomyLevel level) {
+    @Test
+    @SuppressWarnings("unchecked")
+    void finishedTurnWithTextAndAudioSendsTextThenAudio() throws Exception {
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        when(speechOutputPolicy.resolve(any(OutputPolicyContext.class))).thenReturn(OutputMode.TEXT_AND_AUDIO);
+        when(speechReplyService.deliver(any(), any(), any(), anyString())).thenReturn(true);
+
+        invokeDeliverWithOptionalAudio(createTestContext(AutonomyLevel.FULL), sender, "the answer text");
+
+        verify(sender, times(1)).sendRaw(any(), anyString());
+        verify(speechReplyService, times(1)).deliver(any(), any(), eq(OutputMode.TEXT_AND_AUDIO), anyString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void finishedTurnWithAudioOnlySendsAudioAndSkipsText() throws Exception {
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        when(speechOutputPolicy.resolve(any(OutputPolicyContext.class))).thenReturn(OutputMode.AUDIO_ONLY);
+        when(speechReplyService.deliver(any(), any(), any(), anyString())).thenReturn(true);
+
+        invokeDeliverWithOptionalAudio(createTestContext(AutonomyLevel.FULL), sender, "the answer text");
+
+        verify(speechReplyService, times(1)).deliver(any(), any(), eq(OutputMode.AUDIO_ONLY), anyString());
+        verify(sender, never()).sendRaw(any(), anyString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void finishedTurnWithAudioOnlyFallsBackToTextWhenDeliveryFails() throws Exception {
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        when(speechOutputPolicy.resolve(any(OutputPolicyContext.class))).thenReturn(OutputMode.AUDIO_ONLY);
+        when(speechReplyService.deliver(any(), any(), any(), anyString())).thenReturn(false);
+
+        invokeDeliverWithOptionalAudio(createTestContext(AutonomyLevel.FULL), sender, "the answer text");
+
+        verify(speechReplyService, times(1)).deliver(any(), any(), eq(OutputMode.AUDIO_ONLY), anyString());
+        verify(sender, times(1)).sendRaw(any(), anyString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void directiveInMessageTextReachesSpeechOutputPolicyWhenGoalEmpty() throws Exception {
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        when(speechReplyService.deliver(any(), any(), any(), anyString())).thenReturn(true);
+
+        // Goal is empty, but the user's directive lives in the current message text.
+        MessageContext context = createTestContextWithText(AutonomyLevel.FULL, "please reply with audio");
+        context.setGoal("");
+
+        ArgumentCaptor<OutputPolicyContext> policyCaptor = ArgumentCaptor.forClass(OutputPolicyContext.class);
+        when(speechOutputPolicy.resolve(policyCaptor.capture())).thenReturn(OutputMode.TEXT_AND_AUDIO);
+
+        invokeDeliverWithOptionalAudio(context, sender, "the answer text");
+
+        assertEquals(
+                "please reply with audio",
+                policyCaptor.getValue().requestedText(),
+                "explicit directive in the message text must reach the output policy even when goal is empty");
+        verify(speechReplyService, times(1)).deliver(any(), any(), eq(OutputMode.TEXT_AND_AUDIO), anyString());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void approvalAndIntermediateResultsNeverSynthesize() throws Exception {
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+
+        Method method = AgentDispatchHandler.class.getDeclaredMethod(
+                "deliverWithOptionalAudio", MessageContext.class, ChannelSender.class, AgentResult.class, String.class);
+        method.setAccessible(true);
+        method.invoke(
+                handler,
+                createTestContext(AutonomyLevel.FULL),
+                sender,
+                AgentResult.awaitingApproval("garuda", "{}", "sess123", List.of()),
+                "the answer text");
+
+        verify(sender, times(1)).sendRaw(any(), anyString());
+        verify(speechReplyService, never()).deliver(any(), any(), any(), anyString());
+        verify(speechOutputPolicy, never()).resolve(any(OutputPolicyContext.class));
+    }
+
+    @Test
+    void hadInboundAudioDetectsAudioAttachment() throws Exception {
         ChannelUser user = new ChannelUser("u1", "u1", "User 1", ChannelType.REST_API);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, "test", "m1", Instant.now());
+        MediaAttachment audio = MediaAttachment.ofInline(
+                "a1", AttachmentType.AUDIO, "audio/ogg", "voice.ogg", new byte[] {1, 2, 3}, Map.of());
+        ChannelMessage withAudio =
+                new ChannelMessage.RestApiMessage(user, "transcribe this", "m1", Instant.now(), List.of(audio));
+        MessageContext audioContext = new MessageContext("chat123", user, withAudio);
+
+        ChannelMessage withoutAudio = new ChannelMessage.RestApiMessage(user, "transcribe this", "m1", Instant.now());
+        MessageContext plainContext = new MessageContext("chat123", user, withoutAudio);
+
+        Method method = AgentDispatchHandler.class.getDeclaredMethod("hadInboundAudio", MessageContext.class);
+        method.setAccessible(true);
+        assertTrue((Boolean) method.invoke(handler, audioContext));
+        assertFalse((Boolean) method.invoke(handler, plainContext));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void invokeDeliverWithOptionalAudio(MessageContext context, ChannelSender sender, String output)
+            throws Exception {
+        Method method = AgentDispatchHandler.class.getDeclaredMethod(
+                "deliverWithOptionalAudio", MessageContext.class, ChannelSender.class, AgentResult.class, String.class);
+        method.setAccessible(true);
+        method.invoke(handler, context, sender, AgentResult.finished(output, List.of()), output);
+    }
+
+    private MessageContext createTestContext(AutonomyLevel level) {
+        return createTestContextWithText(level, "test");
+    }
+
+    private MessageContext createTestContextWithText(AutonomyLevel level, String text) {
+        ChannelUser user = new ChannelUser("u1", "u1", "User 1", ChannelType.REST_API);
+        ChannelMessage msg = new ChannelMessage.RestApiMessage(user, text, "m1", Instant.now());
 
         MessageContext context = new MessageContext("chat123", user, msg);
         context.setSessionId("sess123");
