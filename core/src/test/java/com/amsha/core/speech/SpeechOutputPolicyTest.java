@@ -47,6 +47,15 @@ class SpeechOutputPolicyTest {
     }
 
     @Test
+    void blankTextWithAudioInputUsesDefaultMode() {
+        SpeechOutputPolicy audioOnlyDefault = new SpeechOutputPolicy("AUDIO_ONLY");
+        assertEquals(OutputMode.AUDIO_ONLY, audioOnlyDefault.resolve(OutputPolicyContext.of("", true)));
+
+        SpeechOutputPolicy textAndAudioDefault = new SpeechOutputPolicy("TEXT_AND_AUDIO");
+        assertEquals(OutputMode.TEXT_AND_AUDIO, textAndAudioDefault.resolve(OutputPolicyContext.of("", true)));
+    }
+
+    @Test
     void audioInputTurnUsesDefaultModeWhenNoDirective() {
         SpeechOutputPolicy audioOnlyDefault = new SpeechOutputPolicy("AUDIO_ONLY");
         assertEquals(

@@ -10,6 +10,15 @@ quarkus:
     server:
       stdio:
         enabled: false
+  websockets-next:
+    server:
+      max-frame-size: 37748736
+      max-message-size: 37748736
+  http:
+    websocket-server:
+      max-frame-size: 37748736
+    limits:
+      max-body-size: 36M
   vertx:
     prefer-native-transport: true
     use-async-dns: true

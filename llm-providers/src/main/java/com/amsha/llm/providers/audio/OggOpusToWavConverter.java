@@ -77,6 +77,8 @@ final class OggOpusToWavConverter {
                     "error",
                     "-i",
                     in.toString(),
+                    "-af",
+                    "dynaudnorm=p=0.9:m=10.0",
                     "-ar",
                     "16000",
                     "-ac",

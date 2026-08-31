@@ -127,6 +127,12 @@ When constructing user prompts for LLM reasoning, `MultimodalMessageMapper` (`am
 
 ![Message Pipeline](./assets/amsha_message_pipeline.svg)
 
+**Audio Ingestion, STT & Speech Synthesis (TTS) Architecture:**
+
+Voice recordings and audio attachments pass through dynamic normalization (`OggOpusToWavConverter`), transcription (`SpeechToTextPort` / Whisper), intent preservation (`IntentClassificationService`), speech output policy resolution (`SpeechOutputPolicy`), prose projection (`SpeechReplyService`), TTS synthesis (`SpeechSynthesisPort` / Qwen3-TTS), and channel-specific transport guards (36 MiB WebSocket frame buffer ceiling; local `ffmpeg` OGG Opus compression for Telegram Bot API).
+
+![Audio & Speech Synthesis Architecture](./assets/amsha_audio_speech_pipeline.svg)
+
 ---
 
 ## ReAct Agent Loop

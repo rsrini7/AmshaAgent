@@ -2128,3 +2128,28 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 - **Auto-heal loop prevention**: If a skill's CLI tool fails with an authentication or configuration error (not a code error), `ExecutionFailureRecoveryService` should NOT trigger Shiva auto-heal — the error is environmental, not fixable by code changes.
 
 **Why**: The `browser-use` skill (removed in P105) appeared to be a local CLI tool but actually required a paid Browser Use Cloud API key. Without it, the LLM entered an infinite Shiva auto-heal loop (`heal:shiva:...:heal:shiva:...`) that grew session IDs until macOS rejected the workspace directory path with `File name too long`.
+
+## 25. Audio, Speech Synthesis & Channel Media Delivery Invariants
+
+### 25.1 Speech Output Policy & Intent Invariants
+
+1. **Explicit vs. Default Resolution**: `SpeechOutputPolicy.resolve` inspects user text directives first (`"reply audio"`, `"audio only"`, `"no audio"`). When text lacks explicit directives:
+   - If the user sent voice-only input (blank text with `inboundAudioPresent = true`), the policy falls back to `amsha.tts.default-output-mode` (`TEXT_ONLY`, `AUDIO_ONLY`, or `TEXT_AND_AUDIO`).
+   - Blank voice-only turns MUST NOT be classified as trivial greetings or simple conversational turns in `IntentClassificationService.isSimpleConversational()`.
+2. **Deterministic Text Projection**: `SpeechReplyService.projectSpeakableText()` strips markdown code blocks, tables, and internal artifacts before passing prose to speech synthesis ports (`OmlxSpeechSynthesisProvider` / `OpenAiSpeechSynthesisProvider`).
+
+### 25.2 Channel Audio Fallback Guarantee
+
+`ChannelSender.sendAudio()` returns `false` or throws if delivery fails or is unsupported. In `AgentDispatchHandler.deliverWithOptionalAudio()`, any failed audio delivery MUST trigger an immediate plaintext fallback via `sender.sendRaw(text)`. Under no circumstances may an agent turn's response be silently lost.
+
+### 25.3 WebSocket Media Buffer & Native Safety
+
+1. **Buffer Ceiling**: Vert.x WebSocket server properties (`quarkus.websockets-next.server.max-frame-size`, `max-message-size`, and `quarkus.http.websocket-server.max-frame-size`) MUST be configured to **36 MiB (37,748,736 bytes)** to accommodate the 25 MiB attachment ceiling plus Base64 expansion and JSON framing.
+2. **Native Pruning Protection**: `WebsocketServerCustomizer` MUST be annotated with `@Unremovable` to ensure Quarkus / GraalVM does not prune the programmatic Vert.x HTTP server options customizer during native dead-code elimination.
+3. **Frontend Memory Management**: In `arc-chat-interface.ts`, incoming assistant Base64 audio payloads and outgoing user audio files MUST be converted to browser `Blob` object URLs (`URL.createObjectURL(blob)`) rather than retaining giant `data:` URI strings directly on DOM attributes.
+
+### 25.4 Telegram Audio Buffer Ceiling & Compression
+
+1. **Camel Telegram Buffer Constraint**: Apache Camel's `camel-quarkus-telegram` component allocates an internal multipart upload buffer (~2 MB). Uncompressed PCM WAV files exceeding this ceiling trigger `java.nio.BufferOverflowException`.
+2. **Local Transcoding**: `TelegramChannelSender.sendAudio()` automatically compresses raw WAV payloads exceeding 1 MB into native Telegram-compatible **OGG Opus** (`libopus`, 32 kbps) using local `ffmpeg`, shrinking multi-megabyte payloads to ~100 KB and ensuring reliable delivery over the Telegram Bot API.
+

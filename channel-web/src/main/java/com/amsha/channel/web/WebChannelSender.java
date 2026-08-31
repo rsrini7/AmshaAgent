@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 import jakarta.json.Json;
 
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 
 import com.amsha.channel.api.ApprovalPrompt;
@@ -56,39 +57,53 @@ public class WebChannelSender implements ChannelSender {
         sendRawWithSession(recipient, sanitized, null);
     }
 
+    @Override
+    public boolean sendAudio(ChannelUser recipient, byte[] audio, String mimeType, String fileName) {
+        if (recipient == null || audio == null || audio.length == 0) {
+            return false;
+        }
+        String base64Audio = Base64.getEncoder().encodeToString(audio);
+        String payload = buildAudioMessageJson(base64Audio, mimeType, fileName);
+        return sendPayloadToRecipient(recipient, payload);
+    }
+
     private void sendRawWithSession(ChannelUser recipient, String text, ApprovalPrompt prompt) {
         String payload = buildMessageJson(text, prompt);
+        sendPayloadToRecipient(recipient, payload);
+    }
+
+    private boolean sendPayloadToRecipient(ChannelUser recipient, String payload) {
         // WebSocket ChannelUser.platformId is the durable owner after authentication.
         // The active socket is addressed by the channel-specific browser platform ID.
         String platformId = recipient.channelId();
 
-        sessionStore
-                .get(platformId)
-                .ifPresentOrElse(
-                        conn -> {
-                            try {
-                                conn.sendText(payload).await().atMost(Duration.ofSeconds(5));
-                            } catch (Exception e) {
-                                log.warnf("Failed to send to session %s: %s", platformId, LogUtil.rootMessage(e));
-                                sessionStore.unregister(platformId);
-                            }
-                        },
-                        () -> {
-                            // If the direct platformId is stale (e.g. refresh), try a broadcast based on the sessionId
-                            // that is known to exist for the user's platform reference (§85-C)
-                            List<WebSocketConnection> ownerConnections =
-                                    sessionStore.getConnectionsByOwner(recipient.platformId());
-                            if (!ownerConnections.isEmpty()) {
-                                sendToConnections(ownerConnections, payload, recipient.platformId());
-                                return;
-                            }
+        var directConn = sessionStore.get(platformId);
+        if (directConn.isPresent()) {
+            try {
+                directConn.get().sendText(payload).await().atMost(Duration.ofSeconds(5));
+                return true;
+            } catch (Exception e) {
+                log.warnf("Failed to send to session %s: %s", platformId, LogUtil.rootMessage(e));
+                sessionStore.unregister(platformId);
+                return false;
+            }
+        }
 
-                            sessionStore
-                                    .getAmshaSessionId(platformId)
-                                    .ifPresentOrElse(
-                                            sid -> sendBySessionWithTarget(sid, text, prompt),
-                                            () -> log.warnf("WebChannelSender: no WS session for id=%s", platformId));
-                        });
+        // If the direct platformId is stale (e.g. refresh), try a broadcast based on the sessionId
+        // that is known to exist for the user's platform reference (§85-C)
+        List<WebSocketConnection> ownerConnections = sessionStore.getConnectionsByOwner(recipient.platformId());
+        if (!ownerConnections.isEmpty()) {
+            sendToConnections(ownerConnections, payload, recipient.platformId());
+            return true;
+        }
+
+        var amshaSessionId = sessionStore.getAmshaSessionId(platformId);
+        if (amshaSessionId.isPresent()) {
+            return sendPayloadToAmshaSession(amshaSessionId.get(), payload);
+        }
+
+        log.warnf("WebChannelSender: no WS session for id=%s", platformId);
+        return false;
     }
 
     @Override
@@ -99,6 +114,10 @@ public class WebChannelSender implements ChannelSender {
 
     private void sendBySessionWithTarget(String sessionId, String text, ApprovalPrompt prompt) {
         String payload = buildMessageJson(text, prompt);
+        sendPayloadToAmshaSession(sessionId, payload);
+    }
+
+    private boolean sendPayloadToAmshaSession(String sessionId, String payload) {
         List<WebSocketConnection> conns = sessionStore.getConnectionsByAmshaSession(sessionId);
 
         if (!conns.isEmpty()) {
@@ -110,14 +129,16 @@ public class WebChannelSender implements ChannelSender {
                                     v -> {},
                                     err -> log.warnf(
                                             "Failed to push result to session %s conn %s: %s",
-                                            sessionId, conn.id(), err.getMessage()));
+                                            sessionId, conn.id(), LogUtil.rootMessage(err)));
                 } catch (Exception e) {
                     log.warnf("Exception pushing result to session %s: %s", sessionId, LogUtil.rootMessage(e));
                 }
             });
             log.infof("Broadcast result for session %s to %d connection(s)", sessionId, conns.size());
+            return true;
         } else {
             log.warnf("WebChannelSender: no active connections found for session %s (async result dropped)", sessionId);
+            return false;
         }
     }
 
@@ -147,5 +168,48 @@ public class WebChannelSender implements ChannelSender {
         }
 
         return builder.build().toString();
+    }
+
+    private static final int MAX_FILE_NAME_CHARS = 120;
+
+    private static String safeFileName(String fileName, String mimeType) {
+        String candidate = fileName == null ? "" : fileName.replace('\\', '/');
+        int separator = candidate.lastIndexOf('/');
+        if (separator >= 0) {
+            candidate = candidate.substring(separator + 1);
+        }
+        candidate = candidate
+                .codePoints()
+                .filter(codePoint -> !Character.isISOControl(codePoint))
+                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                .toString()
+                .trim();
+        if (candidate.isBlank()) {
+            candidate = switch (mimeType != null ? mimeType : "") {
+                case "audio/mpeg" -> "amsha-reply.mp3";
+                case "audio/ogg" -> "amsha-reply.ogg";
+                case "audio/webm" -> "amsha-reply.webm";
+                default -> "amsha-reply.wav";
+            };
+        }
+        return candidate.length() <= MAX_FILE_NAME_CHARS ? candidate : candidate.substring(0, MAX_FILE_NAME_CHARS);
+    }
+
+    private String buildAudioMessageJson(String base64Audio, String mimeType, String fileName) {
+        String safeMime = mimeType != null && !mimeType.isBlank() ? mimeType.trim() : "audio/wav";
+        String safeName = safeFileName(fileName, safeMime);
+        return Json.createObjectBuilder()
+                .add("type", "message")
+                .add("role", "assistant")
+                .add("text", "")
+                .add(
+                        "audio",
+                        Json.createObjectBuilder()
+                                .add("mimeType", safeMime)
+                                .add("fileName", safeName)
+                                .add("data", base64Audio))
+                .add("timestamp", System.currentTimeMillis())
+                .build()
+                .toString();
     }
 }

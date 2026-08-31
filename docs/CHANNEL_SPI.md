@@ -63,8 +63,24 @@ public interface ChannelSender {
     void send(ChannelUser recipient, List<ReplyNode> nodes);  // Rendered delivery
     void sendRaw(ChannelUser recipient, String text);          // Pre-rendered plaintext
     default void sendBySession(String sessionId, String text)  // Session-based delivery (e.g. WebSocket tabs)
+    default boolean sendAudio(ChannelUser recipient, byte[] audio, String mimeType, String fileName) {
+        return false; // Speech synthesis audio delivery (returns false if unsupported/failed)
+    }
 }
 ```
+
+#### Audio Delivery Contracts & Limits
+
+1. **Fallback Safety**: If `sendAudio()` returns `false` or throws an exception, `AgentDispatchHandler` automatically falls back to `sendRaw(text)` plaintext delivery so no turn response is dropped.
+2. **WebSocket Channel (`WebChannelSender`)**:
+   - Emits a JSON frame containing Base64-encoded audio payload with MIME type and safe sanitized file name.
+   - Vert.x server configuration (`WebsocketServerCustomizer`) enforces a **36 MiB** frame buffer ceiling to safely transmit large audio replies and 25 MiB attachments.
+   - Frontend (`arc-chat-interface.ts`) decodes Base64 into browser `Blob` object URLs (`URL.createObjectURL`), avoiding DOM memory retention.
+3. **Telegram Channel (`TelegramChannelSender`)**:
+   - Delivers synthesized voice replies via `OutgoingAudioMessage` over Camel Telegram.
+   - Raw uncompressed WAV files exceeding 1 MB are automatically compressed to native Telegram **OGG Opus** (~100 KB) using local `ffmpeg`, preventing `BufferOverflowException` on Camel's internal multipart upload buffers.
+
+![Audio & Speech Synthesis Architecture](./assets/amsha_audio_speech_pipeline.svg)
 
 ### `ReplyRenderer`
 

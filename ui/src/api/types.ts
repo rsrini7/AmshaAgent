@@ -37,10 +37,18 @@ export interface WsConnectedEvent {
   platformId: string;
 }
 
+export interface WsAssistantAudio {
+  mimeType: string;
+  fileName: string;
+  data: string;
+  url?: string;
+}
+
 export interface WsAssistantMessage {
   type: 'message';
   role: 'assistant';
   text: string;
+  audio?: WsAssistantAudio;
 }
 
 export type WsInboundFrame = WsConnectedEvent | WsAssistantMessage;

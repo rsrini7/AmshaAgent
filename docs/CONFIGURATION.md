@@ -582,6 +582,17 @@ Governed, streaming-validated media downloads for multimodal attachments (`Media
 
 Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDownloadPort`, `DownloadedMedia`); implementation and `MediaSecurityValidator` (SSRF/DNS, redirect revalidation, IP blocklist) live in `amsha-security`. Channel media types: `ChannelMessage` → `MediaAttachment` → `DownloadedMedia` → tool context (`OutboundPurpose.MEDIA_DOWNLOAD`). Telegram emits opaque `telegram://file/<file_id>` references resolved through `GovernedTelegramMediaResolver`. See [SECURITY.md](./SECURITY.md#governed-media-download) and [CHANNEL_SPI.md](./CHANNEL_SPI.md#multimodal-media).
 
+## Speech Synthesis (TTS) & Recognition (STT)
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_TTS_PROVIDER` | `omlx` | Speech synthesis provider (`omlx` or `openai`). |
+| `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` | Model identifier for TTS synthesis. |
+| `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` | Default voice delivery mode (`TEXT_ONLY`, `AUDIO_ONLY`, `TEXT_AND_AUDIO`). |
+| `AMSHA_TTS_RESPONSE_FORMAT` | `wav` | Audio encoding format emitted by the synthesis port (`wav`, `mp3`, `ogg`). |
+| `AMSHA_STT_PROVIDER` | `omlx` | Speech-to-text recognition provider (`omlx` or `openai`). |
+| `AMSHA_STT_MODEL` | `whisper-large-v3` | Model identifier for STT transcription. |
+
 ## Retry
 
 | Variable | Default | Description |

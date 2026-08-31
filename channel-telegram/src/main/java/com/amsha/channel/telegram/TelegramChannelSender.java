@@ -3,12 +3,15 @@ package com.amsha.channel.telegram;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import com.amsha.channel.api.ApprovalPrompt;
 import com.amsha.channel.api.ChannelSender;
@@ -143,6 +146,8 @@ public class TelegramChannelSender implements ChannelSender {
      * <p>Returns {@code false} (never throws) when the recipient, chat, or payload is invalid, or
      * when the Camel send fails, so the caller's text fallback always applies.
      */
+    private static final long COMPRESSION_THRESHOLD_BYTES = 1_048_576L; // 1 MB
+
     @Override
     public boolean sendAudio(ChannelUser recipient, byte[] audio, String mimeType, String fileName) {
         if (recipient == null
@@ -156,17 +161,74 @@ public class TelegramChannelSender implements ChannelSender {
             return false;
         }
         String chatId = recipient.channelId();
-        String safeName = deriveAudioFileName(mimeType);
+        byte[] payload = compressIfLargeWav(audio, mimeType);
+        String safeName = payload.length != audio.length ? "amsha-reply.ogg" : deriveAudioFileName(mimeType);
         OutgoingAudioMessage msg = new OutgoingAudioMessage();
-        msg.setAudio(audio);
+        msg.setAudio(payload);
         msg.setFilenameWithExtension(safeName);
         try {
-            log.infof("TELEGRAM-SENDAUDIO to=%s bytes=%d name=%s", chatId, audio.length, safeName);
+            log.infof("TELEGRAM-SENDAUDIO to=%s bytes=%d name=%s", chatId, payload.length, safeName);
             producerTemplate.sendBodyAndHeader(TELEGRAM_BOTS_ENDPOINT, msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
             return true;
         } catch (Exception e) {
             log.warnf("TELEGRAM-SENDAUDIO failed for chat %s: %s", chatId, LogUtil.rootMessage(e));
             return false;
+        }
+    }
+
+    private byte[] compressIfLargeWav(byte[] audio, String mimeType) {
+        if (audio == null || audio.length < COMPRESSION_THRESHOLD_BYTES) {
+            return audio;
+        }
+        String normalized = mimeType != null ? mimeType.trim().toLowerCase(Locale.ROOT) : "";
+        if (!normalized.contains("wav") && !normalized.isBlank()) {
+            return audio;
+        }
+        Path in = null;
+        Path out = null;
+        try {
+            in = Files.createTempFile("amsha-tel-in-", ".wav");
+            out = Files.createTempFile("amsha-tel-out-", ".ogg");
+            Files.write(in, audio);
+            Process process = new ProcessBuilder(
+                            "ffmpeg",
+                            "-y",
+                            "-loglevel",
+                            "error",
+                            "-i",
+                            in.toString(),
+                            "-c:a",
+                            "libopus",
+                            "-b:a",
+                            "32k",
+                            "-f",
+                            "ogg",
+                            out.toString())
+                    .start();
+            boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+            if (finished && process.exitValue() == 0 && Files.exists(out)) {
+                byte[] compressed = Files.readAllBytes(out);
+                if (compressed.length > 0 && compressed.length < audio.length) {
+                    log.infof(
+                            "TELEGRAM-AUDIO compressed %d bytes WAV -> %d bytes OGG", audio.length, compressed.length);
+                    return compressed;
+                }
+            }
+        } catch (Exception e) {
+            log.debugf("TELEGRAM-AUDIO compression skipped: %s", LogUtil.rootMessage(e));
+        } finally {
+            deleteQuietly(in);
+            deleteQuietly(out);
+        }
+        return audio;
+    }
+
+    private static void deleteQuietly(Path path) {
+        if (path != null) {
+            try {
+                Files.deleteIfExists(path);
+            } catch (Exception _) {
+            }
         }
     }
 

@@ -19,6 +19,12 @@ interface ChatMessage {
   };
   historic?: boolean;
   targetSessionId?: string;
+  audio?: {
+    mimeType: string;
+    fileName: string;
+    data: string;
+    url?: string;
+  };
 }
 
 interface ProgressUpdate {
@@ -49,6 +55,7 @@ export class ArcChatInterface extends LitElement {
   @state() private _attachmentError = '';
   @state() private _encodingAttachment = false;
   @state() private _isRecording = false;
+  @state() private _autoPlaySpeech = false;
   @state() private _wsStatus: 'connecting' | 'open' | 'closed' | 'error' = 'closed';
   @state() private _awaitingApproval = false;
   @state() private _denyReason = '';
@@ -406,6 +413,66 @@ export class ArcChatInterface extends LitElement {
     }
     .mic-btn:hover { color: var(--text-primary); }
     .mic-btn.recording { color: #ef4444; animation: pulse 1s infinite; }
+    .tts-btn {
+      color: var(--text-muted); cursor: pointer; padding-bottom: 8px;
+      transition: var(--transition); background: transparent; border: 0;
+      font-size: 16px; line-height: 1;
+    }
+    .tts-btn:hover { color: var(--text-primary); }
+    .tts-btn.active { color: var(--accent-secondary); }
+    .assistant-audio-player, .user-audio-player {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+      min-width: 260px;
+      max-width: 340px;
+    }
+    .audio-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .audio-badge {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      opacity: 0.9;
+    }
+    .replay-btn {
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+      color: var(--text-primary);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .replay-btn:hover {
+      transform: translateY(-1px);
+      background: color-mix(in srgb, var(--accent) 25%, transparent);
+    }
+    .bubble-user .replay-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: white;
+    }
+    .bubble-user .replay-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .assistant-audio-player audio, .user-audio-player audio {
+      height: 34px;
+      width: 100%;
+      border-radius: 8px;
+      outline: none;
+    }
 
     .send-btn {
       background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
@@ -669,18 +736,23 @@ export class ArcChatInterface extends LitElement {
       this._sessionHalted = true;
       this._resetProgress();
     } else if (frame.type === 'message' && frame.role === 'assistant') {
-      const isApproval = frame.approval || frame.text.includes('⏸');
+      const isApproval = frame.approval || (frame.text && frame.text.includes('⏸'));
       this._isTyping = false;
       this._showDenyReason = false;
+
+      const audioPayload = frame.audio && frame.audio.data
+        ? { ...frame.audio, url: this._base64ToBlobUrl(frame.audio.data, frame.audio.mimeType) }
+        : undefined;
 
       this._messages = [...this._messages, {
         id: crypto.randomUUID(),
         role: 'assistant',
-        text: frame.text,
+        text: frame.text || '',
         timestamp: frame.timestamp || Date.now(),
         isApprovalPrompt: !!isApproval,
         approvalData: frame.approval || null,
-        targetSessionId: frame.sessionId || null
+        targetSessionId: frame.sessionId || null,
+        audio: audioPayload
       }];
       this._awaitingApproval = !!isApproval;
       if (frame.text && HALTED_MESSAGE_PATTERNS.some((pattern) => pattern.test(frame.text))) {
@@ -695,6 +767,14 @@ export class ArcChatInterface extends LitElement {
       } else {
         this._resetProgress();
       }
+
+      if (audioPayload && this._autoPlaySpeech) {
+        try {
+          const snd = new Audio(audioPayload.url || `data:${audioPayload.mimeType};base64,${audioPayload.data}`);
+          snd.play().catch(() => {});
+        } catch (_) {}
+      }
+
       // Scroll to bottom after new message
       this._scrollToBottom();
     }
@@ -715,6 +795,7 @@ export class ArcChatInterface extends LitElement {
       text,
     };
     let displayText = text;
+    let userAudioPayload: { mimeType: string; fileName: string; data: string; url?: string } | undefined;
     if (attachment) {
       this._encodingAttachment = true;
       try {
@@ -725,6 +806,11 @@ export class ArcChatInterface extends LitElement {
           return;
         }
         outbound.attachment = { mimeType: mimeType as 'audio/mpeg' | 'audio/wav' | 'audio/ogg' | 'audio/webm', fileName: attachment.name, data };
+        let blobUrl: string | undefined;
+        try {
+          blobUrl = URL.createObjectURL(attachment);
+        } catch (_) {}
+        userAudioPayload = { mimeType, fileName: attachment.name, data, url: blobUrl };
         displayText = text ? `${text} [${attachment.name}]` : `[${attachment.name}]`;
       } catch (_) {
         this._attachmentError = 'Failed to encode audio attachment';
@@ -735,7 +821,7 @@ export class ArcChatInterface extends LitElement {
     }
     this._messages = [
       ...this._messages,
-      { id: crypto.randomUUID(), role: 'user', text: displayText, timestamp: Date.now() },
+      { id: crypto.randomUUID(), role: 'user', text: displayText, timestamp: Date.now(), audio: userAudioPayload },
     ];
     this._ws?.send(outbound as unknown as import('../api/types').WsOutboundMessage);
     this._input = '';
@@ -801,6 +887,28 @@ export class ArcChatInterface extends LitElement {
     });
   }
 
+  private _base64ToBlobUrl(base64: string, mimeType: string): string {
+    try {
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Uint8Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const blob = new Blob([byteNumbers], { type: mimeType });
+      return URL.createObjectURL(blob);
+    } catch (_) {
+      return `data:${mimeType};base64,${base64}`;
+    }
+  }
+
+  private _replayAudio(audio: { url?: string; mimeType: string; data: string }): void {
+    try {
+      const src = audio.url || `data:${audio.mimeType};base64,${audio.data}`;
+      const snd = new Audio(src);
+      snd.play().catch(() => {});
+    } catch (_) {}
+  }
+
   private _onAudioFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] ?? null;
@@ -847,7 +955,13 @@ export class ArcChatInterface extends LitElement {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       this._recordingStream = stream;
       this._recordedChunks = [];
       const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg'];
@@ -1089,7 +1203,7 @@ export class ArcChatInterface extends LitElement {
                <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
                  ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> Amsha Agent` : 'You'}
                </div>
-               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">${m.role === 'user' ? m.text : this._renderMarkdown(m.id, m.text)}${m.isApprovalPrompt && this._awaitingApproval ? html`<div class="approval-card"><div class="approval-body"><div class="approval-title"><span>⏸</span> Action Requires Approval</div>${m.approvalData ? html`<div class="approval-tool">Tool: <code>${m.approvalData.tool}</code></div><div class="approval-params-header">Parameters:</div><pre class="approval-params"><code>${typeof m.approvalData.params === 'string' ? m.approvalData.params : JSON.stringify(m.approvalData.params, null, 2)}</code></pre>` : html`<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">This session has paused to wait for your permission.</p>`}</div><div class="approval-actions">${this._showDenyReason ? html`<textarea class="deny-reason" .value=${this._denyReason} @input=${(e: any) => this._denyReason = e.target.value} placeholder="Reason for denial (optional)..."></textarea>` : nothing}<button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button><button class="btn-deny" @click=${() => this._sendDeny(m)}>${this._showDenyReason ? 'Send Feedback' : 'Deny'}</button></div></div>` : nothing}</div>
+               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">${m.role === 'user' ? html`<div>${m.text}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}` : html`${m.text ? this._renderMarkdown(m.id, m.text) : nothing}${m.audio ? html`<div class="assistant-audio-player"><div class="audio-header"><span class="audio-badge">🎵 Voice Reply</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`}${m.isApprovalPrompt && this._awaitingApproval ? html`<div class="approval-card"><div class="approval-body"><div class="approval-title"><span>⏸</span> Action Requires Approval</div>${m.approvalData ? html`<div class="approval-tool">Tool: <code>${m.approvalData.tool}</code></div><div class="approval-params-header">Parameters:</div><pre class="approval-params"><code>${typeof m.approvalData.params === 'string' ? m.approvalData.params : JSON.stringify(m.approvalData.params, null, 2)}</code></pre>` : html`<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">This session has paused to wait for your permission.</p>`}</div><div class="approval-actions">${this._showDenyReason ? html`<textarea class="deny-reason" .value=${this._denyReason} @input=${(e: any) => this._denyReason = e.target.value} placeholder="Reason for denial (optional)..."></textarea>` : nothing}<button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button><button class="btn-deny" @click=${() => this._sendDeny(m)}>${this._showDenyReason ? 'Send Feedback' : 'Deny'}</button></div></div>` : nothing}</div>
                <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
             </div>
           `)}
@@ -1102,6 +1216,7 @@ export class ArcChatInterface extends LitElement {
             <input class="attachment-input" type="file" accept=".mp3,.wav,.ogg,.webm,audio/mpeg,audio/wav,audio/ogg,audio/webm,video/webm" @change=${this._onAudioFileSelected} />
             <button class="attach-btn" aria-label="Attach audio file" title="Attach audio (MP3, WAV, OGG, WebM)" @click=${this._triggerFilePicker}>📎</button>
             <button class="mic-btn ${this._isRecording ? 'recording' : ''}" aria-label="${this._isRecording ? 'Stop recording' : 'Record audio'}" title="${this._isRecording ? 'Stop recording' : 'Record audio'}" @click=${this._toggleRecording}>${this._isRecording ? '⏹' : '🎤'}</button>
+            <button class="tts-btn ${this._autoPlaySpeech ? 'active' : ''}" aria-label="${this._autoPlaySpeech ? 'Disable voice reply auto-play' : 'Enable voice reply auto-play'}" title="${this._autoPlaySpeech ? 'Voice auto-play: On' : 'Voice auto-play: Off'}" @click=${() => { this._autoPlaySpeech = !this._autoPlaySpeech; }}>${this._autoPlaySpeech ? '🔊' : '🔈'}</button>
             <textarea
               aria-label="Message Amsha Agent"
               placeholder="Ask Amsha Agent anything…"

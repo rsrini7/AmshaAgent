@@ -60,18 +60,20 @@ public class SpeechOutputPolicy {
 
     /** Resolves the output mode for one turn. Never returns null. */
     public OutputMode resolve(OutputPolicyContext context) {
-        if (context == null || context.requestedText().isBlank()) {
+        if (context == null) {
             return OutputMode.TEXT_ONLY;
         }
         String text = context.requestedText();
-        if (NEGATIVE_AUDIO.matcher(text).find()) {
-            return OutputMode.TEXT_ONLY;
-        }
-        if (AUDIO_ONLY.matcher(text).find()) {
-            return OutputMode.AUDIO_ONLY;
-        }
-        if (POSITIVE_AUDIO.matcher(text).find()) {
-            return OutputMode.TEXT_AND_AUDIO;
+        if (text != null && !text.isBlank()) {
+            if (NEGATIVE_AUDIO.matcher(text).find()) {
+                return OutputMode.TEXT_ONLY;
+            }
+            if (AUDIO_ONLY.matcher(text).find()) {
+                return OutputMode.AUDIO_ONLY;
+            }
+            if (POSITIVE_AUDIO.matcher(text).find()) {
+                return OutputMode.TEXT_AND_AUDIO;
+            }
         }
         return context.inboundAudioPresent() ? defaultMode() : OutputMode.TEXT_ONLY;
     }

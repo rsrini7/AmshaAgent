@@ -127,7 +127,7 @@ public class IntentClassificationService {
      * Used to strip tool definitions from system prompt to save tokens (Fix B).
      */
     public boolean isSimpleConversational(String text) {
-        if (text == null || text.isBlank()) return true;
+        if (text == null || text.isBlank()) return false;
         if (isGreeting(text)) return true;
         // §Issue 2: PII-redacted goals should be treated as simple chitchat
         if (text.contains(AgentSentinels.REDACTED_HYPHEN)) return true;
