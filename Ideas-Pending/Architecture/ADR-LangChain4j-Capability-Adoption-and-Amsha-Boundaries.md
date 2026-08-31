@@ -110,6 +110,52 @@ P7 therefore remains open pending repeatable live Telegram evidence showing
 status captured for any fallback case. This observation does not change the ADR boundary or
 authorize an unmanaged provider/model dependency.
 
+## P8 Speech output decision (2026-08-31)
+
+Speech synthesis is a separate, optional output capability and is not an
+extension of P7 audio-input routing. The reasoning model continues to produce
+the final text answer; a separate `SpeechSynthesisPort` may render that answer
+as bounded audio after reasoning completes.
+
+The ownership and model roles are fixed:
+
+- `SpeechSynthesisPort`, `SpeechSynthesisRequest`, and
+  `SpeechSynthesisResult` belong to `llm-provider-api` under
+  `com.amsha.llm.api.audio`.
+- The OMLX Qwen3-TTS adapter belongs to `llm-providers` and all provider egress
+  uses `GovernedTransportService` with `OutboundPurpose.PROVIDER_API_CALL`.
+- Output-mode resolution and speakable-text projection belong to `amsha-core`.
+- Channel delivery uses the channel API; Telegram maps the bounded result to
+  Camel `OutgoingAudioMessage`.
+
+Qwen3-TTS is output-only. It must never be added to the P7 model-profile or
+`AUDIO` chat-routing matrix. Whisper remains input-only, and Nemotron remains
+retired because OMLX cannot load its `nemotron_voicechat` model type.
+
+V1 supports `TEXT_ONLY`, `TEXT_AND_AUDIO`, and `AUDIO_ONLY`. The default is
+`TEXT_ONLY`; an explicit current-turn request overrides the configured default.
+Setting `AMSHA_TTS_DEFAULT_OUTPUT_MODE=TEXT_AND_AUDIO` enables automatic text
+plus audio for successfully transcribed audio turns. No persisted user
+preference is introduced in V1.
+
+Speech is an enhancement and must fail closed to the existing text answer. A
+disabled, unsupported, oversized, timed-out, policy-denied, HITL-required, or
+failed synthesis, or a channel that cannot deliver audio, must never fail the
+agent turn. Text and audio are separate Telegram messages; V1 does not promise
+Telegram voice bubbles or streaming audio.
+
+The port and adapter enforce bounded text, response bytes, timeout, and
+concurrency. Provider and channel I/O execute off the Vert.x event loop, use
+the actual `Context.isOnEventLoopThread()` assertion, and emit only categorical
+payload-safe metrics. The final answer is projected to speakable plain text;
+reasoning traces, tool output, raw transcripts, Markdown syntax, and internal
+metadata are never synthesized.
+
+P8 remains **Proposed — not started** until the Issue 12 unit, architecture,
+native-image, JAR/native, governance, and live Telegram exit gates pass. The
+backend OMLX TTS endpoint has been proven separately; that evidence does not
+claim Amsha integration is complete.
+
 ## Priority and sequencing
 
 | Priority | Work item | Exit gate |
@@ -124,6 +170,15 @@ authorize an unmanaged provider/model dependency.
 | P7 — core evolution | Turn-aware per-turn modality routing and canonical multimodal history. | Slabs A–D complete and verified (TurnRequirements/ModelRoute contract, deep selector with `capabilityJson` + lazy history projector, route-first assembler, MIME wildcard, Telegram validator, modality-safe failover filtering — focused tests, PMD/Spotless clean); remaining gate is Slab E: live OMLX multi-model matrix evidence. |
 
 The sequence is normative for the follow-on specification and issues. A later phase must not be pulled into implementation because an upstream API is convenient; its exit gate and the relevant Amsha invariant remain the controlling boundary. Java implementation issues must use the focused-verification commands and module-scoped PMD requirements in [AGENTS.md](../../AGENTS.md); the detailed command matrix belongs in the later specification.
+
+### P8 sequencing
+
+P8 follows the P7 specification and remains a proposed output capability until
+Issue 12 passes its contract, provider, core, channel, governance, native-image,
+and live Telegram gates. Its exit gate is a text request with an explicit audio
+directive producing text plus playable audio, an audio-input turn producing
+text plus audio when configured, and both paths safely returning text when TTS
+is disabled or unavailable.
 
 ## Considered options
 
