@@ -89,6 +89,27 @@ If Telegram is included in the implementation scope, the Telegram fixture must b
 
 New vector stores, additional embedding providers, and a parallel moderation/RAIL stack are deferred. They require separate demand and, where applicable, separate ADRs because they interact with persistence parity, embedding descriptor compatibility, and the existing classifier control plane.
 
+## P7 Operational Observation (2026-08-31)
+
+Native Telegram verification established that text and image turns reach the expected runtime
+paths, and that voice-note media passes Telegram mapping and governed download. Voice
+transcription is not yet a deterministic live PASS: one voice run produced a usable response,
+while another voice run reached the same governed download boundary and then degraded to the
+safe text fallback. The native log does not expose the categorical STT result when the runtime
+is stopped, so the next reproduction must capture `amsha_stt_transcription` metrics while the
+server remains running.
+
+There is no Amsha or Whisper age-based filter. Differences between adult and child recordings
+are treated as an STT-quality/provider-runtime observation, not as a routing policy. No age
+classifier or speaker-age metadata may be introduced to resolve this observation. The audio
+path remains Whisper STT → bounded transcript → the normal text model; Nemotron native
+audio-chat remains blocked because OMLX cannot serve that model.
+
+P7 therefore remains open pending repeatable live Telegram evidence showing
+`status="transcribed"` for representative voice recordings, with the categorical failure
+status captured for any fallback case. This observation does not change the ADR boundary or
+authorize an unmanaged provider/model dependency.
+
 ## Priority and sequencing
 
 | Priority | Work item | Exit gate |
