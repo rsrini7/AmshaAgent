@@ -1,6 +1,7 @@
 package com.amsha.llm.api.oauth;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.nio.file.Files;
@@ -29,7 +30,7 @@ public class CodexOAuthTokenExtractor {
     private static final Path AUTH_JSON_PATH = Path.of(System.getProperty("user.home"), ".codex", "auth.json");
 
     @Inject
-    ObjectMapper objectMapper;
+    Instance<ObjectMapper> objectMapper;
 
     /**
      * Extracts the OAuth access token from ~/.codex/auth.json.
@@ -54,7 +55,8 @@ public class CodexOAuthTokenExtractor {
         byte[] content = null;
         try {
             content = Files.readAllBytes(path);
-            ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+            ObjectMapper mapper =
+                    objectMapper != null && objectMapper.isResolvable() ? objectMapper.get() : new ObjectMapper();
             JsonNode root = mapper.readTree(content);
 
             // 1. Primary: tokens.access_token (ChatGPT Plus OAuth)
@@ -108,7 +110,8 @@ public class CodexOAuthTokenExtractor {
 
         try {
             byte[] content = Files.readAllBytes(path);
-            ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+            ObjectMapper mapper =
+                    objectMapper != null && objectMapper.isResolvable() ? objectMapper.get() : new ObjectMapper();
             JsonNode root = mapper.readTree(content);
             JsonNode accNode = root.path("tokens").path("account_id");
             if (!accNode.isMissingNode() && !accNode.asText().isBlank()) {

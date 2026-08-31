@@ -1,6 +1,7 @@
 package com.amsha.llm.api.oauth;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.io.BufferedReader;
@@ -45,7 +46,7 @@ public class AgyOAuthTokenExtractor {
             "apiKey", "api_key", "accessToken", "access_token", "bearerToken", "token", "oauthToken", "sessionKey");
 
     @Inject
-    ObjectMapper objectMapper;
+    Instance<ObjectMapper> objectMapper;
 
     /**
      * Extracts the OAuth token from Antigravity CLI storage.
@@ -91,7 +92,8 @@ public class AgyOAuthTokenExtractor {
         byte[] content = null;
         try {
             content = Files.readAllBytes(path);
-            ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+            ObjectMapper mapper =
+                    objectMapper != null && objectMapper.isResolvable() ? objectMapper.get() : new ObjectMapper();
             JsonNode root = mapper.readTree(content);
             Optional<String> token = extractTokenFromJson(root);
             if (token.isPresent()) {
@@ -151,7 +153,9 @@ public class AgyOAuthTokenExtractor {
 
                 // Keychain might store raw token or a JSON string
                 if (trimmed.startsWith("{")) {
-                    ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+                    ObjectMapper mapper = objectMapper != null && objectMapper.isResolvable()
+                            ? objectMapper.get()
+                            : new ObjectMapper();
                     JsonNode root = mapper.readTree(trimmed);
                     return extractTokenFromJson(root);
                 }

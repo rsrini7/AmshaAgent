@@ -1,6 +1,7 @@
 package com.amsha.llm.providers.audio;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.io.ByteArrayOutputStream;
@@ -70,7 +71,7 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
     String ffmpegPath;
 
     @Inject
-    MeterRegistry meterRegistry;
+    Instance<MeterRegistry> meterRegistry;
 
     @Inject
     public OmlxAudioTranscriptionProvider(
@@ -292,17 +293,14 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
     }
 
     private void record(AudioTranscriptionResult result, Duration duration) {
-        if (meterRegistry == null || result == null) {
+        if (result == null || meterRegistry == null || !meterRegistry.isResolvable()) {
             return;
         }
         String status = result.status().name().toLowerCase(Locale.ROOT);
         try {
-            meterRegistry
-                    .counter("amsha.stt.transcription.total", "status", status)
-                    .increment();
-            meterRegistry
-                    .timer("amsha.stt.transcription.duration", "status", status)
-                    .record(duration);
+            MeterRegistry registry = meterRegistry.get();
+            registry.counter("amsha.stt.transcription.total", "status", status).increment();
+            registry.timer("amsha.stt.transcription.duration", "status", status).record(duration);
         } catch (RuntimeException e) {
             log.debugf("[STT] Metrics unavailable: %s", LogUtil.rootMessage(e));
         }

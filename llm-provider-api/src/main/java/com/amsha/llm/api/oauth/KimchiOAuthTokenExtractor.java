@@ -1,6 +1,7 @@
 package com.amsha.llm.api.oauth;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.io.BufferedReader;
@@ -40,7 +41,7 @@ public class KimchiOAuthTokenExtractor {
             List.of("apiKey", "api_key", "token", "accessToken", "access_token", "bearerToken");
 
     @Inject
-    ObjectMapper objectMapper;
+    Instance<ObjectMapper> objectMapper;
 
     /**
      * Extracts the API key / token from Kimchi CLI storage.
@@ -91,7 +92,8 @@ public class KimchiOAuthTokenExtractor {
         byte[] content = null;
         try {
             content = Files.readAllBytes(path);
-            ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+            ObjectMapper mapper =
+                    objectMapper != null && objectMapper.isResolvable() ? objectMapper.get() : new ObjectMapper();
             JsonNode root = mapper.readTree(content);
             Optional<String> token = extractTokenFromJson(root);
             if (token.isPresent()) {
