@@ -85,7 +85,25 @@ media port, transcribed locally, and passed as bounded text to the selected text
 | `amsha.stt.timeout` | `AMSHA_STT_TIMEOUT` | `PT60S` |
 | `amsha.stt.max-bytes` | `AMSHA_STT_MAX_BYTES` | `26214400` |
 | `amsha.stt.max-transcript-chars` | `AMSHA_STT_MAX_TRANSCRIPT_CHARS` | `12000` |
+| `amsha.stt.ffmpeg-path` | `AMSHA_STT_FFMPEG_PATH` | `ffmpeg` |
 
 The OMLX API key and base URL are reused from `AMSHA_OMLX_API_KEY` and
 `AMSHA_OMLX_BASE_URL`. Provision the Whisper processor/tokenizer sidecars before starting
 OMLX; see `scripts/provision_omlx_whisper_stt.sh`.
+
+### OGG/Opus → WAV conversion
+
+OMLX Whisper cannot decode OGG/Opus voice notes, so `OmlxAudioTranscriptionProvider` transcodes
+them to mono 16 kHz PCM WAV before the transcription call. The conversion runs **after the
+governed media download and before the Whisper request** — never inside the Telegram adapter.
+
+* Detection is by MIME type and magic bytes (`OggS` for OGG/Opus, `RIFF…WAVE` for WAV).
+* WAV input passes through unchanged.
+* OGG/Opus is transcoded with an allowlisted `ffmpeg` invocation built via `ProcessBuilder`
+  (no shell); the executable path comes from `amsha.stt.ffmpeg-path`, not the attachment.
+  The output is forced to mono 16 kHz PCM WAV via `-c:a pcm_s16le`, and ffmpeg's own `-fs`
+  limit plus a post-transcode size check (stat before reading into memory) enforce the bound.
+* The 25 MB payload bound and the configured timeout are enforced; temporary files are removed
+  in a `finally` block. ffmpeg stderr is drained on a background thread to avoid a pipe deadlock.
+* If `ffmpeg` is missing or the transcode fails, the turn degrades safely to its text fallback
+  rather than sending an undecodable payload to Whisper.

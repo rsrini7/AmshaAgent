@@ -44,6 +44,7 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
 
     private final GovernedTransportService governedTransport;
     private final ObjectMapper objectMapper;
+    private final OggOpusToWavConverter converter;
 
     @ConfigProperty(name = "amsha.stt.enabled", defaultValue = "false")
     boolean enabled;
@@ -66,13 +67,20 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
     @ConfigProperty(name = "AMSHA_OMLX_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
     String baseUrl;
 
+    String ffmpegPath;
+
     @Inject
     MeterRegistry meterRegistry;
 
     @Inject
-    public OmlxAudioTranscriptionProvider(GovernedTransportService governedTransport, ObjectMapper objectMapper) {
+    public OmlxAudioTranscriptionProvider(
+            GovernedTransportService governedTransport,
+            ObjectMapper objectMapper,
+            @ConfigProperty(name = "amsha.stt.ffmpeg-path", defaultValue = "ffmpeg") String ffmpegPath) {
         this.governedTransport = governedTransport;
         this.objectMapper = objectMapper;
+        this.ffmpegPath = ffmpegPath;
+        this.converter = new OggOpusToWavConverter(ffmpegPath);
     }
 
     OmlxAudioTranscriptionProvider(
@@ -84,7 +92,8 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
             long maxBytes,
             int maxTranscriptChars,
             String apiKey,
-            String baseUrl) {
+            String baseUrl,
+            String ffmpegPath) {
         this.governedTransport = governedTransport;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
@@ -94,6 +103,8 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
         this.maxTranscriptChars = maxTranscriptChars;
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
+        this.ffmpegPath = ffmpegPath;
+        this.converter = new OggOpusToWavConverter(ffmpegPath);
     }
 
     @Override
@@ -127,8 +138,13 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
             if (audio.length > effectiveMaxBytes()) {
                 return failure(AudioTranscriptionResult.Status.TOO_LARGE, "audio_too_large", started);
             }
+            OggOpusToWavConverter.ConvertedAudio converted = converter.convertIfNeeded(
+                    audio, request.mimeType(), effectiveMaxBytes(), effectiveTimeout(request.timeout()));
+            if (converted.bytes() != null && converted.bytes().length > effectiveMaxBytes()) {
+                return failure(AudioTranscriptionResult.Status.TOO_LARGE, "audio_too_large", started);
+            }
             Duration timeout = effectiveTimeout(request.timeout());
-            HttpRequest httpRequest = buildRequest(audio, request, timeout);
+            HttpRequest httpRequest = buildRequest(converted.bytes(), converted.mimeType(), request, timeout);
             HttpResponse<String> response = governedTransport.send(
                     transcriptionEndpoint(),
                     OutboundPurpose.PROVIDER_API_CALL,
@@ -138,6 +154,9 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
                     httpRequest,
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             return parseResponse(response, started);
+        } catch (AudioConversionException e) {
+            log.debugf("[STT] Audio conversion failed: %s", LogUtil.rootMessage(e));
+            return failure(AudioTranscriptionResult.Status.FAILED, "audio_convert_error", started);
         } catch (OutboundHttpException e) {
             AudioTranscriptionResult.Status status = e.category() == OutboundHttpException.Category.TIMEOUT
                     ? AudioTranscriptionResult.Status.TIMEOUT
@@ -170,10 +189,10 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
         return Files.readAllBytes(request.tempFilePath());
     }
 
-    private HttpRequest buildRequest(byte[] audio, AudioTranscriptionRequest request, Duration timeout)
+    private HttpRequest buildRequest(byte[] audio, String mimeType, AudioTranscriptionRequest request, Duration timeout)
             throws IOException {
         String boundary = "AmshaBoundary" + UUID.randomUUID();
-        byte[] body = multipartBody(boundary, audio, request);
+        byte[] body = multipartBody(boundary, audio, mimeType, request);
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(transcriptionEndpoint()))
                 .timeout(timeout)
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
@@ -186,13 +205,14 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
         return builder.build();
     }
 
-    private byte[] multipartBody(String boundary, byte[] audio, AudioTranscriptionRequest request) throws IOException {
+    private byte[] multipartBody(String boundary, byte[] audio, String mimeType, AudioTranscriptionRequest request)
+            throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream(audio.length + 512);
         writeField(output, boundary, "model", model);
         if (request.languageHint() != null) {
             writeField(output, boundary, "language", request.languageHint());
         }
-        writeBytes(output, boundary, request.mimeType(), audio);
+        writeBytes(output, boundary, mimeType, audio);
         output.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
         return output.toByteArray();
     }

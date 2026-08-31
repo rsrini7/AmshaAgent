@@ -41,7 +41,8 @@ class OmlxAudioTranscriptionProviderTest {
                 1024,
                 12,
                 "test-key",
-                "http://127.0.0.1:8000/v1");
+                "http://127.0.0.1:8000/v1",
+                "ffmpeg");
     }
 
     @Test
@@ -112,5 +113,36 @@ class OmlxAudioTranscriptionProviderTest {
         assertEquals(AudioTranscriptionResult.Status.FAILED, result.status());
         assertEquals("provider_http_error", result.failureReason());
         assertTrue(result.transcript() == null);
+    }
+
+    @Test
+    void oggOpusWithUnavailableFfmpegDegradesSafely() {
+        OmlxAudioTranscriptionProvider broken = new OmlxAudioTranscriptionProvider(
+                governedTransport,
+                new ObjectMapper(),
+                true,
+                "whisper-large-v3-turbo",
+                Duration.ofSeconds(30),
+                1024,
+                12,
+                "test-key",
+                "http://127.0.0.1:8000/v1",
+                "/nonexistent/ffmpeg-bin");
+
+        byte[] ogg = {'O', 'g', 'g', 'S', 1, 2, 3, 4};
+        AudioTranscriptionResult result = broken.transcribe(
+                AudioTranscriptionRequest.ofInline("audio-4", "audio/ogg", ogg, null, Duration.ofSeconds(5)));
+
+        assertEquals(AudioTranscriptionResult.Status.FAILED, result.status());
+        assertEquals("audio_convert_error", result.failureReason());
+        verify(governedTransport, never())
+                .send(
+                        any(String.class),
+                        any(OutboundPurpose.class),
+                        any(),
+                        any(),
+                        any(Boolean.class),
+                        any(HttpRequest.class),
+                        any(HttpResponse.BodyHandler.class));
     }
 }
