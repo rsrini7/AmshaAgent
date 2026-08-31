@@ -38,7 +38,8 @@ public final class MediaBudgetLimits {
             "application/pdf",
             "audio/mpeg",
             "audio/wav",
-            "audio/ogg");
+            "audio/ogg",
+            "audio/webm");
 
     /**
      * Resolves the maximum permitted byte size for the specified attachment type.
@@ -46,6 +47,9 @@ public final class MediaBudgetLimits {
     public static long resolveLimitForType(AttachmentType type, long customMaxImageBytes, long customMaxDocBytes) {
         if (type == AttachmentType.IMAGE) {
             return customMaxImageBytes > 0 ? customMaxImageBytes : DEFAULT_MAX_IMAGE_SIZE_BYTES;
+        }
+        if (type == AttachmentType.AUDIO || type == AttachmentType.DOCUMENT_PDF) {
+            return customMaxDocBytes > 0 ? customMaxDocBytes : DEFAULT_MAX_DOCUMENT_SIZE_BYTES;
         }
         return customMaxDocBytes > 0 ? customMaxDocBytes : DEFAULT_MAX_DOCUMENT_SIZE_BYTES;
     }

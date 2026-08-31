@@ -20,6 +20,7 @@ import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.audio.AudioTranscriptionPort;
 import com.amsha.llm.api.audio.AudioTranscriptionRequest;
 import com.amsha.llm.api.audio.AudioTranscriptionResult;
+import com.amsha.security.api.MediaBudgetLimits;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.GovernedTransportService;
 import com.amsha.security.http.OutboundHttpException;
@@ -39,7 +40,7 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
 
     private static final Logger log = Logger.getLogger(OmlxAudioTranscriptionProvider.class);
     private static final String DEFAULT_MODEL = "whisper-large-v3-turbo";
-    private static final long DEFAULT_MAX_BYTES = 25L * 1024 * 1024;
+    private static final long DEFAULT_MAX_BYTES = MediaBudgetLimits.DEFAULT_MAX_DOCUMENT_SIZE_BYTES;
     private static final int DEFAULT_MAX_TRANSCRIPT_CHARS = 12_000;
     private static final String DEFAULT_TIMEOUT = "PT60S";
 
@@ -47,27 +48,13 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
     private final ObjectMapper objectMapper;
     private final OggOpusToWavConverter converter;
 
-    @ConfigProperty(name = "amsha.stt.enabled", defaultValue = "false")
     boolean enabled;
-
-    @ConfigProperty(name = "amsha.stt.model", defaultValue = DEFAULT_MODEL)
     String model;
-
-    @ConfigProperty(name = "amsha.stt.timeout", defaultValue = DEFAULT_TIMEOUT)
     Duration configuredTimeout;
-
-    @ConfigProperty(name = "amsha.stt.max-bytes", defaultValue = "26214400")
     long maxBytes;
-
-    @ConfigProperty(name = "amsha.stt.max-transcript-chars", defaultValue = "12000")
     int maxTranscriptChars;
-
-    @ConfigProperty(name = "AMSHA_OMLX_API_KEY", defaultValue = "not-needed")
     String apiKey;
-
-    @ConfigProperty(name = "AMSHA_OMLX_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
     String baseUrl;
-
     String ffmpegPath;
 
     @Inject
@@ -77,24 +64,15 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
     public OmlxAudioTranscriptionProvider(
             GovernedTransportService governedTransport,
             ObjectMapper objectMapper,
+            @ConfigProperty(name = "amsha.stt.enabled", defaultValue = "false") boolean enabled,
+            @ConfigProperty(name = "amsha.stt.model", defaultValue = DEFAULT_MODEL) String model,
+            @ConfigProperty(name = "amsha.stt.timeout", defaultValue = DEFAULT_TIMEOUT) Duration configuredTimeout,
+            @ConfigProperty(name = "amsha.stt.max-bytes", defaultValue = "26214400") long maxBytes,
+            @ConfigProperty(name = "amsha.stt.max-transcript-chars", defaultValue = "12000") int maxTranscriptChars,
+            @ConfigProperty(name = "AMSHA_OMLX_API_KEY", defaultValue = "not-needed") String apiKey,
+            @ConfigProperty(name = "AMSHA_OMLX_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
+                    String baseUrl,
             @ConfigProperty(name = "amsha.stt.ffmpeg-path", defaultValue = "ffmpeg") String ffmpegPath) {
-        this.governedTransport = governedTransport;
-        this.objectMapper = objectMapper;
-        this.ffmpegPath = ffmpegPath;
-        this.converter = new OggOpusToWavConverter(ffmpegPath);
-    }
-
-    OmlxAudioTranscriptionProvider(
-            GovernedTransportService governedTransport,
-            ObjectMapper objectMapper,
-            boolean enabled,
-            String model,
-            Duration configuredTimeout,
-            long maxBytes,
-            int maxTranscriptChars,
-            String apiKey,
-            String baseUrl,
-            String ffmpegPath) {
         this.governedTransport = governedTransport;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
@@ -227,11 +205,28 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
 
     private static void writeBytes(ByteArrayOutputStream output, String boundary, String mimeType, byte[] audio)
             throws IOException {
-        output.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio\""
+        String fileName = multipartFileName(mimeType);
+        output.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
+                        + fileName
+                        + "\""
                         + "\r\nContent-Type: " + mimeType + "\r\n\r\n")
                 .getBytes(StandardCharsets.UTF_8));
         output.write(audio);
         output.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String multipartFileName(String mimeType) {
+        if (mimeType == null) {
+            return "audio.bin";
+        }
+        String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "audio/mpeg", "audio/mp3" -> "audio.mp3";
+            case "audio/wav", "audio/x-wav", "audio/wave" -> "audio.wav";
+            case "audio/ogg", "audio/opus", "application/ogg" -> "audio.ogg";
+            case "audio/webm", "video/webm" -> "audio.webm";
+            default -> "audio.bin";
+        };
     }
 
     private AudioTranscriptionResult parseResponse(HttpResponse<String> response, long started) throws IOException {
@@ -286,8 +281,18 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
         if (mimeType == null) {
             return false;
         }
-        return switch (mimeType.toLowerCase(Locale.ROOT)) {
-            case "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/mp4", "audio/webm" -> true;
+        String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "audio/mpeg",
+                    "audio/mp3",
+                    "audio/wav",
+                    "audio/x-wav",
+                    "audio/wave",
+                    "audio/ogg",
+                    "audio/opus",
+                    "application/ogg",
+                    "audio/webm",
+                    "video/webm" -> true;
             default -> false;
         };
     }

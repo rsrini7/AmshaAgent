@@ -10,9 +10,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.util.LogUtil;
+
 /**
- * Transcodes OGG/Opus voice audio to mono 16 kHz PCM WAV using an allowlisted ffmpeg invocation
- * via {@link ProcessBuilder} (never a shell). WAV input passes through unchanged.
+ * Transcodes OGG/Opus and WebM/Opus voice audio to mono 16 kHz PCM WAV using an allowlisted
+ * ffmpeg invocation via {@link ProcessBuilder} (never a shell). WAV input passes through unchanged.
  *
  * <p>Detection is by MIME type and magic bytes only; the ffmpeg executable path comes from
  * configuration, never from the attachment, so there is no injection surface. Conversion honours
@@ -26,6 +28,7 @@ final class OggOpusToWavConverter {
     private static final byte[] OGG_MAGIC = {'O', 'g', 'g', 'S'};
     private static final byte[] RIFF_MAGIC = {'R', 'I', 'F', 'F'};
     private static final byte[] WAVE_MAGIC = {'W', 'A', 'V', 'E'};
+    private static final byte[] WEBM_MAGIC = {0x1A, 0x45, (byte) 0xDF, (byte) 0xA3};
 
     private final Path ffmpegPath;
 
@@ -35,8 +38,8 @@ final class OggOpusToWavConverter {
     }
 
     /**
-     * Returns audio unchanged when it is already WAV or is not OGG/Opus. Otherwise transcodes
-     * OGG/Opus to mono 16 kHz PCM WAV.
+     * Returns audio unchanged when it is already WAV or is not OGG/Opus/WebM. Otherwise
+     * transcodes OGG/Opus or WebM/Opus to mono 16 kHz PCM WAV.
      */
     ConvertedAudio convertIfNeeded(byte[] input, String mimeType, long maxBytes, Duration timeout)
             throws AudioConversionException {
@@ -47,10 +50,10 @@ final class OggOpusToWavConverter {
             String outMime = (mimeType == null || mimeType.isBlank()) ? "audio/wav" : mimeType;
             return new ConvertedAudio(input, outMime);
         }
-        if (!isOggOpus(mimeType, input)) {
+        if (!isOggOpus(mimeType, input) && !isWebm(mimeType, input)) {
             return new ConvertedAudio(input, mimeType);
         }
-        return transcode(input, maxBytes, timeout);
+        return transcode(input, mimeType, maxBytes, timeout);
     }
 
     /** True when the bytes are already a WAV container (any MIME) — used by callers to verify output. */
@@ -58,11 +61,13 @@ final class OggOpusToWavConverter {
         return isWav(null, input);
     }
 
-    private ConvertedAudio transcode(byte[] input, long maxBytes, Duration timeout) throws AudioConversionException {
+    private ConvertedAudio transcode(byte[] input, String mimeType, long maxBytes, Duration timeout)
+            throws AudioConversionException {
         Path in = null;
         Path out = null;
         try {
-            in = Files.createTempFile("amsha-stt-in-", ".ogg");
+            String suffix = isWebm(mimeType, input) ? ".webm" : ".ogg";
+            in = Files.createTempFile("amsha-stt-in-", suffix);
             out = Files.createTempFile("amsha-stt-out-", ".wav");
             Files.write(in, input);
             List<String> command = List.of(
@@ -122,7 +127,7 @@ final class OggOpusToWavConverter {
             }
             return new ConvertedAudio(Files.readAllBytes(out), "audio/wav");
         } catch (IOException e) {
-            throw new AudioConversionException("ffmpeg io error: " + e.getMessage(), e);
+            throw new AudioConversionException("ffmpeg io error: " + LogUtil.rootMessage(e), e);
         } finally {
             deleteQuietly(in);
             deleteQuietly(out);
@@ -130,7 +135,7 @@ final class OggOpusToWavConverter {
     }
 
     private static Thread drainAsync(InputStream stream) {
-        Thread drainer = new Thread(() -> {
+        Thread drainer = Thread.ofVirtual().unstarted(() -> {
             try (InputStream in = stream) {
                 in.transferTo(OutputStream.nullOutputStream());
             } catch (IOException _) {
@@ -166,8 +171,8 @@ final class OggOpusToWavConverter {
 
     private static boolean isWav(String mimeType, byte[] input) {
         if (mimeType != null) {
-            String mime = mimeType.toLowerCase(Locale.ROOT);
-            if (mime.equals("audio/wav") || mime.equals("audio/x-wav") || mime.equals("audio/wave")) {
+            String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+            if (normalized.equals("audio/wav") || normalized.equals("audio/x-wav") || normalized.equals("audio/wave")) {
                 return true;
             }
         }
@@ -176,12 +181,24 @@ final class OggOpusToWavConverter {
 
     private static boolean isOggOpus(String mimeType, byte[] input) {
         if (mimeType != null) {
-            String mime = mimeType.toLowerCase(Locale.ROOT);
-            if (mime.equals("audio/ogg") || mime.equals("audio/opus") || mime.equals("application/ogg")) {
+            String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+            if (normalized.equals("audio/ogg")
+                    || normalized.equals("audio/opus")
+                    || normalized.equals("application/ogg")) {
                 return true;
             }
         }
         return input.length >= 4 && startsWith(input, 0, OGG_MAGIC);
+    }
+
+    private static boolean isWebm(String mimeType, byte[] input) {
+        if (mimeType != null) {
+            String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+            if (normalized.equals("audio/webm") || normalized.equals("video/webm")) {
+                return true;
+            }
+        }
+        return input.length >= 4 && startsWith(input, 0, WEBM_MAGIC);
     }
 
     private static boolean startsWith(byte[] data, int offset, byte[] magic) {

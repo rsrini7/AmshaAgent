@@ -11,18 +11,24 @@ import java.io.StringReader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelServices;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
+import com.amsha.channel.api.MediaAttachment;
 import com.amsha.channel.api.session.SessionRotatedEvent;
 import com.amsha.common.util.LogUtil;
+import com.amsha.security.api.MediaBudgetLimits;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -40,6 +46,11 @@ import io.quarkus.websockets.next.WebSocketConnection;
 public class WebChatEndpoint {
 
     private static final Logger log = Logger.getLogger(WebChatEndpoint.class);
+    private static final int MAX_AUDIO_UPLOAD_BYTES = (int) MediaBudgetLimits.DEFAULT_MAX_DOCUMENT_SIZE_BYTES;
+    private static final int MAX_AUDIO_BASE64_CHARS = 4 * ((MAX_AUDIO_UPLOAD_BYTES + 2) / 3);
+    private static final int MAX_FILE_NAME_CHARS = 255;
+    private static final Set<String> SUPPORTED_AUDIO_MIME_TYPES =
+            Set.of("audio/mpeg", "audio/wav", "audio/ogg", "audio/webm");
 
     @Inject
     WebSocketSessionStore sessionStore;
@@ -145,7 +156,8 @@ public class WebChatEndpoint {
                 .subscribe()
                 .with(
                         id -> {},
-                        err -> log.warnf("Failed to send connected event to %s: %s", conn.id(), err.getMessage()));
+                        err -> log.warnf(
+                                "Failed to send connected event to %s: %s", conn.id(), LogUtil.rootMessage(err)));
 
         log.infof(
                 "WebSocket ready: connId=%s platformId=%s amshaSession=%s owner=%s",
@@ -182,7 +194,8 @@ public class WebChatEndpoint {
                 return;
             }
             String text = json.getString("text", "");
-            if (text.isBlank()) {
+            MediaAttachment attachment = parseAudioAttachment(json);
+            if (text.isBlank() && attachment == null) {
                 return;
             }
 
@@ -198,8 +211,9 @@ public class WebChatEndpoint {
             String userId = messageCs.ownerKeyName() != null ? messageCs.ownerKeyName() : platformId;
             ChannelUser user = new ChannelUser(userId, platformId, "Web User", ChannelType.WEBSOCKET);
 
+            List<MediaAttachment> attachments = attachment == null ? List.of() : List.of(attachment);
             ChannelMessage.WebSocketMessage msg =
-                    new ChannelMessage.WebSocketMessage(user, text, platformId, Instant.now());
+                    new ChannelMessage.WebSocketMessage(user, text, platformId, Instant.now(), attachments);
 
             // ChannelServices.processAsync propagates CDI context and handles pipeline orchestration
             var _ = channelServices.processAsync(msg).exceptionally(ex -> {
@@ -207,9 +221,94 @@ public class WebChatEndpoint {
                 return null;
             });
 
+        } catch (IllegalArgumentException e) {
+            log.warnf("Rejected WebSocket message: %s", LogUtil.rootMessage(e));
+            sendClientError(conn, LogUtil.rootMessage(e));
         } catch (Exception e) {
-            log.warnf("Failed to process incoming WebSocket message: %s\n%s", message, LogUtil.trimmedStack(e));
+            log.warnf("Failed to process incoming WebSocket message: %s", LogUtil.rootMessage(e));
+            log.debugf("WebSocket message processing stack: %s", LogUtil.trimmedStack(e));
+            sendClientError(conn, "Message could not be processed");
         }
+    }
+
+    private static MediaAttachment parseAudioAttachment(JsonObject message) {
+        if (!message.containsKey("attachment") || message.isNull("attachment")) {
+            return null;
+        }
+        JsonObject attachment = message.getJsonObject("attachment");
+        String mimeType = normalizeAudioMimeType(attachment.getString("mimeType", ""));
+        if (!SUPPORTED_AUDIO_MIME_TYPES.contains(mimeType)) {
+            throw new IllegalArgumentException("Supported audio formats are MP3, WAV, OGG, and WebM");
+        }
+        String encoded = attachment.getString("data", "");
+        if (encoded.isBlank()) {
+            throw new IllegalArgumentException("Audio attachment is empty");
+        }
+        if (encoded.length() > MAX_AUDIO_BASE64_CHARS) {
+            throw new IllegalArgumentException("Audio attachment exceeds 25 MiB");
+        }
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(encoded);
+        } catch (IllegalArgumentException _) {
+            throw new IllegalArgumentException("Audio attachment encoding is invalid");
+        }
+        if (bytes.length == 0 || bytes.length > MAX_AUDIO_UPLOAD_BYTES) {
+            throw new IllegalArgumentException("Audio attachment must be between 1 byte and 25 MiB");
+        }
+        return MediaAttachment.ofInline(
+                UUID.randomUUID().toString(),
+                AttachmentType.AUDIO,
+                mimeType,
+                safeFileName(attachment.getString("fileName", ""), mimeType),
+                bytes,
+                Map.of("channel", ChannelType.WEBSOCKET.id()));
+    }
+
+    private static String normalizeAudioMimeType(String mimeType) {
+        String normalized =
+                mimeType == null ? "" : mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "audio/mp3" -> "audio/mpeg";
+            case "audio/x-wav", "audio/wave" -> "audio/wav";
+            case "video/webm" -> "audio/webm";
+            default -> normalized;
+        };
+    }
+
+    private static String safeFileName(String fileName, String mimeType) {
+        String candidate = fileName == null ? "" : fileName.replace('\\', '/');
+        int separator = candidate.lastIndexOf('/');
+        if (separator >= 0) {
+            candidate = candidate.substring(separator + 1);
+        }
+        candidate = candidate
+                .codePoints()
+                .filter(codePoint -> !Character.isISOControl(codePoint))
+                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                .toString()
+                .trim();
+        if (candidate.isBlank()) {
+            candidate = switch (mimeType) {
+                case "audio/mpeg" -> "audio.mp3";
+                case "audio/wav" -> "audio.wav";
+                case "audio/ogg" -> "audio.ogg";
+                case "audio/webm" -> "audio.webm";
+                default -> "audio.bin";
+            };
+        }
+        return candidate.length() <= MAX_FILE_NAME_CHARS ? candidate : candidate.substring(0, MAX_FILE_NAME_CHARS);
+    }
+
+    private static void sendClientError(WebSocketConnection conn, String detail) {
+        if (conn == null) {
+            return;
+        }
+        conn.sendTextAndAwait(Json.createObjectBuilder()
+                .add("type", "error")
+                .add("text", detail == null || detail.isBlank() ? "Invalid message" : detail)
+                .build()
+                .toString());
     }
 
     @OnClose
@@ -219,7 +318,7 @@ public class WebChatEndpoint {
 
     @OnError
     public void onError(WebSocketConnection conn, Throwable t) {
-        cleanup(conn, "error: " + t.getMessage());
+        cleanup(conn, "error: " + LogUtil.rootMessage(t));
     }
 
     private void cleanup(WebSocketConnection conn, String reason) {
@@ -280,7 +379,8 @@ public class WebChatEndpoint {
                             .with(
                                     v -> {},
                                     err -> log.warnf(
-                                            "Failed to send session-rotated to %s: %s", conn.id(), err.getMessage()));
+                                            "Failed to send session-rotated to %s: %s",
+                                            conn.id(), LogUtil.rootMessage(err)));
                 });
             }
         });

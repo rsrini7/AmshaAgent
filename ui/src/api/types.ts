@@ -19,8 +19,16 @@ export interface ApprovalResultDto {
 }
 
 // WebSocket Message Shapes
-export type WsOutboundMessage = 
-  | { type: 'message'; text: string; }
+export type WsOutboundMessage =
+  | {
+      type: 'message';
+      text: string;
+      attachment?: {
+        mimeType: 'audio/mpeg' | 'audio/wav' | 'audio/ogg' | 'audio/webm';
+        fileName: string;
+        data: string;
+      };
+    }
   | { type: 'AUTH'; token: string; };
 
 export interface WsConnectedEvent {

@@ -284,6 +284,7 @@ public final class MediaSecurityValidator {
             case "audio/mpeg" -> validateMpegHeader(header);
             case "audio/wav" -> validateWavHeader(header);
             case "audio/ogg" -> validateOggHeader(header);
+            case "audio/webm" -> validateWebmHeader(header);
             default -> {
                 // The MIME allowlist is enforced by validateMimeType.
             }
@@ -351,6 +352,16 @@ public final class MediaSecurityValidator {
     private static void validateOggHeader(byte[] header) {
         if (!matchesAscii(header, 0, "OggS")) {
             throw OutboundHttpException.magicMismatch("Audio data does not match valid OGG magic header");
+        }
+    }
+
+    private static void validateWebmHeader(byte[] header) {
+        if (header.length < 4
+                || (header[0] & 0xFF) != 0x1A
+                || (header[1] & 0xFF) != 0x45
+                || (header[2] & 0xFF) != 0xDF
+                || (header[3] & 0xFF) != 0xA3) {
+            throw OutboundHttpException.magicMismatch("Audio data does not match valid WebM magic header");
         }
     }
 

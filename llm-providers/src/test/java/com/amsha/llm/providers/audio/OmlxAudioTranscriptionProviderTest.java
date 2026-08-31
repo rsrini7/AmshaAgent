@@ -11,9 +11,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.io.ByteArrayOutputStream;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.Flow;
 
 import com.amsha.llm.api.audio.AudioTranscriptionRequest;
 import com.amsha.llm.api.audio.AudioTranscriptionResult;
@@ -23,6 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class OmlxAudioTranscriptionProviderTest {
 
@@ -69,6 +74,42 @@ class OmlxAudioTranscriptionProviderTest {
         assertEquals(AudioTranscriptionResult.Status.TRANSCRIBED, result.status());
         assertEquals("hello from w", result.transcript());
         assertEquals("en", result.language());
+    }
+
+    @Test
+    void multipartFilenameCarriesExtensionMatchingEffectiveMimeType() {
+        HttpResponse<String> response = mock(HttpResponse.class);
+        doReturn(200).when(response).statusCode();
+        doReturn("{\"text\":\"hello from whisper\",\"language\":\"en\"}")
+                .when(response)
+                .body();
+        ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        doReturn(response)
+                .when(governedTransport)
+                .send(
+                        eq("http://127.0.0.1:8000/v1/audio/transcriptions"),
+                        eq(OutboundPurpose.PROVIDER_API_CALL),
+                        isNull(),
+                        isNull(),
+                        eq(false),
+                        any(HttpRequest.class),
+                        any(HttpResponse.BodyHandler.class));
+
+        AudioTranscriptionResult result = provider.transcribe(AudioTranscriptionRequest.ofInline(
+                "audio-mp3", "audio/mpeg", new byte[] {'I', 'D', '3', 1}, null, Duration.ofSeconds(5)));
+
+        assertEquals(AudioTranscriptionResult.Status.TRANSCRIBED, result.status());
+        verify(governedTransport)
+                .send(
+                        eq("http://127.0.0.1:8000/v1/audio/transcriptions"),
+                        eq(OutboundPurpose.PROVIDER_API_CALL),
+                        isNull(),
+                        isNull(),
+                        eq(false),
+                        requestCaptor.capture(),
+                        any(HttpResponse.BodyHandler.class));
+        String multipart = new String(readBody(requestCaptor.getValue()), StandardCharsets.ISO_8859_1);
+        assertTrue(multipart.contains("filename=\"audio.mp3\""));
     }
 
     @Test
@@ -144,5 +185,31 @@ class OmlxAudioTranscriptionProviderTest {
                         any(Boolean.class),
                         any(HttpRequest.class),
                         any(HttpResponse.BodyHandler.class));
+    }
+
+    private static byte[] readBody(HttpRequest request) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        request.bodyPublisher().orElseThrow().subscribe(new Flow.Subscriber<>() {
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                subscription.request(Long.MAX_VALUE);
+            }
+
+            @Override
+            public void onNext(ByteBuffer item) {
+                byte[] chunk = new byte[item.remaining()];
+                item.get(chunk);
+                output.writeBytes(chunk);
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                throw new AssertionError("Failed to read HTTP request body", throwable);
+            }
+
+            @Override
+            public void onComplete() {}
+        });
+        return output.toByteArray();
     }
 }

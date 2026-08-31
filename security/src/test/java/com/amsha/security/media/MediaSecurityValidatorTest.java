@@ -174,6 +174,8 @@ class MediaSecurityValidatorTest {
         assertEquals(
                 "audio/wav",
                 MediaSecurityValidator.validateMimeType("audio/x-wav; charset=binary", AttachmentType.AUDIO));
+        assertEquals(
+                "audio/webm", MediaSecurityValidator.validateMimeType("audio/webm; codecs=opus", AttachmentType.AUDIO));
 
         // Rejects null or blank
         assertThrows(
@@ -240,7 +242,7 @@ class MediaSecurityValidatorTest {
     }
 
     @Test
-    @DisplayName("validateMagicBytes recognizes valid headers for PNG, JPEG, GIF, PDF, WebP, MPEG, WAV, OGG")
+    @DisplayName("validateMagicBytes recognizes valid headers for PNG, JPEG, GIF, PDF, WebP, MPEG, WAV, OGG, WebM")
     void validateMagicBytes_validHeaders() {
         byte[] png = new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
         assertDoesNotThrow(() -> MediaSecurityValidator.validateMagicBytes(png, "image/png"));
@@ -268,6 +270,8 @@ class MediaSecurityValidatorTest {
 
         byte[] ogg = new byte[] {'O', 'g', 'g', 'S'};
         assertDoesNotThrow(() -> MediaSecurityValidator.validateMagicBytes(ogg, "audio/ogg"));
+        byte[] webm = new byte[] {0x1A, 0x45, (byte) 0xDF, (byte) 0xA3};
+        assertDoesNotThrow(() -> MediaSecurityValidator.validateMagicBytes(webm, "audio/webm"));
     }
 
     @Test
@@ -322,6 +326,11 @@ class MediaSecurityValidatorTest {
         assertThrows(
                 OutboundHttpException.class,
                 () -> MediaSecurityValidator.validateMagicBytes(corruptedOgg, "audio/ogg"));
+
+        byte[] corruptedWebm = new byte[] {0x1A, 0x45, 0x00, 0x00};
+        assertThrows(
+                OutboundHttpException.class,
+                () -> MediaSecurityValidator.validateMagicBytes(corruptedWebm, "audio/webm"));
 
         assertThrows(
                 OutboundHttpException.class,

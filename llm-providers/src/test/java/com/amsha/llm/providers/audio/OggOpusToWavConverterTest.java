@@ -19,6 +19,7 @@ class OggOpusToWavConverterTest {
 
     private static final byte[] OGG_BYTES = {'O', 'g', 'g', 'S', 1, 2, 3, 4};
     private static final byte[] WAV_BYTES = {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E', 1, 2};
+    private static final byte[] WEBM_BYTES = {0x1A, 0x45, (byte) 0xDF, (byte) 0xA3, 1, 2, 3, 4};
     private static final byte[] OTHER_BYTES = {'P', 'K', 3, 4, 1, 2, 3, 4};
 
     @Test
@@ -79,6 +80,37 @@ class OggOpusToWavConverterTest {
         assertEquals('E', (char) wav[11]);
     }
 
+    @Test
+    void webmOpusWithMissingFfmpegThrowsCategorical() {
+        OggOpusToWavConverter converter = new OggOpusToWavConverter("/nonexistent/ffmpeg-bin");
+        AudioConversionException ex = assertThrows(
+                AudioConversionException.class,
+                () -> converter.convertIfNeeded(WEBM_BYTES, "audio/webm", 25 * 1024 * 1024, Duration.ofSeconds(30)));
+        assertTrue(ex.getMessage().contains("ffmpeg"), ex.getMessage());
+    }
+
+    @Test
+    void webmOpusIsTranscodedToMono16kWavWhenFfmpegPresent() throws Exception {
+        assumeTrue(ffmpegPresent(), "ffmpeg not on PATH; skipping live transcode");
+        OggOpusToWavConverter converter = new OggOpusToWavConverter("ffmpeg");
+
+        byte[] webm = synthesizeWebm();
+        OggOpusToWavConverter.ConvertedAudio result =
+                converter.convertIfNeeded(webm, "audio/webm", 25 * 1024 * 1024, Duration.ofSeconds(60));
+
+        assertEquals("audio/wav", result.mimeType());
+        byte[] wav = result.bytes();
+        assertTrue(wav.length > 12, "transcoded WAV is empty");
+        assertEquals('R', (char) wav[0]);
+        assertEquals('I', (char) wav[1]);
+        assertEquals('F', (char) wav[2]);
+        assertEquals('F', (char) wav[3]);
+        assertEquals('W', (char) wav[8]);
+        assertEquals('A', (char) wav[9]);
+        assertEquals('V', (char) wav[10]);
+        assertEquals('E', (char) wav[11]);
+    }
+
     private static boolean ffmpegPresent() {
         try {
             Process p = new ProcessBuilder("ffmpeg", "-version").start();
@@ -122,6 +154,41 @@ class OggOpusToWavConverterTest {
             return bytes;
         } finally {
             Files.deleteIfExists(ogg);
+        }
+    }
+
+    private static byte[] synthesizeWebm() throws IOException, InterruptedException {
+        Path webm = Files.createTempFile("amsha-webmtest-out-", ".webm");
+        try {
+            List<String> cmd = List.of(
+                    "ffmpeg",
+                    "-y",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "sine=frequency=440:duration=0.2",
+                    "-c:a",
+                    "libopus",
+                    "-f",
+                    "webm",
+                    webm.toString());
+            Process p = new ProcessBuilder(cmd).start();
+            boolean done = p.waitFor(30, TimeUnit.SECONDS);
+            p.destroyForcibly();
+            if (!done || p.exitValue() != 0) {
+                throw new IOException("ffmpeg webm synthesis failed");
+            }
+            byte[] bytes = Files.readAllBytes(webm);
+            assertTrue(bytes.length >= 4, "synthesized WebM is empty");
+            assertEquals((byte) 0x1A, bytes[0]);
+            assertEquals((byte) 0x45, bytes[1]);
+            assertEquals((byte) 0xDF, bytes[2]);
+            assertEquals((byte) 0xA3, bytes[3]);
+            return bytes;
+        } finally {
+            Files.deleteIfExists(webm);
         }
     }
 }

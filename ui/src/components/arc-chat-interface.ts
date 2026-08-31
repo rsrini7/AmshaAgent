@@ -45,6 +45,10 @@ export class ArcChatInterface extends LitElement {
 
   @state() private _messages: ChatMessage[] = [];
   @state() private _input = '';
+  @state() private _audioAttachment: File | null = null;
+  @state() private _attachmentError = '';
+  @state() private _encodingAttachment = false;
+  @state() private _isRecording = false;
   @state() private _wsStatus: 'connecting' | 'open' | 'closed' | 'error' = 'closed';
   @state() private _awaitingApproval = false;
   @state() private _denyReason = '';
@@ -68,6 +72,17 @@ export class ArcChatInterface extends LitElement {
   private _boundProgress = ((e: Event) => this._onProgress(e as CustomEvent<ProgressUpdate>)) as EventListener;
   private static readonly WS_TOKEN_TTL = 30_000;
   private static readonly MIN_CONNECT_INTERVAL = 5000;
+  private static readonly MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
+  private static readonly SUPPORTED_AUDIO_TYPES = new Set([
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/ogg', 'audio/webm', 'video/webm',
+  ]);
+  private static readonly AUDIO_EXT_TO_MIME: Record<string, string> = {
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.webm': 'audio/webm',
+  };
+
+  private _mediaRecorder: MediaRecorder | null = null;
+  private _recordedChunks: Blob[] = [];
+  private _recordingStream: MediaStream | null = null;
 
   static styles = css`
     :host { 
@@ -358,6 +373,39 @@ export class ArcChatInterface extends LitElement {
        transition: var(--transition);
     }
     .attach-btn:hover { color: var(--text-primary); }
+    .attachment-input { display: none; }
+    .attachment-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .attachment-row button {
+      border: 0;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .attachment-error {
+      margin-bottom: 8px;
+      color: #ef4444;
+      font-size: 12px;
+    }
+    .mic-btn {
+      color: var(--text-muted); cursor: pointer; padding-bottom: 8px;
+      transition: var(--transition); background: transparent; border: 0;
+      font-size: 16px; line-height: 1;
+    }
+    .mic-btn:hover { color: var(--text-primary); }
+    .mic-btn.recording { color: #ef4444; animation: pulse 1s infinite; }
 
     .send-btn {
       background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
@@ -465,6 +513,10 @@ export class ArcChatInterface extends LitElement {
       clearTimeout(this._reconnectTimeoutId);
       this._reconnectTimeoutId = null;
     }
+    if (this._isRecording) {
+      this._stopRecording();
+    }
+    this._recordingStream?.getTracks().forEach((track) => track.stop());
     this._markdownCache.clear();
     this._resetProgress();
     this._ws?.disconnect();
@@ -648,18 +700,234 @@ export class ArcChatInterface extends LitElement {
     }
   }
 
-  private _send() {
+  private async _send() {
     const text = this._input.trim();
-    if (!text || this._wsStatus !== 'open') return;
-    this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text, timestamp: Date.now() }];
-    this._ws?.send({ type: 'message', text });
+    const attachment = this._audioAttachment;
+    if ((!text && !attachment) || this._wsStatus !== 'open' || this._encodingAttachment) {
+      return;
+    }
+    if (attachment && !this._isSupportedAudioFile(attachment)) {
+      this._attachmentError = 'Supported audio formats are MP3, WAV, OGG, and WebM (max 25 MiB)';
+      return;
+    }
+    let outbound: { type: 'message'; text: string; attachment?: { mimeType: string; fileName: string; data: string } } = {
+      type: 'message',
+      text,
+    };
+    let displayText = text;
+    if (attachment) {
+      this._encodingAttachment = true;
+      try {
+        const data = await this._fileToBase64(attachment);
+        const mimeType = this._resolveAttachmentMimeType(attachment);
+        if (!mimeType) {
+          this._encodingAttachment = false;
+          return;
+        }
+        outbound.attachment = { mimeType: mimeType as 'audio/mpeg' | 'audio/wav' | 'audio/ogg' | 'audio/webm', fileName: attachment.name, data };
+        displayText = text ? `${text} [${attachment.name}]` : `[${attachment.name}]`;
+      } catch (_) {
+        this._attachmentError = 'Failed to encode audio attachment';
+        this._encodingAttachment = false;
+        return;
+      }
+      this._encodingAttachment = false;
+    }
+    this._messages = [
+      ...this._messages,
+      { id: crypto.randomUUID(), role: 'user', text: displayText, timestamp: Date.now() },
+    ];
+    this._ws?.send(outbound as unknown as import('../api/types').WsOutboundMessage);
     this._input = '';
+    this._audioAttachment = null;
+    this._attachmentError = '';
+    const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+    if (fileInput) {
+      fileInput.value = '';
+    }
     this._progressPhase = 'Thinking';
     this._progressDetail = 'Preparing the first response';
     this._progressTrail = [{ phase: this._progressPhase, detail: this._progressDetail }];
     this._sessionHalted = false;
     this._isTyping = true;
     this._scrollToBottom();
+  }
+
+  private _isSupportedAudioFile(file: File): boolean {
+    if (file.size === 0 || file.size > ArcChatInterface.MAX_AUDIO_UPLOAD_BYTES) {
+      return false;
+    }
+    const mime = (file.type || '').split(';')[0].trim().toLowerCase();
+    if (ArcChatInterface.SUPPORTED_AUDIO_TYPES.has(mime)) {
+      return true;
+    }
+    const ext = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
+    return ext in ArcChatInterface.AUDIO_EXT_TO_MIME;
+  }
+
+  private _resolveAttachmentMimeType(file: File): string {
+    const mime = (file.type || '').split(';')[0].trim().toLowerCase();
+    if (mime === 'audio/mp3') {
+      return 'audio/mpeg';
+    }
+    if (mime === 'audio/x-wav' || mime === 'audio/wave') {
+      return 'audio/wav';
+    }
+    if (mime === 'video/webm') {
+      return 'audio/webm';
+    }
+    if (ArcChatInterface.SUPPORTED_AUDIO_TYPES.has(mime)) {
+      return mime;
+    }
+    const ext = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
+    const byExt = ArcChatInterface.AUDIO_EXT_TO_MIME[ext];
+    if (byExt) {
+      return byExt;
+    }
+    this._attachmentError = `Unsupported file type: ${ext || 'unknown'} — use MP3, WAV, OGG, or WebM`;
+    return '';
+  }
+
+  private _fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const comma = result.indexOf(',');
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private _onAudioFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (!file) {
+      return;
+    }
+    if (!this._isSupportedAudioFile(file)) {
+      this._attachmentError = 'Supported audio formats are MP3, WAV, OGG, and WebM (max 25 MiB)';
+      input.value = '';
+      return;
+    }
+    this._attachmentError = '';
+    this._audioAttachment = file;
+  }
+
+  private _clearAttachment(): void {
+    this._audioAttachment = null;
+    this._attachmentError = '';
+    const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  }
+
+  private _triggerFilePicker(): void {
+    const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+    fileInput?.click();
+  }
+
+  private async _toggleRecording(): Promise<void> {
+    if (this._isRecording) {
+      this._stopRecording();
+    } else {
+      await this._startRecording();
+    }
+  }
+
+  private async _startRecording(): Promise<void> {
+    if (this._isRecording) {
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      this._attachmentError = 'Microphone recording is not supported in this browser';
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this._recordingStream = stream;
+      this._recordedChunks = [];
+      const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg'];
+      let mimeType = '';
+      for (const candidate of preferred) {
+        if (MediaRecorder.isTypeSupported(candidate)) {
+          mimeType = candidate;
+          break;
+        }
+      }
+      if (!mimeType && typeof MediaRecorder.isTypeSupported === 'function') {
+        this._attachmentError = 'Voice recording in WebM or OGG is not supported in this browser';
+        stream.getTracks().forEach((track) => track.stop());
+        this._recordingStream = null;
+        return;
+      }
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          this._recordedChunks.push(event.data);
+        }
+      };
+      recorder.onstop = () => {
+        const blobMime = recorder.mimeType || mimeType || 'audio/webm';
+        const normalized = blobMime.split(';')[0].trim().toLowerCase();
+        if (normalized !== 'audio/webm' && normalized !== 'audio/ogg') {
+          this._attachmentError = `Recorded audio format (${normalized || 'unknown'}) is not supported — use WebM or OGG`;
+        } else {
+          const blob = new Blob(this._recordedChunks, { type: normalized });
+          if (blob.size === 0 || blob.size > ArcChatInterface.MAX_AUDIO_UPLOAD_BYTES) {
+            this._attachmentError = 'Recording must be between 1 byte and 25 MiB';
+          } else {
+            const fileName = normalized === 'audio/ogg' ? 'recording.ogg' : 'recording.webm';
+            this._audioAttachment = new File([blob], fileName, { type: normalized });
+            this._attachmentError = '';
+            const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+            if (fileInput) {
+              fileInput.value = '';
+            }
+          }
+        }
+        this._recordedChunks = [];
+        this._recordingStream?.getTracks().forEach((track) => track.stop());
+        this._recordingStream = null;
+        this._mediaRecorder = null;
+        this._isRecording = false;
+      };
+      this._mediaRecorder = recorder;
+      recorder.start(100);
+      this._isRecording = true;
+      this._attachmentError = '';
+      const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+      if (fileInput) {
+        fileInput.value = '';
+      }
+    } catch (_) {
+      this._attachmentError = 'Microphone access was denied or unavailable';
+      this._recordingStream?.getTracks().forEach((track) => track.stop());
+      this._recordingStream = null;
+    }
+  }
+
+  private _stopRecording(): void {
+    if (!this._isRecording || !this._mediaRecorder) {
+      return;
+    }
+    try {
+      if (this._mediaRecorder.state !== 'inactive') {
+        this._mediaRecorder.stop();
+      } else {
+        this._recordingStream?.getTracks().forEach((track) => track.stop());
+        this._recordingStream = null;
+        this._isRecording = false;
+      }
+    } catch (_) {
+      this._recordingStream?.getTracks().forEach((track) => track.stop());
+      this._recordingStream = null;
+      this._mediaRecorder = null;
+      this._isRecording = false;
+    }
   }
 
   public startNewSession(platformId: string) {
@@ -828,8 +1096,12 @@ export class ArcChatInterface extends LitElement {
         </div>
         
         <div class="input-wrapper">
+          ${this._attachmentError ? html`<div class="attachment-error">${this._attachmentError}</div>` : nothing}
+          ${this._audioAttachment ? html`<div class="attachment-row"><span>🎵 ${this._audioAttachment.name} (${Math.round(this._audioAttachment.size / 1024)} KB)</span><button aria-label="Remove attachment" @click=${this._clearAttachment}>×</button></div>` : nothing}
           <div class="input-area">
-            <div class="attach-btn" aria-label="Attach file" role="button" tabindex="0">📎</div>
+            <input class="attachment-input" type="file" accept=".mp3,.wav,.ogg,.webm,audio/mpeg,audio/wav,audio/ogg,audio/webm,video/webm" @change=${this._onAudioFileSelected} />
+            <button class="attach-btn" aria-label="Attach audio file" title="Attach audio (MP3, WAV, OGG, WebM)" @click=${this._triggerFilePicker}>📎</button>
+            <button class="mic-btn ${this._isRecording ? 'recording' : ''}" aria-label="${this._isRecording ? 'Stop recording' : 'Record audio'}" title="${this._isRecording ? 'Stop recording' : 'Record audio'}" @click=${this._toggleRecording}>${this._isRecording ? '⏹' : '🎤'}</button>
             <textarea
               aria-label="Message Amsha Agent"
               placeholder="Ask Amsha Agent anything…"
@@ -844,7 +1116,7 @@ export class ArcChatInterface extends LitElement {
               }}"
               @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } }}"
             ></textarea>
-            <button aria-label="Send message" class="send-btn" ?disabled="${!this._input.trim() || this._wsStatus !== 'open' || this._awaitingApproval}" @click="${this._send}">
+            <button aria-label="Send message" class="send-btn" ?disabled="${(!this._input.trim() && !this._audioAttachment) || this._wsStatus !== 'open' || this._awaitingApproval || this._encodingAttachment || this._isRecording}" @click="${this._send}">
                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             </button>
           </div>
