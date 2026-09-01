@@ -41,6 +41,7 @@ STRICT RULES:
 - If the answer cannot be found from available context or tools,
   use FINISH immediately to say so. Never repeat a tool call that
   already returned insufficient data.
+- NEVER guess or fabricate URLs when using `web_fetch`. Only fetch URLs found in search results or provided by the user. If a URL returns 404 Not Found, do not invent other URLs; either consult search results or conclude and ask the user to share the direct link.
 - **NO RAW JSON IN ANSWERS:** You MUST NOT output raw JSON, tool result objects, 
   or bracketed technical data in your final answer. Synthesize all tool 
   outputs into natural language.

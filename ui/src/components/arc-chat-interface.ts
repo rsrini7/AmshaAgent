@@ -39,6 +39,7 @@ const HALTED_MESSAGE_PATTERNS = [
   /budget exceeded/i,
   /timed out/i,
   /session halted/i,
+  /system halted/i,
 ];
 
 @customElement('arc-chat-interface')
@@ -487,6 +488,35 @@ export class ArcChatInterface extends LitElement {
     .send-btn:disabled {
       filter: grayscale(1); opacity: 0.4; cursor: not-allowed;
     }
+    .stop-btn {
+      background: #ef4444;
+      border: none; border-radius: 12px; width: 38px; height: 38px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.2s, background-color 0.2s;
+      color: white; flex-shrink: 0; margin-bottom: 3px;
+    }
+    .stop-btn:hover {
+      background: #dc2626; transform: translateY(-1px);
+    }
+    .progress-stop-btn {
+      margin-left: auto;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #ef4444;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .progress-stop-btn:hover {
+      background: rgba(239, 68, 68, 0.25);
+      transform: translateY(-1px);
+    }
     
     /* Markdown Styles */
     .bubble pre {
@@ -519,10 +549,17 @@ export class ArcChatInterface extends LitElement {
        font-size: 12px; font-family: 'Fira Code', monospace; 
        margin: 0; overflow-x: auto; max-height: 240px; border: 1px solid rgba(255,255,255,0.05);
     }
-    .approval-actions { display: flex; padding: 12px; gap: 10px; background: rgba(10, 11, 15, 0.5); }
+    .approval-actions { display: flex; flex-direction: column; padding: 12px; gap: 10px; background: rgba(10, 11, 15, 0.5); }
+    .approval-buttons { display: flex; gap: 10px; width: 100%; }
     .btn-approve { flex: 1; height: 38px; background: #00d4aa; color: #0a0b0f; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; }
-    .btn-deny { border: 1px solid rgba(255,255,255,0.1); background: transparent; color: white; border-radius: 8px; padding: 0 16px; cursor: pointer; }
-    textarea.deny-reason { width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px; color: white; }
+    .btn-deny { border: 1px solid rgba(255,255,255,0.15); background: transparent; color: white; border-radius: 8px; padding: 0 16px; cursor: pointer; height: 38px; }
+    .btn-deny:hover { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #ef4444; }
+    .btn-deny-submit { flex: 1; height: 38px; background: #ef4444; color: white; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; }
+    .btn-deny-submit:hover { background: #dc2626; }
+    .btn-cancel { border: 1px solid rgba(255,255,255,0.15); background: transparent; color: var(--text-muted); border-radius: 8px; padding: 0 16px; cursor: pointer; height: 38px; }
+    .btn-cancel:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+    textarea.deny-reason { width: 100%; box-sizing: border-box; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 0; color: white; font-family: inherit; font-size: 13px; resize: vertical; min-height: 64px; outline: none; }
+    textarea.deny-reason:focus { border-color: #ef4444; }
   `;
 
   updated(changedProperties: Map<string, unknown>) {
@@ -1102,6 +1139,21 @@ export class ArcChatInterface extends LitElement {
     this._scrollToBottom();
   }
 
+  private _sendStop() {
+    if (!this._isTyping && !this._awaitingApproval) return;
+    this._ws?.send({ type: 'message', text: '/stop' });
+    this._isTyping = false;
+    this._awaitingApproval = false;
+    this._sessionHalted = true;
+    this._progressPhase = 'Halted';
+    this._progressDetail = 'Session halted by user';
+    this._messages = [
+      ...this._messages,
+      { id: crypto.randomUUID(), role: 'user', text: '/stop', timestamp: Date.now() },
+    ];
+    this._scrollToBottom();
+  }
+
   private _scrollToBottom() {
     this.updateComplete.then(() => {
       requestAnimationFrame(() => {
@@ -1157,9 +1209,13 @@ export class ArcChatInterface extends LitElement {
   }
 
   render() {
-    const showProgress = this._isTyping || this._awaitingApproval || this._progressTrail.length > 0;
-    const phaseLabel = this._progressPhase || (this._awaitingApproval ? 'Waiting for approval' : 'Working');
-    const detailLabel = this._progressDetail || (this._awaitingApproval ? 'Approve or deny the tool request' : 'Processing the request');
+    const showProgress = this._isTyping || this._awaitingApproval || this._progressTrail.length > 0 || this._sessionHalted;
+    const phaseLabel = this._sessionHalted
+      ? 'Session Halted'
+      : (this._progressPhase || (this._awaitingApproval ? 'Waiting for approval' : 'Working'));
+    const detailLabel = this._sessionHalted
+      ? 'Workspace terminated. Click New Session to start a fresh chat.'
+      : (this._progressDetail || (this._awaitingApproval ? 'Approve or deny the tool request' : 'Processing the request'));
 
     return html`
       <div class="chat-shell">
@@ -1172,6 +1228,9 @@ export class ArcChatInterface extends LitElement {
                   <div class="progress-kicker">Live progress</div>
                   <div class="progress-phase">${phaseLabel}</div>
                 </div>
+                ${!this._sessionHalted ? html`
+                  <button class="progress-stop-btn" @click=${this._sendStop} title="Stop execution (/stop)">■ Stop</button>
+                ` : nothing}
               </div>
               <div class="progress-detail">${detailLabel}</div>
               ${this._progressTrail.length > 1 ? html`
@@ -1183,10 +1242,10 @@ export class ArcChatInterface extends LitElement {
                   `)}
                 </div>
               ` : nothing}
-              <div class="progress-bar"><span></span></div>
+              ${!this._sessionHalted ? html`<div class="progress-bar"><span></span></div>` : nothing}
               ${this._sessionHalted ? html`
-                <div class="halt-actions">
-                  <button class="new-session-btn" @click=${() => this.startNewSession(crypto.randomUUID())}>New Session</button>
+                <div class="halt-actions" style="margin-top: 12px;">
+                  <button class="new-session-btn" @click=${() => this.startNewSession(crypto.randomUUID())}>+ Start New Session</button>
                 </div>
               ` : nothing}
             </div>
@@ -1203,7 +1262,7 @@ export class ArcChatInterface extends LitElement {
                <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
                  ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> Amsha Agent` : 'You'}
                </div>
-               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">${m.role === 'user' ? html`<div>${m.text}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}` : html`${m.text ? this._renderMarkdown(m.id, m.text) : nothing}${m.audio ? html`<div class="assistant-audio-player"><div class="audio-header"><span class="audio-badge">🎵 Voice Reply</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`}${m.isApprovalPrompt && this._awaitingApproval ? html`<div class="approval-card"><div class="approval-body"><div class="approval-title"><span>⏸</span> Action Requires Approval</div>${m.approvalData ? html`<div class="approval-tool">Tool: <code>${m.approvalData.tool}</code></div><div class="approval-params-header">Parameters:</div><pre class="approval-params"><code>${typeof m.approvalData.params === 'string' ? m.approvalData.params : JSON.stringify(m.approvalData.params, null, 2)}</code></pre>` : html`<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">This session has paused to wait for your permission.</p>`}</div><div class="approval-actions">${this._showDenyReason ? html`<textarea class="deny-reason" .value=${this._denyReason} @input=${(e: any) => this._denyReason = e.target.value} placeholder="Reason for denial (optional)..."></textarea>` : nothing}<button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button><button class="btn-deny" @click=${() => this._sendDeny(m)}>${this._showDenyReason ? 'Send Feedback' : 'Deny'}</button></div></div>` : nothing}</div>
+               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">${m.role === 'user' ? html`<div>${m.text}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}` : html`${m.text ? this._renderMarkdown(m.id, m.text) : nothing}${m.audio ? html`<div class="assistant-audio-player"><div class="audio-header"><span class="audio-badge">🎵 Voice Reply</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`}${m.isApprovalPrompt && this._awaitingApproval ? html`<div class="approval-card"><div class="approval-body"><div class="approval-title"><span>⏸</span> Action Requires Approval</div>${m.approvalData ? html`<div class="approval-tool">Tool: <code>${m.approvalData.tool}</code></div><div class="approval-params-header">Parameters:</div><pre class="approval-params"><code>${typeof m.approvalData.params === 'string' ? m.approvalData.params : JSON.stringify(m.approvalData.params, null, 2)}</code></pre>` : html`<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">This session has paused to wait for your permission.</p>`}</div><div class="approval-actions">${this._showDenyReason ? html`<textarea class="deny-reason" .value=${this._denyReason} @input=${(e: any) => this._denyReason = e.target.value} placeholder="Reason for denial (optional)..."></textarea><div class="approval-buttons"><button class="btn-deny-submit" @click=${() => this._sendDeny(m)}>Submit Denial</button><button class="btn-cancel" @click=${() => { this._showDenyReason = false; this._denyReason = ''; }}>Cancel</button></div>` : html`<div class="approval-buttons"><button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button><button class="btn-deny" @click=${() => this._sendDeny(m)}>Deny</button></div>`}</div></div>` : nothing}</div>
                <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
             </div>
           `)}
@@ -1231,9 +1290,15 @@ export class ArcChatInterface extends LitElement {
               }}"
               @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } }}"
             ></textarea>
-            <button aria-label="Send message" class="send-btn" ?disabled="${(!this._input.trim() && !this._audioAttachment) || this._wsStatus !== 'open' || this._awaitingApproval || this._encodingAttachment || this._isRecording}" @click="${this._send}">
-               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            </button>
+            ${this._isTyping && !this._awaitingApproval ? html`
+              <button aria-label="Stop response" class="stop-btn" title="Stop response (/stop)" @click="${this._sendStop}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+              </button>
+            ` : html`
+              <button aria-label="Send message" class="send-btn" ?disabled="${(!this._input.trim() && !this._audioAttachment) || this._wsStatus !== 'open' || this._awaitingApproval || this._encodingAttachment || this._isRecording}" @click="${this._send}">
+                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            `}
           </div>
         </div>
       </div>

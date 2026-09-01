@@ -21,7 +21,11 @@ public class HaltReflex implements AgentReflex {
 
     @Override
     public boolean matches(String input) {
-        return input != null && input.trim().equalsIgnoreCase("/halt");
+        if (input == null) {
+            return false;
+        }
+        String trimmed = input.trim();
+        return trimmed.equalsIgnoreCase("/halt") || trimmed.equalsIgnoreCase("/stop");
     }
 
     @Override
