@@ -18,9 +18,11 @@ final class DefaultOnnxSessionHandleFactory implements OnnxSessionHandleFactory 
     public OnnxSessionHandle open(OrtEnvironment environment, VerifiedOnnxModelBundle bundle) throws Exception {
         var embeddingSpec = bundle.manifest().embeddingSpec();
         var classifierSpec = bundle.manifest().classifierSpec();
+        var scoringSpec = bundle.manifest().scoringSpec();
         int maximumLength = embeddingSpec
                 .map(OnnxEmbeddingBundleSpec::maxSequenceLength)
                 .or(() -> classifierSpec.map(OnnxClassifierBundleSpec::maxSequenceLength))
+                .or(() -> scoringSpec.map(OnnxScoringBundleSpec::maxSequenceLength))
                 .orElse(0);
         var tokenizer = maximumLength > 0
                 ? tokenizerFactory.load(bundle.tokenizerPath(), maximumLength)

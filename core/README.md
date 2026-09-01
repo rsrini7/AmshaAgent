@@ -223,6 +223,17 @@ The `foundry` provider integrates with Microsoft Foundry Local daemon (`foundry 
 | `amsha.classifier.foundry.model` | `AMSHA_CLASSIFIER_FOUNDRY_MODEL` | `qwen3-14b` | Classifier slot model |
 | `amsha.classifier.foundry.base-url` | `AMSHA_CLASSIFIER_FOUNDRY_BASE_URL` | `http://127.0.0.1:8000/v1` | Classifier slot base URL |
 
+## Observability & ChatModelListener Pilot
+
+Amsha provides zero-payload-leakage observability for LLM invocations with strict runtime controls. For this pilot, `AmshaChatModelListener` attaches to OpenAI-compatible `OpenAiChatModel` instances:
+- `off` (default): Request acquisition rejected; no listener telemetry is emitted.
+- `shadow`: Emits shadow metrics (`amsha.observability.listener.shadow.*`) and duration timers for zero-delta parity comparison against authoritative `AgentObserver` metrics; no sample queue is retained.
+- `active`: Emits active `amsha.llm.listener_call` child spans and active metrics/timers for calls without an existing manual instrumentation marker. Calls already covered by Amsha's manual instrumentation remain authoritative and are not duplicated.
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.observability.chat-listener.mode` | `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | Mode for LangChain4j `ChatModelListener` pilot (`off`, `shadow`, `active`) |
+
 ## Testing
 
 Run core tests:

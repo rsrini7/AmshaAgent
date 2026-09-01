@@ -193,6 +193,13 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
                         ? applyDecisionToTool(targetSessionId, pending.get(0), reason)
                         : applyDecisionToAll(targetSessionId, reason);
 
+                if (cp == null || BatchDecisionUtil.hasPendingToolNames(cp, objectMapper)) {
+                    log.infof(
+                            "[%sReflex] decision was not terminal for session=%s; resume suppressed",
+                            getActionName(), targetSessionId);
+                    return getNoPendingMessage();
+                }
+
                 if (ChannelType.CLI
                         .id()
                         .equalsIgnoreCase(context.getUser().channel().id())) {
@@ -226,8 +233,25 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         String activeRole = latestPending.get().getAgentRole();
 
         AgentCheckpoint cp = latestPending.get();
-        if (cp.hasBatchToolDecisions()) {
-            applyDecisionToAll(targetSid, reason);
+        AgentCheckpoint resolved;
+        try {
+            if (cp.hasBatchToolDecisions()) {
+                resolved = applyDecisionToAll(targetSid, reason);
+            } else if (cp.getPendingToolName() != null
+                    && !cp.getPendingToolName().isBlank()) {
+                resolved = applyDecisionToTool(targetSid, cp.getPendingToolName(), reason);
+            } else {
+                return getNoPendingMessage();
+            }
+        } catch (CheckpointResolutionException e) {
+            return getNoPendingMessage();
+        }
+
+        if (resolved == null || BatchDecisionUtil.hasPendingToolNames(resolved, objectMapper)) {
+            log.infof(
+                    "[DELEGATE-%s] decision was not terminal for session=%s; resume suppressed",
+                    getActionName(), targetSid);
+            return getNoPendingMessage();
         }
 
         String auditMsg =
@@ -258,9 +282,8 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         try {
             AgentCheckpoint cp = applyDecisionToTool(targetSessionId, toolName, reason);
-            if (BatchDecisionUtil.pendingToolNames(cp, objectMapper).isEmpty()) {
-                checkpointApprovalService.triggerResume(cp);
-            }
+            if (cp == null) return getNoPendingMessage();
+            if (!BatchDecisionUtil.hasPendingToolNames(cp, objectMapper)) checkpointApprovalService.triggerResume(cp);
             return getPerToolSuccessResponse(toolName);
         } catch (CheckpointResolutionException e) {
             return getNoPendingMessage();

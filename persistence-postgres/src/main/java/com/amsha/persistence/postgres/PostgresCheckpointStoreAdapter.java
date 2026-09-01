@@ -385,7 +385,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                 return false;
             }
             String rawJson = dto.batchToolDecisions();
-            if (rawJson == null) {
+            if (rawJson == null || rawJson.isBlank()) {
                 log.warnf("[BatchOps] batchToolDecisions is null for session=%s", sessionId);
                 return false;
             }
@@ -396,9 +396,13 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                     log.warnf("[BatchOps] Tool '%s' not in batch for session %s.", toolName, sessionId);
                     return false;
                 }
+                if (map.get(toolName) != ToolDecision.PENDING) {
+                    log.infof("[BatchOps] Tool '%s' is already decided for session=%s", toolName, sessionId);
+                    return false;
+                }
                 map.put(toolName, ToolDecision.valueOf(decision));
                 String updatedJson = objectMapper.writeValueAsString(map);
-                return dao.atomicUpdateBatchDecision(sessionId, agentRole, updatedJson, Instant.now());
+                return dao.atomicUpdateBatchDecision(sessionId, agentRole, updatedJson, rawJson, Instant.now());
             } catch (Exception e) {
                 log.errorf("[BatchOps] Failed to update batch tool decision: %s", LogUtil.rootMessage(e));
                 return false;

@@ -39,6 +39,17 @@ Concrete provider factories are annotated with `@ApplicationScoped` and discover
 - **Token Resolvers & CLI Helpers**: Caching and fallback resolution in `com.amsha.llm.providers.helper`.
 - **Native Reflection**: Registered in `LlmProvidersReflectionConfig`.
 
+## Observability & ChatModelListener Pilot
+
+For this pilot, OpenAI-compatible `OpenAiChatModel` instances built via `ChatModelFactory.openAiBuilder()` attach `AmshaChatModelListener` if discovered in the CDI container (other provider SDKs remain Amsha-observed). The listener operates under `ChatModelListenerRuntimeControl`:
+- `off` (default): Listener rejects request acquisition and performs 0 operations.
+- `shadow`: Records shadow metrics (`amsha.observability.listener.shadow.*`) and duration timers for parity comparison against authoritative `AgentObserver` metrics; no sample queue is retained.
+- `active`: Emits active `amsha.llm.listener_call` child spans with OTel semantic conventions and active metrics/timers for calls without an existing manual instrumentation marker. Manually instrumented calls remain authoritative and are not duplicated.
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.observability.chat-listener.mode` | `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | Mode for LangChain4j `ChatModelListener` pilot (`off`, `shadow`, `active`) |
+
 ## Adding a New Provider
 
 To add a new provider to `amsha-llm-providers`:

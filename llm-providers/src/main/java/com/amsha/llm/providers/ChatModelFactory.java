@@ -2,6 +2,7 @@ package com.amsha.llm.providers;
 
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.listener.ChatModelListener;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
@@ -9,6 +10,7 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.spi.CDI;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -17,16 +19,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
-import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.config.CoreSpiResolutionValidator;
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.wrapper.AgyResponsesChatModel;
 import com.amsha.llm.providers.wrapper.ClaudeCodeResponsesChatModel;
@@ -53,7 +58,6 @@ import io.quarkus.arc.Unremovable;
 public class ChatModelFactory implements ChatModelCreationPort {
 
     private static final Logger LOG = Logger.getLogger(ChatModelFactory.class);
-    private static final Pattern HEADROOM_PORT_PATTERN = Pattern.compile(":87[89]\\d");
     private static final ObjectMapper EXTRA_BODY_MAPPER = new ObjectMapper();
 
     public ChatModelFactory() {}
@@ -69,7 +73,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
             double temperature,
             boolean logRequests,
             boolean logResponses) {
-        return OpenAiChatModel.builder()
+        var builder = OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .modelName(modelName)
@@ -79,6 +83,20 @@ public class ChatModelFactory implements ChatModelCreationPort {
                 .temperature(temperature)
                 .logRequests(logRequests)
                 .logResponses(logResponses);
+        resolveChatModelListener().ifPresent(listener -> builder.listeners(List.of(listener)));
+        return builder;
+    }
+
+    /** Resolves the optional listener through the repository's canonical CDI SPI algorithm. */
+    private static Optional<ChatModelListener> resolveChatModelListener() {
+        try {
+            return CoreSpiResolutionValidator.resolveOptional(CDI.current().getBeanManager(), ChatModelListener.class);
+        } catch (RuntimeException e) {
+            // Static/unit-test construction may happen without an active CDI container. The
+            // listener is optional and must never make the provider builder unusable.
+            LOG.debugf("ChatModelListener resolution skipped (%s)", e.getClass().getSimpleName());
+            return Optional.empty();
+        }
     }
 
     /** Applies JSON format when model supports native structured output and toolless mode is active. */
@@ -94,7 +112,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
             boolean toolless,
             String baseUrl) {
         if (mode == StructuredOutputMode.NATIVE && toolless) {
-            if (isHeadroomProxyUrl(baseUrl)) {
+            if (StructuredOutputCapabilities.isHeadroomProxyUrl(baseUrl)) {
                 LOG.info("Bypassing native JSON response format due to Headroom proxy routing: " + baseUrl);
                 return;
             }
@@ -102,16 +120,9 @@ public class ChatModelFactory implements ChatModelCreationPort {
         }
     }
 
-    private static boolean isHeadroomProxyUrl(String url) {
-        if (url == null) return false;
-        String lower = url.toLowerCase();
-        return lower.contains("headroom")
-                || HEADROOM_PORT_PATTERN.matcher(lower).find();
-    }
-
     /** Convenience: builds an OpenAI-compatible ChatModel from an {@link LlmModelConfig}. */
     public static ChatModel createFromConfig(LlmModelConfig config) {
-        return openAiBuilder(
+        ChatModel model = openAiBuilder(
                         config.baseUrl(),
                         config.apiKey()
                                 .orElseThrow(() ->
@@ -124,6 +135,12 @@ public class ChatModelFactory implements ChatModelCreationPort {
                         false,
                         false)
                 .build();
+        boolean eligible = StructuredOutputCapabilities.resolvesToStrictSchema(
+                config.structuredOutputMode(),
+                config.strictJsonSchemaAdvertised(),
+                config.baseUrl(),
+                config.toolless());
+        return eligible ? CapabilityAwareChatModel.markStrict(model) : model;
     }
 
     /** Convenience: builds an OpenAI-compatible ChatModel from direct parameters. */
@@ -276,26 +293,31 @@ public class ChatModelFactory implements ChatModelCreationPort {
     public ChatModel createForAdapter(
             String adapterId, String baseUrl, String apiKey, String model, AgentLlmConfig config) {
         String adapter = adapterId == null ? "" : adapterId.toLowerCase(Locale.ROOT);
-        return switch (adapter) {
-            case "gemini" -> createGemini(baseUrl, apiKey, model, config);
-            case "anthropic", "claude" -> createAnthropic(baseUrl, apiKey, model, config);
-            case "claude-code" -> createClaudeCode(baseUrl, apiKey, model, config);
-            case "agy", "antigravity" -> createAgy(baseUrl, apiKey, model, config);
-            case "kimchi" -> createKimchi(baseUrl, apiKey, model, config);
-            case "foundry", "foundrylocal" -> createFoundry(baseUrl, model, config);
-            case "ollama" -> createOllama(baseUrl, model, config);
-            case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
-            default ->
-                createOpenAi(
-                        baseUrl,
-                        apiKey,
-                        model,
-                        config.maxTokens(),
-                        config.timeout(),
-                        config.maxRetries(),
-                        config.temperature(),
-                        config.logHttp());
-        };
+        ChatModel created =
+                switch (adapter) {
+                    case "gemini" -> createGemini(baseUrl, apiKey, model, config);
+                    case "anthropic", "claude" -> createAnthropic(baseUrl, apiKey, model, config);
+                    case "claude-code" -> createClaudeCode(baseUrl, apiKey, model, config);
+                    case "agy", "antigravity" -> createAgy(baseUrl, apiKey, model, config);
+                    case "kimchi" -> createKimchi(baseUrl, apiKey, model, config);
+                    case "foundry", "foundrylocal" -> createFoundry(baseUrl, model, config);
+                    case "ollama" -> createOllama(baseUrl, model, config);
+                    case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
+                    default ->
+                        createOpenAi(
+                                baseUrl,
+                                apiKey,
+                                model,
+                                config.maxTokens(),
+                                config.timeout(),
+                                config.maxRetries(),
+                                config.temperature(),
+                                config.logHttp());
+                };
+        boolean eligible = "openai".equals(adapter)
+                && StructuredOutputCapabilities.resolvesToStrictSchema(
+                        config.structuredOutputMode(), true, baseUrl, true);
+        return eligible ? CapabilityAwareChatModel.markStrict(created) : created;
     }
 
     private static GovernedTransportService resolveGovernedTransport() {

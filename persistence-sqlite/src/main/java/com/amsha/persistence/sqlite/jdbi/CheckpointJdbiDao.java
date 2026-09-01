@@ -269,11 +269,12 @@ public interface CheckpointJdbiDao {
             @Bind("now") String now);
 
     @SqlUpdate(
-            "UPDATE agent_checkpoint SET batch_tool_decisions = :json, updated_at = :now WHERE session_id = :sessionId AND agent_role = :agentRole AND status = 'AWAITING_APPROVAL'")
+            "UPDATE agent_checkpoint SET batch_tool_decisions = :json, updated_at = :now WHERE session_id = :sessionId AND agent_role = :agentRole AND status = 'AWAITING_APPROVAL' AND batch_tool_decisions = :expectedJson")
     boolean atomicUpdateBatchDecision(
             @Bind("sessionId") String sessionId,
             @Bind("agentRole") String agentRole,
             @Bind("json") String json,
+            @Bind("expectedJson") String expectedJson,
             @Bind("now") String now);
 
     @SqlUpdate(

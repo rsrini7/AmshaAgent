@@ -8,10 +8,12 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 
@@ -51,6 +53,11 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     }
 
     @Override
+    public boolean supportsStrictJsonSchema() {
+        return true;
+    }
+
+    @Override
     public ChatModel create() {
         return doCreate(modelName.orElseThrow(() -> new IllegalStateException("OpenAI requires AMSHA_OPENAI_MODEL")));
     }
@@ -76,7 +83,18 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
                         agentConfig.maxRetries(),
                         agentConfig.temperature(),
                         agentConfig.logHttp()));
+        if (strictSchemaEligible()) {
+            entries = entries.stream()
+                    .map(entry -> new MultiModelChatModel.ModelEntry(
+                            entry.label(), CapabilityAwareChatModel.markStrict(entry.model()), true))
+                    .toList();
+        }
         if (entries.size() == 1) return entries.get(0).model();
         return new MultiModelChatModel("openai", entries, 5);
+    }
+
+    private boolean strictSchemaEligible() {
+        return StructuredOutputCapabilities.resolvesToStrictSchema(
+                agentConfig.structuredOutputMode(), supportsStrictJsonSchema(), baseUrl, true);
     }
 }

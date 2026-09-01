@@ -17,6 +17,7 @@ The implementation follows [ADR-ONNX-In-Process-Local-ML-Inference.md](../Ideas-
 | **Phase 2: Shadow Classifiers** | **Runtime/tooling complete; evidence open** | Disabled-by-default intent, tool-risk, and answer-quality adapters, verified bundle execution, payload-free shadow metrics, and reproducible preparation/export tooling are implemented. Human-approved datasets, calibrated models, error budgets, and retained shadow evidence remain pending. |
 | **Phase 2.5: Core Classifier SPI Gate** | **Implementation complete** | Ordered post-policy tool-risk and answer-quality SPIs preserve deterministic decisions and HITL, permit only monotonic risk upgrades, share one pre-tool retry budget, and have no active ONNX implementation. |
 | **Phase 3A: Active Classifiers & Controls** | **Implementation complete** | Internal-only, mandatory-audited per-classifier runtime state distinguishes requested/effective enablement, rejects missing implementations, and drains accepted leases after disable. Active ONNX classifier interceptors bridge to core Phase 2.5 SPIs and preserve deterministic execution when disabled. |
+| **Phase 3B: Local Cross-Encoder Reranking** | **Implementation complete; evidence gated** | `LocalOnnxScoringAdapter` (`RerankerPort` via CDI `Instance` + `@Unremovable`), `OnnxScoringBundleSpec` (384-token `text-pair` contract, `BATCH_BY_ONE` logits), `OnnxScoringRunner` + `OnnxTextInputSupport` (shared truncation bounded to manifest `maxSequenceLength`), `RerankingService` deterministic fallback preserving `ScoredChunk.score()` and tagging `amsha.rag.rerank.fallback`, and non-destructive `searchReranked` path in `RagContextEnricher`. Fail-closed by default (`amsha.rag.reranker.enabled=false`); executable benchmark gate under `scripts/evaluate_reranker_benchmark.py` with 105-query graded corpus, paired permutation testing, and p95≤250 ms gate. |
 
 Current evidence (2026-07-29): the pinned Python-reference corpus passes with minimum cosine `0.999999998` against the FP32 `0.9999` threshold, 100% for every declared partition, and stable nearest-neighbour rankings. The macOS arm64 record passes three fresh native lifecycles, 100 inference probes per lifecycle, graceful shutdown, and maximum RSS growth of `22,816 KiB` against the `64 MiB` limit. Multi-backend vector parity also passes. The release harness still fails closed when either Linux target or signed artifacts are missing.
 
@@ -136,10 +137,18 @@ AMSHA_EMBEDDING_ONNX_SPACE_REVISION=e8c3b32edf5434bc2275fc9bab85f82640a19130
 AMSHA_EMBED_DIMENSIONS=768
 ```
 
-Install the pinned development bundle before enabling the slot:
+Install the pinned development embedding bundle before enabling the slot:
 
 ```bash
 mise run models:install-mpnet
+```
+
+Install the pinned cross-encoder reranking bundle (used only when reranking is enabled):
+
+```bash
+mise run models:install-bge-reranker   # installs data/models/bge-reranker-v1 (Apache-2.0, Xenova/bge-reranker-base)
+# or directly:
+python3 .mise/tasks/models/install-bge-reranker.py
 ```
 
 `onnx` is never added to the default provider list. An ONNX-only configuration has no
@@ -148,6 +157,54 @@ the same embedding-space descriptor. Existing incompatible vector namespaces sti
 retain the non-vector BM25/FTS keyword-search fallback.
 
 ---
+
+## 5.1 Cross-Encoder Reranking Configuration
+
+`LocalOnnxScoringAdapter` is the optional `RerankerPort` implementation. It is discovered via CDI `Instance<RerankerPort>` and retained for native builds with `@Unremovable`. When no reranker is available or `isAvailable()` is false, `RerankingService` falls back deterministically to the synthetic RRF order and increments `amsha.rag.rerank.fallback{reason=no_provider}`.
+
+```env
+# Enable reranking (requires ONNX runtime and a verified scoring bundle)
+AMSHA_ONNX_ENABLED=true
+AMSHA_RAG_RERANKER_ENABLED=true
+AMSHA_RAG_RERANKER_BUNDLE_ID=bge-reranker-v1
+AMSHA_RAG_RERANKER_TIMEOUT=PT5S
+AMSHA_RAG_RERANKER_MAX_CANDIDATES=50
+AMSHA_RAG_RERANKER_MAX_INPUT_BYTES=262144
+```
+
+Behavioral contract:
+
+* **Score preservation** — `ScoredChunk.score()` (synthetic RRF fusion value) is retained byte-for-byte; `RerankedChunk.rerankScore` is used only for reordering.
+* **Bounded execution** — scoring runs under `OnnxInferenceScheduler` with an absolute `Instant` deadline; `searchReranked` requests `contextChunks*3` candidates, reranks the top `maxCandidates`, and appends overflow with strictly lower synthetic scores.
+* **Payload limits** — query and each candidate are rejected by UTF-8 byte length before tokenization; truncation is bounded to the manifest `maxSequenceLength` (384) and metered via `amsha.localml.onnx.truncation{component=cross_encoder}`.
+* **Non-blocking guard** — `Context.isOnEventLoopThread()` fails fast; `@RunOnVirtualThread` callers are permitted.
+* **Fallbacks are exhaustive** — `no_provider`, `descriptor_mismatch`, `execution_error`, `cardinality_mismatch`, `identity_mismatch`, `order_invalid`, `empty_result` all return the original RRF ordering and never invent chunks.
+
+Scoring bundle manifest (`OnnxScoringBundleSpec`) pins the verified contract:
+
+```json
+"scoring": {
+  "inputType": "text-pair",
+  "inputIdsName": "input_ids",
+  "attentionMaskName": "attention_mask",
+  "tokenTypeIdsName": null,
+  "outputName": "logits",
+  "maxSequenceLength": 384,
+  "paddingTokenId": 1,
+  "outputLabel": "relevance",
+  "scoreDirection": "HIGHER_IS_BETTER",
+  "expectedOutputShape": "BATCH_BY_ONE"
+}
+```
+
+Executable acceptance gate (105 graded queries, 20 candidates each, 2 long-candidate cases, 5 seeds, 10 000-permutation test, real ONNX inference when the bundle is present):
+
+```bash
+python3 scripts/evaluate_reranker_benchmark.py
+python3 scripts/evaluate_reranker_benchmark.py --require-pass   # CI: exits non-zero when gate fails closed
+```
+
+Gates: `ΔnDCG@10 ≥ +0.02`, `ΔMRR@10 ≥ -0.005`, `p < 0.05`, `p95 ≤ 250 ms`. `amsha.rag.reranker.enabled` remains `false` by default; the gate `FAIL_CLOSED` status documents the default-disabled invariant.
 
 ## 6. Architecture & Concurrency Safeguards
 

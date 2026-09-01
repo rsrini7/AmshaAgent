@@ -659,6 +659,12 @@ amsha:
     # 0.1.9 digests are pinned in code; any other version is verified against
     # that release's own checksums.txt (fail-closed).
     vec-version: "${AMSHA_RAG_VEC_VERSION:0.1.9}"
+    reranker:
+      enabled: ${AMSHA_RAG_RERANKER_ENABLED:false}
+      bundle-id: "${AMSHA_RAG_RERANKER_BUNDLE_ID:bge-reranker-v1}"
+      timeout: ${AMSHA_RAG_RERANKER_TIMEOUT:PT5S}
+      max-candidates: ${AMSHA_RAG_RERANKER_MAX_CANDIDATES:50}
+      max-input-bytes: ${AMSHA_RAG_RERANKER_MAX_INPUT_BYTES:262144}
   auto-seed-secrets: "${AMSHA_AUTO_SEED_SECRETS:false}"
   skills:
     hot-reload: true
@@ -895,6 +901,8 @@ amsha:
     rate-limit-backoff-seconds: 30
 
   observability:
+    chat-listener:
+      mode: "${AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE:off}"
     phoenix:
       enabled: "${AMSHA_PHOENIX_ENABLED:true}"
       endpoint: "${AMSHA_PHOENIX_ENDPOINT:http://localhost:4318/v1/traces}"

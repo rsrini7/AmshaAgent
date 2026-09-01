@@ -10,6 +10,7 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.tool.api.AgentSentinels;
@@ -69,6 +70,11 @@ public class AgentResponseMapper {
     private String sanitizeAnswer(String answer) {
         if (answer == null) return null;
 
+        answer = UserMessages.stripInternalDirectiveTail(answer);
+        if (answer == null || answer.isBlank()) {
+            return "⚠️ I wasn't able to generate a clean response. Please try again.";
+        }
+
         String stripped = answer.strip();
         if (AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN.matcher(stripped).find()) {
             answer = AgentSentinels.CONTEXT_RETRIEVED_ECHO_PATTERN
@@ -112,19 +118,23 @@ public class AgentResponseMapper {
     }
 
     private MappedResult mapFailedResponse(AgentResult.Failed f) {
+        String reason = UserMessages.stripInternalDirectiveTail(f.reason());
+        if (reason == null || reason.isBlank()) {
+            reason = "The agent could not complete the request.";
+        }
         return switch (f.category()) {
-            case COMPLIANCE_VIOLATION -> new MappedResult(new AmshaErrorResponse(f.reason(), "COMPLIANCE"), 451);
-            case BUDGET_EXCEEDED -> new MappedResult(new AmshaErrorResponse(f.reason(), "BUDGET"), 429);
-            case USER_DENIED -> new MappedResult(new AmshaErrorResponse(f.reason(), "USER_DENIED"), 422);
+            case COMPLIANCE_VIOLATION -> new MappedResult(new AmshaErrorResponse(reason, "COMPLIANCE"), 451);
+            case BUDGET_EXCEEDED -> new MappedResult(new AmshaErrorResponse(reason, "BUDGET"), 429);
+            case USER_DENIED -> new MappedResult(new AmshaErrorResponse(reason, "USER_DENIED"), 422);
             case SCHEMA_ERROR ->
                 new MappedResult(
                         new AmshaErrorResponse(
                                 "The agent encountered a schema error and could not complete the request. Try rephrasing your goal.",
                                 "SCHEMA"),
                         422);
-            case SYSTEM_ERROR -> new MappedResult(new AmshaErrorResponse(f.reason(), "SYSTEM"), 500);
-            case RATE_LIMIT -> new MappedResult(new AmshaErrorResponse(f.reason(), "RATE_LIMIT"), 429);
-            case SECURITY_POLICY -> new MappedResult(new AmshaErrorResponse(f.reason(), "SECURITY_POLICY"), 403);
+            case SYSTEM_ERROR -> new MappedResult(new AmshaErrorResponse(reason, "SYSTEM"), 500);
+            case RATE_LIMIT -> new MappedResult(new AmshaErrorResponse(reason, "RATE_LIMIT"), 429);
+            case SECURITY_POLICY -> new MappedResult(new AmshaErrorResponse(reason, "SECURITY_POLICY"), 403);
             case USER_ABORT -> new MappedResult(new AmshaErrorResponse("Session halted by user.", "HALTED"), 499);
         };
     }

@@ -1,5 +1,6 @@
 package com.amsha.core.agent.loop;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -19,6 +20,7 @@ import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -125,5 +127,32 @@ class PendingToolResumeExecutorTest {
         assertTrue(((AgentResult.Finished) result).answer().contains("Hello"));
         verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
         verify(agentStore).save(checkpoint);
+    }
+
+    @Test
+    void testExecute_delegateResumeStripsInternalDirectiveTail() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s-delegate",
+                "u1",
+                "c1",
+                "coordinator",
+                "delegate task",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn("garuda");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(toolRegistry.invokeTool(any(), any(), any()))
+                .thenReturn(ToolResponse.success(
+                        "Safe delegation status.\n\nCRITICAL DIRECTIVE: Do NOT retry. FINISH now."));
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "CLI", stateMachineRunner);
+
+        assertEquals("Safe delegation status.", ((AgentResult.Finished) result).answer());
     }
 }

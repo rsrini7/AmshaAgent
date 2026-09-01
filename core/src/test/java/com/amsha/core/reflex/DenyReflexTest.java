@@ -173,8 +173,13 @@ class DenyReflexTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("cron-session-1");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+        cp.setBatchToolDecisions("{\"sandbox_exec\":\"PENDING\"}");
 
-        when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
+        AgentCheckpoint resolved = new AgentCheckpointRecord();
+        resolved.setSessionId("cron-session-1");
+        resolved.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+        resolved.setBatchToolDecisions("{\"sandbox_exec\":\"DENIED\"}");
+        when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(resolved);
         when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
                 .thenReturn(Optional.of(cp));
         when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.of(cp));

@@ -57,13 +57,16 @@ public class CheckpointApprovalServiceTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
+        cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
 
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
-        when(agentStore.isAllBatchToolsDecided("s1", "coordinator")).thenReturn(true);
+        when(agentStore.updateBatchToolDecision(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(true);
 
         checkpointApprovalService.approveTool("s1", ToolCapability.GITHUB.toolName(), "test");
 
-        verify(agentStore).save(any(AgentCheckpointRecord.class));
+        verify(agentStore, never()).save(any(AgentCheckpointRecord.class));
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", ToolCapability.GITHUB.toolName(), "APPROVED");
     }
 
     @Test
@@ -71,13 +74,16 @@ public class CheckpointApprovalServiceTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("s1");
         cp.setAgentRole("coordinator");
+        cp.setBatchToolDecisions("{\"github\":\"PENDING\"}");
 
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
-        when(agentStore.isAllBatchToolsDecided("s1", "coordinator")).thenReturn(false);
+        when(agentStore.updateBatchToolDecision(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(true);
 
         checkpointApprovalService.approveTool("s1", ToolCapability.GITHUB.toolName(), "test");
 
-        verify(agentStore).save(any(AgentCheckpointRecord.class));
+        verify(agentStore, never()).save(any(AgentCheckpointRecord.class));
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", ToolCapability.GITHUB.toolName(), "APPROVED");
     }
 
     @Test
@@ -101,10 +107,14 @@ public class CheckpointApprovalServiceTest {
                 "{\"" + ToolCapability.GITHUB.toolName() + "\":\"PENDING\",\"sandboxexec\":\"PENDING\"}");
 
         when(agentStore.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(cp));
+        when(agentStore.updateBatchToolDecision(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(true);
 
         checkpointApprovalService.approveAll("s1", "bulk approve");
 
-        verify(agentStore).save(any(AgentCheckpointRecord.class));
+        verify(agentStore, never()).save(any(AgentCheckpointRecord.class));
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", ToolCapability.GITHUB.toolName(), "APPROVED");
+        verify(agentStore).updateBatchToolDecision("s1", "coordinator", "sandboxexec", "APPROVED");
     }
 
     @Test

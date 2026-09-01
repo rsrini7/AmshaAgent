@@ -9,7 +9,6 @@ import java.util.regex.Pattern;
 
 import com.amsha.channel.api.ApprovalPrompt;
 import com.amsha.channel.api.ChannelPlugin;
-import com.amsha.channel.api.ContentNode;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentLoop;
@@ -262,12 +261,9 @@ public class AgentDispatchHandler implements MessageHandler {
                 .ifPresentOrElse(
                         s -> {
                             if (result instanceof AgentResult.AwaitingApproval aa) {
-                                String text = AgentResultFormatter.formatBasic(result);
                                 s.send(
                                         context.getUser(),
-                                        List.of(
-                                                new ContentNode.Text(text),
-                                                new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+                                        List.of(new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
                             } else {
                                 String output = AgentResultFormatter.format(result);
                                 s.sendRaw(context.getUser(), output);

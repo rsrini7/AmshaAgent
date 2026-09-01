@@ -75,9 +75,9 @@
   <path d="M260 227 L300 227 L300 190 L340 190" fill="none" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
   <text x="305" y="215" font-size="9" fill="#c2c0b6" font-family="'Segoe UI', system-ui, sans-serif">Sync O(1)</text>
 
-  <!-- Archival Memory → ArchivalContextCache (Async Vector Search) -->
+  <!-- Archival Memory → ArchivalContextCache (Async Vector Search + optional cross-encoder rerank) -->
   <line x1="260" y1="337" x2="340" y2="337" stroke="#a98fe2" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-async)"/>
-  <text x="300" y="328" text-anchor="middle" font-size="9" fill="#a98fe2" font-family="'Segoe UI', system-ui, sans-serif">Async RAG</text>
+  <text x="300" y="328" text-anchor="middle" font-size="9" fill="#a98fe2" font-family="'Segoe UI', system-ui, sans-serif">Async RAG + rerank</text>
 
   <!-- ArchivalContextCache → Prompt Assembly (Sync cached O(1) read) -->
   <line x1="460" y1="300" x2="460" y2="209" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>

@@ -289,10 +289,17 @@ configure_onnx() {
 
   local model_file="$AMSHA_ONNX_MODEL_ROOT/all-mpnet-base-v2-e8c3b32/model.onnx"
   if [[ ! -f "$model_file" ]]; then
-    printf '📥 Installing the pinned ONNX bundle because --onnx was requested.\n'
+    printf '📥 Installing the pinned ONNX embedding bundle because --onnx was requested.\n'
     (cd "$PROJECT_ROOT" && mise run models:install-mpnet)
   fi
-  [[ -f "$model_file" ]] || die "ONNX bundle is unavailable at $model_file."
+  [[ -f "$model_file" ]] || die "ONNX embedding bundle is unavailable at $model_file."
+
+  local reranker_file="$AMSHA_ONNX_MODEL_ROOT/bge-reranker-v1/model.onnx"
+  if [[ ! -f "$reranker_file" ]]; then
+    printf '📥 Installing the pinned ONNX reranker bundle because --onnx was requested.\n'
+    (cd "$PROJECT_ROOT" && mise run models:install-bge-reranker)
+  fi
+  [[ -f "$reranker_file" ]] || die "ONNX reranker bundle is unavailable at $reranker_file."
 }
 
 build_native() {

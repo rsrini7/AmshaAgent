@@ -9,13 +9,19 @@ import jakarta.inject.Inject;
 
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.core.structured.StructuredOutputMetrics;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
+import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.llm.api.error.LlmToolCallException;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Routes LLM requests to the correct ChatModel based on agent role,
@@ -32,6 +38,7 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
 
     private final ChatModel globalChatModel;
     private final ModelRouter modelRouter;
+    private final MeterRegistry meterRegistry;
 
     @ConfigProperty(name = "amsha.llm.circuit-breaker.enabled", defaultValue = "true")
     boolean cbEnabled;
@@ -40,9 +47,14 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     private final ConcurrentHashMap<String, PerModelCircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
 
     @Inject
-    public LangChain4jLlmAdapter(ChatModel globalChatModel, ModelRouter modelRouter) {
+    public LangChain4jLlmAdapter(ChatModel globalChatModel, ModelRouter modelRouter, MeterRegistry meterRegistry) {
         this.globalChatModel = globalChatModel;
         this.modelRouter = modelRouter;
+        this.meterRegistry = meterRegistry;
+    }
+
+    public LangChain4jLlmAdapter(ChatModel globalChatModel, ModelRouter modelRouter) {
+        this(globalChatModel, modelRouter, null);
     }
 
     @Override
@@ -56,8 +68,28 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     }
 
     @Override
+    public ChatResponse nextStep(ChatRequest request, String agentRole, String schemaJson) {
+        ChatModel resolvedModel = resolveModel(agentRole, false);
+        ChatRequest outbound = withNativeSchemaIfCapable(request, resolvedModel, schemaJson);
+        try {
+            return execute(outbound, resolvedModel);
+        } catch (LlmMalformedResponseException e) {
+            if (!StructuredSchemaRequests.hasNativeJsonSchema(outbound)) {
+                throw e;
+            }
+            StructuredOutputMetrics.recordSchemaRejection(meterRegistry, "agent");
+            log.debug("Native schema rejected; retrying the same routed model with prompt-only structured output");
+            return execute(StructuredSchemaRequests.withoutNativeJsonSchema(outbound), resolvedModel);
+        }
+    }
+
+    @Override
     public ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
         ChatModel resolvedModel = resolveModel(agentRole, bypassLightweightRouting);
+        return execute(request, resolvedModel);
+    }
+
+    private ChatResponse execute(ChatRequest request, ChatModel resolvedModel) {
 
         if (!cbEnabled) {
             return resolvedModel.chat(request);
@@ -69,6 +101,23 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         return cb.execute(request, resolvedModel);
     }
 
+    private ChatRequest withNativeSchemaIfCapable(ChatRequest request, ChatModel model, String schemaJson) {
+        if (schemaJson == null
+                || schemaJson.isBlank()
+                || !(model instanceof StrictJsonSchemaCapable capable)
+                || !capable.supportsStrictJsonSchema()) {
+            return request;
+        }
+        try {
+            return StructuredSchemaRequests.withNativeJsonSchema(request, "structured-output", schemaJson);
+        } catch (IllegalArgumentException e) {
+            log.debugf(
+                    "Native schema attachment skipped; using prompt-only structured output: %s",
+                    LogUtil.rootMessage(e));
+            return request;
+        }
+    }
+
     private ChatModel resolveModel(String agentRole, boolean bypassLightweightRouting) {
         if (agentRole == null || agentRole.isBlank()) {
             return globalChatModel;
@@ -78,7 +127,7 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
         } catch (Exception e) {
             log.warnf(
                     "[LLM-ADAPTER] Model resolution failed for role=%s, falling back to global: %s",
-                    agentRole, e.getMessage());
+                    agentRole, LogUtil.rootMessage(e));
             return globalChatModel;
         }
     }

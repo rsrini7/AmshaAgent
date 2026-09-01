@@ -1,5 +1,7 @@
 package com.amsha.core.message;
 
+import com.amsha.tool.api.ToolCapability;
+
 /**
  * Centralized catalog for all user-facing emoji-prefixed messages.
  * <p>
@@ -39,12 +41,16 @@ public final class UserMessages {
                     + "Only roles with sufficient capabilities (e.g. 'coder') can delegate to this agent. "
                     + "Please request the coordinator to delegate via coder.";
     public static final String DELEGATION_FAILED_FORMAT = "Delegation to '%s' failed: %s";
+
     /**
      * Separator that splits a model-facing observation into its user-safe head and its
      * LLM-directive tail. ToolResultProcessor strips everything from this marker onward
      * before persisting or emitting an answer to the chat channel.
      */
-    public static final String CRITICAL_DIRECTIVE_SEPARATOR = "\n\nCRITICAL DIRECTIVE:";
+    public static final String CRITICAL_DIRECTIVE_MARKER = "CRITICAL DIRECTIVE:";
+
+    /** Separator between a user-safe observation and coordinator-only instructions. */
+    public static final String CRITICAL_DIRECTIVE_SEPARATOR = "\n\n" + CRITICAL_DIRECTIVE_MARKER;
 
     /**
      * Stable marker embedded in {@link #DELEGATION_PAUSED_FORMAT} so deterministic
@@ -61,6 +67,8 @@ public final class UserMessages {
     public static final String DELEGATION_PAUSED_FORMAT =
             "Delegation to '%s' is " + DELEGATION_PAUSED_MARKER + ": tool '%s' needs human approval. "
                     + "The delegated agent's result will be delivered automatically once it is granted."
+                    + " This is a separate approval for the delegated tool. "
+                    + "Reply with `/approve` again to continue, or `/deny` to cancel."
                     + CRITICAL_DIRECTIVE_SEPARATOR
                     + " This is a system status, not an error. Do NOT retry the delegation. "
                     + "Do NOT add commentary; you must FINISH this turn now.";
@@ -210,6 +218,17 @@ public final class UserMessages {
         return String.format(DELEGATION_UNKNOWN_AGENT_FORMAT, agent, list);
     }
 
+    /**
+     * Explains why a delegated goal cannot carry an unauthorized nested tool
+     * request. The outer delegation approval never grants child capabilities.
+     */
+    public static String delegationCapabilityUnavailable(String agent, String tool) {
+        return "❌ Delegation blocked: agent '" + agent + "' is not permitted to use nested tool '" + tool + "'. "
+                + "Approval of '" + ToolCapability.DELEGATE_TO_AGENT.toolName()
+                + "' cannot authorize a nested tool. "
+                + "Delegate to a role with that capability or handle the request directly.";
+    }
+
     public static String delegationRejectedCaps(String target, String unauthorized, String current) {
         return String.format(DELEGATION_REJECTED_CAPS_FORMAT, target, unauthorized, current);
     }
@@ -227,13 +246,37 @@ public final class UserMessages {
      * user-safe head. Falls back to the generic paused notice when the observation
      * carries no directive separator.
      */
+    public static String stripInternalDirectiveTail(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        int markerIndex = indexOfIgnoreCase(text, CRITICAL_DIRECTIVE_MARKER);
+        return markerIndex < 0 ? text : text.substring(0, markerIndex).stripTrailing();
+    }
+
+    /**
+     * Strips LLM-directive tail from model-facing observation, returning
+     * user-safe head. Falls back generic paused notice when observation
+     * carries no directive separator.
+     */
     public static String userSafePortion(String observation) {
         if (observation == null || observation.isBlank()) {
             return DELEGATION_PAUSED_USER_FALLBACK;
         }
-        int idx = observation.indexOf(CRITICAL_DIRECTIVE_SEPARATOR);
-        String head = idx >= 0 ? observation.substring(0, idx).trim() : "";
-        return head.isEmpty() ? DELEGATION_PAUSED_USER_FALLBACK : head;
+        String head = stripInternalDirectiveTail(observation);
+        if (head == null || head.isBlank() || head.strip().equals(observation.strip())) {
+            return DELEGATION_PAUSED_USER_FALLBACK;
+        }
+        return head.strip();
+    }
+
+    private static int indexOfIgnoreCase(String text, String needle) {
+        for (int index = 0; index <= text.length() - needle.length(); index++) {
+            if (text.regionMatches(true, index, needle, 0, needle.length())) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     public static String personaEscalationNotice(String fromRole, String toolName, String toRole) {

@@ -134,7 +134,7 @@ public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescrip
                         }
                     };
                 }
-                throw new IllegalStateException("No embedding providers configured. "
+                throw new IllegalStateException("No embedding providers configured. Check mpnet model is available. "
                         + "Check amsha.infinite-loop.embedding.providers (currently: " + loopProviders + ")");
             }
 

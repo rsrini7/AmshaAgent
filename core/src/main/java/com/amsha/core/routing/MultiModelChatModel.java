@@ -1,5 +1,6 @@
 package com.amsha.core.routing;
 
+import dev.langchain4j.model.chat.Capability;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -7,12 +8,16 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
+import com.amsha.llm.api.StructuredOutputCapabilities;
+import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -31,16 +36,22 @@ import org.jboss.logging.Logger;
  * <p>Used by provider factories to support comma-separated API keys and model names.
  * The InfiniteLoopChatModel sees this as a single slot.
  */
-public class MultiModelChatModel implements ChatModel {
+public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable {
 
     private static final Logger log = Logger.getLogger(MultiModelChatModel.class);
     private static final long MAX_COOLDOWN_WAIT_MS = 120_000L;
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
 
-    public record ModelEntry(String label, ChatModel model) {}
+    public record ModelEntry(String label, ChatModel model, boolean advertisesStrictSchema) {
+
+        public ModelEntry(String label, ChatModel model) {
+            this(label, model, false);
+        }
+    }
 
     private final String providerName;
     private final List<ModelEntry> entries;
+    private final Set<Capability> compositeCapabilities;
     private final Map<String, ModelHealth> health;
     private final AtomicInteger currentIndex;
     private final int cooldownBaseSeconds;
@@ -58,6 +69,8 @@ public class MultiModelChatModel implements ChatModel {
         }
         this.providerName = providerName;
         this.entries = List.copyOf(entries);
+        this.compositeCapabilities = StructuredOutputCapabilities.intersectionOf(
+                this.entries.stream().map(ModelEntry::model).toList());
         this.health = new ConcurrentHashMap<>();
         for (ModelEntry e : entries) {
             health.put(e.label(), new ModelHealth());
@@ -81,9 +94,34 @@ public class MultiModelChatModel implements ChatModel {
                         .orElse("none") + "]";
     }
 
+    /**
+     * Safe intersection of all candidates' capabilities, computed once at
+     * composition time. Never upgraded mid-request when rotation advances to
+     * another candidate; health, cooldown, and permanent-disable states never
+     * change the reported set.
+     */
+    @Override
+    public Set<Capability> supportedCapabilities() {
+        return compositeCapabilities;
+    }
+
+    @Override
+    public boolean supportsStrictJsonSchema() {
+        return entries.stream().allMatch(MultiModelChatModel::candidateSupportsStrictSchema);
+    }
+
+    private static boolean candidateSupportsStrictSchema(ModelEntry entry) {
+        return entry.advertisesStrictSchema()
+                || (entry.model() instanceof StrictJsonSchemaCapable capable && capable.supportsStrictJsonSchema());
+    }
+
     @Override
     public ChatResponse chat(ChatRequest request) {
         int n = entries.size();
+        // Replay invariant: once a candidate fails while serving a schema-bearing
+        // request, later candidates receive the downgraded (schema-less) request.
+        boolean schemaRejected = false;
+        LlmMalformedResponseException schemaRejection = null;
 
         while (true) {
             int start = currentIndex.updateAndGet(i -> (i + 1) % n);
@@ -104,17 +142,40 @@ public class MultiModelChatModel implements ChatModel {
                     continue;
                 }
 
+                ChatRequest outbound = schemaRejected
+                        ? StructuredSchemaRequests.withoutNativeJsonSchema(request)
+                        : StructuredSchemaRequests.forCandidate(request, candidateSupportsStrictSchema(entry));
+                boolean schemaAttached = StructuredSchemaRequests.hasNativeJsonSchema(outbound);
                 try {
                     long startMs = System.currentTimeMillis();
-                    ChatResponse response = entry.model().chat(request);
+                    ChatResponse response = entry.model().chat(outbound);
                     long elapsedMs = System.currentTimeMillis() - startMs;
                     h.recordSuccess();
                     currentIndex.set(idx);
                     log.infof("MultiModel: [%s] served by %s (%dms)", providerName, entry.label(), elapsedMs);
                     return response;
                 } catch (Throwable t) {
-                    classifyAndHandle(entry.label(), h, t);
+                    if (schemaAttached) {
+                        // A schema-bearing failure must advance (downgraded), never
+                        // abort the chain: the next candidate gets the stripped request.
+                        schemaRejected = true;
+                    }
+                    try {
+                        classifyAndHandle(entry.label(), h, t);
+                    } catch (LlmMalformedResponseException mre) {
+                        if (!schemaAttached) {
+                            throw mre;
+                        }
+                        schemaRejection = mre;
+                        log.debugf(
+                                "MultiModel: [%s] %s rejected native schema; continuing without it.",
+                                providerName, entry.label());
+                    }
                 }
+            }
+
+            if (schemaRejection != null) {
+                throw schemaRejection;
             }
 
             // All entries exhausted

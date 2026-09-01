@@ -8,8 +8,8 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-4844_passing-brightgreen.svg?style=flat)
-  ![Coverage](https://img.shields.io/badge/Coverage-72.39%25-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-5030_passing-brightgreen.svg?style=flat)
+  ![Coverage](https://img.shields.io/badge/Coverage-72.68%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -87,8 +87,8 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **AES-256-GCM-SIV vault** with Argon2id key derivation — secrets never stored in plaintext
 - **Secret-safe application logging** — console and file filters redact credential-shaped URLs, bearer values, assignments, formatted parameters, and throwable cause/suppressed chains before rendering
 - **Tamper-evident HMAC audit chain** — every action logged as append-only, verifiable record
-- **MemGPT-style three-tier memory** — prompt-injected Core context, exact-turn Recall history, and semantic Archival knowledge; retrieval combines FTS5 and sqlite-vec with Reciprocal Rank Fusion
-- **Opt-in in-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding implementation runs verified local bundles without Python containers, downloads, or external inference sidecars; Linux native records and signed release provenance remain open gates
+- **MemGPT-style three-tier memory** — prompt-injected Core context, exact-turn Recall history, and semantic Archival knowledge; retrieval combines FTS5 and sqlite-vec with Reciprocal Rank Fusion and an optional local cross-encoder reranker
+- **Opt-in in-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding + optional cross-encoder reranking (`bge-reranker-v1`, BGE Reranker) runs verified local bundles without Python containers, downloads, or external inference sidecars; Linux native records and signed release provenance remain open gates
 - **Vector index descriptor fingerprinting & non-destructive safety** — 15-field `EmbeddingIndexDescriptor` validates model, tokenizer, pooling, and dimension compatibility across SQLite (`sqlite-vec`), PostgreSQL (`pgvector`), and Lucene Filesystem backends; mismatched indices degrade non-destructively to BM25/FTS5 keyword search without auto-deleting vectors
 - **Non-authoritative classifier shadow path** — disabled-by-default intent, tool-risk, and answer-quality adapters emit bounded payload-free comparisons without changing routing, authorization, retry, or answer behavior; reproducible review/training/export tooling is present, while human-approved datasets and promoted models remain pending
 - **classifier safety gate** — core now provides ordered post-policy tool-risk and answer-quality SPIs with monotonic risk upgrades, existing HITL preservation, and one pre-tool retry budget; no active ONNX implementation is wired, so model evidence remains required before behavioral activation
@@ -99,7 +99,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Behavioral self-evolution** — opt-in trace capture, pattern extraction, and reviewed directives that improve future interactions
 - **MCP integration** — both inbound MCP server and outbound MCP client for dynamic tool loading; discovered tools default to the network bulkhead and can be categorized at registration
 - **Multi-channel** — REST API, CLI REPL, Telegram bot, WebSocket web UI, one-shot `ask` mode
-- **Guided setup and observability** — onboarding wizard, encrypted provider settings, OpenTelemetry tracing, SSE status updates, and web management panels
+- **Guided setup and observability** — onboarding wizard, encrypted provider settings, OpenTelemetry tracing (LangChain4j `ChatModelListener` pilot: `off`/`shadow`/`active` with zero payload, `amsha.observability.chat-listener.mode`), SSE status updates, and web management panels
 - **Backend-aware deployment** — JVM backend selection at startup, native backend selection at build time, with PostgreSQL and filesystem runtime profiles
 
 ---
@@ -178,8 +178,8 @@ persistence-fs/       ← Filesystem adapter (JSON store)
 llm-providers/        ← 21 concrete provider factories + SDKs
 sandbox/              ← Process & Podman isolation
 tools-builtin/        ← Built-in AgentTool implementations + Lucene tool search + Playwright CLI automation
-rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory
-local-ml-onnx/        ← Verified local ONNX embeddings + shadow classifiers
+rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory + deterministic reranking
+local-ml-onnx/        ← Verified local ONNX embeddings, shadow classifiers, and cross-encoder reranking
 mcp/                  ← MCP server bridge + dynamic client tool loading
 onboarding/           ← 6-step setup wizard REST API
 self-evolve/          ← Trace capture and self-evolution learning loop

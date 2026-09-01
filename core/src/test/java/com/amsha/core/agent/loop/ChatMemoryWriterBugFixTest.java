@@ -67,4 +67,18 @@ class ChatMemoryWriterBugFixTest {
         assertEquals(3, filtered.size(), "Should have removed the last AiMessage with orphaned tool request");
         assertEquals("result1", ((ToolExecutionResultMessage) filtered.get(2)).text());
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testSaveAnswer_doesNotPersistInternalDirectiveTail() {
+        String answer = "Safe answer.\n\nCRITICAL DIRECTIVE: FINISH immediately.";
+        when(writer.piiScanReflex.sanitize(answer)).thenReturn(answer);
+        when(store.getMessages("s1")).thenReturn(List.of());
+
+        writer.saveAnswer("s1", answer);
+
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(store).updateMessages(eq("s1"), captor.capture());
+        assertEquals("Safe answer.", ((AiMessage) captor.getValue().getFirst()).text());
+    }
 }

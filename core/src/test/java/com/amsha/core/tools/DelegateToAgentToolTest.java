@@ -20,6 +20,7 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.observability.AgentOtelContext;
+import com.amsha.core.pipeline.MessageContext;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.security.api.AutonomyLevel;
@@ -31,6 +32,7 @@ import com.amsha.tool.api.ToolResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -66,6 +68,9 @@ class DelegateToAgentToolTest {
     GroupConsultationEngine groupConsultationEngine;
 
     @Mock
+    GroupConsultationDelegator groupConsultationDelegator;
+
+    @Mock
     RoleRegistry roleRegistry;
 
     @Mock
@@ -86,8 +91,6 @@ class DelegateToAgentToolTest {
         DelegationProcessor dp = new DelegationProcessor();
         dp.groupConsultationService = groupConsultationService;
         tool.delegationProcessor = dp;
-        tool.groupConsultationService = groupConsultationService;
-        tool.groupConsultationEngine = groupConsultationEngine;
         Mockito.lenient().when(verificationGateInstance.isResolvable()).thenReturn(true);
         Mockito.lenient().when(verificationGateInstance.get()).thenReturn(verificationGate);
         tool.verificationGate = verificationGateInstance;
@@ -187,7 +190,8 @@ class DelegateToAgentToolTest {
                         eq(AgentRoleEnum.DEBUGGER.toScopedName()),
                         eq("debug this"),
                         eq(reasoningEngine),
-                        anyInt()))
+                        anyInt(),
+                        any(MessageContext.class)))
                 .thenReturn(AgentResult.finished("Fixed NPE", List.of()));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
@@ -208,6 +212,19 @@ class DelegateToAgentToolTest {
 
         assertTrue(response.success());
         assertTrue(response.output().contains("Fixed NPE"));
+
+        ArgumentCaptor<MessageContext> contextCaptor = ArgumentCaptor.forClass(MessageContext.class);
+        verify(agentLoop)
+                .run(
+                        startsWith(SESSION_ID + AgentSentinels.DELEGATE_SESSION_SENTINEL + "shiva"),
+                        eq(AgentRoleEnum.DEBUGGER.toScopedName()),
+                        eq("debug this"),
+                        eq(reasoningEngine),
+                        anyInt(),
+                        contextCaptor.capture());
+        assertEquals(CHAT_ID, contextCaptor.getValue().getChatId());
+        assertEquals(USER_ID, contextCaptor.getValue().getUser().platformId());
+        assertEquals("debug this", contextCaptor.getValue().getMessage().text());
     }
 
     @Test
@@ -244,7 +261,8 @@ class DelegateToAgentToolTest {
                         eq(AgentRoleEnum.CODER.toScopedName()),
                         anyString(),
                         eq(reasoningEngine),
-                        anyInt()))
+                        anyInt(),
+                        any(MessageContext.class)))
                 .thenReturn(AgentResult.finished("public class Bug {}", List.of()));
 
         VerificationGate.VerificationResult vFail =
@@ -256,7 +274,8 @@ class DelegateToAgentToolTest {
                         eq(AgentRoleEnum.DEBUGGER.toScopedName()),
                         anyString(),
                         eq(reasoningEngine),
-                        anyInt()))
+                        anyInt(),
+                        any(MessageContext.class)))
                 .thenReturn(AgentResult.finished("Fixed class", List.of()));
 
         ToolExecutionContext ctx = new ToolExecutionContext(
@@ -352,7 +371,8 @@ class DelegateToAgentToolTest {
                         eq(AgentRoleEnum.DEBUGGER.toScopedName()),
                         anyString(),
                         eq(reasoningEngine),
-                        anyInt()))
+                        anyInt(),
+                        any(MessageContext.class)))
                 .thenReturn(AgentResult.finished("Done", List.of()));
 
         ToolExecutionContext ctx = new ToolExecutionContext(

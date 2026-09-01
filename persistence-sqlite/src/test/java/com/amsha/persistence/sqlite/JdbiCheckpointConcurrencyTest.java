@@ -171,6 +171,10 @@ class JdbiCheckpointConcurrencyTest {
         boolean updated = checkpointStore.atomicUpdateBatchToolDecision(sessionId, "coordinator", "tool_a", "APPROVED");
         assertTrue(updated, "Batch tool decision should be updated");
 
+        boolean staleUpdate =
+                checkpointStore.atomicUpdateBatchToolDecision(sessionId, "coordinator", "tool_a", "DENIED");
+        assertFalse(staleUpdate, "A decided tool must reject a later decision");
+
         // Save with AWAITING_APPROVAL status but null batch decisions — merge gate
         // should preserve them
         CheckpointDto saveWithoutDecisions = new CheckpointDto(

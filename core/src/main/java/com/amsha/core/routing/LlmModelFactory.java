@@ -119,7 +119,8 @@ public class LlmModelFactory {
                 Optional.ofNullable(timeout),
                 Optional.ofNullable(maxRetries),
                 structuredOutputMode,
-                toolless);
+                toolless,
+                factory.supportsStrictJsonSchema());
 
         return factory.create(config);
     }

@@ -31,4 +31,15 @@ public interface ReasoningEngine {
      * Optional method for structured (non-ReAct) LLM calls.
      */
     String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt);
+
+    /**
+     * Structured call carrying the operation's raw JSON schema for request-scoped
+     * native attachment. Implementations that do not support attachment may
+     * ignore the schema (the prompt text still describes the expected output and
+     * the bounded self-correction loop stays authoritative), but engines wired to
+     * {@code LangChainReasoningEngine} honor it.
+     */
+    default String chatForStructuredOutput(String sessionId, String agentRole, String schemaPrompt, String schemaJson) {
+        return chatForStructuredOutput(sessionId, agentRole, schemaPrompt);
+    }
 }

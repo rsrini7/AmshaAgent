@@ -11,13 +11,18 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.llm.api.error.LlmRateLimitException;
 import com.amsha.llm.api.error.LlmToolCallException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * Tests for {@link LangChain4jLlmAdapter} per-model circuit breaker isolation
@@ -28,12 +33,14 @@ class LangChain4jLlmAdapterTest {
     private ChatModel globalModel;
     private ModelRouter modelRouter;
     private LangChain4jLlmAdapter adapter;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
         globalModel = mock(ChatModel.class);
         modelRouter = mock(ModelRouter.class);
-        adapter = new LangChain4jLlmAdapter(globalModel, modelRouter);
+        meterRegistry = new SimpleMeterRegistry();
+        adapter = new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry);
         adapter.cbEnabled = true;
     }
 
@@ -208,4 +215,123 @@ class LangChain4jLlmAdapterTest {
         ChatResponse result = cb2.execute(request(), model2);
         assertNotNull(result);
     }
+
+    @Test
+    void schemaAttachmentUsesTheActiveRoutedModel_notGlobalModel() {
+        ChatModel routedDelegate = mock(ChatModel.class);
+        ChatModel routedModel = new CapabilityAwareChatModel(routedDelegate);
+        when(modelRouter.resolve("coder", false)).thenReturn(routedModel);
+        when(routedDelegate.chat(any(ChatRequest.class))).thenReturn(response());
+        ArgumentCaptor<ChatRequest> requests = ArgumentCaptor.forClass(ChatRequest.class);
+
+        adapter.nextStep(request(), "coder", SCHEMA);
+
+        verify(routedDelegate).chat(requests.capture());
+        assertTrue(StructuredSchemaRequests.hasNativeJsonSchema(requests.getValue()));
+        verifyNoInteractions(globalModel);
+    }
+
+    @Test
+    void schemaAttachmentDoesNotUseGlobalCapabilityForNonCapableRoute() {
+        ChatModel routedModel = mock(ChatModel.class);
+        when(modelRouter.resolve("coder", false)).thenReturn(routedModel);
+        when(routedModel.chat(any(ChatRequest.class))).thenReturn(response());
+        ArgumentCaptor<ChatRequest> requests = ArgumentCaptor.forClass(ChatRequest.class);
+
+        adapter.nextStep(request(), "coder", SCHEMA);
+
+        verify(routedModel).chat(requests.capture());
+        assertFalse(StructuredSchemaRequests.hasNativeJsonSchema(requests.getValue()));
+    }
+
+    @Test
+    void nativeSchemaRejectionRetriesOnceWithPromptOnlyRequest() {
+        ChatModel delegate = mock(ChatModel.class);
+        ChatModel capableModel = new CapabilityAwareChatModel(delegate);
+        when(modelRouter.resolve("coder", false)).thenReturn(capableModel);
+        when(delegate.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmMalformedResponseException("schema rejected", null))
+                .thenReturn(response());
+        ArgumentCaptor<ChatRequest> requests = ArgumentCaptor.forClass(ChatRequest.class);
+
+        ChatResponse result = adapter.nextStep(request(), "coder", SCHEMA);
+
+        assertNotNull(result);
+        verify(delegate, times(2)).chat(requests.capture());
+        assertTrue(StructuredSchemaRequests.hasNativeJsonSchema(
+                requests.getAllValues().get(0)));
+        assertFalse(StructuredSchemaRequests.hasNativeJsonSchema(
+                requests.getAllValues().get(1)));
+    }
+
+    @Test
+    void nextStep_withInvalidSchemaJson_logsAndDegradesToPromptOnly() {
+        ChatModel delegate = mock(ChatModel.class);
+        ChatModel capableModel = new CapabilityAwareChatModel(delegate);
+        when(modelRouter.resolve("coder", false)).thenReturn(capableModel);
+        when(delegate.chat(any(ChatRequest.class))).thenReturn(response());
+        ArgumentCaptor<ChatRequest> requests = ArgumentCaptor.forClass(ChatRequest.class);
+
+        ChatResponse result = adapter.nextStep(request(), "coder", "invalid-json-schema");
+
+        assertNotNull(result);
+        verify(delegate).chat(requests.capture());
+        assertFalse(StructuredSchemaRequests.hasNativeJsonSchema(requests.getValue()));
+    }
+
+    @Test
+    void nextStep_withBlankSchemaJson_doesNotAttachSchema() {
+        ChatModel delegate = mock(ChatModel.class);
+        ChatModel capableModel = new CapabilityAwareChatModel(delegate);
+        when(modelRouter.resolve("coder", false)).thenReturn(capableModel);
+        when(delegate.chat(any(ChatRequest.class))).thenReturn(response());
+        ArgumentCaptor<ChatRequest> requests = ArgumentCaptor.forClass(ChatRequest.class);
+
+        ChatResponse result = adapter.nextStep(request(), "coder", "  ");
+
+        assertNotNull(result);
+        verify(delegate).chat(requests.capture());
+        assertFalse(StructuredSchemaRequests.hasNativeJsonSchema(requests.getValue()));
+    }
+
+    @Test
+    void nextStep_whenCircuitBreakerDisabled_delegatesDirectly() {
+        adapter.cbEnabled = false;
+        when(globalModel.chat(any(ChatRequest.class))).thenReturn(response());
+
+        ChatResponse result = adapter.nextStep(request(), null);
+
+        assertNotNull(result);
+        verify(globalModel).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void nextStep_whenNonSchemaMalformedResponse_rethrowsDirectly() {
+        when(globalModel.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmMalformedResponseException("syntax error", null));
+
+        assertThrows(LlmMalformedResponseException.class, () -> adapter.nextStep(request(), null, (String) null));
+    }
+
+    @Test
+    void schemaRejectionRecordsPayloadFreeMetric() {
+        ChatModel delegate = mock(ChatModel.class);
+        ChatModel capableModel = new CapabilityAwareChatModel(delegate);
+        when(modelRouter.resolve("coder", false)).thenReturn(capableModel);
+        when(delegate.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmMalformedResponseException("schema rejected", null))
+                .thenReturn(response());
+
+        adapter.nextStep(request(), "coder", SCHEMA);
+
+        assertEquals(
+                1.0,
+                meterRegistry
+                        .get("amsha.llm.structured.schema.rejection")
+                        .tag("operation", "agent")
+                        .counter()
+                        .count());
+    }
+
+    private static final String SCHEMA = "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}}}";
 }

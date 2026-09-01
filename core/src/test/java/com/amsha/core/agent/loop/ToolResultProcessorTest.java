@@ -216,12 +216,18 @@ class ToolResultProcessorTest {
         var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
         String pausedMsg = UserMessages.delegationPaused("core:researcher", "parallel|batch");
         assertTrue(pausedMsg.contains(UserMessages.DELEGATION_PAUSED_MARKER));
+        assertTrue(pausedMsg.contains("/approve"));
+        assertTrue(pausedMsg.contains("/deny"));
+        assertTrue(pausedMsg.contains("separate approval"));
+        assertTrue(pausedMsg.contains("`/approve` again"));
         var res = ToolResponse.success(pausedMsg);
 
         StepDecision decision = processor.resolveOutcome(
                 ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, pausedMsg, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
         String userSafe = "⏳ " + UserMessages.userSafePortion(pausedMsg);
+        assertTrue(userSafe.contains("/approve"));
+        assertTrue(userSafe.contains("/deny"));
         verify(writer).saveAnswer("sess-1", userSafe);
         // Directive tail must never reach the chat channel.
         assertFalse(userSafe.contains("CRITICAL DIRECTIVE"));

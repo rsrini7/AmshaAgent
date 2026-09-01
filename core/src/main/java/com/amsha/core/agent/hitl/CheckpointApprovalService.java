@@ -66,27 +66,20 @@ public class CheckpointApprovalService {
         }
 
         AgentCheckpoint cp = cpOpt.get();
-        // §Bug-1 Fix: Do NOT set status = APPROVED here to avoid SQLite constraint failures.
-        // The triggerResume call below will transition it to RESUMING.
-        try {
-            cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-        } catch (JsonProcessingException e) {
-            log.errorf("HITL-APPROVE: failed to serialize decisions: %s", LogUtil.rootMessage(e));
+        Map<String, ToolDecision> current = readDecisions(cp, "HITL-APPROVE");
+        int updated = 0;
+        if (decisions != null) {
+            for (Map.Entry<String, ToolDecision> entry : decisions.entrySet()) {
+                if (isFinalDecision(entry.getValue()) && applyDecision(cp, current, entry.getKey(), entry.getValue())) {
+                    updated++;
+                }
+            }
         }
-        agentStore.save(cp);
+        if (updated == 0) return;
 
-        agentSseService.publish(
-                sessionId,
-                new AgentSseService.HitlEvent(
-                        sessionId,
-                        HitlEventType.APPROVED.wireValue(),
-                        cp.getPendingToolName(),
-                        cp.getPendingToolParametersJson(),
-                        null,
-                        null,
-                        Instant.now()));
-        log.infof(
-                "HITL-APPROVE: session %s role %s approved with %d decisions", sessionId, agentRole, decisions.size());
+        setLocalDecisions(cp, current, "HITL-APPROVE");
+        publishDecision(cp, HitlEventType.APPROVED, null, null);
+        log.infof("HITL-APPROVE: session %s role %s updated %d decisions", sessionId, agentRole, updated);
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
@@ -96,30 +89,12 @@ public class CheckpointApprovalService {
             throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
-        // §Bug-1 Fix: Keep status as AWAITING_APPROVAL.
+        Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-APPROVE-ALL");
+        int updated = applyAllPending(cp, decisions, ToolDecision.APPROVED);
+        if (updated == 0) throw alreadyDecided(sessionId, "all");
 
-        try {
-            String decisionsJson = cp.getBatchToolDecisions();
-            if (decisionsJson != null && !decisionsJson.isBlank()) {
-                Map<String, ToolDecision> decisions = objectMapper.readValue(decisionsJson, new TypeReference<>() {});
-                decisions.replaceAll((k, v) -> ToolDecision.APPROVED);
-                cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-            }
-        } catch (JsonProcessingException e) {
-            log.errorf("HITL-APPROVE-ALL: failed to update decisions: %s", LogUtil.rootMessage(e));
-        }
-
-        agentStore.save(cp);
-        agentSseService.publish(
-                sessionId,
-                new AgentSseService.HitlEvent(
-                        sessionId,
-                        HitlEventType.APPROVED.wireValue(),
-                        cp.getPendingToolName(),
-                        cp.getPendingToolParametersJson(),
-                        null,
-                        null,
-                        Instant.now()));
+        setLocalDecisions(cp, decisions, "HITL-APPROVE-ALL");
+        publishDecision(cp, HitlEventType.APPROVED, null, null);
         return cp;
     }
 
@@ -129,19 +104,15 @@ public class CheckpointApprovalService {
         if (cpOpt.isEmpty()) return;
 
         AgentCheckpoint cp = cpOpt.get();
+        if (cp.hasBatchToolDecisions()) {
+            denyAll(sessionId, reason);
+            return;
+        }
+        if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL) return;
         cp.setStatus(CheckpointStatus.DENIED);
         agentStore.save(cp);
 
-        agentSseService.publish(
-                sessionId,
-                new AgentSseService.HitlEvent(
-                        sessionId,
-                        HitlEventType.DENIED.wireValue(),
-                        cp.getPendingToolName(),
-                        cp.getPendingToolParametersJson(),
-                        null,
-                        reason,
-                        Instant.now()));
+        publishDecision(cp, HitlEventType.DENIED, reason, null);
         log.infof("HITL-DENY: session %s role %s denied. reason=%s", sessionId, agentRole, reason);
     }
 
@@ -152,31 +123,12 @@ public class CheckpointApprovalService {
             throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
-        // §Bug-1 Fix: Keep status as AWAITING_APPROVAL so claimForResume CAS can succeed.
-        // The resume handler will manage the final status transition.
+        Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-DENY-ALL");
+        int updated = applyAllPending(cp, decisions, ToolDecision.DENIED);
+        if (updated == 0) throw alreadyDecided(sessionId, "all");
 
-        try {
-            String decisionsJson = cp.getBatchToolDecisions();
-            if (decisionsJson != null && !decisionsJson.isBlank()) {
-                Map<String, ToolDecision> decisions = objectMapper.readValue(decisionsJson, new TypeReference<>() {});
-                decisions.replaceAll((k, v) -> ToolDecision.DENIED);
-                cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-            }
-        } catch (JsonProcessingException e) {
-            log.errorf("HITL-DENY-ALL: failed to update decisions: %s", LogUtil.rootMessage(e));
-        }
-
-        agentStore.save(cp);
-        agentSseService.publish(
-                sessionId,
-                new AgentSseService.HitlEvent(
-                        sessionId,
-                        HitlEventType.DENIED.wireValue(),
-                        cp.getPendingToolName(),
-                        cp.getPendingToolParametersJson(),
-                        null,
-                        reason,
-                        Instant.now()));
+        setLocalDecisions(cp, decisions, "HITL-DENY-ALL");
+        publishDecision(cp, HitlEventType.DENIED, reason, null);
         return cp;
     }
 
@@ -187,27 +139,12 @@ public class CheckpointApprovalService {
             throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
-        // §Bug-2 Fix: Explicitly use the passed-in toolName parameter.
-        try {
-            Map<String, ToolDecision> decisions = new LinkedHashMap<>();
-            String existingDecisions = cp.getBatchToolDecisions();
-            if (existingDecisions != null && !existingDecisions.isBlank()) {
-                decisions = objectMapper.readValue(existingDecisions, new TypeReference<>() {});
-            }
-
-            decisions.put(toolName, ToolDecision.APPROVED);
-            cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-
-            // §Bug-1 Fix: Keep as AWAITING_APPROVAL.
-            agentStore.save(cp);
-
-            agentSseService.publish(
-                    sessionId,
-                    new AgentSseService.HitlEvent(
-                            sessionId, HitlEventType.APPROVED.wireValue(), toolName, null, null, null, Instant.now()));
-        } catch (JsonProcessingException e) {
-            log.errorf("HITL-APPROVE-TOOL: failed to update decision for %s: %s", toolName, LogUtil.rootMessage(e));
+        Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-APPROVE-TOOL");
+        if (!applyDecision(cp, decisions, toolName, ToolDecision.APPROVED)) {
+            throw alreadyDecided(sessionId, toolName);
         }
+        setLocalDecisions(cp, decisions, "HITL-APPROVE-TOOL");
+        publishDecision(cp, HitlEventType.APPROVED, null, toolName);
         return cp;
     }
 
@@ -218,68 +155,123 @@ public class CheckpointApprovalService {
             throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
-        // §Bug-2 Fix: Explicitly use the passed-in toolName parameter.
-        try {
-            Map<String, ToolDecision> decisions = new LinkedHashMap<>();
-            String existingDecisions = cp.getBatchToolDecisions();
-            if (existingDecisions != null && !existingDecisions.isBlank()) {
-                decisions = objectMapper.readValue(existingDecisions, new TypeReference<>() {});
-            }
-
-            decisions.put(toolName, ToolDecision.DENIED);
-            cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
-
-            // §Bug-1 Fix: Keep as AWAITING_APPROVAL.
-            agentStore.save(cp);
-
-            agentSseService.publish(
-                    sessionId,
-                    new AgentSseService.HitlEvent(
-                            sessionId, HitlEventType.DENIED.wireValue(), toolName, null, null, reason, Instant.now()));
-        } catch (JsonProcessingException e) {
-            log.errorf("HITL-DENY-TOOL: failed to update decision for %s: %s", toolName, LogUtil.rootMessage(e));
+        Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-DENY-TOOL");
+        if (!applyDecision(cp, decisions, toolName, ToolDecision.DENIED)) {
+            throw alreadyDecided(sessionId, toolName);
         }
+        setLocalDecisions(cp, decisions, "HITL-DENY-TOOL");
+        publishDecision(cp, HitlEventType.DENIED, reason, toolName);
         return cp;
+    }
+
+    private Map<String, ToolDecision> readDecisions(AgentCheckpoint cp, String operation) {
+        String json = cp.getBatchToolDecisions();
+        if (json == null || json.isBlank()) return new LinkedHashMap<>();
+        try {
+            Map<String, ToolDecision> parsed = objectMapper.readValue(json, new TypeReference<>() {});
+            return parsed == null ? new LinkedHashMap<>() : new LinkedHashMap<>(parsed);
+        } catch (JsonProcessingException e) {
+            log.errorf("%s: failed to read persisted decisions: %s", operation, LogUtil.rootMessage(e));
+            throw new CheckpointResolutionException("Approval state cannot be resolved safely", 409);
+        }
+    }
+
+    private int applyAllPending(AgentCheckpoint cp, Map<String, ToolDecision> decisions, ToolDecision target) {
+        int updated = 0;
+        for (String toolName : decisions.keySet().toArray(String[]::new)) {
+            if (applyDecision(cp, decisions, toolName, target)) updated++;
+        }
+        return updated;
+    }
+
+    private boolean applyDecision(
+            AgentCheckpoint cp, Map<String, ToolDecision> decisions, String toolName, ToolDecision target) {
+        if (!isFinalDecision(target) || toolName == null || !ToolDecision.PENDING.equals(decisions.get(toolName))) {
+            return false;
+        }
+        boolean updated =
+                agentStore.updateBatchToolDecision(cp.getSessionId(), cp.getAgentRole(), toolName, target.name());
+        if (updated) decisions.put(toolName, target);
+        return updated;
+    }
+
+    private void setLocalDecisions(AgentCheckpoint cp, Map<String, ToolDecision> decisions, String operation) {
+        try {
+            cp.setBatchToolDecisions(objectMapper.writeValueAsString(decisions));
+        } catch (JsonProcessingException e) {
+            log.errorf("%s: failed to serialize local decision view: %s", operation, LogUtil.rootMessage(e));
+            throw new CheckpointResolutionException("Approval state cannot be returned safely", 409);
+        }
+    }
+
+    private void publishDecision(AgentCheckpoint cp, HitlEventType type, String reason, String toolName) {
+        agentSseService.publish(
+                cp.getSessionId(),
+                new AgentSseService.HitlEvent(
+                        cp.getSessionId(),
+                        type.wireValue(),
+                        toolName != null ? toolName : cp.getPendingToolName(),
+                        cp.getPendingToolParametersJson(),
+                        null,
+                        reason,
+                        Instant.now()));
+    }
+
+    private static boolean isFinalDecision(ToolDecision decision) {
+        return decision == ToolDecision.APPROVED || decision == ToolDecision.DENIED;
+    }
+
+    private static CheckpointResolutionException alreadyDecided(String sessionId, String toolName) {
+        return new CheckpointResolutionException(
+                "Approval decision already resolved for session " + sessionId + " tool " + toolName, 409);
     }
 
     /**
      * Triggers resume after a batch decision. Publishes a single RESUMED SSE
      * event only after the resume handler completes (or fails).
-     * <p>
-     * §Issue-2 Fix: Previously this published RESUMED before calling the handler,
+     *
+     * <p>§Issue-2 Fix: Previously this published RESUMED before calling the handler,
      * and a duplicate RESUMED would be published. Now we publish exactly once.
      */
     public void triggerResume(AgentCheckpoint cp) {
         if (cp == null) return;
 
-        if (!BatchDecisionUtil.pendingToolNames(cp, objectMapper).isEmpty()) {
+        AgentCheckpoint latest =
+                agentStore.findLatestAwaitingApproval(cp.getSessionId()).orElse(cp);
+        if (BatchDecisionUtil.hasPendingToolNames(latest, objectMapper)) {
             log.debugf(
-                    "HITL-RESUME: skipping trigger for session %s as batch tools are still pending", cp.getSessionId());
+                    "HITL-RESUME: skipping trigger for session %s as batch tools are still pending",
+                    latest.getSessionId());
             return;
         }
 
-        log.infof("HITL-RESUME: triggering resume for session %s role %s", cp.getSessionId(), cp.getAgentRole());
+        log.infof(
+                "HITL-RESUME: triggering resume for session %s role %s", latest.getSessionId(), latest.getAgentRole());
 
-        // §Resume-Fix: actively drive resumption to prevent the HITL flow from stalling
         try {
             if (resumeHandlerInstance.isResolvable()) {
                 CheckpointResumeHandler handler = resumeHandlerInstance.get();
                 handler.resumeAfterBatchDecision(
-                        cp.getSessionId(),
-                        cp.getAgentRole(),
-                        cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : "unknown",
-                        cp.getChannelPlatformId() != null ? cp.getChannelPlatformId() : cp.getSessionId(),
-                        cp.getChannelType() != null ? cp.getChannelType() : "websocket");
+                        latest.getSessionId(),
+                        latest.getAgentRole(),
+                        latest.getChannelPlatformId() != null ? latest.getChannelPlatformId() : "unknown",
+                        latest.getChannelPlatformId() != null ? latest.getChannelPlatformId() : latest.getSessionId(),
+                        latest.getChannelType() != null ? latest.getChannelType() : "websocket");
             }
         } catch (Exception e) {
             log.warnf(
                     "HITL-RESUME: failed to trigger CheckpointResumeHandler automatically: %s", LogUtil.rootMessage(e));
         }
 
-        // Single RESUMED event published after the handler completes (or fails)
         agentSseService.publish(
-                cp.getSessionId(),
+                latest.getSessionId(),
                 new AgentSseService.HitlEvent(
-                        cp.getSessionId(), HitlEventType.RESUMED.wireValue(), null, null, null, null, Instant.now()));
+                        latest.getSessionId(),
+                        HitlEventType.RESUMED.wireValue(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        Instant.now()));
     }
 }

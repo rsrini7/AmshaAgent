@@ -394,7 +394,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                         return false;
                     }
                     String rawJson = dto.batchToolDecisions();
-                    if (rawJson == null) {
+                    if (rawJson == null || rawJson.isBlank()) {
                         log.warnf("[BatchOps] batchToolDecisions is null for session=%s", sessionId);
                         return false;
                     }
@@ -407,10 +407,14 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                                     toolName, sessionId, map.keySet());
                             return false;
                         }
+                        if (map.get(toolName) != ToolDecision.PENDING) {
+                            log.infof("[BatchOps] Tool '%s' is already decided for session=%s", toolName, sessionId);
+                            return false;
+                        }
                         map.put(toolName, ToolDecision.valueOf(decision));
                         String updatedJson = objectMapper.writeValueAsString(map);
                         String now = TemporalUtils.formatIsoLex(Instant.now());
-                        return dao.atomicUpdateBatchDecision(sessionId, agentRole, updatedJson, now);
+                        return dao.atomicUpdateBatchDecision(sessionId, agentRole, updatedJson, rawJson, now);
                     } catch (Exception e) {
                         log.errorf(
                                 "[BatchOps] Failed to update batch tool decision for session=%s tool=%s: %s",

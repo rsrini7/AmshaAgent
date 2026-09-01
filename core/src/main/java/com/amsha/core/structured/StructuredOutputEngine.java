@@ -50,7 +50,13 @@ public class StructuredOutputEngine {
             """, combinedContext, schema);
 
         return retryLoop.execute(sessionId, agentRole, "structured_output:" + functionName, () -> {
-            String rawResponse = reasoningEngine.chatForStructuredOutput(sessionId, agentRole, schemaPrompt);
+            // Missing-resource fallback ("{}") is not a real schema: pass null so
+            // native attachment skips immediately instead of parsing a propertyless
+            // object. The prompt text still carries the schema block for the
+            // prompt-directive path.
+            String schemaForAttachment = "{}".equals(schema) ? null : schema;
+            String rawResponse =
+                    reasoningEngine.chatForStructuredOutput(sessionId, agentRole, schemaPrompt, schemaForAttachment);
             return extractor.extract(rawResponse, targetType);
         });
     }

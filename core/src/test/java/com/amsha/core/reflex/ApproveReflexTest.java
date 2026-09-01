@@ -180,8 +180,13 @@ class ApproveReflexTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("cron-session-123");
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+        cp.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
 
-        when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(cp);
+        AgentCheckpoint resolved = new AgentCheckpointRecord();
+        resolved.setSessionId("cron-session-123");
+        resolved.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+        resolved.setBatchToolDecisions("{\"github\":\"APPROVED\", \"serper\":\"APPROVED\"}");
+        when(checkpointApprovalService.approveAll(anyString(), anyString())).thenReturn(resolved);
         when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
                 .thenReturn(Optional.of(cp));
         when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.of(cp));
@@ -239,9 +244,15 @@ class ApproveReflexTest {
         cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
         cp.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+        cp.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
 
         // Session CP exists
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
+        AgentCheckpoint resolved = new AgentCheckpointRecord();
+        resolved.setSessionId("session-1");
+        resolved.setAgentRole(AgentRoleEnum.COORDINATOR.toScopedName());
+        resolved.setBatchToolDecisions("{\"github\":\"APPROVED\", \"serper\":\"APPROVED\"}");
+        when(checkpointApprovalService.approveAll("session-1", "CLI approve")).thenReturn(resolved);
 
         MessageContext ctx = createContext("/approve");
         ReflexResult result = approveReflex.execute("session-1", userId, "chat-1", "/approve", ctx);
@@ -370,7 +381,13 @@ class ApproveReflexTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setOriginalGoal("Store my API key");
         cp.setAgentRole("coordinator");
+        cp.setBatchToolDecisions("{\"github\":\"PENDING\", \"serper\":\"PENDING\"}");
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
+        AgentCheckpoint resolved = new AgentCheckpointRecord();
+        resolved.setSessionId("session-1");
+        resolved.setAgentRole("coordinator");
+        resolved.setBatchToolDecisions("{\"github\":\"APPROVED\", \"serper\":\"APPROVED\"}");
+        when(checkpointApprovalService.approveAll("session-1", "CLI approve")).thenReturn(resolved);
 
         var cron = new AgentCronDto(
                 "cron-123",

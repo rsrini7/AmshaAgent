@@ -5,6 +5,8 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -24,7 +26,11 @@ import com.amsha.core.compaction.CompactionAbortedException;
 import com.amsha.core.events.CompactionEvent;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.governance.SessionBudgetTracker;
+import com.amsha.core.structured.StructuredOutputMetrics;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.api.StructuredSchemaRequests;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.memory.config.TieredMemoryConfig;
 import com.amsha.memory.tiered.RecallMemoryService;
 import com.amsha.memory.tiered.RecallMessageMapper;
@@ -38,6 +44,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.smallrye.common.annotation.Identifier;
 
 /**
@@ -53,6 +60,8 @@ public class CompactionService {
     private static final int MAX_COMPACTION_RETRIES = 3;
     private static final String TRUNCATION_SUFFIX = "...[truncated]";
     private static final List<String> SUMMARY_RESPONSE_FIELDS = List.of("summary", "content", "result");
+    private static final String COMPACTION_SCHEMA =
+            "{\"type\":\"object\",\"properties\":{\"summary\":{\"type\":\"string\"}},\"required\":[\"summary\"]}";
 
     @ConfigProperty(name = "amsha.memory.compaction.max-chars", defaultValue = "96000")
     long maxCharsBeforeCompaction;
@@ -108,6 +117,9 @@ public class CompactionService {
     long maxBackoffMs;
 
     private static final Logger log = Logger.getLogger(CompactionService.class);
+
+    @Inject
+    MeterRegistry meterRegistry;
 
     private static final String PROMPT_TEMPLATE = """
         You are a context summarizer for an AI agent session.
@@ -300,12 +312,51 @@ public class CompactionService {
     }
 
     private String summarizeCompactionResponse(String sessionId, String prompt, int attempt) {
-        String responseText = compactionModel
-                .chat(UserMessage.userMessage(prompt))
-                .aiMessage()
-                .text();
-        if (responseText == null || responseText.isBlank()) return "";
-        if (resolveCompactionMode() != StructuredOutputMode.NATIVE) return responseText.trim();
+        StructuredOutputMode mode = resolveCompactionMode();
+        ChatRequest request = ChatRequest.builder()
+                .messages(List.of(UserMessage.userMessage(prompt)))
+                .build();
+        boolean schemaAttached = false;
+        if (mode == StructuredOutputMode.NATIVE
+                && compactionModel instanceof StrictJsonSchemaCapable capable
+                && capable.supportsStrictJsonSchema()) {
+            try {
+                request = StructuredSchemaRequests.withNativeJsonSchema(request, "compaction", COMPACTION_SCHEMA);
+                schemaAttached = true;
+            } catch (Exception e) {
+                log.debugf("Compaction native schema attachment skipped: %s", LogUtil.rootMessage(e));
+            }
+        }
+
+        ChatResponse response;
+        boolean degradedToDirective = false;
+        try {
+            response = compactionModel.chat(request);
+        } catch (LlmMalformedResponseException mre) {
+            if (!schemaAttached) {
+                throw mre;
+            }
+            StructuredOutputMetrics.recordSchemaRejection(meterRegistry, "compaction");
+            log.debug("Native schema rejected by compaction model; retrying with PROMPT_DIRECTIVE mode");
+            degradedToDirective = true;
+            String directivePrompt = nativeJsonFallbackPrompt(prompt);
+            ChatRequest promptOnly = StructuredSchemaRequests.withoutNativeJsonSchema(ChatRequest.builder()
+                    .messages(List.of(UserMessage.userMessage(directivePrompt)))
+                    .build());
+            response = compactionModel.chat(promptOnly);
+        }
+
+        String responseText = (response != null && response.aiMessage() != null)
+                ? response.aiMessage().text()
+                : null;
+        if (responseText == null) {
+            ChatResponse legacy = compactionModel.chat(UserMessage.userMessage(prompt));
+            responseText = (legacy != null && legacy.aiMessage() != null)
+                    ? legacy.aiMessage().text()
+                    : "";
+        }
+        if (responseText.isBlank()) return "";
+        if (mode != StructuredOutputMode.NATIVE || degradedToDirective) return responseText.trim();
         return extractNativeSummary(sessionId, prompt, responseText, attempt);
     }
 
@@ -386,6 +437,7 @@ public class CompactionService {
 
     private static boolean isJsonError(Throwable e) {
         if (e == null) return false;
+        if (e instanceof LlmMalformedResponseException) return true;
         String msg = e.getMessage();
         if (msg != null && (msg.contains("json_validate_failed") || msg.contains("invalid_json"))) return true;
         return isJsonError(e.getCause());

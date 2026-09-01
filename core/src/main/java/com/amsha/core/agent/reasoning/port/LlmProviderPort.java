@@ -33,6 +33,23 @@ public interface LlmProviderPort {
     ChatResponse nextStep(ChatRequest request, String agentRole);
 
     /**
+     * Executes a toolless structured-output request with its raw JSON schema.
+     * The provider seam owns route resolution and may attach the schema only to
+     * the active model that explicitly supports strict JSON Schema. Implementations
+     * that do not support native carriage retain the prompt-directive path.
+     *
+     * @param request chat request whose prompt contains the structured-output
+     *                directive
+     * @param agentRole agent role used for model routing
+     * @param schemaJson raw JSON Schema for this request, or {@code null} when
+     *                   native attachment is not applicable
+     * @return chat response
+     */
+    default ChatResponse nextStep(ChatRequest request, String agentRole, String schemaJson) {
+        return nextStep(request, agentRole);
+    }
+
+    /**
      * Executes a chat request for the given agent role, optionally bypassing lightweight-goal
      * model downgrading for exactly this call (memory-synthesis escalation).
      *

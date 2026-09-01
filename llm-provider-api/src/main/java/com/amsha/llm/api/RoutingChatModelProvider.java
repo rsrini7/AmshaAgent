@@ -20,4 +20,17 @@ public interface RoutingChatModelProvider {
     default boolean requiresApiKey() {
         return true;
     }
+
+    /**
+     * Deliberate declaration that this provider/model family accepts a strict
+     * JSON-Schema response format ({@code type: json_schema}), not merely generic
+     * JSON mode. Resolution combines this advertisement with
+     * {@link StructuredOutputCapabilities#resolvesToStrictSchema}.
+     *
+     * <p>Defaults to {@code false}; a factory must only override with evidence
+     * that the upstream API enforces the declared schema at decoding time.</p>
+     */
+    default boolean supportsStrictJsonSchema() {
+        return false;
+    }
 }

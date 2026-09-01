@@ -1,6 +1,9 @@
 package com.amsha.core.routing;
 
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -22,13 +25,20 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.persona.AgentRoleRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.security.DestructiveVocabularyFilter;
+import com.amsha.core.structured.StructuredOutputMetrics;
 import com.amsha.core.util.ClassUtils;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.api.StructuredSchemaRequests;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
 import io.smallrye.common.annotation.Identifier;
 
@@ -38,6 +48,15 @@ import io.smallrye.common.annotation.Identifier;
 public class IntentDetectorService implements IntentDetector {
 
     private static final Logger log = Logger.getLogger(IntentDetectorService.class);
+
+    @Inject
+    MeterRegistry meterRegistry;
+
+    private static final String INTENT_SCHEMA =
+            "{\"type\":\"object\",\"properties\":{\"role\":{\"type\":\"string\"}},\"required\":[\"role\"]}";
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @Inject
     @Identifier("intent-classifier")
@@ -186,17 +205,18 @@ public class IntentDetectorService implements IntentDetector {
         long startNs = System.nanoTime();
         try {
             // §Issue 1: Add a hard timeout to ensure SLA compliance
-            raw = CompletableFuture.supplyAsync(() -> classifierModel.chat(finalSafePrompt), managedExecutor)
+            raw = CompletableFuture.supplyAsync(
+                            () -> executeClassifierModel(classifierModel, finalSafePrompt, mode), managedExecutor)
                     .get(slaTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException te) {
             log.warnf("IntentDetector SLA breach (TIMEOUT > %dms) - using fast fallback model", slaTimeoutMs);
-            String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
+            String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage, mode);
             return completeClassification(
                     userMessage,
                     destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase(Locale.ROOT)), userMessage));
         } catch (Exception e) {
             log.warnf("Intent classifier failed: %s. Using fast fallback model.", LogUtil.rootMessage(e));
-            String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage);
+            String rawFallback = tryFallbackOrHeuristic(finalSafePrompt, userMessage, mode);
             return completeClassification(
                     userMessage,
                     destructiveFilter.filter(sanitize(rawFallback.trim().toLowerCase(Locale.ROOT)), userMessage));
@@ -216,6 +236,65 @@ public class IntentDetectorService implements IntentDetector {
         return completeClassification(userMessage, destructiveFilter.filter(result, userMessage));
     }
 
+    private String executeClassifierModel(ChatModel model, String prompt, StructuredOutputMode mode) {
+        ChatRequest request = ChatRequest.builder()
+                .messages(List.of(UserMessage.from(prompt)))
+                .build();
+        boolean schemaAttached = false;
+        if (mode == StructuredOutputMode.NATIVE
+                && model instanceof StrictJsonSchemaCapable capable
+                && capable.supportsStrictJsonSchema()) {
+            try {
+                request = StructuredSchemaRequests.withNativeJsonSchema(request, "intent-classifier", INTENT_SCHEMA);
+                schemaAttached = true;
+            } catch (Exception e) {
+                log.debugf("Intent classifier native schema attachment skipped: %s", LogUtil.rootMessage(e));
+            }
+        }
+        try {
+            ChatResponse response = model.chat(request);
+            if (response != null && response.aiMessage() != null) {
+                return extractRoleOrRaw(response.aiMessage().text());
+            }
+            return model.chat(prompt);
+        } catch (LlmMalformedResponseException mre) {
+            if (!schemaAttached) {
+                throw mre;
+            }
+            StructuredOutputMetrics.recordSchemaRejection(meterRegistry, "intent-classifier");
+            log.debug("Native schema rejected by intent classifier; retrying with prompt directive");
+            String directivePrompt =
+                    "CRITICAL: You MUST respond with ONLY a single role name token. No explanation, no JSON, no punctuation.\n\n"
+                            + prompt;
+            ChatRequest promptOnly = StructuredSchemaRequests.withoutNativeJsonSchema(ChatRequest.builder()
+                    .messages(List.of(UserMessage.from(directivePrompt)))
+                    .build());
+            ChatResponse promptResponse = model.chat(promptOnly);
+            if (promptResponse != null && promptResponse.aiMessage() != null) {
+                return extractRoleOrRaw(promptResponse.aiMessage().text());
+            }
+            return model.chat(directivePrompt);
+        }
+    }
+
+    private String extractRoleOrRaw(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+                JsonNode node = mapper.readTree(trimmed);
+                JsonNode roleNode = node.get("role");
+                if (roleNode != null && roleNode.isTextual()) {
+                    return roleNode.asText();
+                }
+            } catch (Exception _) {
+                // Fall back to raw text
+            }
+        }
+        return raw;
+    }
+
     private String completeClassification(String userMessage, String authoritativeRole) {
         try {
             if (intentShadowEvaluation != null) intentShadowEvaluation.observe(userMessage, authoritativeRole);
@@ -225,10 +304,11 @@ public class IntentDetectorService implements IntentDetector {
         return authoritativeRole;
     }
 
-    private String tryFallbackOrHeuristic(String prompt, String userMessage) {
+    private String tryFallbackOrHeuristic(String prompt, String userMessage, StructuredOutputMode mode) {
         if (ollamaFallbackEnabled && fallbackModel != null && fallbackModel.isResolvable()) {
             try {
-                return CompletableFuture.supplyAsync(() -> fallbackModel.get().chat(prompt), managedExecutor)
+                return CompletableFuture.supplyAsync(
+                                () -> executeClassifierModel(fallbackModel.get(), prompt, mode), managedExecutor)
                         .get(1500, TimeUnit.MILLISECONDS);
             } catch (Exception e) {
                 log.warnf("Intent fallback failed: %s. Using local heuristic.", LogUtil.rootMessage(e));

@@ -22,6 +22,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.LaunchMode;
 import io.smallrye.common.annotation.Identifier;
@@ -60,6 +61,9 @@ public class InfiniteLoopIntentChatModelProvider {
 
     @Inject
     LlmModelFactory modelFactory;
+
+    @Inject
+    MeterRegistry meterRegistry;
 
     private volatile InfiniteLoopChatModel instance;
 
@@ -105,7 +109,8 @@ public class InfiniteLoopIntentChatModelProvider {
                             List.of(new InfiniteLoopChatModel.Slot("dummy", dummy, "unknown")),
                             cooldownBaseSeconds,
                             cooldownMaxSeconds,
-                            cooldownTransientSeconds);
+                            cooldownTransientSeconds,
+                            meterRegistry);
                 }
                 throw new IllegalStateException("No classifier providers configured. "
                         + "Check amsha.infinite-loop.classifier.providers (currently: " + loopProviders + ")");
@@ -117,7 +122,12 @@ public class InfiniteLoopIntentChatModelProvider {
                     slots.stream().map(InfiniteLoopChatModel.Slot::name).toList());
 
             instance = new InfiniteLoopChatModel(
-                    "intent-classifier-chat", slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds);
+                    "intent-classifier-chat",
+                    slots,
+                    cooldownBaseSeconds,
+                    cooldownMaxSeconds,
+                    cooldownTransientSeconds,
+                    meterRegistry);
             return instance;
         }
     }

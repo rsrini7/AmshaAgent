@@ -17,12 +17,14 @@ import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronRunDto;
 import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.AgentSentinels;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Dependent
 public class CronDecisionRouter {
@@ -45,6 +47,9 @@ public class CronDecisionRouter {
     @Inject
     WorkspaceManager workspaceManager;
 
+    @Inject
+    ObjectMapper objectMapper;
+
     public String execute(CronContext ctx) throws Exception {
         String cronId = ctx.cronId;
 
@@ -55,6 +60,9 @@ public class CronDecisionRouter {
         String resolvedSessionId = resolveSessionId(cronId);
 
         AgentCheckpoint pendingCheckpoint = ctx.applyDecisionToAll().apply(resolvedSessionId, ctx.reason);
+        if (pendingCheckpoint == null || BatchDecisionUtil.hasPendingToolNames(pendingCheckpoint, objectMapper)) {
+            return ctx.errorMsg().get();
+        }
         String cronSessionId = pendingCheckpoint.getSessionId();
         String cronRole = pendingCheckpoint.getAgentRole();
 

@@ -362,6 +362,11 @@ schema) and must match the model used by every active provider.
 | `AMSHA_RAG_VEC_PATH` | `./lib/vec0` | Path to sqlite-vec native extension |
 | `AMSHA_RAG_VEC_AUTO_DOWNLOAD` | `false` | Auto-download the sqlite-vec release asset (SHA-256 verified) when missing from disk and JAR. Opt-in; offline-safe by default |
 | `AMSHA_RAG_VEC_VERSION` | `0.1.9` | sqlite-vec version used by the auto-downloader; 0.1.9 digests are pinned in code, other versions are verified against the release checksums.txt |
+| `AMSHA_RAG_RERANKER_ENABLED` | `false` | Enable local ONNX cross-encoder reranking (`RerankerPort` via `LocalOnnxScoringAdapter`). Fail-closed: disabled by default |
+| `AMSHA_RAG_RERANKER_BUNDLE_ID` | `bge-reranker-v1` | Verified local cross-encoder bundle ID under `AMSHA_ONNX_MODEL_ROOT` |
+| `AMSHA_RAG_RERANKER_TIMEOUT` | `PT5S` | Total deadline for one cross-encoder scoring request (ISO-8601 duration) |
+| `AMSHA_RAG_RERANKER_MAX_CANDIDATES` | `50` | Maximum retrieved candidate chunks scored per query (excess retains RRF order) |
+| `AMSHA_RAG_RERANKER_MAX_INPUT_BYTES` | `262144` | UTF-8 byte limit (256 KB) for query or candidate text before scoring (excess rejected) |
 
 ## In-Process Local ML (ONNX Runtime)
 
@@ -383,6 +388,11 @@ schema) and must match the model used by every active provider.
 | `AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS` | `5` | Request timeout in seconds for ONNX embedding model requests |
 | `AMSHA_EMBEDDING_ONNX_SPACE_ID` | *(unset)* | Vector space ID matching bundle manifest (e.g. `sentence-transformers/all-mpnet-base-v2`) |
 | `AMSHA_EMBEDDING_ONNX_SPACE_REVISION` | *(unset)* | Vector space revision matching bundle manifest Git commit SHA |
+| `AMSHA_RAG_RERANKER_ENABLED` | `false` | Duplicate alias for RAG reranker enablement (see Memory & RAG); kept here for discoverability |
+| `AMSHA_RAG_RERANKER_BUNDLE_ID` | `bge-reranker-v1` | Duplicate alias for reranker bundle ID |
+| `AMSHA_RAG_RERANKER_TIMEOUT` | `PT5S` | Duplicate alias for reranker deadline |
+| `AMSHA_RAG_RERANKER_MAX_CANDIDATES` | `50` | Duplicate alias for reranker candidate window |
+| `AMSHA_RAG_RERANKER_MAX_INPUT_BYTES` | `262144` | Duplicate alias for reranker byte limit |
 
 ## Self-Evolution
 
@@ -551,6 +561,7 @@ the request before authentication or resource handling.
 
 | Variable | Default | Description |
 |---|---|---|
+| `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | LangChain4j `ChatModelListener` pilot mode (`off` = no-op, `shadow` = shadow metrics/timers with zero payload, `active` = `amsha.llm.listener_call` spans + active metrics for calls not already manually instrumented). `ChatModelListenerRuntimeControl` fail-closed: enables to `shadow`/`active` only when a ready `AmshaChatModelListener` CDI implementation is registered; disabling drains in-flight leases. |
 | `AMSHA_PHOENIX_ENABLED` | `true` | Enable OTel trace export to Arize Phoenix |
 | `AMSHA_PHOENIX_ENDPOINT` | `http://localhost:4318/v1/traces` | Phoenix OTLP HTTP endpoint |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OpenTelemetry collector endpoint |

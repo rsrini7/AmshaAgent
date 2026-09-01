@@ -102,12 +102,17 @@ public class ApprovalStateMachine implements ApprovalGateway {
                     toolName, effectiveTool, sessionId);
         }
 
+        boolean updatedAny = false;
         if ("all".equalsIgnoreCase(effectiveTool)) {
             log.infof("[ASM] Approving all pending tools for session=%s: %s", sessionId, pendingTools);
             for (String pending : pendingTools) {
-                agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, decisionEnum.name());
-                if (decisionEnum == ToolDecision.APPROVED) {
-                    grantLease(sessionId, cp, pending);
+                boolean updated =
+                        agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, decisionEnum.name());
+                if (updated) {
+                    updatedAny = true;
+                    if (decisionEnum == ToolDecision.APPROVED) {
+                        grantLease(sessionId, cp, pending);
+                    }
                 }
             }
         } else {
@@ -117,11 +122,13 @@ public class ApprovalStateMachine implements ApprovalGateway {
                         effectiveTool, sessionId, pendingTools);
                 return ApprovalResult.alreadyDecided(sessionId, effectiveTool);
             }
-            agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), effectiveTool, decisionEnum.name());
-            if (decisionEnum == ToolDecision.APPROVED) {
-                grantLease(sessionId, cp, effectiveTool);
-            }
+            updatedAny = agentStore.updateBatchToolDecision(
+                    sessionId, cp.getAgentRole(), effectiveTool, decisionEnum.name());
+            if (!updatedAny) return ApprovalResult.alreadyDecided(sessionId, effectiveTool);
+            if (decisionEnum == ToolDecision.APPROVED) grantLease(sessionId, cp, effectiveTool);
         }
+
+        if (!updatedAny) return ApprovalResult.alreadyDecided(sessionId, effectiveTool);
 
         // 6. Resolve final outcome — all decided or still pending
         var result = resolveOutcome(sessionId, cp, effectiveTool, decisionEnum, allTools, pendingTools);

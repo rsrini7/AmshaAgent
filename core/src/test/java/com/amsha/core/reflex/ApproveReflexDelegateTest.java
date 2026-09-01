@@ -108,6 +108,7 @@ class ApproveReflexDelegateTest {
         AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(agentStore.findLatestAwaitingApproval(eq(targetSid))).thenReturn(Optional.of(cp));
+        when(checkpointApprovalService.approveAll(eq(targetSid), any())).thenReturn(cp);
         lenient().when(delegateGuard.isDelegate(adminId)).thenReturn(false);
 
         MessageContext context = createTestContext(targetSid, adminId, input);
@@ -144,6 +145,7 @@ class ApproveReflexDelegateTest {
         AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
+        when(checkpointApprovalService.approveAll(eq(mySessionId), any())).thenReturn(cp);
         lenient().when(delegateGuard.isDelegate(ownerId)).thenReturn(false);
 
         MessageContext context = createTestContext(mySessionId, ownerId, input);
@@ -166,6 +168,7 @@ class ApproveReflexDelegateTest {
         when(cp.getAgentRole()).thenReturn("coordinator");
         when(cp.hasBatchToolDecisions()).thenReturn(false);
         when(agentStore.findLatestAwaitingApproval(eq(mySessionId))).thenReturn(Optional.of(cp));
+        when(checkpointApprovalService.approveAll(eq(mySessionId), any())).thenReturn(cp);
 
         MessageContext context = createTestContext(mySessionId, adminId, input);
         var result = reflex.execute(mySessionId, adminId, "chat1", input, context);

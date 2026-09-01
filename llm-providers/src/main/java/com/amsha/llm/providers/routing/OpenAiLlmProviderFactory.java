@@ -21,6 +21,11 @@ public class OpenAiLlmProviderFactory implements RoutingChatModelProvider {
     }
 
     @Override
+    public boolean supportsStrictJsonSchema() {
+        return true;
+    }
+
+    @Override
     public ChatModel create(LlmModelConfig config) {
         return ChatModelFactory.createFromConfig(config);
     }

@@ -9,9 +9,11 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.Instance;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -23,6 +25,10 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.events.CompactionEvent;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.governance.SessionBudgetTracker;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
+import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.api.StructuredSchemaRequests;
+import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.memory.config.TieredMemoryConfig;
 import com.amsha.memory.tiered.RecallMemoryService;
 import com.amsha.persistence.api.CompactionStorePort;
@@ -270,6 +276,121 @@ class CompactionServiceTest {
         assertTrue(
                 template.contains("Do NOT preserve or restate secrets"),
                 "Compaction prompt should exclude secrets from summaries");
+    }
+
+    private interface CapableChatModel extends ChatModel, StrictJsonSchemaCapable {}
+
+    @Test
+    void nativeSchema_attachedWhenStrictCapableAndNativeMode() {
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(capableModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("{\"summary\": \"Strict schema summary\"}"))
+                        .build());
+
+        Instance<StructuredOutputMode> modeInst = mock(Instance.class);
+        when(modeInst.isUnsatisfied()).thenReturn(false);
+        when(modeInst.get()).thenReturn(StructuredOutputMode.NATIVE);
+
+        service.compactionModel = capableModel;
+        service.compactionModeInstance = modeInst;
+
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+
+        assertTrue(service.compact("session1", "test-user"));
+
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        verify(capableModel).chat(captor.capture());
+        assertTrue(StructuredSchemaRequests.hasNativeJsonSchema(captor.getValue()));
+    }
+
+    @Test
+    void nativeSchema_notAttachedWhenModeIsPromptDirective() {
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(capableModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("Prompt directive summary"))
+                        .build());
+
+        Instance<StructuredOutputMode> modeInst = mock(Instance.class);
+        when(modeInst.isUnsatisfied()).thenReturn(false);
+        when(modeInst.get()).thenReturn(StructuredOutputMode.PROMPT_DIRECTIVE);
+
+        service.compactionModel = capableModel;
+        service.compactionModeInstance = modeInst;
+
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+
+        assertTrue(service.compact("session1", "test-user"));
+
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        verify(capableModel).chat(captor.capture());
+        assertFalse(StructuredSchemaRequests.hasNativeJsonSchema(captor.getValue()));
+    }
+
+    @Test
+    void nativeSchema_malformedResponse_retriesWithoutNativeSchema() {
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(capableModel.chat(any(ChatRequest.class)))
+                .thenThrow(new LlmMalformedResponseException("schema rejected"))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("Fallback prose summary after schema rejection"))
+                        .build());
+        when(capableModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("Fallback prose summary after schema rejection"))
+                        .build());
+
+        Instance<StructuredOutputMode> modeInst = mock(Instance.class);
+        when(modeInst.isUnsatisfied()).thenReturn(false);
+        when(modeInst.get()).thenReturn(StructuredOutputMode.NATIVE);
+
+        service.compactionModel = capableModel;
+        service.compactionModeInstance = modeInst;
+
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+
+        assertTrue(service.compact("session1", "test-user"));
+
+        ArgumentCaptor<ChatRequest> captor = ArgumentCaptor.forClass(ChatRequest.class);
+        verify(capableModel, times(2)).chat(captor.capture());
+        List<ChatRequest> requests = captor.getAllValues();
+        assertTrue(StructuredSchemaRequests.hasNativeJsonSchema(requests.get(0)));
+        assertFalse(StructuredSchemaRequests.hasNativeJsonSchema(requests.get(1)));
+        UserMessage retryMsg = (UserMessage) requests.get(1).messages().get(0);
+        assertTrue(retryMsg.singleText().contains("CRITICAL: You MUST respond ONLY with the summary prose"));
+    }
+
+    @Test
+    void nativeSchema_extractsSummaryFromJsonContentAndResultFields() {
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("{\"content\": \"Content field summary\"}"))
+                        .build());
+
+        assertTrue(service.compact("session1", "test-user"));
+        ArgumentCaptor<CompactionSummaryDto> captor = ArgumentCaptor.forClass(CompactionSummaryDto.class);
+        verify(mockPort).upsert(captor.capture());
+        assertEquals("Content field summary", captor.getValue().summary());
+
+        reset(mockPort);
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("{\"result\": \"Result field summary\"}"))
+                        .build());
+
+        assertTrue(service.compact("session1", "test-user"));
+        verify(mockPort).upsert(captor.capture());
+        assertEquals("Result field summary", captor.getValue().summary());
     }
 
     private static void setField(Object target, String name, Object value) {

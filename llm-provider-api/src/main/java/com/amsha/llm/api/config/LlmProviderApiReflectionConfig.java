@@ -9,7 +9,9 @@ import com.amsha.llm.api.ModelEntry;
 import com.amsha.llm.api.NetworkPolicyViolation;
 import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.llm.api.ProviderValidationResult;
+import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
 import com.amsha.llm.api.error.LlmContextOverflowException;
@@ -59,6 +61,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AgyOAuthTokenExtractor.class,
             ClaudeCodeOAuthTokenExtractor.class,
             CodexOAuthTokenExtractor.class,
-            KimchiOAuthTokenExtractor.class
+            KimchiOAuthTokenExtractor.class,
+            StrictJsonSchemaCapable.class,
+            StructuredSchemaRequests.class
         })
 public class LlmProviderApiReflectionConfig {}

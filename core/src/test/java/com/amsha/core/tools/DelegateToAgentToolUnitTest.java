@@ -11,10 +11,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.agent.loop.AgentLoop;
-import com.amsha.core.agent.loop.GroupAnalyticsService;
-import com.amsha.core.agent.loop.GroupConsultationEngine;
-import com.amsha.core.agent.loop.GroupConsultationService;
-import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.RoleDefinition;
@@ -61,18 +57,6 @@ class DelegateToAgentToolUnitTest {
 
     @Mock
     CheckpointCrudPort checkpointCrud;
-
-    @Mock
-    GroupConsultationService groupConsultationService;
-
-    @Mock
-    GroupConsultationEngine groupConsultationEngine;
-
-    @Mock
-    GroupAnalyticsService groupAnalytics;
-
-    @Mock
-    TaskClassifierService taskClassifier;
 
     @Mock
     RoleRegistry roleRegistry;
@@ -165,7 +149,7 @@ class DelegateToAgentToolUnitTest {
         when(roleRegistry.resolveRoleDefinition(anyString())).thenReturn(shivaDef);
 
         AgentResult finished = AgentResult.finished("Code debugged successfully", List.of());
-        when(mockAgentLoop.run(anyString(), anyString(), anyString(), any(), anyInt()))
+        when(mockAgentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
                 .thenReturn(finished);
         when(delegationProcessor.handleSubAgentResult(any(), any(), any()))
                 .thenReturn(ToolResponse.success("Code debugged successfully"));

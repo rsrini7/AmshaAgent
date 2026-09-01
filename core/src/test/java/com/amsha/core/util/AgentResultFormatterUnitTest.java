@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.message.UserMessages;
 
 import org.junit.jupiter.api.Test;
 
@@ -53,5 +54,37 @@ class AgentResultFormatterUnitTest {
         String hitl = AgentResultFormatter.formatCronHitl("cron-123", "Daily Backup", "execute_shell");
         assertTrue(hitl.contains("Approval Required for background task"));
         assertTrue(hitl.contains("Daily Backup"));
+    }
+
+    @Test
+    void testSanitizeCriticalDirectiveTailFromFinishedAnswer() {
+        String answer =
+                "Delegation is waiting for approval.\n\n" + "CRITICAL DIRECTIVE: Do NOT retry delegation. FINISH now.";
+
+        String formatted = AgentResultFormatter.format(AgentResult.finished(answer, List.of()));
+
+        assertEquals("Delegation is waiting for approval.", formatted);
+        assertFalse(formatted.contains("CRITICAL DIRECTIVE"));
+        assertFalse(formatted.contains("FINISH now"));
+    }
+
+    @Test
+    void testSanitizeCriticalDirectiveTailFromJsonWrappedFinishedAnswer() {
+        String answer = "{\"response\":\"Safe answer CRITICAL DIRECTIVE: FINISH now.\"}";
+
+        String formatted = AgentResultFormatter.format(AgentResult.finished(answer, List.of()));
+
+        assertEquals("Safe answer", formatted);
+        assertFalse(formatted.contains("CRITICAL DIRECTIVE"));
+    }
+
+    @Test
+    void testMalformedToolArrayUsesSafeUserFacingFallback() {
+        String answer = "[{\"name\":\"garuda\",\"arguments\":{\"agent\":\"brahma\"}}]";
+
+        String formatted = AgentResultFormatter.format(AgentResult.finished(answer, List.of()));
+
+        assertEquals(UserMessages.AI_UNEXPECTED_RESPONSE, formatted);
+        assertFalse(formatted.contains("Tool output was malformed"));
     }
 }

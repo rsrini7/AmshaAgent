@@ -20,6 +20,12 @@ final class OnnxTextInputSupport {
 
     private OnnxTextInputSupport() {}
 
+    /**
+     * Validates that the active ORT session input and output tensors match the verified manifest.
+     *
+     * <p>Requires exact set equality between the graph's inputs and declared inputs.
+     * Optional extra inputs are rejected fail-closed to guarantee deterministic binding.
+     */
     static void validateGraph(OrtSession session, OnnxTextInputSpec spec) throws OnnxTextInputException {
         List<String> declaredInputs = new ArrayList<>();
         declaredInputs.add(spec.inputIdsName());
@@ -50,6 +56,66 @@ final class OnnxTextInputSupport {
         long[][] attentionMask = new long[texts.size()][sequenceLength];
         long[][] tokenTypeIds = new long[texts.size()][sequenceLength];
         for (int row = 0; row < encodings.length; row++) {
+            Arrays.fill(inputIds[row], spec.paddingTokenId());
+            long[] ids = encodings[row].getIds();
+            long[] mask = encodings[row].getAttentionMask();
+            long[] types = encodings[row].getTypeIds();
+            int copied = Math.min(ids.length, sequenceLength);
+            System.arraycopy(ids, 0, inputIds[row], 0, copied);
+            System.arraycopy(mask, 0, attentionMask[row], 0, Math.min(mask.length, copied));
+            if (types != null) {
+                System.arraycopy(types, 0, tokenTypeIds[row], 0, Math.min(types.length, copied));
+            }
+            if (countActive(attentionMask[row]) == 0) {
+                throw new OnnxTextInputException("Tokenizer produced an all-zero attention mask");
+            }
+        }
+        return new Batch(inputIds, attentionMask, tokenTypeIds);
+    }
+
+    /**
+     * Prepares and tokenizes a batch of {@code (query, candidate)} pairs under a declared sequence budget.
+     *
+     * <p>Tokenizes pairs using the underlying HuggingFace tokenizer with truncation bounded to
+     * {@link OnnxTextInputSpec#maxSequenceLength()}, preserving head context up to the sequence limit and
+     * incrementing the payload-free {@code amsha.localml.onnx.truncation(component=cross_encoder)} metric
+     * when sequence truncation occurs.
+     */
+    static Batch preparePairs(
+            HuggingFaceTokenizer tokenizer,
+            OnnxTextInputSpec spec,
+            String query,
+            List<String> candidateTexts,
+            OnnxInferenceMetrics metrics)
+            throws OnnxTextInputException {
+        int batchSize = candidateTexts.size();
+        Encoding[] encodings = new Encoding[batchSize];
+        int sequenceLength = 0;
+        boolean truncationOccurred = false;
+
+        for (int i = 0; i < batchSize; i++) {
+            String candidate = candidateTexts.get(i);
+            Encoding encoding = tokenizer.encode(query, candidate);
+            Objects.requireNonNull(encoding, "tokenizer encoding");
+            encodings[i] = encoding;
+            long[] ids = encoding.getIds();
+            Encoding[] overflowing = encoding.getOverflowing();
+            if ((overflowing != null && overflowing.length > 0) || ids.length >= spec.maxSequenceLength()) {
+                truncationOccurred = true;
+            }
+            sequenceLength = Math.max(sequenceLength, Math.min(ids.length, spec.maxSequenceLength()));
+        }
+        if (truncationOccurred && metrics != null) {
+            metrics.recordTruncation("cross_encoder");
+        }
+        if (sequenceLength == 0) {
+            throw new OnnxTextInputException("Tokenizer produced an empty sequence for pair input");
+        }
+
+        long[][] inputIds = new long[batchSize][sequenceLength];
+        long[][] attentionMask = new long[batchSize][sequenceLength];
+        long[][] tokenTypeIds = new long[batchSize][sequenceLength];
+        for (int row = 0; row < batchSize; row++) {
             Arrays.fill(inputIds[row], spec.paddingTokenId());
             long[] ids = encodings[row].getIds();
             long[] mask = encodings[row].getAttentionMask();

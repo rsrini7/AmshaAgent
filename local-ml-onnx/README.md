@@ -38,6 +38,11 @@ Optional in-process ONNX Runtime integration for Amsha Agent.
 | amsha.embedding.onnx.timeout-seconds | AMSHA_EMBEDDING_ONNX_TIMEOUT_SECONDS | 5 | Maximum synchronous wait for one ONNX embedding request. |
 | amsha.embedding.onnx.space-id | AMSHA_EMBEDDING_ONNX_SPACE_ID | _(manifest)_ | Optional assertion that must match the verified bundle embedding space. |
 | amsha.embedding.onnx.space-revision | AMSHA_EMBEDDING_ONNX_SPACE_REVISION | _(manifest)_ | Optional assertion that must match the verified bundle embedding-space revision. |
+| amsha.rag.reranker.enabled | AMSHA_RAG_RERANKER_ENABLED | false | Enables local ONNX cross-encoder reranking under RerankerPort. |
+| amsha.rag.reranker.bundle-id | AMSHA_RAG_RERANKER_BUNDLE_ID | bge-reranker-v1 | Explicit verified local cross-encoder model bundle ID. |
+| amsha.rag.reranker.timeout | AMSHA_RAG_RERANKER_TIMEOUT | PT5S | Total deadline for one cross-encoder scoring request. |
+| amsha.rag.reranker.max-candidates | AMSHA_RAG_RERANKER_MAX_CANDIDATES | 50 | Maximum number of retrieved candidate chunks scored. |
+| amsha.rag.reranker.max-input-bytes | AMSHA_RAG_RERANKER_MAX_INPUT_BYTES | 262144 | UTF-8 byte limit for query or candidate text before scoring. |
 
 `OnnxModelBundleRegistry` loads only an explicitly selected bundle ID below the
 configured root. It never downloads assets; each bundle must contain a regular
@@ -112,10 +117,13 @@ The automated promotion path is `classifier:collect`/`classifier:build-dataset`
 `classifier:promote`; promotion remains blocked until a named human approval
 record matches the evidence digest.
 
-For a reproducible development bundle, run `mise run models:install-mpnet`. It
-downloads the Apache-2.0 `sentence-transformers/all-mpnet-base-v2` revision pinned by
-the task, verifies its fixed SHA-256 and sizes, and writes the matching local manifest.
-The resulting files remain under gitignored `data/models/`.
+For reproducible development bundles:
+- `mise run models:install-mpnet`: Installs the Apache-2.0 `sentence-transformers/all-mpnet-base-v2` embedding bundle.
+- `mise run models:install-bge-reranker`: Installs the Apache-2.0 `Xenova/bge-reranker-base` cross-encoder reranking bundle.
+- `mise run models:install-all`: Installs all pinned local ONNX development bundles in one step.
+- `mise run models:list`: Scans and validates manifests of all installed local ONNX models.
+
+All bundles verify fixed SHA-256 digests and byte counts, writing deterministic local manifests under gitignored `data/models/`.
 Run `./mvnw -pl local-ml-onnx -Dtest=OnnxEmbeddingModelSmokeTest test` after
 installation to execute the JVM smoke test against the real bundle.
 

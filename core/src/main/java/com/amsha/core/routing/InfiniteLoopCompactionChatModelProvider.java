@@ -22,6 +22,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.LaunchMode;
 import io.smallrye.common.annotation.Identifier;
@@ -67,6 +68,9 @@ public class InfiniteLoopCompactionChatModelProvider {
     @Inject
     LlmModelFactory modelFactory;
 
+    @Inject
+    MeterRegistry meterRegistry;
+
     private volatile InfiniteLoopChatModel instance;
 
     @Produces
@@ -111,7 +115,8 @@ public class InfiniteLoopCompactionChatModelProvider {
                             List.of(new InfiniteLoopChatModel.Slot("dummy", dummy, "unknown")),
                             cooldownBaseSeconds,
                             cooldownMaxSeconds,
-                            cooldownTransientSeconds);
+                            cooldownTransientSeconds,
+                            meterRegistry);
                 }
                 throw new IllegalStateException("No compaction providers configured. "
                         + "Check amsha.infinite-loop.compaction.providers (currently: " + loopProviders + ")");
@@ -123,7 +128,12 @@ public class InfiniteLoopCompactionChatModelProvider {
                     slots.stream().map(InfiniteLoopChatModel.Slot::name).toList());
 
             instance = new InfiniteLoopChatModel(
-                    "compaction-chat", slots, cooldownBaseSeconds, cooldownMaxSeconds, cooldownTransientSeconds);
+                    "compaction-chat",
+                    slots,
+                    cooldownBaseSeconds,
+                    cooldownMaxSeconds,
+                    cooldownTransientSeconds,
+                    meterRegistry);
             return instance;
         }
     }

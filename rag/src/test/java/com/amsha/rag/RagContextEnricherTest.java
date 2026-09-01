@@ -1,7 +1,14 @@
 package com.amsha.rag;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.List;
@@ -34,6 +41,10 @@ class RagContextEnricherTest {
         enricher.minScore = 0.01;
     }
 
+    private static List<RerankedChunk> toReranked(List<ScoredChunk> chunks) {
+        return chunks.stream().map(c -> new RerankedChunk(c, c.score())).toList();
+    }
+
     @Test
     void testEnrichSkipOnCronSession() {
         String sessionId = AgentSentinels.CRON_SESSION_PREFIX + "123";
@@ -60,7 +71,7 @@ class RagContextEnricherTest {
                 new ScoredChunk("id1", "Amsha Agent is an agentic AI framework.", 0.85),
                 new ScoredChunk("id2", "It uses RAG for long-term memory.", 0.75));
 
-        when(memoryService.search(anyString(), eq("user-1"), anyInt())).thenReturn(mockChunks);
+        when(memoryService.searchReranked(anyString(), eq("user-1"), anyInt())).thenReturn(toReranked(mockChunks));
 
         String result = WorkspaceContext.run(sessionId, "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich(sessionId, "user-1", goal, basePrompt);
@@ -73,7 +84,7 @@ class RagContextEnricherTest {
 
     @Test
     void testEnrichEmptyResults() throws Exception {
-        when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(Collections.emptyList());
+        when(memoryService.searchReranked(anyString(), anyString(), anyInt())).thenReturn(Collections.emptyList());
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
@@ -89,7 +100,7 @@ class RagContextEnricherTest {
                 new ScoredChunk("id2", "Strong match 2", 0.8),
                 new ScoredChunk("id3", "Weak match", 0.1));
 
-        when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
+        when(memoryService.searchReranked(anyString(), anyString(), anyInt())).thenReturn(toReranked(mockChunks));
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
@@ -109,7 +120,7 @@ class RagContextEnricherTest {
                 new ScoredChunk("id2", "Medium score", 0.6),
                 new ScoredChunk("id3", "Low score", 0.3));
 
-        when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
+        when(memoryService.searchReranked(anyString(), anyString(), anyInt())).thenReturn(toReranked(mockChunks));
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
@@ -130,7 +141,7 @@ class RagContextEnricherTest {
                 new ScoredChunk("id3", "Mid", 0.5),
                 new ScoredChunk("id4", "Low", 0.1));
 
-        when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
+        when(memoryService.searchReranked(anyString(), anyString(), anyInt())).thenReturn(toReranked(mockChunks));
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
@@ -144,7 +155,7 @@ class RagContextEnricherTest {
     void testSingleChunkDoesNotApplyAdaptiveThreshold() throws Exception {
         List<ScoredChunk> mockChunks = List.of(new ScoredChunk("id1", "Only result", 0.01));
 
-        when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
+        when(memoryService.searchReranked(anyString(), anyString(), anyInt())).thenReturn(toReranked(mockChunks));
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
@@ -158,7 +169,7 @@ class RagContextEnricherTest {
         List<ScoredChunk> mockChunks =
                 List.of(new ScoredChunk("id1", "Result A", 0.05), new ScoredChunk("id2", "Result B", -0.1));
 
-        when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(mockChunks);
+        when(memoryService.searchReranked(anyString(), anyString(), anyInt())).thenReturn(toReranked(mockChunks));
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
@@ -184,14 +195,14 @@ class RagContextEnricherTest {
 
     @Test
     void testNullUserIdFallsBackToSessionId() throws Exception {
-        when(memoryService.search(anyString(), anyString(), anyInt()))
-                .thenReturn(List.of(new ScoredChunk("id1", "Content", 0.8)));
+        when(memoryService.searchReranked(anyString(), anyString(), anyInt()))
+                .thenReturn(toReranked(List.of(new ScoredChunk("id1", "Content", 0.8))));
 
         WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", null, "Query", "Base prompt");
         });
 
-        verify(memoryService).search(anyString(), eq("sess-1"), anyInt());
+        verify(memoryService).searchReranked(anyString(), eq("sess-1"), anyInt());
     }
 
     @Test
@@ -202,7 +213,7 @@ class RagContextEnricherTest {
                 new ScoredChunk("id3", "Three", 0.88),
                 new ScoredChunk("id4", "Four", 0.87));
 
-        when(memoryService.search(anyString(), anyString(), anyInt())).thenReturn(manyChunks);
+        when(memoryService.searchReranked(anyString(), anyString(), anyInt())).thenReturn(toReranked(manyChunks));
 
         String result = WorkspaceContext.run("sess-1", "user-1", "chat-1", AutonomyLevel.FULL, "COORDINATOR", () -> {
             return enricher.enrich("sess-1", "user-1", "Query", "Base prompt");
