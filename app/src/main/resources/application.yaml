@@ -14,11 +14,6 @@ quarkus:
     server:
       max-frame-size: 37748736
       max-message-size: 37748736
-  http:
-    websocket-server:
-      max-frame-size: 37748736
-    limits:
-      max-body-size: 36M
   vertx:
     prefer-native-transport: true
     use-async-dns: true
@@ -103,13 +98,15 @@ quarkus:
   http:
     port: 8080
     ssl-port: 8443
+    websocket-server:
+      max-frame-size: 37748736
     cors:
       enabled: true
       origins: "${AMSHA_CORS_ORIGINS:http://localhost:3000,http://localhost:8080}"
       headers: "X-Amsha-API-Key,X-AMSHA-API-KEY,X-AMSHA-PLATFORM-ID,Content-Type,Accept"
       methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     limits:
-      max-body-size: 10M
+      max-body-size: 36M
 
   rest:
     path: /api/v1   # all /sessions endpoints served at /api/v1/sessions
