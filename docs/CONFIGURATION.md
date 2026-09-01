@@ -236,10 +236,10 @@ the same cooldown timing.
 | `AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS` | `groq,ollama` | Comma-separated compaction providers |
 | `AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | `groq,ollama` | Comma-separated classifier providers |
 | `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers |
-| `AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS` | `30` | Base cooldown between provider switches (s) |
-| `AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS` | `300` | Max cooldown (s) |
+| `AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS` | `5` | Base cooldown between provider switches (s) |
+| `AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS` | `60` | Max cooldown (s) |
 | `AMSHA_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS` | `5` | Transient error cooldown (s) |
-| `AMSHA_INFINITE_LOOP_MAX_LATENCY_MS` | `60000` | Max acceptable latency (ms) |
+| `AMSHA_INFINITE_LOOP_MAX_LATENCY_MS` | `45000` | Max acceptable latency (ms) |
 
 For each provider in `AMSHA_INFINITE_LOOP_LLM_PROVIDERS`, the following per-provider
 variables are required (replace `{PROVIDER}` with the provider name, e.g., `GROQ`, `OPENROUTER`, `GEMINI`):
