@@ -105,6 +105,8 @@ public class TelegramCallbackHandler {
             // during potentially long-running approvalGate.decide/resume paths §7.35
             answerCallback(query.getId());
 
+            sender.editMessage(chatId, messageId, "⏳ Processing approval…", null);
+
             sessionId = resolveSessionId(sessionId, userId);
 
             ApprovalResult result = approvalGateway.decide(sessionId, toolName, decision, "Telegram Callback");
