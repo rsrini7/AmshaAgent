@@ -96,6 +96,26 @@ class SpeechDeliveryServiceTest {
     }
 
     @Test
+    void deliverAudioOnlyDoesNotSynthesizeApprovalPause() {
+        ChannelUser user = new ChannelUser("u1", "u1", "User 1", ChannelType.TELEGRAM);
+        MessageContext ctx = new MessageContext("chat123", user, null);
+        ctx.setGoal("reply with audio");
+
+        when(userPreferenceService.getOutputMode("u1")).thenReturn(Optional.of("AUDIO_ONLY"));
+        when(speechOutputPolicy.resolve(any())).thenReturn(OutputMode.AUDIO_ONLY);
+
+        deliveryService.deliver(
+                ctx,
+                sender,
+                user,
+                AgentResult.finished("⏸ Approval needed for tool: serper_web_search", List.of()),
+                "⏸ Approval needed for tool: serper_web_search");
+
+        verify(sender).sendRaw(eq(user), contains("Approval needed"));
+        verify(speechReplyService, never()).deliver(any(), any(), any(), anyString());
+    }
+
+    @Test
     void deliverTextAndAudioSendsBoth() {
         ChannelUser user = new ChannelUser("u1", "u1", "User 1", ChannelType.TELEGRAM);
         MessageContext ctx = new MessageContext("chat123", user, null);

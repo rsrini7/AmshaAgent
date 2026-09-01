@@ -48,6 +48,10 @@ public class SpeechDeliveryService {
         if (mode == OutputMode.AUDIO_ONLY) {
             if (isApprovalPause) {
                 sender.sendRaw(user, output);
+                // Approval prompts are control messages, not agent answers. Keep them
+                // text-only so an audio request cannot cause the approval prompt itself
+                // to be synthesized.
+                return;
             }
             if (!speechReplyService.deliver(sender, user, mode, output)) {
                 if (!isApprovalPause) {
