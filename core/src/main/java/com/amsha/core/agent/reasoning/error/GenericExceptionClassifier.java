@@ -69,6 +69,8 @@ public class GenericExceptionClassifier extends LlmExceptionClassifierChain {
             if (lower.contains("not in request.tools")
                     || lower.contains("tool_use_failed")
                     || lower.contains("failed_generation")
+                    || lower.contains("chat template error")
+                    || lower.contains("no user query found")
                     || lower.contains("json mode cannot be combined with tool/function calling")) {
                 return new LlmToolCallException(msg, original);
             }

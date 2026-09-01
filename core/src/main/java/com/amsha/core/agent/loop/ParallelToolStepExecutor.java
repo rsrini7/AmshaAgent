@@ -407,6 +407,21 @@ public class ParallelToolStepExecutor {
             }
         }
 
+        if (split.hitlPending().isEmpty()) {
+            List<ParallelToolCall> completed = new ArrayList<>();
+            for (ParallelToolCall call : calls) {
+                ToolResponse resp = preResults.get(call.toolName());
+                if (resp != null) {
+                    completed.add(call.withResult(resp.output(), resp.success()));
+                } else {
+                    completed.add(call.withResult("Tool execution missing response", false));
+                }
+            }
+            List<ParallelToolCall> allCompleted =
+                    batchResultAggregator.mergeCompletedCalls(calls, List.of(), completed);
+            return batchResultAggregator.buildCompletedBatchDecision(context, history, batchStep, allCompleted, 0);
+        }
+
         List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
         return StepDecision.terminal(checkpointManager.persistBatchWithPreExecuted(
                 context, calls, preResults, historyAtPause, context.channelType(), context.channelPlatformId()));

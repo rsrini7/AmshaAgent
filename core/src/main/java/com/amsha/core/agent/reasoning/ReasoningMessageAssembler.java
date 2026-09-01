@@ -257,6 +257,23 @@ public class ReasoningMessageAssembler {
             }
         }
 
+        // Invariant guarantee: chat templates require at least one UserMessage (e.g. on resumed turns
+        // where history projection contains only tool calls/results). If missing, inject a goal-oriented
+        // UserMessage (preserving multimodal attachments via the target model's capability) right after
+        // any system messages and before assistant/tool messages.
+        boolean hasUserMessage = messages.stream().anyMatch(m -> m instanceof UserMessage);
+        if (!hasUserMessage) {
+            String userQuery = (goal != null && !goal.isBlank()) ? goal : "Please proceed.";
+            UserMessage fallbackUserMsg = (attachments != null && !attachments.isEmpty())
+                    ? mapMediaMessage(context, userQuery, cap, targetModelName)
+                    : UserMessage.userMessage(userQuery);
+            int insertIdx = 0;
+            while (insertIdx < messages.size() && messages.get(insertIdx) instanceof SystemMessage) {
+                insertIdx++;
+            }
+            messages.add(insertIdx, fallbackUserMsg);
+        }
+
         boolean isBackgroundSession = autonomyLevel == AutonomyLevel.BACKGROUND
                 || (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX));
 

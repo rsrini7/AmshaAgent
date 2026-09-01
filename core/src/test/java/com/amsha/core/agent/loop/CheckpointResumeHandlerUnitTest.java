@@ -19,6 +19,7 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.persistence.api.AgentCronDto;
@@ -77,6 +78,9 @@ class CheckpointResumeHandlerUnitTest {
     @Mock
     ManagedExecutor executor;
 
+    @Mock
+    SpeechDeliveryService speechDeliveryService;
+
     CheckpointResumeHandler handler;
 
     @BeforeEach
@@ -93,6 +97,7 @@ class CheckpointResumeHandlerUnitTest {
                 recoveryService,
                 escalationService);
         handler.executor = executor;
+        handler.speechDeliveryService = speechDeliveryService;
     }
 
     @Test
@@ -211,7 +216,7 @@ class CheckpointResumeHandlerUnitTest {
         AgentResult res = AgentResult.finished("resumed answer", List.of());
         dispatch.invoke(handler, null, res, ChannelType.WEBSOCKET, user, "sess-ws", "tool_x");
 
-        verify(sender).sendRaw(eq(user), contains("Approved"));
+        verify(speechDeliveryService).deliver(isNull(), eq(sender), eq(user), eq(res), contains("Approved"));
     }
 
     @Test
@@ -277,5 +282,23 @@ class CheckpointResumeHandlerUnitTest {
         markCronTerminal.invoke(
                 handler, "12345678-1234-1234-1234-123456789012", AgentResult.finished("done", List.of()));
         verify(cronStore).markCompleted(eq("12345678-1234-1234-1234-123456789012"), any());
+    }
+
+    @Test
+    void testDispatchResumeResultAudioOnlyDeliversAudio() {
+        ChannelSender sender = mock(ChannelSender.class);
+        ChannelPlugin plugin = mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find("telegram")).thenReturn(Optional.of(plugin));
+
+        ChannelUser user = new ChannelUser("u1", "c1", "User 1", ChannelType.TELEGRAM);
+        MessageContext ctx = mock(MessageContext.class);
+        when(ctx.getGoal()).thenReturn("what is latest quarkus lts version");
+        when(ctx.getMessage()).thenReturn(null);
+
+        AgentResult result = AgentResult.finished("The latest Quarkus LTS version is 3.15", List.of());
+        handler.dispatchResumeResult(ctx, result, ChannelType.TELEGRAM, user, "s-1", "garuda");
+
+        verify(speechDeliveryService).deliver(eq(ctx), eq(sender), eq(user), eq(result), contains("3.15"));
     }
 }

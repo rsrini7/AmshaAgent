@@ -236,6 +236,61 @@ class ReasoningMessageAssemblerTest {
         assertEquals("Hi", userMessages.getFirst().singleText());
     }
 
+    @Test
+    void testAssemble_guaranteesUserMessageWhenProjectedHistoryHasOnlyToolMessages() throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        // History from previous execution: AiMessage + ToolExecutionResultMessage without UserMessage
+        when(historyAssembler.assemble(any(), any(), any()))
+                .thenReturn(List.of(
+                        AiMessage.aiMessage("thinking"),
+                        ToolExecutionResultMessage.toolExecutionResultMessage("call_0", "web_fetch", "content")));
+
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+        AgentExecutionContext context = new AgentExecutionContext(
+                "sess-resume",
+                "u1",
+                "c1",
+                "coordinator",
+                "what is latest quarkus lts version",
+                AutonomyLevel.SUPERVISED,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "123",
+                null,
+                Map.of());
+
+        ReasoningMessageAssembler.AssembledMessages result = assembler.assemble(
+                context,
+                "coordinator",
+                "what is latest quarkus lts version",
+                Collections.emptyList(),
+                "system prompt",
+                Set.of(),
+                false,
+                false,
+                false);
+
+        List<UserMessage> userMessages = result.messages().stream()
+                .filter(m -> m instanceof UserMessage)
+                .map(m -> (UserMessage) m)
+                .toList();
+        assertFalse(
+                userMessages.isEmpty(),
+                "Messages list MUST contain at least one UserMessage for chat template compliance");
+        assertEquals(
+                "what is latest quarkus lts version", userMessages.getFirst().singleText());
+        // Verify UserMessage is inserted before AiMessage
+        int userIdx = -1;
+        int aiIdx = -1;
+        for (int i = 0; i < result.messages().size(); i++) {
+            if (result.messages().get(i) instanceof UserMessage && userIdx == -1) userIdx = i;
+            if (result.messages().get(i) instanceof AiMessage && aiIdx == -1) aiIdx = i;
+        }
+        assertTrue(userIdx < aiIdx, "UserMessage must precede AiMessage in conversation sequence");
+    }
+
     private static ReasoningMessageAssembler createAssembler() throws Exception {
         ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
         when(historyAssembler.assemble("sess-1", "goal", Collections.emptyList()))

@@ -26,6 +26,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.state.StatefulAgentStore;
@@ -364,6 +365,9 @@ public class AgentLoop {
             if (restored != null) {
                 mergedData.putAll(restored);
             }
+        }
+        if (TurnDispatchService.hasInboundAudio(context)) {
+            mergedData.put(TurnDispatchService.DATA_INBOUND_AUDIO, true);
         }
 
         String chatId = context != null && context.getChatId() != null ? context.getChatId() : sessionId;

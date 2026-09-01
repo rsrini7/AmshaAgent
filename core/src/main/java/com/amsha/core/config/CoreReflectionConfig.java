@@ -22,6 +22,7 @@ import dev.langchain4j.data.pdf.PdfFile;
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
+import com.amsha.core.agent.loop.ResumeToolInfoFormatter;
 import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.MultimodalHistoryProjector;
 import com.amsha.core.agent.reasoning.MultimodalMessageMapper;
@@ -75,6 +76,7 @@ import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
 import com.amsha.core.skill.SkillPromptParams;
+import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.tools.CheckList;
 import com.amsha.core.tools.CheckListEvent;
 import com.amsha.core.tools.CheckListItem;
@@ -188,7 +190,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ChatModelListenerRuntimeControl.class,
             ChatModelListenerRuntimeControl.Snapshot.class,
             ChatModelListenerRuntimeControl.ToggleResult.class,
-            AmshaChatModelListener.class
+            AmshaChatModelListener.class,
+            SpeechDeliveryService.class,
+            ResumeToolInfoFormatter.class
         },
         classNames = {
             "dev.langchain4j.model.chat.listener.ChatModelListener",
