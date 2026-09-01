@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelUser;
+import com.amsha.channel.api.preference.UserPreferenceService;
 import com.amsha.common.util.LogUtil;
 import com.amsha.llm.api.audio.SpeechSynthesisPort;
 import com.amsha.llm.api.audio.SpeechSynthesisRequest;
@@ -44,6 +45,7 @@ public class SpeechReplyService {
 
     private final int maxInputChars;
     private final Instance<SpeechSynthesisPort> speechPort;
+    private final UserPreferenceService userPreferenceService;
     private final String responseFormat;
     private final Duration timeout;
     private final String audioFileName;
@@ -51,11 +53,13 @@ public class SpeechReplyService {
     @Inject
     public SpeechReplyService(
             Instance<SpeechSynthesisPort> speechPort,
+            UserPreferenceService userPreferenceService,
             @ConfigProperty(name = "amsha.tts.max-input-chars", defaultValue = "1200") int maxInputChars,
             @ConfigProperty(name = "amsha.tts.response-format", defaultValue = DEFAULT_RESPONSE_FORMAT)
                     String responseFormat,
             @ConfigProperty(name = "amsha.tts.timeout", defaultValue = "PT120S") Duration timeout) {
         this.speechPort = speechPort;
+        this.userPreferenceService = userPreferenceService;
         this.maxInputChars = maxInputChars > 0 ? maxInputChars : DEFAULT_MAX_INPUT_CHARS;
         // The format is shared with the provider's config; the channel derives the real extension
         // from the MIME type, so this file name is advisory and stays consistent with the format.
@@ -91,8 +95,11 @@ public class SpeechReplyService {
         if (speakable.isBlank()) {
             return false;
         }
+        String userVoice = userPreferenceService != null
+                ? userPreferenceService.getEffectiveVoice(user.platformId()).orElse(null)
+                : null;
         SpeechSynthesisRequest request =
-                SpeechSynthesisRequest.of(UUID.randomUUID().toString(), speakable, null, responseFormat, timeout);
+                SpeechSynthesisRequest.of(UUID.randomUUID().toString(), speakable, userVoice, responseFormat, timeout);
         if (!port.supports(request)) {
             return false;
         }

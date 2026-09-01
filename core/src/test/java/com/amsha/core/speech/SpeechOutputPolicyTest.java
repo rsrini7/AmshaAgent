@@ -12,6 +12,9 @@ class SpeechOutputPolicyTest {
     void explicitNegativeDirectiveStaysTextOnly() {
         SpeechOutputPolicy policy = new SpeechOutputPolicy("TEXT_ONLY");
         assertEquals(OutputMode.TEXT_ONLY, policy.resolve(OutputPolicyContext.of("do not send audio", false)));
+        assertEquals(
+                OutputMode.TEXT_ONLY,
+                policy.resolve(OutputPolicyContext.of("do not send audio", false, OutputMode.TEXT_AND_AUDIO)));
     }
 
     @Test
@@ -31,6 +34,32 @@ class SpeechOutputPolicyTest {
     void audioOnlyPhraseResolvesToAudioOnly() {
         SpeechOutputPolicy policy = new SpeechOutputPolicy("TEXT_ONLY");
         assertEquals(OutputMode.AUDIO_ONLY, policy.resolve(OutputPolicyContext.of("audio only please", false)));
+    }
+
+    @Test
+    void preferredOutputModeAppliesToNeutralText() {
+        SpeechOutputPolicy policy = new SpeechOutputPolicy("TEXT_ONLY");
+        assertEquals(
+                OutputMode.TEXT_AND_AUDIO,
+                policy.resolve(OutputPolicyContext.of("hello world", false, OutputMode.TEXT_AND_AUDIO)));
+        assertEquals(
+                OutputMode.AUDIO_ONLY,
+                policy.resolve(OutputPolicyContext.of("hello world", false, OutputMode.AUDIO_ONLY)));
+        assertEquals(
+                OutputMode.TEXT_ONLY,
+                policy.resolve(OutputPolicyContext.of("hello world", false, OutputMode.TEXT_ONLY)));
+    }
+
+    @Test
+    void explicitTextOnlyPreferenceOverridesSystemAudioDefaultOnInboundAudio() {
+        SpeechOutputPolicy textAndAudioDefault = new SpeechOutputPolicy("TEXT_AND_AUDIO");
+        assertEquals(
+                OutputMode.TEXT_ONLY,
+                textAndAudioDefault.resolve(OutputPolicyContext.of("", true, OutputMode.TEXT_ONLY)));
+
+        SpeechOutputPolicy audioOnlyDefault = new SpeechOutputPolicy("AUDIO_ONLY");
+        assertEquals(
+                OutputMode.TEXT_ONLY, audioOnlyDefault.resolve(OutputPolicyContext.of("", true, OutputMode.TEXT_ONLY)));
     }
 
     @Test

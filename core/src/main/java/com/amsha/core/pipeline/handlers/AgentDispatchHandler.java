@@ -4,6 +4,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
 
@@ -12,6 +14,7 @@ import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.MediaAttachment;
+import com.amsha.channel.api.preference.UserPreferenceService;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentLoop;
@@ -85,6 +88,9 @@ public class AgentDispatchHandler implements MessageHandler {
 
     @Inject
     SpeechReplyService speechReplyService;
+
+    @Inject
+    UserPreferenceService userPreferenceService;
 
     @Override
     public int priority() {
@@ -308,8 +314,10 @@ public class AgentDispatchHandler implements MessageHandler {
         // Resolve the policy text from the goal, falling back to the current message text. Some
         // dispatch paths reach here with an empty goal while the user's directive ("reply with audio")
         // lives in the message body; without the fallback the explicit request would be missed.
+        String userId = context.getUser() != null ? context.getUser().platformId() : null;
+        OutputMode preferredMode = resolveUserPreferredMode(userId);
         OutputMode mode = speechOutputPolicy.resolve(
-                OutputPolicyContext.of(resolvePolicyText(context), hadInboundAudio(context)));
+                OutputPolicyContext.of(resolvePolicyText(context), hadInboundAudio(context), preferredMode));
         if (mode == OutputMode.AUDIO_ONLY) {
             if (!speechReplyService.deliver(sender, context.getUser(), mode, output)) {
                 sender.sendRaw(context.getUser(), output);
@@ -320,6 +328,22 @@ public class AgentDispatchHandler implements MessageHandler {
         if (mode == OutputMode.TEXT_AND_AUDIO) {
             speechReplyService.deliver(sender, context.getUser(), mode, output);
         }
+    }
+
+    private OutputMode resolveUserPreferredMode(String userId) {
+        if (userId == null || userPreferenceService == null) {
+            return null;
+        }
+        return userPreferenceService
+                .getOutputMode(userId)
+                .flatMap(m -> {
+                    try {
+                        return Optional.of(OutputMode.valueOf(m.trim().toUpperCase(Locale.ROOT)));
+                    } catch (IllegalArgumentException _) {
+                        return Optional.empty();
+                    }
+                })
+                .orElse(null);
     }
 
     /** Channel-neutral detection: true when this turn carried an inbound audio attachment. */

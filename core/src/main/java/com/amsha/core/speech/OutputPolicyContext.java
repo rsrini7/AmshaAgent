@@ -9,14 +9,23 @@ package com.amsha.core.speech;
  *
  * @param requestedText the user's request for this turn; for an audio turn this is the transcript
  * @param inboundAudioPresent true when this turn originated from or carried inbound audio
+ * @param preferredMode optional user-configured output mode preference
  */
-public record OutputPolicyContext(String requestedText, boolean inboundAudioPresent) {
+public record OutputPolicyContext(String requestedText, boolean inboundAudioPresent, OutputMode preferredMode) {
+
+    public OutputPolicyContext(String requestedText, boolean inboundAudioPresent) {
+        this(requestedText, inboundAudioPresent, null);
+    }
 
     public OutputPolicyContext {
         requestedText = requestedText == null ? "" : requestedText;
     }
 
     public static OutputPolicyContext of(String requestedText, boolean inboundAudioPresent) {
-        return new OutputPolicyContext(requestedText, inboundAudioPresent);
+        return new OutputPolicyContext(requestedText, inboundAudioPresent, null);
+    }
+
+    public static OutputPolicyContext of(String requestedText, boolean inboundAudioPresent, OutputMode preferredMode) {
+        return new OutputPolicyContext(requestedText, inboundAudioPresent, preferredMode);
     }
 }

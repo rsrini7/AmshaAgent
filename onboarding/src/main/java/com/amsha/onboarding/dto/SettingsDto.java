@@ -1,5 +1,7 @@
 package com.amsha.onboarding.dto;
 
+import java.util.List;
+
 public record SettingsDto(
         String provider,
         String model,
@@ -11,4 +13,7 @@ public record SettingsDto(
         String effectiveBaseUrl,
         String effectiveSource,
         String credentialState,
-        String credentialSource) {}
+        String credentialSource,
+        String voice,
+        String speechOutputMode,
+        List<String> availableVoices) {}

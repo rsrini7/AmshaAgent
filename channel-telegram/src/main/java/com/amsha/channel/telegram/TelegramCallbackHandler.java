@@ -19,6 +19,7 @@ import com.amsha.channel.api.hitl.ApprovalGateway;
 import com.amsha.channel.api.hitl.ApprovalNotifier;
 import com.amsha.channel.api.hitl.ApprovalOutcome;
 import com.amsha.channel.api.hitl.ApprovalResult;
+import com.amsha.channel.api.preference.UserPreferenceService;
 import com.amsha.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -48,6 +49,9 @@ public class TelegramCallbackHandler {
     ApprovalNotifier notificationService;
 
     @Inject
+    UserPreferenceService userPreferenceService;
+
+    @Inject
     ObjectMapper objectMapper;
 
     @ConfigProperty(name = "amsha.channel.telegram.bot-token")
@@ -66,6 +70,11 @@ public class TelegramCallbackHandler {
         int messageId = Math.toIntExact(query.getMessage().getMessageId());
 
         log.infof("TELEGRAM-CALLBACK: %s from user=%s chat=%s msg=%d", data, userId, chatId, messageId);
+
+        if (data.startsWith("V|")) {
+            handleVoiceCallback(query, data.substring(2).trim(), userId, chatId, messageId);
+            return;
+        }
 
         BatchHitlKeyboardBuilder.BatchCallbackEvent event =
                 BatchHitlKeyboardBuilder.parseCallback(data).orElse(null);
@@ -202,6 +211,40 @@ public class TelegramCallbackHandler {
                     });
         } catch (Exception e) {
             log.warnf("Failed to serialize Telegram callback answer: %s", LogUtil.rootMessage(e));
+        }
+    }
+
+    private void handleVoiceCallback(
+            IncomingCallbackQuery query, String voiceName, String userId, String chatId, int messageId) {
+        String queryId = query.getId();
+        if (voiceName == null || voiceName.isBlank() || "default".equalsIgnoreCase(voiceName)) {
+            userPreferenceService.clearVoice(userId);
+            String systemVoice = userPreferenceService.getEffectiveVoice(userId).orElse("Random / Default");
+            answerCallback(queryId, "✅ Voice reset to default: " + systemVoice);
+            sender.editMessage(
+                    chatId,
+                    messageId,
+                    "🗣 Voice preference cleared. System default will be used: **" + systemVoice + "**",
+                    null);
+            return;
+        }
+
+        try {
+            userPreferenceService.setVoice(userId, voiceName);
+            answerCallback(queryId, "✅ Voice set to " + voiceName);
+            sender.editMessage(
+                    chatId,
+                    messageId,
+                    "🗣 Voice preference set to **" + voiceName + "**. All future speech replies will use this voice.",
+                    null);
+        } catch (IllegalArgumentException e) {
+            log.warnf("Rejected invalid voice callback '%s': %s", voiceName, LogUtil.rootMessage(e));
+            answerCallback(queryId, "⚠️ Unsupported voice: " + voiceName);
+            sender.editMessage(
+                    chatId,
+                    messageId,
+                    "⚠️ Unsupported voice option: **" + voiceName + "**. Please choose a valid voice.",
+                    null);
         }
     }
 

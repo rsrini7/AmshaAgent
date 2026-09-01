@@ -367,6 +367,13 @@ export class ArcClient {
     return this.request<{ systemPrompt: string }>('/settings/prompt');
   }
 
+  async patchVoice(voice?: string, speechOutputMode?: string): Promise<{ voice: string; speechOutputMode: string }> {
+    return this.request<{ voice: string; speechOutputMode: string }>('/settings/voice', {
+      method: 'PATCH',
+      body: JSON.stringify({ voice, speechOutputMode })
+    });
+  }
+
   async resetOnboarding(): Promise<any> {
     return this.request<any>('/settings/reset', {
       method: 'POST'

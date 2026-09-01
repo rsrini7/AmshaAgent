@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.channel.api.preference.UserPreferenceService;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
@@ -31,6 +32,7 @@ import com.amsha.onboarding.dto.NetworkProfileUpdateRequest;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
 import com.amsha.onboarding.dto.SettingsDto;
+import com.amsha.onboarding.dto.VoiceSettingsUpdateRequest;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.security.api.SecretVault;
@@ -68,6 +70,9 @@ public class SettingsResource {
 
     @Inject
     AuditService auditService;
+
+    @Inject
+    UserPreferenceService userPreferenceService;
 
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
     String appVersion;
@@ -112,6 +117,9 @@ public class SettingsResource {
         String prompt = readVaultString(VaultConstants.SYSTEM_PROMPT_KEY, "");
         String displayPrompt = prompt.length() > 200 ? prompt.substring(0, 199) + "…" : prompt;
         boolean effectiveSkipOnboarding = backendLlmConfigured();
+        String voice = userPreferenceService.getVoice(owner).orElse("");
+        String speechOutputMode = userPreferenceService.getOutputMode(owner).orElse("");
+        List<String> availableVoices = userPreferenceService.getAvailableVoices();
         return new SettingsDto(
                 configuration.effectiveProvider(),
                 configuration.effectiveModel(),
@@ -123,7 +131,38 @@ public class SettingsResource {
                 configuration.effectiveBaseUrl(),
                 configuration.effectiveSource(),
                 configuration.credentialState(),
-                configuration.credentialSource());
+                configuration.credentialSource(),
+                voice,
+                speechOutputMode,
+                availableVoices);
+    }
+
+    @PATCH
+    @Path("/voice")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Update user voice and speech output mode preferences")
+    public Response updateVoice(@HeaderParam("X-Amsha-API-Key") String key, VoiceSettingsUpdateRequest req) {
+        String owner = requireOwner();
+        if (owner == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build();
+        }
+        if (req != null) {
+            try {
+                userPreferenceService.updatePreferences(owner, req.voice(), req.speechOutputMode());
+            } catch (IllegalArgumentException e) {
+                return Response.status(400)
+                        .entity(new AmshaErrorResponse("Invalid voice or speech setting", e.getMessage()))
+                        .build();
+            }
+        }
+        return Response.ok(Map.of(
+                        "voice",
+                        userPreferenceService.getEffectiveVoice(owner).orElse("default"),
+                        "speechOutputMode",
+                        userPreferenceService.getEffectiveOutputMode(owner).orElse("TEXT_ONLY")))
+                .build();
     }
 
     @GET

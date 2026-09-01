@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.amsha.core.llm.LlmValidationGateway;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
+import com.amsha.onboarding.dto.VoiceSettingsUpdateRequest;
 import com.amsha.onboarding.testutil.FlywayEnabledTestProfile;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -125,6 +126,54 @@ public class SettingsResourceTest {
         // Under vault-priority=false the effective provider is the configured one;
         // the durable commit still succeeds and writes the legacy LLM_* vault keys.
         givenAuth().when().get("/settings").then().statusCode(200);
+    }
+
+    @Test
+    void testPatchVoice() {
+        VoiceSettingsUpdateRequest req = new VoiceSettingsUpdateRequest("vivian", "AUDIO_ONLY");
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(req)
+                .when()
+                .patch("/settings/voice")
+                .then()
+                .statusCode(200)
+                .body("voice", is("vivian"))
+                .body("speechOutputMode", is("AUDIO_ONLY"));
+    }
+
+    @Test
+    void testPatchVoiceInvalidRejectsWith400() {
+        VoiceSettingsUpdateRequest req = new VoiceSettingsUpdateRequest("invalid_voice_xyz", "AUDIO_ONLY");
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(req)
+                .when()
+                .patch("/settings/voice")
+                .then()
+                .statusCode(400);
+
+        VoiceSettingsUpdateRequest req2 = new VoiceSettingsUpdateRequest("vivian", "INVALID_MODE_XYZ");
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(req2)
+                .when()
+                .patch("/settings/voice")
+                .then()
+                .statusCode(400);
+    }
+
+    @Test
+    void testPatchVoiceClear() {
+        VoiceSettingsUpdateRequest req = new VoiceSettingsUpdateRequest("default", "default");
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(req)
+                .when()
+                .patch("/settings/voice")
+                .then()
+                .statusCode(200)
+                .body("speechOutputMode", is("TEXT_ONLY"));
     }
 
     @Test

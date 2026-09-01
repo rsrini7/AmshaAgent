@@ -14,11 +14,10 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
  * <p>Precedence, highest first:
  * <ol>
  *   <li>an explicit positive or negative directive in the current turn;</li>
+ *   <li>a user-configured output mode preference (including {@link OutputMode#TEXT_ONLY});</li>
  *   <li>{@code amsha.tts.default-output-mode}, applied to audio-input turns;</li>
  *   <li>a safe {@link OutputMode#TEXT_ONLY} fallback.</li>
  * </ol>
- *
- * <p>V1 has no persisted user preference, so there is no user-preference level between 1 and 2.
  *
  * <p>Audio is never triggered by an incidental mention of the word "audio": every positive pattern
  * requires either an action verb ("reply/answer/send ... with/in/as ... audio") or an explicit
@@ -74,6 +73,9 @@ public class SpeechOutputPolicy {
             if (POSITIVE_AUDIO.matcher(text).find()) {
                 return OutputMode.TEXT_AND_AUDIO;
             }
+        }
+        if (context.preferredMode() != null) {
+            return context.preferredMode();
         }
         return context.inboundAudioPresent() ? defaultMode() : OutputMode.TEXT_ONLY;
     }

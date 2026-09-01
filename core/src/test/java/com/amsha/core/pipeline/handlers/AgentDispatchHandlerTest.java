@@ -32,6 +32,7 @@ import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.channel.api.MediaAttachment;
 import com.amsha.channel.api.ReplyNode;
+import com.amsha.channel.api.preference.UserPreferenceService;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
@@ -88,6 +89,9 @@ class AgentDispatchHandlerTest {
 
     @Mock
     SpeechReplyService speechReplyService;
+
+    @Mock
+    UserPreferenceService userPreferenceService;
 
     @InjectMocks
     AgentDispatchHandler handler;

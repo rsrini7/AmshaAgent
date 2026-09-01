@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
+import com.amsha.channel.api.preference.UserPreferenceService;
 import com.amsha.llm.api.audio.SpeechSynthesisPort;
 import com.amsha.llm.api.audio.SpeechSynthesisRequest;
 import com.amsha.llm.api.audio.SpeechSynthesisResult;
@@ -35,8 +36,9 @@ class SpeechReplyServiceTest {
     private final SpeechSynthesisPort port = mock(SpeechSynthesisPort.class);
     private final Instance<SpeechSynthesisPort> portInstance = mock(Instance.class);
     private final ChannelSender sender = mock(ChannelSender.class);
+    private final UserPreferenceService userPreferenceService = mock(UserPreferenceService.class);
     private final SpeechReplyService service =
-            new SpeechReplyService(portInstance, 1200, "wav", Duration.ofSeconds(120));
+            new SpeechReplyService(portInstance, userPreferenceService, 1200, "wav", Duration.ofSeconds(120));
 
     @Test
     void textOnlyModeReturnsFalseWithoutResolvingPort() {
