@@ -223,11 +223,7 @@ public class InfiniteLoopProvider<T, R> {
                             .call(() -> invoker.invoke(slot.model(), request));
                     long elapsedMs = System.currentTimeMillis() - startMs;
                     if (maxLatencyMs > 0 && elapsedMs > maxLatencyMs) {
-                        log.warnf(
-                                "InfiniteLoop: Slot [%s] responded in %dms (threshold %dms); "
-                                        + "returning the valid response and cooling the slot before its next use.",
-                                slot.name(), elapsedMs, maxLatencyMs);
-                        h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+                        handleSlowValidResponse(h, slot.name(), elapsedMs);
                         currentIndex.set(idx);
                         lastUsedSlots.get().put(loopId, slot.name());
                         return response;
@@ -276,6 +272,26 @@ public class InfiniteLoopProvider<T, R> {
             }
 
             interruptibleSleep(shortestMs, "InfiniteLoop");
+        }
+    }
+
+    private void handleSlowValidResponse(SlotHealth h, String slotName, long elapsedMs) {
+        boolean hasAlternativeSlot = health.values().stream()
+                        .filter(sh -> !sh.isPermanentlyDisabled())
+                        .count()
+                > 1;
+        if (hasAlternativeSlot) {
+            log.warnf(
+                    "InfiniteLoop: Slot [%s] responded in %dms (threshold %dms); "
+                            + "returning the valid response and cooling the slot before its next use.",
+                    slotName, elapsedMs, maxLatencyMs);
+            h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
+        } else {
+            log.warnf(
+                    "InfiniteLoop: Slot [%s] responded in %dms (threshold %dms); "
+                            + "retaining active status as no alternative slots are available.",
+                    slotName, elapsedMs, maxLatencyMs);
+            h.recordSuccess();
         }
     }
 

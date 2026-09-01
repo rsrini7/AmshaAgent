@@ -15,7 +15,7 @@ FAIL=0; PASS=0; RL_WAIT=62
 info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$(format_http_code "$1")"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute()  { curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" "$@"; }
 sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 task_id() {
   python3 -c "import json; d=json.load(open('/tmp/resp')); rows=d if isinstance(d,list) else d.get('items',d.get('tasks',[])) if isinstance(d,dict) else []; print((rows or [{}])[0].get('taskId',''))" 2>/dev/null
