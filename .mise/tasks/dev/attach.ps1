@@ -14,16 +14,9 @@ if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Typ
         }'
 }
 
-$envCopied = $false
 try {
-    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
-        Copy-Item -Path '../.env' -Destination '.env'
-        $envCopied = $true
-        Write-Host '[dev:attach] Copied ../.env -> app/.env for this session'
-    }
-
-    if (-not $env:TELEGRAM_BOT_TOKEN) {
-        Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'
+    if (-not $env:TELEGRAM_BOT_TOKEN -and -not (Test-Path '../.env')) {
+        Write-Host '❌  Root .env is missing; create it before starting Telegram attach mode'
         exit 1
     }
 
@@ -52,11 +45,6 @@ try {
 
     [Console]::TreatControlCAsInput = $false
     $host.UI.RawUI.FlushInputBuffer()
-
-    if ($envCopied) {
-        Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
-        Write-Host '[dev:attach] Cleaned up temporary app/.env'
-    }
 
     Write-Host '[dev:attach] Terminal restored. Press Enter if cursor is missing.'
     if ($script:exitCode -eq 130 -or $script:exitCode -eq 143) { exit 0 }

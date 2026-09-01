@@ -112,3 +112,5 @@ __pycache__/
 *.diff
 *files.txt
 .scratch/
+
+.workbuddy-ai/

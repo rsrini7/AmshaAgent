@@ -16,7 +16,7 @@ ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 okh()   { printf "✅ HTTP %s (HITL→approved)\n" "$1"; PASS=$((PASS+1)); }
 warn()  { printf "⚠️  HTTP %s (%s)\n" "$1" "$2"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute()  { curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" "$@"; }
 sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 
 create_session() {
@@ -29,14 +29,14 @@ create_session() {
 }
 
 run_raw() {
-  curl -s -m 180 -o /tmp/resp -w "%{http_code}" \
+  curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" \
     -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
     -X POST "$B/api/v1/sessions/$1/run" \
     -d "{\"goal\":\"$2\",\"agentRole\":\"$3\",\"maxIterations\":$4}"
 }
 
 approve() {
-  curl -s -m 180 -o /tmp/resp -w "%{http_code}" \
+  curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" \
     -H "X-Amsha-API-Key: $VALID_KEY" \
     -X POST "$B/api/v1/sessions/$1/approve?agentRole=$2"
 }

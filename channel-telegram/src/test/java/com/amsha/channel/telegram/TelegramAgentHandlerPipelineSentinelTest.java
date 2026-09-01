@@ -78,7 +78,7 @@ class TelegramAgentHandlerPipelineSentinelTest {
 
         ChannelUser user = new ChannelUser(userId, chatId, "alice", ChannelType.TELEGRAM);
         ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", chatId, Instant.now());
-        when(mapper.map(any(), any(), any())).thenReturn(msg);
+        when(mapper.map(any(IncomingMessage.class), any(), any())).thenReturn(msg);
 
         // Simulate a crash in the core pipeline (returned via SPI)
         CompletableFuture<Void> failed = new CompletableFuture<>();

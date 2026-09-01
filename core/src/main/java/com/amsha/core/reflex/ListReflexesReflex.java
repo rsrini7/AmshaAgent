@@ -32,6 +32,7 @@ public class ListReflexesReflex implements AgentReflex {
             Map.entry(DenyReflex.class, new ReflexDescriptor("`/deny`", "Deny pending action")),
             Map.entry(StoreReflex.class, new ReflexDescriptor("`/store`", "Store key-value pair")),
             Map.entry(VaultStoreReflex.class, new ReflexDescriptor("`/vault`", "Store encrypted secret")),
+            Map.entry(VoiceReflex.class, new ReflexDescriptor("`/voice` `/tts`", "Select or switch speech voice")),
             Map.entry(
                     ListReflexesReflex.class,
                     new ReflexDescriptor("`/reflex` `/commands` `/help`", "List all commands")),

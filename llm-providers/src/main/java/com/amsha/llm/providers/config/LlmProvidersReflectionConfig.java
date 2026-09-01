@@ -1,6 +1,8 @@
 package com.amsha.llm.providers.config;
 
 import com.amsha.llm.providers.ChatModelFactory;
+import com.amsha.llm.providers.audio.OmlxAudioTranscriptionProvider;
+import com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider;
 import com.amsha.llm.providers.catalog.StaticProviderCatalogAdapter;
 import com.amsha.llm.providers.helper.AgyCliExecutor;
 import com.amsha.llm.providers.helper.AgyTokenResolver;
@@ -81,6 +83,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             KimchiResponsesChatModel.class,
             NvidiaMessageSanitizer.class,
             AgyProviderFactory.class,
+            OmlxAudioTranscriptionProvider.class,
+            OmlxSpeechSynthesisProvider.class,
             CerebrasProviderFactory.class,
             ClaudeCodeProviderFactory.class,
             CloudflareProviderFactory.class,
@@ -125,6 +129,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         },
         classNames = {
             "com.amsha.llm.providers.catalog.StaticProviderCatalogAdapter$RawProvider",
+            "com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider$BoundedAudioSubscriber",
+            "com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider$ResponseTooLargeException",
             "com.amsha.llm.providers.wrapper.AgyResponsesChatModel$SseAccumulator",
             "com.amsha.llm.providers.wrapper.AgyResponsesChatModel$ToolExecutionRequestBuilder",
             "com.amsha.llm.providers.wrapper.ClaudeCodeResponsesChatModel$ClaudeSseAccumulator",

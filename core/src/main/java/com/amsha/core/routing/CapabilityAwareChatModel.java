@@ -15,31 +15,71 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalCapable;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 
 /**
  * Preserves a routed {@link ChatModel} while carrying Amsha's explicit strict
- * JSON-Schema admission decision alongside it.
+ * JSON-Schema and multimodal capability decisions alongside it.
  */
-public final class CapabilityAwareChatModel implements ChatModel, StrictJsonSchemaCapable {
+public final class CapabilityAwareChatModel implements ChatModel, StrictJsonSchemaCapable, MultimodalCapable {
 
     private final ChatModel delegate;
+    private final boolean strictJsonSchema;
+    private final MultimodalCapability multimodalCapability;
+
+    public CapabilityAwareChatModel(
+            ChatModel delegate, boolean strictJsonSchema, MultimodalCapability multimodalCapability) {
+        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.strictJsonSchema = strictJsonSchema;
+        this.multimodalCapability =
+                multimodalCapability != null ? multimodalCapability : MultimodalCapability.TEXT_ONLY;
+    }
 
     public CapabilityAwareChatModel(ChatModel delegate) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this(delegate, true, MultimodalCapability.TEXT_ONLY);
     }
 
     /** Avoids adding another wrapper when a factory already marked the model. */
     public static ChatModel markStrict(ChatModel model) {
-        if (model instanceof StrictJsonSchemaCapable capable && capable.supportsStrictJsonSchema()) {
+        return withCapabilities(model, true, null);
+    }
+
+    /** Wraps a model with explicit strict-schema and multimodal capabilities. */
+    public static ChatModel withCapabilities(
+            ChatModel model, boolean strictSchema, MultimodalCapability multimodalCapability) {
+        if (model == null) {
+            return null;
+        }
+        boolean existingStrict = model instanceof StrictJsonSchemaCapable sc && sc.supportsStrictJsonSchema();
+        MultimodalCapability existingMulti = MultimodalCapabilities.resolveCapability(model);
+
+        boolean effectiveStrict = strictSchema || existingStrict;
+        MultimodalCapability effectiveMulti = multimodalCapability != null ? multimodalCapability : existingMulti;
+
+        if (!effectiveStrict && !effectiveMulti.isMultimodal() && !(model instanceof CapabilityAwareChatModel)) {
             return model;
         }
-        return new CapabilityAwareChatModel(model);
+
+        if (model instanceof CapabilityAwareChatModel ca
+                && ca.supportsStrictJsonSchema() == effectiveStrict
+                && Objects.equals(ca.multimodalCapability(), effectiveMulti)) {
+            return model;
+        }
+
+        return new CapabilityAwareChatModel(model, effectiveStrict, effectiveMulti);
     }
 
     @Override
     public boolean supportsStrictJsonSchema() {
-        return true;
+        return strictJsonSchema;
+    }
+
+    @Override
+    public MultimodalCapability multimodalCapability() {
+        return multimodalCapability;
     }
 
     @Override
@@ -97,7 +137,9 @@ public final class CapabilityAwareChatModel implements ChatModel, StrictJsonSche
         if (capabilities != null) {
             augmented.addAll(capabilities);
         }
-        augmented.add(Capability.RESPONSE_FORMAT_JSON_SCHEMA);
+        if (strictJsonSchema) {
+            augmented.add(Capability.RESPONSE_FORMAT_JSON_SCHEMA);
+        }
         return Set.copyOf(augmented);
     }
 }

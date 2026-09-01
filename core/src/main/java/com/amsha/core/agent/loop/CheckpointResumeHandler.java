@@ -5,7 +5,6 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +23,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
@@ -34,7 +34,6 @@ import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.AgentSentinels;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -136,6 +135,9 @@ public class CheckpointResumeHandler {
     @Inject
     MeterRegistry meterRegistry;
 
+    @Inject
+    SpeechDeliveryService speechDeliveryService;
+
     @ActivateRequestContext
     public void resumeAfterBatchDecision(
             String sessionId, String agentRole, String userId, String chatId, String channelType) {
@@ -177,7 +179,7 @@ public class CheckpointResumeHandler {
                             ? ChannelType.WEBSOCKET
                             : ChannelType.of(channelType);
                     ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
-                    context = prepareResumeMessageContext(chatId, user, cType, resumeGoal);
+                    context = prepareResumeMessageContext(chatId, user, cType, resumeGoal, checkpoint);
 
                     String toolInfo = buildToolInfoPart(checkpoint);
                     AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
@@ -200,7 +202,7 @@ public class CheckpointResumeHandler {
     }
 
     private MessageContext prepareResumeMessageContext(
-            String chatId, ChannelUser user, ChannelType cType, String goal) {
+            String chatId, ChannelUser user, ChannelType cType, String goal, AgentCheckpoint checkpoint) {
         ChannelMessage msg =
                 switch (cType.id()) {
                     case "telegram" -> new ChannelMessage.TelegramMessage(user, goal, chatId, Instant.now());
@@ -213,6 +215,15 @@ public class CheckpointResumeHandler {
         MessageContext context = new MessageContext(chatId, user, msg);
         context.setResumeSignal(true);
         context.setGoal(goal);
+        if (checkpoint != null && checkpoint.getContextDataJson() != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = objectMapper.readValue(checkpoint.getContextDataJson(), Map.class);
+                if (data != null) data.forEach(context::setData);
+            } catch (Exception e) {
+                log.debugf("Restore context data (non-fatal): %s", LogUtil.rootMessage(e));
+            }
+        }
         return context;
     }
 
@@ -281,8 +292,8 @@ public class CheckpointResumeHandler {
                                 context.getUser().channel().id()));
     }
 
-    private void dispatchResumeResult(
-            MessageContext _context,
+    void dispatchResumeResult(
+            MessageContext context,
             AgentResult result,
             ChannelType cType,
             ChannelUser user,
@@ -308,7 +319,7 @@ public class CheckpointResumeHandler {
                 .find(cType.id())
                 .map(ChannelPlugin::sender)
                 .ifPresentOrElse(
-                        s -> sendFormattedResult(s, user, result, finalOutput, sessionId, cType),
+                        s -> sendFormattedResult(s, user, result, finalOutput, sessionId, context),
                         () -> fallbackResultDispatch(sessionId, result, cType));
     }
 
@@ -318,12 +329,14 @@ public class CheckpointResumeHandler {
             AgentResult result,
             String output,
             String sessionId,
-            ChannelType _cType) {
-        if (result instanceof AgentResult.AwaitingApproval aa
-                && aa.toolName().startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+            MessageContext context) {
+        if (result instanceof AgentResult.AwaitingApproval aa) {
             s.send(user, List.of(new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+            return;
+        }
+        if (speechDeliveryService != null) {
+            speechDeliveryService.deliver(context, s, user, result, output);
         } else {
-            // CLI, WebSocket, and unknown channel types all use raw text delivery
             s.sendRaw(user, output);
         }
     }
@@ -336,56 +349,7 @@ public class CheckpointResumeHandler {
     }
 
     private String buildToolInfoPart(AgentCheckpoint checkpoint) {
-        if (checkpoint == null) return null;
-        String toolName = checkpoint.getPendingToolName();
-        if (toolName == null || toolName.isBlank()) return null;
-
-        StringBuilder sb = new StringBuilder();
-
-        if (checkpoint.isParallelBatch()) {
-            String[] tools = toolName.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
-                    .split(",", -1);
-            Map<String, Integer> counts = new LinkedHashMap<>();
-            for (String t : tools) {
-                counts.put(t, counts.getOrDefault(t, 0) + 1);
-            }
-            boolean first = true;
-            for (Map.Entry<String, Integer> e : counts.entrySet()) {
-                if (!first) sb.append(", ");
-                first = false;
-                sb.append(e.getKey());
-                if (e.getValue() > 1) sb.append(" (").append(e.getValue()).append("x)");
-            }
-        } else {
-            sb.append(toolName);
-            String paramsJson = checkpoint.getPendingToolParametersJson();
-            if (paramsJson != null && !paramsJson.isBlank()) {
-                try {
-                    Map<String, Object> params =
-                            objectMapper.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-                    if (!params.isEmpty()) {
-                        sb.append("\n");
-                        for (Map.Entry<String, Object> e : params.entrySet()) {
-                            String val = e.getValue() instanceof String s
-                                    ? s
-                                    : objectMapper.writeValueAsString(e.getValue());
-                            if (val.length() > 200) val = val.substring(0, 200) + "…";
-                            sb.append("  ")
-                                    .append(e.getKey())
-                                    .append(": ")
-                                    .append(val)
-                                    .append("\n");
-                        }
-                    }
-                } catch (Exception e) {
-                    log.debugf("Failed to format params JSON, using raw: %s", LogUtil.rootMessage(e));
-                    String display = paramsJson.length() > 500 ? paramsJson.substring(0, 500) + "…" : paramsJson;
-                    sb.append("\n  ").append(display);
-                }
-            }
-        }
-
-        return sb.toString().stripTrailing();
+        return ResumeToolInfoFormatter.format(checkpoint, objectMapper);
     }
 
     private void syncCronStatus(String sessionId) {
@@ -422,21 +386,15 @@ public class CheckpointResumeHandler {
         var cron = AgentCronRecord.fromDto(dto);
 
         switch (result) {
-            case AgentResult.Finished _ -> {
-                if (cron.isRunOnce()) cronStore.markCompleted(id, Instant.now());
-                else
+            case AgentResult.Finished _, AgentResult.StructuredFinished _ -> {
+                if (cron.isRunOnce()) {
+                    cronStore.markCompleted(id, Instant.now());
+                } else {
                     cronStore.markFired(
                             id,
                             Instant.now(),
                             CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
-            }
-            case AgentResult.StructuredFinished _ -> {
-                if (cron.isRunOnce()) cronStore.markCompleted(id, Instant.now());
-                else
-                    cronStore.markFired(
-                            id,
-                            Instant.now(),
-                            CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
+                }
             }
             case AgentResult.Failed f -> cronStore.markFailed(id, f.reason());
             case AgentResult.AwaitingApproval _ -> cronStore.markAwaitingApproval(id);

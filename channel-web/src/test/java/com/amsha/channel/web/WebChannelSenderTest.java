@@ -110,4 +110,60 @@ class WebChannelSenderTest {
 
         assertDoesNotThrow(() -> sender.send(user, nodes));
     }
+
+    @Test
+    void testSendAudioDeliversToDirectSession() {
+        WebSocketConnection connection = mock(WebSocketConnection.class);
+        when(connection.sendText(anyString())).thenReturn(Uni.createFrom().nullItem());
+        when(sessionStore.get("ws-plat-1")).thenReturn(Optional.of(connection));
+
+        ChannelUser user = new ChannelUser("usr1", "ws-plat-1", "user", ChannelType.WEBSOCKET);
+        byte[] audio = new byte[] {'R', 'I', 'F', 'F', 1, 2, 3, 4};
+
+        boolean result = sender.sendAudio(user, audio, "audio/wav", "voice.wav");
+
+        assertTrue(result);
+        verify(sessionStore).get("ws-plat-1");
+        verify(connection).sendText(contains("\"mimeType\":\"audio/wav\""));
+    }
+
+    @Test
+    void testSendAudioDeliversToOwnerFallback() {
+        WebSocketConnection connection = mock(WebSocketConnection.class);
+        when(connection.sendText(anyString())).thenReturn(Uni.createFrom().nullItem());
+        when(sessionStore.get("ws-plat-1")).thenReturn(Optional.empty());
+        when(sessionStore.getConnectionsByOwner("usr1")).thenReturn(List.of(connection));
+
+        ChannelUser user = new ChannelUser("usr1", "ws-plat-1", "user", ChannelType.WEBSOCKET);
+        byte[] audio = new byte[] {'R', 'I', 'F', 'F', 1, 2, 3, 4};
+
+        boolean result = sender.sendAudio(user, audio, "audio/wav", "voice.wav");
+
+        assertTrue(result);
+        verify(sessionStore).getConnectionsByOwner("usr1");
+        verify(connection).sendText(contains("\"mimeType\":\"audio/wav\""));
+    }
+
+    @Test
+    void testSendAudioReturnsFalseWhenNoSession() {
+        when(sessionStore.get("ws-plat-1")).thenReturn(Optional.empty());
+        when(sessionStore.getConnectionsByOwner("usr1")).thenReturn(List.of());
+        when(sessionStore.getAmshaSessionId("ws-plat-1")).thenReturn(Optional.empty());
+
+        ChannelUser user = new ChannelUser("usr1", "ws-plat-1", "user", ChannelType.WEBSOCKET);
+        byte[] audio = new byte[] {'R', 'I', 'F', 'F', 1, 2, 3, 4};
+
+        boolean result = sender.sendAudio(user, audio, "audio/wav", "voice.wav");
+
+        assertFalse(result);
+    }
+
+    @Test
+    void testSendAudioReturnsFalseForNullOrEmptyAudio() {
+        ChannelUser user = new ChannelUser("usr1", "ws-plat-1", "user", ChannelType.WEBSOCKET);
+
+        assertFalse(sender.sendAudio(user, null, "audio/wav", "voice.wav"));
+        assertFalse(sender.sendAudio(user, new byte[0], "audio/wav", "voice.wav"));
+        assertFalse(sender.sendAudio(null, new byte[] {1, 2}, "audio/wav", "voice.wav"));
+    }
 }

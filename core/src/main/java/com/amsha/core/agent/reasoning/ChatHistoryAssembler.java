@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.ToolCallJsonKeys;
 import com.amsha.memory.config.TieredMemoryConfig;
 import com.amsha.memory.tiered.CoreMemoryPromptRenderer;
@@ -263,16 +264,23 @@ public class ChatHistoryAssembler {
                     } else {
                         messages.add(AiMessage.aiMessage(truncated));
                     }
-                } else if (msg instanceof UserMessage um
-                        && um.singleText() != null
-                        && um.singleText().length() > 2000) {
-                    String truncated = um.singleText().substring(0, 1997) + "...";
-                    messages.add(UserMessage.userMessage(truncated));
+                } else if (msg instanceof UserMessage um) {
+                    String text = safeUserText(um);
+                    if (text != null && text.length() > 2000) {
+                        String truncated = text.substring(0, 1997) + "...";
+                        messages.add(UserMessage.userMessage(truncated));
+                    } else {
+                        messages.add(msg);
+                    }
                 } else {
                     messages.add(msg);
                 }
             }
         }
+    }
+
+    private static String safeUserText(UserMessage um) {
+        return um == null ? null : MultimodalRequests.textOf(um, "history");
     }
 
     private void appendReActHistory(List<ChatMessage> messages, List<ReasoningStep> history) {

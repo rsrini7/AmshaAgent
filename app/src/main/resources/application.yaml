@@ -10,6 +10,10 @@ quarkus:
     server:
       stdio:
         enabled: false
+  websockets-next:
+    server:
+      max-frame-size: 37748736
+      max-message-size: 37748736
   vertx:
     prefer-native-transport: true
     use-async-dns: true
@@ -94,13 +98,15 @@ quarkus:
   http:
     port: 8080
     ssl-port: 8443
+    websocket-server:
+      max-frame-size: 37748736
     cors:
       enabled: true
       origins: "${AMSHA_CORS_ORIGINS:http://localhost:3000,http://localhost:8080}"
       headers: "X-Amsha-API-Key,X-AMSHA-API-KEY,X-AMSHA-PLATFORM-ID,Content-Type,Accept"
       methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     limits:
-      max-body-size: 10M
+      max-body-size: 36M
 
   rest:
     path: /api/v1   # all /sessions endpoints served at /api/v1/sessions
@@ -415,6 +421,44 @@ amsha:
     foundry:
       base-url: "${AMSHA_CLASSIFIER_FOUNDRY_BASE_URL:${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}}"
       model: "${AMSHA_CLASSIFIER_FOUNDRY_MODEL:qwen3-14b}"
+    omlx:
+      api-key: "${AMSHA_CLASSIFIER_OMLX_API_KEY:${AMSHA_OMLX_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_OMLX_BASE_URL:${AMSHA_OMLX_BASE_URL:http://127.0.0.1:8000/v1}}"
+      model: "${AMSHA_CLASSIFIER_OMLX_MODEL:${AMSHA_OMLX_MODEL:}}"
+    groq:
+      api-key: "${AMSHA_CLASSIFIER_GROQ_API_KEY:${AMSHA_GROQ_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_GROQ_BASE_URL:${AMSHA_GROQ_BASE_URL:https://api.groq.com/openai/v1}}"
+      model: "${AMSHA_CLASSIFIER_GROQ_MODEL:llama-3.1-8b-instant}"
+    ollama:
+      base-url: "${AMSHA_CLASSIFIER_OLLAMA_BASE_URL:${AMSHA_OLLAMA_BASE_URL:http://localhost:11434}}"
+      model: "${AMSHA_CLASSIFIER_OLLAMA_MODEL:mistral-small:latest}"
+    cerebras:
+      api-key: "${AMSHA_CLASSIFIER_CEREBRAS_API_KEY:${AMSHA_CEREBRAS_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_CEREBRAS_BASE_URL:${AMSHA_CEREBRAS_BASE_URL:https://api.cerebras.ai/v1}}"
+      model: "${AMSHA_CLASSIFIER_CEREBRAS_MODEL:llama3.1-8b}"
+    openrouter:
+      api-key: "${AMSHA_CLASSIFIER_OPENROUTER_API_KEY:${AMSHA_OPENROUTER_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_OPENROUTER_BASE_URL:${AMSHA_OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}}"
+      model: "${AMSHA_CLASSIFIER_OPENROUTER_MODEL:openai/gpt-oss-20b:free}"
+    nvidia:
+      api-key: "${AMSHA_CLASSIFIER_NVIDIA_API_KEY:${AMSHA_NVIDIA_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_NVIDIA_BASE_URL:${AMSHA_NVIDIA_BASE_URL:https://integrate.api.nvidia.com/v1}}"
+      model: "${AMSHA_CLASSIFIER_NVIDIA_MODEL:meta/llama-3.3-70b-instruct}"
+    gemini:
+      api-key: "${AMSHA_CLASSIFIER_GEMINI_API_KEY:${AMSHA_GEMINI_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_GEMINI_BASE_URL:${AMSHA_GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}}"
+      model: "${AMSHA_CLASSIFIER_GEMINI_MODEL:gemini-2.5-flash-lite}"
+    openai:
+      api-key: "${AMSHA_CLASSIFIER_OPENAI_API_KEY:${AMSHA_OPENAI_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_OPENAI_BASE_URL:${AMSHA_OPENAI_BASE_URL:https://api.openai.com/v1}}"
+      model: "${AMSHA_CLASSIFIER_OPENAI_MODEL:gpt-4o-mini}"
+    generic-openai:
+      api-key: "${AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY:${AMSHA_GENERIC_OPENAI_API_KEY:}}"
+      base-url: "${AMSHA_CLASSIFIER_GENERIC_OPENAI_BASE_URL:${AMSHA_GENERIC_OPENAI_BASE_URL:}}"
+      model: "${AMSHA_CLASSIFIER_GENERIC_OPENAI_MODEL:deepseek-v4-flash}"
+    llama-cpp:
+      base-url: "${AMSHA_CLASSIFIER_LLAMACPP_BASE_URL:${AMSHA_LLAMACPP_BASE_URL:http://127.0.0.1:9000/v1}}"
+      model: "${AMSHA_CLASSIFIER_LLAMACPP_MODEL:qwen3}"
   onnx:
     enabled: ${AMSHA_ONNX_ENABLED:false}
     model-root: "${AMSHA_ONNX_MODEL_ROOT:data/models}"
@@ -465,6 +509,8 @@ amsha:
     provider: ${AMSHA_LLM_PROVIDER:groq}
     profile-routing:
       enabled: ${AMSHA_LLM_PROFILE_ROUTING_ENABLED:false}
+    modality-route-seeder:
+      enabled: ${AMSHA_LLM_MODALITY_ROUTE_SEEDER_ENABLED:false}
     vault-priority: ${AMSHA_LLM_VAULT_PRIORITY:false}
     log-http: ${AMSHA_LLM_LOG_HTTP:false}
     max-retries: ${AMSHA_LLM_MAX_RETRIES:3}
@@ -557,6 +603,58 @@ amsha:
       base-url: "${AMSHA_OMLX_BASE_URL:http://127.0.0.1:8000/v1}"
       api-key: "${AMSHA_OMLX_API_KEY:}"
       model: "${AMSHA_OMLX_MODEL:}"
+    groq:
+      api-key: "${AMSHA_GROQ_API_KEY:}"
+      base-url: "${AMSHA_GROQ_BASE_URL:https://api.groq.com/openai/v1}"
+      model: "${AMSHA_GROQ_MODEL:meta-llama/llama-4-scout-17b-16e-instruct}"
+    ollama:
+      base-url: "${AMSHA_OLLAMA_BASE_URL:http://localhost:11434}"
+      model: "${AMSHA_OLLAMA_MODEL:mistral-small:latest}"
+    cerebras:
+      api-key: "${AMSHA_CEREBRAS_API_KEY:}"
+      base-url: "${AMSHA_CEREBRAS_BASE_URL:https://api.cerebras.ai/v1}"
+      model: "${AMSHA_CEREBRAS_MODEL:qwen-3-235b-a22b-instruct-2507}"
+    nvidia:
+      api-key: "${AMSHA_NVIDIA_API_KEY:}"
+      base-url: "${AMSHA_NVIDIA_BASE_URL:https://integrate.api.nvidia.com/v1}"
+      model: "${AMSHA_NVIDIA_MODEL:bytedance/seed-oss-36b-instruct}"
+    gemini:
+      api-key: "${AMSHA_GEMINI_API_KEY:}"
+      base-url: "${AMSHA_GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}"
+      model: "${AMSHA_GEMINI_MODEL:gemini-2.5-flash-lite}"
+    openai:
+      api-key: "${AMSHA_OPENAI_API_KEY:}"
+      base-url: "${AMSHA_OPENAI_BASE_URL:https://api.openai.com/v1}"
+      model: "${AMSHA_OPENAI_MODEL:gpt-4o-mini}"
+    generic-openai:
+      api-key: "${AMSHA_GENERIC_OPENAI_API_KEY:}"
+      base-url: "${AMSHA_GENERIC_OPENAI_BASE_URL:}"
+      model: "${AMSHA_GENERIC_OPENAI_MODEL:gpt-4o-mini}"
+    llama-cpp:
+      base-url: "${AMSHA_LLAMACPP_BASE_URL:http://127.0.0.1:9000/v1}"
+      model: "${AMSHA_LLAMACPP_MODEL:qwen3}"
+  stt:
+    enabled: ${AMSHA_STT_ENABLED:false}
+    model: ${AMSHA_STT_MODEL:whisper-large-v3-turbo}
+    timeout: ${AMSHA_STT_TIMEOUT:PT60S}
+    max-bytes: ${AMSHA_STT_MAX_BYTES:26214400}
+    max-transcript-chars: ${AMSHA_STT_MAX_TRANSCRIPT_CHARS:12000}
+    ffmpeg-path: ${AMSHA_STT_FFMPEG_PATH:ffmpeg}
+  tts:
+    # P8 speech synthesis (Issue 12). Output-only; disabled by default. V1 supports only the
+    # directly verified WAV format from the OMLX Qwen3-TTS model — any other response_format is
+    # reported UNSUPPORTED rather than attempted. Never shares routing with P7 audio input.
+    enabled: ${AMSHA_TTS_ENABLED:false}
+    model: ${AMSHA_TTS_MODEL:Qwen3-TTS-12Hz-1.7B-Base-bf16}
+    voice: ${AMSHA_TTS_VOICE:}
+    response-format: ${AMSHA_TTS_RESPONSE_FORMAT:wav}
+    timeout: ${AMSHA_TTS_TIMEOUT:PT120S}
+    max-input-chars: ${AMSHA_TTS_MAX_INPUT_CHARS:1200}
+    max-bytes: ${AMSHA_TTS_MAX_BYTES:8388608}
+    max-concurrent: ${AMSHA_TTS_MAX_CONCURRENT:1}
+    # Resolved output mode for inbound-audio turns when the user gives no explicit directive.
+    # One of TEXT_ONLY | TEXT_AND_AUDIO | AUDIO_ONLY. Default TEXT_ONLY (fail closed).
+    default-output-mode: ${AMSHA_TTS_DEFAULT_OUTPUT_MODE:TEXT_ONLY}
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -566,20 +664,28 @@ amsha:
       providers: ${AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS:groq,ollama}
     embedding:
       providers: ${AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS:ollama}
-    cooldown-base-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS:30}
-    cooldown-max-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS:300}
+    cooldown-base-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS:5}
+    cooldown-max-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS:60}
     cooldown-transient-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS:5}
-    max-latency-ms: ${AMSHA_INFINITE_LOOP_MAX_LATENCY_MS:60000}
+    max-latency-ms: ${AMSHA_INFINITE_LOOP_MAX_LATENCY_MS:45000}
   # Embedding-space values prevent incompatible provider rotation. A provider
   # without an explicit shared space remains provider-bound by default.
   embedding:
     ollama:
+      model: "${AMSHA_EMBEDDING_OLLAMA_MODEL:nomic-embed-text:v1.5}"
+      base-url: "${AMSHA_EMBEDDING_OLLAMA_BASE_URL:http://localhost:11434}"
       space-id: "${AMSHA_EMBEDDING_OLLAMA_SPACE_ID:}"
       space-revision: "${AMSHA_EMBEDDING_OLLAMA_SPACE_REVISION:}"
     jina:
+      api-key: "${AMSHA_EMBEDDING_JINA_API_KEY:}"
+      model: "${AMSHA_EMBEDDING_JINA_MODEL:jina-embeddings-v5-text-nano}"
+      base-url: "${AMSHA_EMBEDDING_JINA_BASE_URL:https://api.jina.ai/v1/}"
       space-id: "${AMSHA_EMBEDDING_JINA_SPACE_ID:}"
       space-revision: "${AMSHA_EMBEDDING_JINA_SPACE_REVISION:}"
     openai:
+      api-key: "${AMSHA_EMBEDDING_OPENAI_API_KEY:}"
+      model: "${AMSHA_EMBEDDING_OPENAI_MODEL:text-embedding-3-small}"
+      base-url: "${AMSHA_EMBEDDING_OPENAI_BASE_URL:https://api.openai.com/v1}"
       space-id: "${AMSHA_EMBEDDING_OPENAI_SPACE_ID:}"
       space-revision: "${AMSHA_EMBEDDING_OPENAI_SPACE_REVISION:}"
     onnx:
@@ -634,6 +740,44 @@ amsha:
     foundry:
       base-url: "${AMSHA_COMPACTION_FOUNDRY_BASE_URL:${AMSHA_FOUNDRY_BASE_URL:http://127.0.0.1:8000/v1}}"
       model: "${AMSHA_COMPACTION_FOUNDRY_MODEL:qwen3-14b}"
+    omlx:
+      api-key: "${AMSHA_COMPACTION_OMLX_API_KEY:${AMSHA_OMLX_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_OMLX_BASE_URL:${AMSHA_OMLX_BASE_URL:http://127.0.0.1:8000/v1}}"
+      model: "${AMSHA_COMPACTION_OMLX_MODEL:${AMSHA_OMLX_MODEL:}}"
+    groq:
+      api-key: "${AMSHA_COMPACTION_GROQ_API_KEY:${AMSHA_GROQ_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_GROQ_BASE_URL:${AMSHA_GROQ_BASE_URL:https://api.groq.com/openai/v1}}"
+      model: "${AMSHA_COMPACTION_GROQ_MODEL:llama-3.1-8b-instant}"
+    ollama:
+      base-url: "${AMSHA_COMPACTION_OLLAMA_BASE_URL:${AMSHA_OLLAMA_BASE_URL:http://localhost:11434}}"
+      model: "${AMSHA_COMPACTION_OLLAMA_MODEL:mistral-small:latest}"
+    cerebras:
+      api-key: "${AMSHA_COMPACTION_CEREBRAS_API_KEY:${AMSHA_CEREBRAS_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_CEREBRAS_BASE_URL:${AMSHA_CEREBRAS_BASE_URL:https://api.cerebras.ai/v1}}"
+      model: "${AMSHA_COMPACTION_CEREBRAS_MODEL:llama3.1-8b}"
+    openrouter:
+      api-key: "${AMSHA_COMPACTION_OPENROUTER_API_KEY:${AMSHA_OPENROUTER_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_OPENROUTER_BASE_URL:${AMSHA_OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}}"
+      model: "${AMSHA_COMPACTION_OPENROUTER_MODEL:openai/gpt-oss-20b:free}"
+    nvidia:
+      api-key: "${AMSHA_COMPACTION_NVIDIA_API_KEY:${AMSHA_NVIDIA_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_NVIDIA_BASE_URL:${AMSHA_NVIDIA_BASE_URL:https://integrate.api.nvidia.com/v1}}"
+      model: "${AMSHA_COMPACTION_NVIDIA_MODEL:meta/llama-3.3-70b-instruct}"
+    gemini:
+      api-key: "${AMSHA_COMPACTION_GEMINI_API_KEY:${AMSHA_GEMINI_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_GEMINI_BASE_URL:${AMSHA_GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}}"
+      model: "${AMSHA_COMPACTION_GEMINI_MODEL:gemini-2.5-flash-lite}"
+    openai:
+      api-key: "${AMSHA_COMPACTION_OPENAI_API_KEY:${AMSHA_OPENAI_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_OPENAI_BASE_URL:${AMSHA_OPENAI_BASE_URL:https://api.openai.com/v1}}"
+      model: "${AMSHA_COMPACTION_OPENAI_MODEL:gpt-4o-mini}"
+    generic-openai:
+      api-key: "${AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY:${AMSHA_GENERIC_OPENAI_API_KEY:}}"
+      base-url: "${AMSHA_COMPACTION_GENERIC_OPENAI_BASE_URL:${AMSHA_GENERIC_OPENAI_BASE_URL:}}"
+      model: "${AMSHA_COMPACTION_GENERIC_OPENAI_MODEL:deepseek-v4-flash}"
+    llama-cpp:
+      base-url: "${AMSHA_COMPACTION_LLAMACPP_BASE_URL:${AMSHA_LLAMACPP_BASE_URL:http://127.0.0.1:9000/v1}}"
+      model: "${AMSHA_COMPACTION_LLAMACPP_MODEL:qwen3}"
   agent:
     default-timezone: "${AMSHA_DEFAULT_TIMEZONE:Asia/Kolkata}"
     rate-limit:
@@ -839,6 +983,7 @@ amsha:
     telegram:
       enabled: "${AMSHA_TELEGRAM_ENABLED:false}"
       bot-token: ${TELEGRAM_BOT_TOKEN:mock-telegram-token}
+      base-uri: "${AMSHA_TELEGRAM_BASE_URI:https://api.telegram.org}"
       default-autonomy-level: SUPERVISED
       allowed-user-ids: "${AMSHA_TELEGRAM_ALLOWED_USER_IDS:}"
       allowed-users: "${AMSHA_TELEGRAM_ALLOWED_USERS:mock-telegram-user}"
@@ -906,6 +1051,13 @@ amsha:
     phoenix:
       enabled: "${AMSHA_PHOENIX_ENABLED:true}"
       endpoint: "${AMSHA_PHOENIX_ENDPOINT:http://localhost:4318/v1/traces}"
+
+  media:
+    max-image-size-mb: ${AMSHA_MEDIA_MAX_IMAGE_SIZE_MB:10}
+    max-document-size-mb: ${AMSHA_MEDIA_MAX_DOCUMENT_SIZE_MB:25}
+    max-total-payload-mb: ${AMSHA_MEDIA_MAX_TOTAL_PAYLOAD_MB:50}
+    connect-timeout-seconds: ${AMSHA_MEDIA_CONNECT_TIMEOUT_SECONDS:10}
+    read-timeout-seconds: ${AMSHA_MEDIA_READ_TIMEOUT_SECONDS:30}
 
   sandbox:
     enabled: "${AMSHA_SANDBOX_ENABLED:true}"

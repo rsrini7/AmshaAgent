@@ -16,6 +16,9 @@ Pure API contracts for security in Amsha Agent: risk vocabulary, autonomy levels
 | `VaultKey` / `VaultConstants` | Vault key identifiers and shared constants |
 | `CryptoConstants` | Cryptographic constants shared across modules |
 | `RequiresSecret` / `RequiresSecrets` | Declarations that a capability requires named vault secrets |
+| `MediaDownloadPort` | Port contract for governed, safety-validated media downloads |
+| `DownloadedMedia` | Container for downloaded media content with deterministic temp file cleanup |
+| `MediaBudgetLimits` | Media size limits, timeouts, and MIME allowlist constants |
 
 ## Downstream Usage
 

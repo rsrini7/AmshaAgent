@@ -6,12 +6,20 @@ import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.LlmProviderDescriptor;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.ModelEntry;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalCapable;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.NetworkPolicyViolation;
 import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.llm.api.ProviderValidationResult;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.api.StructuredSchemaRequests;
+import com.amsha.llm.api.audio.AudioTranscriptionRequest;
+import com.amsha.llm.api.audio.AudioTranscriptionResult;
+import com.amsha.llm.api.audio.SpeechSynthesisRequest;
+import com.amsha.llm.api.audio.SpeechSynthesisResult;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
 import com.amsha.llm.api.error.LlmContextOverflowException;
@@ -63,6 +71,14 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CodexOAuthTokenExtractor.class,
             KimchiOAuthTokenExtractor.class,
             StrictJsonSchemaCapable.class,
-            StructuredSchemaRequests.class
+            StructuredSchemaRequests.class,
+            AudioTranscriptionRequest.class,
+            AudioTranscriptionResult.class,
+            SpeechSynthesisRequest.class,
+            SpeechSynthesisResult.class,
+            MultimodalCapability.class,
+            MultimodalCapable.class,
+            MultimodalCapabilities.class,
+            MultimodalRequests.class
         })
 public class LlmProviderApiReflectionConfig {}

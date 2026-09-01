@@ -48,6 +48,9 @@ class HaltReflexTest {
         assertTrue(reflex.matches("/halt"));
         assertTrue(reflex.matches("  /HALT  "));
         assertTrue(reflex.matches("/Halt"));
+        assertTrue(reflex.matches("/stop"));
+        assertTrue(reflex.matches("  /STOP  "));
+        assertTrue(reflex.matches("/Stop"));
     }
 
     @Test

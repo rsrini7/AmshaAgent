@@ -21,6 +21,10 @@
             <groupId>com.amsha</groupId>
             <artifactId>amsha-common</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-channel-api</artifactId>
+        </dependency>
 
         <!-- Quarkus Arc CDI & Config -->
         <dependency>

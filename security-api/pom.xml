@@ -29,6 +29,12 @@
             <artifactId>jackson-annotations</artifactId>
         </dependency>
 
+        <!-- Channel neutral media types -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-channel-api</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

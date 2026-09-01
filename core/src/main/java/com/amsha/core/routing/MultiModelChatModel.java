@@ -15,6 +15,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalCapable;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredSchemaRequests;
@@ -36,22 +40,28 @@ import org.jboss.logging.Logger;
  * <p>Used by provider factories to support comma-separated API keys and model names.
  * The InfiniteLoopChatModel sees this as a single slot.
  */
-public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable {
+public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable, MultimodalCapable {
 
     private static final Logger log = Logger.getLogger(MultiModelChatModel.class);
     private static final long MAX_COOLDOWN_WAIT_MS = 120_000L;
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
 
-    public record ModelEntry(String label, ChatModel model, boolean advertisesStrictSchema) {
+    public record ModelEntry(
+            String label, ChatModel model, boolean advertisesStrictSchema, MultimodalCapability multimodalCapability) {
+
+        public ModelEntry(String label, ChatModel model, boolean advertisesStrictSchema) {
+            this(label, model, advertisesStrictSchema, MultimodalCapabilities.resolveCapability(model));
+        }
 
         public ModelEntry(String label, ChatModel model) {
-            this(label, model, false);
+            this(label, model, false, MultimodalCapabilities.resolveCapability(model));
         }
     }
 
     private final String providerName;
     private final List<ModelEntry> entries;
     private final Set<Capability> compositeCapabilities;
+    private final MultimodalCapability compositeMultimodalCapability;
     private final Map<String, ModelHealth> health;
     private final AtomicInteger currentIndex;
     private final int cooldownBaseSeconds;
@@ -71,6 +81,8 @@ public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable {
         this.entries = List.copyOf(entries);
         this.compositeCapabilities = StructuredOutputCapabilities.intersectionOf(
                 this.entries.stream().map(ModelEntry::model).toList());
+        this.compositeMultimodalCapability = MultimodalCapabilities.intersect(
+                this.entries.stream().map(ModelEntry::multimodalCapability).toList());
         this.health = new ConcurrentHashMap<>();
         for (ModelEntry e : entries) {
             health.put(e.label(), new ModelHealth());
@@ -83,6 +95,11 @@ public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable {
 
     public MultiModelChatModel(String providerName, List<ModelEntry> entries, int cooldownTransientSeconds) {
         this(providerName, entries, 10, 60, cooldownTransientSeconds);
+    }
+
+    @Override
+    public MultimodalCapability multimodalCapability() {
+        return compositeMultimodalCapability;
     }
 
     @Override
@@ -131,20 +148,14 @@ public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable {
                 ModelEntry entry = entries.get(idx);
                 ModelHealth h = health.get(entry.label());
 
-                if (h.isPermanentlyDisabled()) {
-                    log.debugf("MultiModel: [%s] %s permanently disabled, skipping.", providerName, entry.label());
+                if (shouldSkipEntry(entry, h, request)) {
                     continue;
                 }
-                if (h.isInCooldown()) {
-                    log.debugf(
-                            "MultiModel: [%s] %s in cooldown (%ds remaining), skipping.",
-                            providerName, entry.label(), h.cooldownRemainingMs() / 1000);
-                    continue;
-                }
-
+                ChatRequest candidateReq =
+                        MultimodalRequests.forCandidate(request, entry.multimodalCapability(), entry.label());
                 ChatRequest outbound = schemaRejected
-                        ? StructuredSchemaRequests.withoutNativeJsonSchema(request)
-                        : StructuredSchemaRequests.forCandidate(request, candidateSupportsStrictSchema(entry));
+                        ? StructuredSchemaRequests.withoutNativeJsonSchema(candidateReq)
+                        : StructuredSchemaRequests.forCandidate(candidateReq, candidateSupportsStrictSchema(entry));
                 boolean schemaAttached = StructuredSchemaRequests.hasNativeJsonSchema(outbound);
                 try {
                     long startMs = System.currentTimeMillis();
@@ -205,6 +216,24 @@ public class MultiModelChatModel implements ChatModel, StrictJsonSchemaCapable {
 
             interruptibleSleep(shortestMs);
         }
+    }
+
+    private boolean shouldSkipEntry(ModelEntry entry, ModelHealth health, ChatRequest request) {
+        if (health.isPermanentlyDisabled()) {
+            log.debugf("MultiModel: [%s] %s permanently disabled, skipping.", providerName, entry.label());
+            return true;
+        }
+        if (health.isInCooldown()) {
+            log.debugf(
+                    "MultiModel: [%s] %s in cooldown (%ds remaining), skipping.",
+                    providerName, entry.label(), health.cooldownRemainingMs() / 1000);
+            return true;
+        }
+        if (!MultimodalRequests.supportsAllMultimodalContent(request, entry.multimodalCapability())) {
+            log.debugf("MultiModel: [%s] %s cannot consume request modality, skipping.", providerName, entry.label());
+            return true;
+        }
+        return false;
     }
 
     private void classifyAndHandle(String label, ModelHealth h, Throwable t) {

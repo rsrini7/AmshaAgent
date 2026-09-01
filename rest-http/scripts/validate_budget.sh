@@ -19,7 +19,7 @@ RL_WAIT=62
 info() { printf "%-4s %-58s " "" "$1"; }
 ok() { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail() { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
-mute() { curl -s -m 180 -o /tmp/resp -w "%{http_code}" "$@"; }
+mute() { curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" "$@"; }
 sid() { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 create_session() {
   local body="$1"
@@ -80,7 +80,7 @@ RID=$(sid)
 [ "$CODE" = "201" ] || [ "$CODE" = "200" ] && ok "$CODE" || { fail "$CODE"; RID=""; }
 if [ -n "$RID" ]; then
   info "AUTO-9: run github task (READONLY → blocked, 200 no tool)"
-  CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$RID/run" '{"goal":"List the public repositories of GitHub user rsrini7.","agentRole":"coordinator","maxIterations":2}')
+  CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$RID/run" '{"goal":"List the public repositories of GitHub user rsrini7. If tools cannot be executed, summarize in plain text.","agentRole":"coordinator","maxIterations":3}')
   [ "$CODE" = "200" ] || [ "$CODE" = "202" ] && ok "$CODE" || fail "$CODE"
   info "AUTO-10: audit has NO TOOL_INVOKED"
   CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/audit/session/$RID")

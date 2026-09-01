@@ -119,7 +119,19 @@ ws://host/ws/chat
   → WorkspaceContext.run() → AgentLoop.run() + CRON CONSTRAINT directive
 ```
 
+**Multimodal media (staged `channel-api` attachment & provider mapping):**
+
+Channel adapters produce `ChannelMessage` with optional `List<MediaAttachment>` (type `IMAGE|DOCUMENT_PDF|AUDIO|OTHER`, `sourceUri`/`inlineData`, `mimeType`, `fileName`, `sizeBytes`). When media requires downloading, core resolves it through `MediaDownloadPort` (`amsha-security-api`, implemented by `GovernedMediaDownloadService` in `amsha-security` under `OutboundPurpose.MEDIA_DOWNLOAD`), which enforces `MediaBudgetLimits` + `MediaSecurityValidator` (SSRF, IP blocklist, DNS revalidation, magic bytes), streams to `DownloadedMedia`, and injects governed payloads into the turn context. Total-payload (`50 MiB`) fail-closed across the batch. Telegram emits opaque `telegram://file/<file_id>` references resolved through `GovernedTelegramMediaResolver` in `amsha-security`. See [SECURITY.md#governed-media-download](./SECURITY.md#governed-media-download) and `amsha.media.*` in [CONFIGURATION.md](./CONFIGURATION.md#media-ingestion--download-limits).
+
+When constructing user prompts for LLM reasoning, `MultimodalMessageMapper` (`amsha-core`) maps validated attachments to LangChain4j content items (`ImageContent`, `AudioContent`, `PdfFileContent`) according to the active model's `MultimodalCapability` (resolved via `MultimodalCapabilities.defaultCapabilityForModel` or provider SPI). If a modality is unsupported, file size exceeds model limits, or the batch count is exceeded, `MultimodalMessageMapper` safely falls back to structured text placeholders without crashing or failing the agent turn. Composite routing models (`MultiModelChatModel`, `OrderedFailoverChatModel`) compute the safe capability intersection across candidate models.
+
 ![Message Pipeline](./assets/amsha_message_pipeline.svg)
+
+**Audio Ingestion, STT & Speech Synthesis (TTS) Architecture:**
+
+Voice recordings and audio attachments pass through dynamic normalization (`OggOpusToWavConverter`), transcription (`SpeechToTextPort` / Whisper), intent preservation (`IntentClassificationService`), speech output policy resolution (`SpeechOutputPolicy`), prose projection (`SpeechReplyService`), TTS synthesis (`SpeechSynthesisPort` / Qwen3-TTS), and channel-specific transport guards (36 MiB WebSocket frame buffer ceiling; local `ffmpeg` OGG Opus compression for Telegram Bot API).
+
+![Audio & Speech Synthesis Architecture](./assets/amsha_audio_speech_pipeline.svg)
 
 ---
 
@@ -634,7 +646,7 @@ The `AutonomyPolicy` defines which operations are auto-allowed at each level. Op
 | `SCHEDULE_AUTONOMOUS` | ✅ | ✅ | ❌ | ❌ |
 | `DELEGATE_AUTONOMOUS` | ✅ | guard → HITL | ✅ | ❌ |
 
-- **FULL**: all operations allowed without approval.
+- **FULL**: non-sensitive operations are allowed without approval; `NETWORK_OUTBOUND`, `EXECUTE_SHELL`, and governed media downloads remain HITL-gated.
 - **SUPERVISED** (default): only `READ_FS` and `SCHEDULE_AUTONOMOUS` auto-allowed; everything else evaluated by `ToolGovernanceGuard`.
 - **BACKGROUND** (cron execution): `READ_FS`, `NETWORK_OUTBOUND`, `DELEGATE_AUTONOMOUS` allowed; mutations blocked.
 - **READONLY**: only `READ_FS` allowed; all side-effecting operations blocked.
@@ -908,6 +920,14 @@ identity rules are documented in [MCP Management](./MCP_MANAGEMENT.md).
 ### Amsha Agent as MCP Server
 
 `McpAdminResource` (`GET /mcp/tools`) exposes Amsha Agent's internal tools as MCP-compatible descriptors. `AgentFunctionProcessor` (build-time) generates JSON schemas from `@AgentFunction`-annotated SAM interfaces.
+
+### P4 Safety-Gated MCP Adapter Decision (2026-08-28) — Retain Native Bridge
+
+LangChain4j `langchain4j-mcp:1.17.2-beta27` was evaluated as transport/serialization adapter **beneath** existing `McpClientService`/`ExternalMcpToolAdapter` per [ADR-LangChain4j](../Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp) and [Issue 07](../.scratch/lc4j-capability-adoption/issues/07-p4-mcp-protocol-adapter-gate.md) Issue 07. Decision: **RETAIN** native bridge (`amsha-mcp` 193 tests) — `1.17.2` couples `McpToolProvider`/`ToolSpecification`/`ToolExecutor` to `AiServices` with no standalone transport/DTO layer, and adding the beta would violate the `1.17.2` version ceiling; adopting upstream execution would bypass `ToolInvocationGuard`/`PreflightState`/`LoopStuckDetector`, `NETWORK_OUTBOUND`/`EXECUTE_SHELL` HITL, `HostExecSkillGrant`, `SecretVault` zeroed `USER:<userId>` credential hygiene, user-scoped isolation, `FINISH` invariant, and `McpReflectionConfig` native-image verification. Evaluation matrix (5× Amsha Superior, 1× Parity — isolation, HITL, credentials, `FINISH`, native, transports) and full disposition in [`.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md); tracker P4 row in [`.scratch/lc4j-capability-adoption/spec.md`](../.scratch/lc4j-capability-adoption/spec.md). If a future GA exposes decoupled transport DTOs, re-evaluate as adapter with governed local-fixture corpus (stdio+HTTP, NDJSON, audit/workspace/HITL/`FINISH`, `Context.isOnEventLoopThread()`).
+
+### P6 Safety-Gated Easy RAG Evaluation (2026-08-29) — Retain Amsha RAG Subsystem
+
+LangChain4j `quarkus-langchain4j-easy-rag` was evaluated as a retrieval path per [ADR-LangChain4j](../Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#easy-rag) §Easy-RAG and [Issue 09](../.scratch/lc4j-capability-adoption/issues/09-p6-easy-rag-gate.md) Issue 09. Decision: **RETAIN** the Amsha native RAG subsystem — Easy RAG is a member-BOM-managed starter (one `quarkus.langchain4j.easy-rag.path` property, boot-time Apache Tika scan into an auto-registered in-memory `EmbeddingStore`, auto-wired default `RetrievalAugmentor`, **explicitly not native-image compatible**) that performs vector-cosine retrieval only. Adopting it would replace Amsha's governed ingestion (`IngestDocumentTool` → `MemoryRetrievalPort.index()` via `ToolInvocationGuard`/PII scan/audit), hybrid FTS5/BM25 + vector (sqlite-vec / pgvector) RRF retrieval, `RerankingService` deterministic fallback, `userId`/session-scoped retrieval with cron exclusion, and the `EmbeddingIndexDescriptor` non-destructive fallback gate with an unguarded global vector store and a broken native build. Evaluation matrix (6× Amsha Superior, 1× Easy RAG Superior — onboarding simplicity only) and full disposition in [`.scratch/lc4j-capability-adoption/evidence/08-easy-rag-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/08-easy-rag-evaluation/README.md); tracker P6 row in [`.scratch/lc4j-capability-adoption/spec.md`](../.scratch/lc4j-capability-adoption/spec.md). No proof of equivalence means retain the current Amsha-owned implementation.
 
 ### Amsha Agent as MCP Client (Dynamic Tool Loading)
 

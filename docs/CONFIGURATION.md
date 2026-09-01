@@ -236,10 +236,10 @@ the same cooldown timing.
 | `AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS` | `groq,ollama` | Comma-separated compaction providers |
 | `AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | `groq,ollama` | Comma-separated classifier providers |
 | `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers |
-| `AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS` | `30` | Base cooldown between provider switches (s) |
-| `AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS` | `300` | Max cooldown (s) |
+| `AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS` | `5` | Base cooldown between provider switches (s) |
+| `AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS` | `60` | Max cooldown (s) |
 | `AMSHA_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS` | `5` | Transient error cooldown (s) |
-| `AMSHA_INFINITE_LOOP_MAX_LATENCY_MS` | `60000` | Max acceptable latency (ms) |
+| `AMSHA_INFINITE_LOOP_MAX_LATENCY_MS` | `45000` | Max acceptable latency (ms) |
 
 For each provider in `AMSHA_INFINITE_LOOP_LLM_PROVIDERS`, the following per-provider
 variables are required (replace `{PROVIDER}` with the provider name, e.g., `GROQ`, `OPENROUTER`, `GEMINI`):
@@ -443,6 +443,7 @@ schema) and must match the model used by every active provider.
 | `AMSHA_TELEGRAM_ENABLED` | `false` | Enable Telegram bot |
 | `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | — | Comma-separated numeric Telegram user IDs |
 | `AMSHA_TELEGRAM_ALLOWED_USERS` | `mock-telegram-user` | Comma-separated @usernames |
+| `AMSHA_TELEGRAM_BASE_URI` | `https://api.telegram.org` | Telegram Bot API base URI for getFile and file downloads |
 | `AMSHA_CHANNEL_TELEGRAM_MAX_LENGTH` | `4096` | Max Telegram message length |
 
 ## MCP
@@ -566,6 +567,31 @@ the request before authentication or resource handling.
 | `AMSHA_PHOENIX_ENDPOINT` | `http://localhost:4318/v1/traces` | Phoenix OTLP HTTP endpoint |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OpenTelemetry collector endpoint |
 | `OTEL_SDK_DISABLED` | `false` | Disable OpenTelemetry SDK |
+
+## Media Ingestion & Download Limits
+
+Governed, streaming-validated media downloads for multimodal attachments (`MediaDownloadPort` / `GovernedMediaDownloadService` in `amsha-security`). All downloads enforce size, MIME, and SSRF guards before buffering; payloads land in deterministic temp files (`DownloadedMedia`) with `AutoCloseable` cleanup.
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_MEDIA_MAX_IMAGE_SIZE_MB` | `10` | Maximum size in megabytes for a single image attachment (`image/png`, `image/jpeg`, `image/webp`, or `image/gif`). Streaming fail-closed when exceeded. |
+| `AMSHA_MEDIA_MAX_DOCUMENT_SIZE_MB` | `25` | Maximum size in megabytes for a single document/audio attachment (`application/pdf`, `audio/mpeg`, `audio/wav`, `audio/x-wav`, or `audio/ogg`). `audio/x-wav` is canonicalized to `audio/wav`. |
+| `AMSHA_MEDIA_MAX_TOTAL_PAYLOAD_MB` | `50` | Maximum total megabytes summed across all attachments in a single inbound turn. Multi-attachment batch fail-closed when exceeded. |
+| `AMSHA_MEDIA_CONNECT_TIMEOUT_SECONDS` | `10` | Governed HTTP connect timeout in seconds (`GovernedHttpClient` via `OutboundHttpPolicyService`). |
+| `AMSHA_MEDIA_READ_TIMEOUT_SECONDS` | `30` | Governed HTTP read timeout in seconds; streaming read loop enforces size incrementally, not after buffering. |
+
+Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDownloadPort`, `DownloadedMedia`); implementation and `MediaSecurityValidator` (SSRF/DNS, redirect revalidation, IP blocklist) live in `amsha-security`. Channel media types: `ChannelMessage` → `MediaAttachment` → `DownloadedMedia` → tool context (`OutboundPurpose.MEDIA_DOWNLOAD`). Telegram emits opaque `telegram://file/<file_id>` references resolved through `GovernedTelegramMediaResolver`. See [SECURITY.md](./SECURITY.md#governed-media-download) and [CHANNEL_SPI.md](./CHANNEL_SPI.md#multimodal-media).
+
+## Speech Synthesis (TTS) & Recognition (STT)
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_TTS_PROVIDER` | `omlx` | Speech synthesis provider (`omlx` or `openai`). |
+| `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` | Model identifier for TTS synthesis. |
+| `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` | Default voice delivery mode (`TEXT_ONLY`, `AUDIO_ONLY`, `TEXT_AND_AUDIO`). |
+| `AMSHA_TTS_RESPONSE_FORMAT` | `wav` | Audio encoding format emitted by the synthesis port (`wav`, `mp3`, `ogg`). |
+| `AMSHA_STT_PROVIDER` | `omlx` | Speech-to-text recognition provider (`omlx` or `openai`). |
+| `AMSHA_STT_MODEL` | `whisper-large-v3` | Model identifier for STT transcription. |
 
 ## Retry
 

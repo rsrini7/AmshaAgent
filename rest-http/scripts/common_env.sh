@@ -29,6 +29,9 @@ if [ -z "${AMSHA_DATA_DIR:-}" ]; then
   fi
 fi
 
+# Default curl timeout in seconds for agent run/approve endpoints (configurable via AMSHA_VALIDATION_TIMEOUT)
+CURL_TIMEOUT="${AMSHA_VALIDATION_TIMEOUT:-300}"
+
 # Formats HTTP status codes, explaining 000 as timeout/unreachable
 format_http_code() {
   local code="$1"

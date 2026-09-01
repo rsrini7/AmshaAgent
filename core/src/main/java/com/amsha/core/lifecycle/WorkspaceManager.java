@@ -24,6 +24,7 @@ import com.amsha.core.scope.WorkspaceScopeContext;
 import com.amsha.core.scope.WorkspaceScoped;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointStorePort;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -54,12 +55,19 @@ public class WorkspaceManager {
     public static boolean isSessionHalted(String sessionId) {
         if (sessionId == null) return false;
         Long haltedAt = HALTED_SESSIONS.get(sessionId);
-        if (haltedAt == null) return false;
-        if (System.currentTimeMillis() - haltedAt > HALTED_SESSION_TTL_MS) {
-            HALTED_SESSIONS.remove(sessionId);
-            return false;
+        if (haltedAt != null) {
+            if (System.currentTimeMillis() - haltedAt > HALTED_SESSION_TTL_MS) {
+                HALTED_SESSIONS.remove(sessionId);
+                return false;
+            }
+            return true;
         }
-        return true;
+        int delegateIdx = sessionId.indexOf(AgentSentinels.DELEGATE_SESSION_SENTINEL);
+        if (delegateIdx > 0) {
+            String parentSessionId = sessionId.substring(0, delegateIdx);
+            return isSessionHalted(parentSessionId);
+        }
+        return false;
     }
 
     /** Returns true if any session has been halted (for interrupting blocking waits). */

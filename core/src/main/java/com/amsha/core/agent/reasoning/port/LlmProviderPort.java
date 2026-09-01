@@ -3,6 +3,10 @@ package com.amsha.core.agent.reasoning.port;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
+import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.TurnRequirements;
+import com.amsha.llm.api.MultimodalCapability;
+
 /**
  * Abstraction seam between the reasoning engine and the underlying LLM provider SDK.
  *
@@ -62,5 +66,55 @@ public interface LlmProviderPort {
      */
     default ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
         return nextStep(request, agentRole);
+    }
+
+    /**
+     * Resolves the multimodal capability supported by the model for the given agent role.
+     * Defaults to {@link com.amsha.llm.api.MultimodalCapability#TEXT_ONLY}.
+     */
+    default MultimodalCapability multimodalCapability(String agentRole) {
+        return MultimodalCapability.TEXT_ONLY;
+    }
+
+    /**
+     * Executes a chat request using the pre-resolved ModelRoute.
+     * When route or route.model() is null, falls back to role-based resolution.
+     *
+     * @param request   The chat request.
+     * @param agentRole The agent role ID used for fallback routing.
+     * @param route     The pre-resolved ModelRoute.
+     * @return The chat response.
+     * @throws com.amsha.llm.api.error.LlmProviderException if the provider throws an error.
+     */
+    default ChatResponse nextStep(ChatRequest request, String agentRole, ModelRoute route) {
+        return nextStep(request, agentRole);
+    }
+
+    /**
+     * Executes a request on the pre-resolved route while retaining the one-shot escalation flag.
+     * The flag only affects legacy role-based resolution; an already selected route remains
+     * authoritative so multimodal content cannot be sent to a different model.
+     *
+     * @param request the chat request
+     * @param agentRole agent role used only when the route is absent
+     * @param route the pre-resolved route
+     * @param bypassLightweightRouting whether legacy resolution should bypass lightweight routing
+     * @return chat response
+     */
+    default ChatResponse nextStep(
+            ChatRequest request, String agentRole, ModelRoute route, boolean bypassLightweightRouting) {
+        return route != null
+                ? nextStep(request, agentRole, route)
+                : nextStep(request, agentRole, bypassLightweightRouting);
+    }
+
+    /**
+     * Resolves a turn-aware {@link ModelRoute} for the given role and turn requirements.
+     * Slab A accepts {@link TurnRequirements} at the port seam; modality selection is wired in
+     * Slab B via a {@code ModelRouteSelector}. The default returns {@code null} so non-routing
+     * providers remain unaffected; concrete providers override to route per requirements.
+     */
+    default ModelRoute resolveRoute(String agentRole, TurnRequirements requirements) {
+        return null;
     }
 }

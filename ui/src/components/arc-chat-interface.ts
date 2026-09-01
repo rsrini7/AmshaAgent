@@ -19,6 +19,12 @@ interface ChatMessage {
   };
   historic?: boolean;
   targetSessionId?: string;
+  audio?: {
+    mimeType: string;
+    fileName: string;
+    data: string;
+    url?: string;
+  };
 }
 
 interface ProgressUpdate {
@@ -33,6 +39,7 @@ const HALTED_MESSAGE_PATTERNS = [
   /budget exceeded/i,
   /timed out/i,
   /session halted/i,
+  /system halted/i,
 ];
 
 @customElement('arc-chat-interface')
@@ -45,6 +52,11 @@ export class ArcChatInterface extends LitElement {
 
   @state() private _messages: ChatMessage[] = [];
   @state() private _input = '';
+  @state() private _audioAttachment: File | null = null;
+  @state() private _attachmentError = '';
+  @state() private _encodingAttachment = false;
+  @state() private _isRecording = false;
+  @state() private _autoPlaySpeech = false;
   @state() private _wsStatus: 'connecting' | 'open' | 'closed' | 'error' = 'closed';
   @state() private _awaitingApproval = false;
   @state() private _denyReason = '';
@@ -68,6 +80,17 @@ export class ArcChatInterface extends LitElement {
   private _boundProgress = ((e: Event) => this._onProgress(e as CustomEvent<ProgressUpdate>)) as EventListener;
   private static readonly WS_TOKEN_TTL = 30_000;
   private static readonly MIN_CONNECT_INTERVAL = 5000;
+  private static readonly MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
+  private static readonly SUPPORTED_AUDIO_TYPES = new Set([
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/ogg', 'audio/webm', 'video/webm',
+  ]);
+  private static readonly AUDIO_EXT_TO_MIME: Record<string, string> = {
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.webm': 'audio/webm',
+  };
+
+  private _mediaRecorder: MediaRecorder | null = null;
+  private _recordedChunks: Blob[] = [];
+  private _recordingStream: MediaStream | null = null;
 
   static styles = css`
     :host { 
@@ -358,6 +381,99 @@ export class ArcChatInterface extends LitElement {
        transition: var(--transition);
     }
     .attach-btn:hover { color: var(--text-primary); }
+    .attachment-input { display: none; }
+    .attachment-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .attachment-row button {
+      border: 0;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .attachment-error {
+      margin-bottom: 8px;
+      color: #ef4444;
+      font-size: 12px;
+    }
+    .mic-btn {
+      color: var(--text-muted); cursor: pointer; padding-bottom: 8px;
+      transition: var(--transition); background: transparent; border: 0;
+      font-size: 16px; line-height: 1;
+    }
+    .mic-btn:hover { color: var(--text-primary); }
+    .mic-btn.recording { color: #ef4444; animation: pulse 1s infinite; }
+    .tts-btn {
+      color: var(--text-muted); cursor: pointer; padding-bottom: 8px;
+      transition: var(--transition); background: transparent; border: 0;
+      font-size: 16px; line-height: 1;
+    }
+    .tts-btn:hover { color: var(--text-primary); }
+    .tts-btn.active { color: var(--accent-secondary); }
+    .assistant-audio-player, .user-audio-player {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+      min-width: 260px;
+      max-width: 340px;
+    }
+    .audio-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .audio-badge {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      opacity: 0.9;
+    }
+    .replay-btn {
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+      color: var(--text-primary);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .replay-btn:hover {
+      transform: translateY(-1px);
+      background: color-mix(in srgb, var(--accent) 25%, transparent);
+    }
+    .bubble-user .replay-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: white;
+    }
+    .bubble-user .replay-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .assistant-audio-player audio, .user-audio-player audio {
+      height: 34px;
+      width: 100%;
+      border-radius: 8px;
+      outline: none;
+    }
 
     .send-btn {
       background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
@@ -371,6 +487,35 @@ export class ArcChatInterface extends LitElement {
     }
     .send-btn:disabled {
       filter: grayscale(1); opacity: 0.4; cursor: not-allowed;
+    }
+    .stop-btn {
+      background: #ef4444;
+      border: none; border-radius: 12px; width: 38px; height: 38px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.2s, background-color 0.2s;
+      color: white; flex-shrink: 0; margin-bottom: 3px;
+    }
+    .stop-btn:hover {
+      background: #dc2626; transform: translateY(-1px);
+    }
+    .progress-stop-btn {
+      margin-left: auto;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #ef4444;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .progress-stop-btn:hover {
+      background: rgba(239, 68, 68, 0.25);
+      transform: translateY(-1px);
     }
     
     /* Markdown Styles */
@@ -404,10 +549,17 @@ export class ArcChatInterface extends LitElement {
        font-size: 12px; font-family: 'Fira Code', monospace; 
        margin: 0; overflow-x: auto; max-height: 240px; border: 1px solid rgba(255,255,255,0.05);
     }
-    .approval-actions { display: flex; padding: 12px; gap: 10px; background: rgba(10, 11, 15, 0.5); }
+    .approval-actions { display: flex; flex-direction: column; padding: 12px; gap: 10px; background: rgba(10, 11, 15, 0.5); }
+    .approval-buttons { display: flex; gap: 10px; width: 100%; }
     .btn-approve { flex: 1; height: 38px; background: #00d4aa; color: #0a0b0f; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; }
-    .btn-deny { border: 1px solid rgba(255,255,255,0.1); background: transparent; color: white; border-radius: 8px; padding: 0 16px; cursor: pointer; }
-    textarea.deny-reason { width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px; color: white; }
+    .btn-deny { border: 1px solid rgba(255,255,255,0.15); background: transparent; color: white; border-radius: 8px; padding: 0 16px; cursor: pointer; height: 38px; }
+    .btn-deny:hover { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #ef4444; }
+    .btn-deny-submit { flex: 1; height: 38px; background: #ef4444; color: white; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; }
+    .btn-deny-submit:hover { background: #dc2626; }
+    .btn-cancel { border: 1px solid rgba(255,255,255,0.15); background: transparent; color: var(--text-muted); border-radius: 8px; padding: 0 16px; cursor: pointer; height: 38px; }
+    .btn-cancel:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+    textarea.deny-reason { width: 100%; box-sizing: border-box; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 0; color: white; font-family: inherit; font-size: 13px; resize: vertical; min-height: 64px; outline: none; }
+    textarea.deny-reason:focus { border-color: #ef4444; }
   `;
 
   updated(changedProperties: Map<string, unknown>) {
@@ -465,6 +617,10 @@ export class ArcChatInterface extends LitElement {
       clearTimeout(this._reconnectTimeoutId);
       this._reconnectTimeoutId = null;
     }
+    if (this._isRecording) {
+      this._stopRecording();
+    }
+    this._recordingStream?.getTracks().forEach((track) => track.stop());
     this._markdownCache.clear();
     this._resetProgress();
     this._ws?.disconnect();
@@ -617,18 +773,23 @@ export class ArcChatInterface extends LitElement {
       this._sessionHalted = true;
       this._resetProgress();
     } else if (frame.type === 'message' && frame.role === 'assistant') {
-      const isApproval = frame.approval || frame.text.includes('⏸');
+      const isApproval = frame.approval || (frame.text && frame.text.includes('⏸'));
       this._isTyping = false;
       this._showDenyReason = false;
+
+      const audioPayload = frame.audio && frame.audio.data
+        ? { ...frame.audio, url: this._base64ToBlobUrl(frame.audio.data, frame.audio.mimeType) }
+        : undefined;
 
       this._messages = [...this._messages, {
         id: crypto.randomUUID(),
         role: 'assistant',
-        text: frame.text,
+        text: frame.text || '',
         timestamp: frame.timestamp || Date.now(),
         isApprovalPrompt: !!isApproval,
         approvalData: frame.approval || null,
-        targetSessionId: frame.sessionId || null
+        targetSessionId: frame.sessionId || null,
+        audio: audioPayload
       }];
       this._awaitingApproval = !!isApproval;
       if (frame.text && HALTED_MESSAGE_PATTERNS.some((pattern) => pattern.test(frame.text))) {
@@ -643,23 +804,281 @@ export class ArcChatInterface extends LitElement {
       } else {
         this._resetProgress();
       }
+
+      if (audioPayload && this._autoPlaySpeech) {
+        try {
+          const snd = new Audio(audioPayload.url || `data:${audioPayload.mimeType};base64,${audioPayload.data}`);
+          snd.play().catch(() => {});
+        } catch (_) {}
+      }
+
       // Scroll to bottom after new message
       this._scrollToBottom();
     }
   }
 
-  private _send() {
+  private async _send() {
     const text = this._input.trim();
-    if (!text || this._wsStatus !== 'open') return;
-    this._messages = [...this._messages, { id: crypto.randomUUID(), role: 'user', text, timestamp: Date.now() }];
-    this._ws?.send({ type: 'message', text });
+    const attachment = this._audioAttachment;
+    if ((!text && !attachment) || this._wsStatus !== 'open' || this._encodingAttachment) {
+      return;
+    }
+    if (attachment && !this._isSupportedAudioFile(attachment)) {
+      this._attachmentError = 'Supported audio formats are MP3, WAV, OGG, and WebM (max 25 MiB)';
+      return;
+    }
+    let outbound: { type: 'message'; text: string; attachment?: { mimeType: string; fileName: string; data: string } } = {
+      type: 'message',
+      text,
+    };
+    let displayText = text;
+    let userAudioPayload: { mimeType: string; fileName: string; data: string; url?: string } | undefined;
+    if (attachment) {
+      this._encodingAttachment = true;
+      try {
+        const data = await this._fileToBase64(attachment);
+        const mimeType = this._resolveAttachmentMimeType(attachment);
+        if (!mimeType) {
+          this._encodingAttachment = false;
+          return;
+        }
+        outbound.attachment = { mimeType: mimeType as 'audio/mpeg' | 'audio/wav' | 'audio/ogg' | 'audio/webm', fileName: attachment.name, data };
+        let blobUrl: string | undefined;
+        try {
+          blobUrl = URL.createObjectURL(attachment);
+        } catch (_) {}
+        userAudioPayload = { mimeType, fileName: attachment.name, data, url: blobUrl };
+        displayText = text ? `${text} [${attachment.name}]` : `[${attachment.name}]`;
+      } catch (_) {
+        this._attachmentError = 'Failed to encode audio attachment';
+        this._encodingAttachment = false;
+        return;
+      }
+      this._encodingAttachment = false;
+    }
+    this._messages = [
+      ...this._messages,
+      { id: crypto.randomUUID(), role: 'user', text: displayText, timestamp: Date.now(), audio: userAudioPayload },
+    ];
+    this._ws?.send(outbound as unknown as import('../api/types').WsOutboundMessage);
     this._input = '';
+    this._audioAttachment = null;
+    this._attachmentError = '';
+    const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+    if (fileInput) {
+      fileInput.value = '';
+    }
     this._progressPhase = 'Thinking';
     this._progressDetail = 'Preparing the first response';
     this._progressTrail = [{ phase: this._progressPhase, detail: this._progressDetail }];
     this._sessionHalted = false;
     this._isTyping = true;
     this._scrollToBottom();
+  }
+
+  private _isSupportedAudioFile(file: File): boolean {
+    if (file.size === 0 || file.size > ArcChatInterface.MAX_AUDIO_UPLOAD_BYTES) {
+      return false;
+    }
+    const mime = (file.type || '').split(';')[0].trim().toLowerCase();
+    if (ArcChatInterface.SUPPORTED_AUDIO_TYPES.has(mime)) {
+      return true;
+    }
+    const ext = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
+    return ext in ArcChatInterface.AUDIO_EXT_TO_MIME;
+  }
+
+  private _resolveAttachmentMimeType(file: File): string {
+    const mime = (file.type || '').split(';')[0].trim().toLowerCase();
+    if (mime === 'audio/mp3') {
+      return 'audio/mpeg';
+    }
+    if (mime === 'audio/x-wav' || mime === 'audio/wave') {
+      return 'audio/wav';
+    }
+    if (mime === 'video/webm') {
+      return 'audio/webm';
+    }
+    if (ArcChatInterface.SUPPORTED_AUDIO_TYPES.has(mime)) {
+      return mime;
+    }
+    const ext = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
+    const byExt = ArcChatInterface.AUDIO_EXT_TO_MIME[ext];
+    if (byExt) {
+      return byExt;
+    }
+    this._attachmentError = `Unsupported file type: ${ext || 'unknown'} — use MP3, WAV, OGG, or WebM`;
+    return '';
+  }
+
+  private _fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const comma = result.indexOf(',');
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private _base64ToBlobUrl(base64: string, mimeType: string): string {
+    try {
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Uint8Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const blob = new Blob([byteNumbers], { type: mimeType });
+      return URL.createObjectURL(blob);
+    } catch (_) {
+      return `data:${mimeType};base64,${base64}`;
+    }
+  }
+
+  private _replayAudio(audio: { url?: string; mimeType: string; data: string }): void {
+    try {
+      const src = audio.url || `data:${audio.mimeType};base64,${audio.data}`;
+      const snd = new Audio(src);
+      snd.play().catch(() => {});
+    } catch (_) {}
+  }
+
+  private _onAudioFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (!file) {
+      return;
+    }
+    if (!this._isSupportedAudioFile(file)) {
+      this._attachmentError = 'Supported audio formats are MP3, WAV, OGG, and WebM (max 25 MiB)';
+      input.value = '';
+      return;
+    }
+    this._attachmentError = '';
+    this._audioAttachment = file;
+  }
+
+  private _clearAttachment(): void {
+    this._audioAttachment = null;
+    this._attachmentError = '';
+    const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+    if (fileInput) {
+      fileInput.value = '';
+    }
+  }
+
+  private _triggerFilePicker(): void {
+    const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+    fileInput?.click();
+  }
+
+  private async _toggleRecording(): Promise<void> {
+    if (this._isRecording) {
+      this._stopRecording();
+    } else {
+      await this._startRecording();
+    }
+  }
+
+  private async _startRecording(): Promise<void> {
+    if (this._isRecording) {
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      this._attachmentError = 'Microphone recording is not supported in this browser';
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      this._recordingStream = stream;
+      this._recordedChunks = [];
+      const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg'];
+      let mimeType = '';
+      for (const candidate of preferred) {
+        if (MediaRecorder.isTypeSupported(candidate)) {
+          mimeType = candidate;
+          break;
+        }
+      }
+      if (!mimeType && typeof MediaRecorder.isTypeSupported === 'function') {
+        this._attachmentError = 'Voice recording in WebM or OGG is not supported in this browser';
+        stream.getTracks().forEach((track) => track.stop());
+        this._recordingStream = null;
+        return;
+      }
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          this._recordedChunks.push(event.data);
+        }
+      };
+      recorder.onstop = () => {
+        const blobMime = recorder.mimeType || mimeType || 'audio/webm';
+        const normalized = blobMime.split(';')[0].trim().toLowerCase();
+        if (normalized !== 'audio/webm' && normalized !== 'audio/ogg') {
+          this._attachmentError = `Recorded audio format (${normalized || 'unknown'}) is not supported — use WebM or OGG`;
+        } else {
+          const blob = new Blob(this._recordedChunks, { type: normalized });
+          if (blob.size === 0 || blob.size > ArcChatInterface.MAX_AUDIO_UPLOAD_BYTES) {
+            this._attachmentError = 'Recording must be between 1 byte and 25 MiB';
+          } else {
+            const fileName = normalized === 'audio/ogg' ? 'recording.ogg' : 'recording.webm';
+            this._audioAttachment = new File([blob], fileName, { type: normalized });
+            this._attachmentError = '';
+            const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+            if (fileInput) {
+              fileInput.value = '';
+            }
+          }
+        }
+        this._recordedChunks = [];
+        this._recordingStream?.getTracks().forEach((track) => track.stop());
+        this._recordingStream = null;
+        this._mediaRecorder = null;
+        this._isRecording = false;
+      };
+      this._mediaRecorder = recorder;
+      recorder.start(100);
+      this._isRecording = true;
+      this._attachmentError = '';
+      const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
+      if (fileInput) {
+        fileInput.value = '';
+      }
+    } catch (_) {
+      this._attachmentError = 'Microphone access was denied or unavailable';
+      this._recordingStream?.getTracks().forEach((track) => track.stop());
+      this._recordingStream = null;
+    }
+  }
+
+  private _stopRecording(): void {
+    if (!this._isRecording || !this._mediaRecorder) {
+      return;
+    }
+    try {
+      if (this._mediaRecorder.state !== 'inactive') {
+        this._mediaRecorder.stop();
+      } else {
+        this._recordingStream?.getTracks().forEach((track) => track.stop());
+        this._recordingStream = null;
+        this._isRecording = false;
+      }
+    } catch (_) {
+      this._recordingStream?.getTracks().forEach((track) => track.stop());
+      this._recordingStream = null;
+      this._mediaRecorder = null;
+      this._isRecording = false;
+    }
   }
 
   public startNewSession(platformId: string) {
@@ -720,6 +1139,21 @@ export class ArcChatInterface extends LitElement {
     this._scrollToBottom();
   }
 
+  private _sendStop() {
+    if (!this._isTyping && !this._awaitingApproval) return;
+    this._ws?.send({ type: 'message', text: '/stop' });
+    this._isTyping = false;
+    this._awaitingApproval = false;
+    this._sessionHalted = true;
+    this._progressPhase = 'Halted';
+    this._progressDetail = 'Session halted by user';
+    this._messages = [
+      ...this._messages,
+      { id: crypto.randomUUID(), role: 'user', text: '/stop', timestamp: Date.now() },
+    ];
+    this._scrollToBottom();
+  }
+
   private _scrollToBottom() {
     this.updateComplete.then(() => {
       requestAnimationFrame(() => {
@@ -775,9 +1209,13 @@ export class ArcChatInterface extends LitElement {
   }
 
   render() {
-    const showProgress = this._isTyping || this._awaitingApproval || this._progressTrail.length > 0;
-    const phaseLabel = this._progressPhase || (this._awaitingApproval ? 'Waiting for approval' : 'Working');
-    const detailLabel = this._progressDetail || (this._awaitingApproval ? 'Approve or deny the tool request' : 'Processing the request');
+    const showProgress = this._isTyping || this._awaitingApproval || this._progressTrail.length > 0 || this._sessionHalted;
+    const phaseLabel = this._sessionHalted
+      ? 'Session Halted'
+      : (this._progressPhase || (this._awaitingApproval ? 'Waiting for approval' : 'Working'));
+    const detailLabel = this._sessionHalted
+      ? 'Workspace terminated. Click New Session to start a fresh chat.'
+      : (this._progressDetail || (this._awaitingApproval ? 'Approve or deny the tool request' : 'Processing the request'));
 
     return html`
       <div class="chat-shell">
@@ -790,6 +1228,9 @@ export class ArcChatInterface extends LitElement {
                   <div class="progress-kicker">Live progress</div>
                   <div class="progress-phase">${phaseLabel}</div>
                 </div>
+                ${!this._sessionHalted ? html`
+                  <button class="progress-stop-btn" @click=${this._sendStop} title="Stop execution (/stop)">■ Stop</button>
+                ` : nothing}
               </div>
               <div class="progress-detail">${detailLabel}</div>
               ${this._progressTrail.length > 1 ? html`
@@ -801,10 +1242,10 @@ export class ArcChatInterface extends LitElement {
                   `)}
                 </div>
               ` : nothing}
-              <div class="progress-bar"><span></span></div>
+              ${!this._sessionHalted ? html`<div class="progress-bar"><span></span></div>` : nothing}
               ${this._sessionHalted ? html`
-                <div class="halt-actions">
-                  <button class="new-session-btn" @click=${() => this.startNewSession(crypto.randomUUID())}>New Session</button>
+                <div class="halt-actions" style="margin-top: 12px;">
+                  <button class="new-session-btn" @click=${() => this.startNewSession(crypto.randomUUID())}>+ Start New Session</button>
                 </div>
               ` : nothing}
             </div>
@@ -821,15 +1262,20 @@ export class ArcChatInterface extends LitElement {
                <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
                  ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> Amsha Agent` : 'You'}
                </div>
-               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">${m.role === 'user' ? m.text : this._renderMarkdown(m.id, m.text)}${m.isApprovalPrompt && this._awaitingApproval ? html`<div class="approval-card"><div class="approval-body"><div class="approval-title"><span>⏸</span> Action Requires Approval</div>${m.approvalData ? html`<div class="approval-tool">Tool: <code>${m.approvalData.tool}</code></div><div class="approval-params-header">Parameters:</div><pre class="approval-params"><code>${typeof m.approvalData.params === 'string' ? m.approvalData.params : JSON.stringify(m.approvalData.params, null, 2)}</code></pre>` : html`<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">This session has paused to wait for your permission.</p>`}</div><div class="approval-actions">${this._showDenyReason ? html`<textarea class="deny-reason" .value=${this._denyReason} @input=${(e: any) => this._denyReason = e.target.value} placeholder="Reason for denial (optional)..."></textarea>` : nothing}<button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button><button class="btn-deny" @click=${() => this._sendDeny(m)}>${this._showDenyReason ? 'Send Feedback' : 'Deny'}</button></div></div>` : nothing}</div>
+               <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">${m.role === 'user' ? html`<div>${m.text}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}` : html`${m.text ? this._renderMarkdown(m.id, m.text) : nothing}${m.audio ? html`<div class="assistant-audio-player"><div class="audio-header"><span class="audio-badge">🎵 Voice Reply</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`}${m.isApprovalPrompt && this._awaitingApproval ? html`<div class="approval-card"><div class="approval-body"><div class="approval-title"><span>⏸</span> Action Requires Approval</div>${m.approvalData ? html`<div class="approval-tool">Tool: <code>${m.approvalData.tool}</code></div><div class="approval-params-header">Parameters:</div><pre class="approval-params"><code>${typeof m.approvalData.params === 'string' ? m.approvalData.params : JSON.stringify(m.approvalData.params, null, 2)}</code></pre>` : html`<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">This session has paused to wait for your permission.</p>`}</div><div class="approval-actions">${this._showDenyReason ? html`<textarea class="deny-reason" .value=${this._denyReason} @input=${(e: any) => this._denyReason = e.target.value} placeholder="Reason for denial (optional)..."></textarea><div class="approval-buttons"><button class="btn-deny-submit" @click=${() => this._sendDeny(m)}>Submit Denial</button><button class="btn-cancel" @click=${() => { this._showDenyReason = false; this._denyReason = ''; }}>Cancel</button></div>` : html`<div class="approval-buttons"><button class="btn-approve" @click=${() => this._sendApprove(m)}>Approve</button><button class="btn-deny" @click=${() => this._sendDeny(m)}>Deny</button></div>`}</div></div>` : nothing}</div>
                <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
             </div>
           `)}
         </div>
         
         <div class="input-wrapper">
+          ${this._attachmentError ? html`<div class="attachment-error">${this._attachmentError}</div>` : nothing}
+          ${this._audioAttachment ? html`<div class="attachment-row"><span>🎵 ${this._audioAttachment.name} (${Math.round(this._audioAttachment.size / 1024)} KB)</span><button aria-label="Remove attachment" @click=${this._clearAttachment}>×</button></div>` : nothing}
           <div class="input-area">
-            <div class="attach-btn" aria-label="Attach file" role="button" tabindex="0">📎</div>
+            <input class="attachment-input" type="file" accept=".mp3,.wav,.ogg,.webm,audio/mpeg,audio/wav,audio/ogg,audio/webm,video/webm" @change=${this._onAudioFileSelected} />
+            <button class="attach-btn" aria-label="Attach audio file" title="Attach audio (MP3, WAV, OGG, WebM)" @click=${this._triggerFilePicker}>📎</button>
+            <button class="mic-btn ${this._isRecording ? 'recording' : ''}" aria-label="${this._isRecording ? 'Stop recording' : 'Record audio'}" title="${this._isRecording ? 'Stop recording' : 'Record audio'}" @click=${this._toggleRecording}>${this._isRecording ? '⏹' : '🎤'}</button>
+            <button class="tts-btn ${this._autoPlaySpeech ? 'active' : ''}" aria-label="${this._autoPlaySpeech ? 'Disable voice reply auto-play' : 'Enable voice reply auto-play'}" title="${this._autoPlaySpeech ? 'Voice auto-play: On' : 'Voice auto-play: Off'}" @click=${() => { this._autoPlaySpeech = !this._autoPlaySpeech; }}>${this._autoPlaySpeech ? '🔊' : '🔈'}</button>
             <textarea
               aria-label="Message Amsha Agent"
               placeholder="Ask Amsha Agent anything…"
@@ -844,9 +1290,15 @@ export class ArcChatInterface extends LitElement {
               }}"
               @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send(); } }}"
             ></textarea>
-            <button aria-label="Send message" class="send-btn" ?disabled="${!this._input.trim() || this._wsStatus !== 'open' || this._awaitingApproval}" @click="${this._send}">
-               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            </button>
+            ${this._isTyping && !this._awaitingApproval ? html`
+              <button aria-label="Stop response" class="stop-btn" title="Stop response (/stop)" @click="${this._sendStop}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+              </button>
+            ` : html`
+              <button aria-label="Send message" class="send-btn" ?disabled="${(!this._input.trim() && !this._audioAttachment) || this._wsStatus !== 'open' || this._awaitingApproval || this._encodingAttachment || this._isRecording}" @click="${this._send}">
+                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            `}
           </div>
         </div>
       </div>

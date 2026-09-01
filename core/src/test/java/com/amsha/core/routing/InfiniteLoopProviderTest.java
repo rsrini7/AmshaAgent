@@ -30,6 +30,49 @@ class InfiniteLoopProviderTest {
     }
 
     @Test
+    void slowValidResponseMultiSlotCoolsDownSlowSlot() {
+        InfiniteLoopProvider<String, String> provider = new InfiniteLoopProvider<>(
+                "multi-slot-test",
+                List.of(
+                        new InfiniteLoopProvider.Slot<>("slot-1", "m1"),
+                        new InfiniteLoopProvider.Slot<>("slot-2", "m2")),
+                (model, request) -> {
+                    if ("m2".equals(model)) {
+                        try {
+                            Thread.sleep(5);
+                        } catch (InterruptedException _) {
+                            Thread.currentThread().interrupt();
+                        }
+                        return "from-slot-2";
+                    }
+                    return "from-slot-1";
+                },
+                10,
+                10,
+                10,
+                1);
+
+        // First call starts at index (0 + 1) % 2 = 1 (slot-2, slow).
+        // It returns valid response and cools down slot-2.
+        assertEquals("from-slot-2", provider.invoke("request"));
+        assertEquals(
+                "slot-2",
+                InfiniteLoopProvider.getLastUsedSlot("multi-slot-test").orElse(null));
+
+        // Second call starts at index 0 (slot-1, fast).
+        assertEquals("from-slot-1", provider.invoke("request"));
+        assertEquals(
+                "slot-1",
+                InfiniteLoopProvider.getLastUsedSlot("multi-slot-test").orElse(null));
+
+        // Third call wants to start at index 1 (slot-2), but slot-2 is cooled down, so it falls back to slot-1.
+        assertEquals("from-slot-1", provider.invoke("request"));
+        assertEquals(
+                "slot-1",
+                InfiniteLoopProvider.getLastUsedSlot("multi-slot-test").orElse(null));
+    }
+
+    @Test
     void transientFailuresRemainRecoverableAfterThreshold() {
         AtomicInteger attempts = new AtomicInteger();
         InfiniteLoopProvider<String, String> provider = new InfiniteLoopProvider<>(

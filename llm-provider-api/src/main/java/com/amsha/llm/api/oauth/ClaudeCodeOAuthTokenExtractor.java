@@ -1,6 +1,7 @@
 package com.amsha.llm.api.oauth;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.io.BufferedReader;
@@ -44,7 +45,7 @@ public class ClaudeCodeOAuthTokenExtractor {
             "accessToken", "access_token", "bearerToken", "token", "apiKey", "api_key", "oauthToken", "sessionKey");
 
     @Inject
-    ObjectMapper objectMapper;
+    Instance<ObjectMapper> objectMapper;
 
     /**
      * Extracts the OAuth token from the Claude Code CLI storage.
@@ -90,7 +91,8 @@ public class ClaudeCodeOAuthTokenExtractor {
         byte[] content = null;
         try {
             content = Files.readAllBytes(path);
-            ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+            ObjectMapper mapper =
+                    objectMapper != null && objectMapper.isResolvable() ? objectMapper.get() : new ObjectMapper();
             JsonNode root = mapper.readTree(content);
             Optional<String> token = extractTokenFromJson(root);
             if (token.isPresent()) {
@@ -153,7 +155,8 @@ public class ClaudeCodeOAuthTokenExtractor {
         if (raw == null || raw.isBlank()) return Optional.empty();
         if (raw.startsWith("{") && raw.endsWith("}")) {
             try {
-                ObjectMapper mapper = objectMapper != null ? objectMapper : new ObjectMapper();
+                ObjectMapper mapper =
+                        objectMapper != null && objectMapper.isResolvable() ? objectMapper.get() : new ObjectMapper();
                 JsonNode node = mapper.readTree(raw);
                 return extractTokenFromJson(node);
             } catch (Exception _) {

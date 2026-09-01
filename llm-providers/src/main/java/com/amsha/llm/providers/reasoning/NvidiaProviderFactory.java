@@ -8,10 +8,13 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 import com.amsha.llm.providers.wrapper.NvidiaMessageSanitizer;
@@ -63,19 +66,20 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
 
     private ChatModel doCreate(String modelName) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Nvidia requires AMSHA_NVIDIA_API_KEY"));
-        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key,
-                modelName,
-                "nvidia",
-                (k, m) -> new NvidiaMessageSanitizer(ChatModelFactory.createOpenAi(
-                        baseUrl,
-                        k,
-                        m,
-                        agentConfig.maxTokens(),
-                        agentConfig.timeout(),
-                        agentConfig.maxRetries(),
-                        agentConfig.temperature(),
-                        agentConfig.logHttp())));
+        List<MultiModelChatModel.ModelEntry> entries =
+                ChatModelFactory.buildMultiModelEntries(key, modelName, "nvidia", (k, m) -> {
+                    ChatModel raw = new NvidiaMessageSanitizer(ChatModelFactory.createOpenAi(
+                            baseUrl,
+                            k,
+                            m,
+                            agentConfig.maxTokens(),
+                            agentConfig.timeout(),
+                            agentConfig.maxRetries(),
+                            agentConfig.temperature(),
+                            agentConfig.logHttp()));
+                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("nvidia", m);
+                    return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
+                });
         if (entries.size() == 1) return entries.get(0).model();
         return new MultiModelChatModel("nvidia", entries, 5);
     }

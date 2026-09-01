@@ -25,7 +25,7 @@ public class AuditEventRecorder {
     @Inject
     SessionAuditSequencer sequencer;
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void record(AuditEvent event) {
         if (event.getIdempotencyKey() != null) {
             if (auditStore.countByIdempotencyKey(event.getIdempotencyKey()) > 0) {

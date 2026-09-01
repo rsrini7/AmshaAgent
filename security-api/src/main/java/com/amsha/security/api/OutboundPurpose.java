@@ -17,5 +17,7 @@ public enum OutboundPurpose {
     /** Explicit activation of a discovered MCP tool. */
     MCP_TOOL_ENABLE,
     /** MCP tool invocation. */
-    MCP_TOOL_CALL
+    MCP_TOOL_CALL,
+    /** Governed media attachment download. */
+    MEDIA_DOWNLOAD
 }

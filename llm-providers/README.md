@@ -39,6 +39,18 @@ Concrete provider factories are annotated with `@ApplicationScoped` and discover
 - **Token Resolvers & CLI Helpers**: Caching and fallback resolution in `com.amsha.llm.providers.helper`.
 - **Native Reflection**: Registered in `LlmProvidersReflectionConfig`.
 
+## Multimodal Model Capabilities
+
+Provider models declare or dynamically resolve multimodal capabilities via `MultimodalCapability` (contract from `amsha-llm-provider-api`):
+- **OpenAI Vision**: `gpt-4o`, `gpt-4-turbo`, `o1` support `IMAGE` (PNG/JPEG/WEBP/GIF) up to 20 MiB, up to 10 images per request, inline base64 content.
+- **Gemini**: `gemini-1.5-pro`, `gemini-2.0-flash`, etc. support `IMAGE`, `AUDIO`, and `DOCUMENT_PDF` up to 25 MiB, up to 16 media items per request.
+- **Anthropic**: `claude-3-5-sonnet`, `claude-3-haiku` support `IMAGE` and `DOCUMENT_PDF` up to 25 MiB, up to 10 media items per request.
+- **Open-Weight Models**: `llava`, `pixtral`, etc. support `IMAGE` up to 10 MiB, up to 5 images per request.
+- **OMLX**: Recognized local Qwen vision families are `IMAGE`-only in this contract; audio is not inferred from an arbitrary model name. To transcribe Telegram audio, select an audio-capable Gemini model with `AMSHA_LLM_PROVIDER=gemini` and `AMSHA_GEMINI_API_KEY`, or configure only `gemini` in `AMSHA_INFINITE_LOOP_LLM_PROVIDERS`. Do not combine OMLX with Gemini for this turn because the safe composite intersection removes `AUDIO`.
+- **Text-Only Models & Failover**: Models without vision/audio capabilities default to `MultimodalCapability.TEXT_ONLY`. When a turn contains media attachments, `MultimodalMessageMapper` in `amsha-core` automatically provides structured fallback text placeholders so the turn completes safely.
+
+Provider URL capability declarations do not authorize the mapper to forward source URLs. URI-backed attachments are fetched only through the governed media port and are forwarded as validated inline bytes; URL-only transport currently degrades to a text placeholder.
+
 ## Observability & ChatModelListener Pilot
 
 For this pilot, OpenAI-compatible `OpenAiChatModel` instances built via `ChatModelFactory.openAiBuilder()` attach `AmshaChatModelListener` if discovered in the CDI container (other provider SDKs remain Amsha-observed). The listener operates under `ChatModelListenerRuntimeControl`:
@@ -58,3 +70,70 @@ To add a new provider to `amsha-llm-providers`:
 3. Implement `RoutingChatModelProvider` in `llm-providers/src/main/java/com/amsha/llm/providers/routing/<Name>LlmProviderFactory.java`.
 4. Register the new factory classes in `LlmProvidersReflectionConfig.java`.
 5. Add unit coverage in `AgentProviderFactoryCoverageTest` and `RoutingProviderFactoryCoverageTest`.
+
+## Governed Whisper transcription
+
+`OmlxAudioTranscriptionProvider` implements the `AudioTranscriptionPort` execution seam for
+Whisper served by OMLX. It is deliberately not a chat-model capability or a model-route
+profile. When enabled, an unsupported audio attachment is downloaded through the governed
+media port, transcribed locally, and passed as bounded text to the selected text model.
+
+| Property | Environment variable | Default |
+|---|---|---|
+| `amsha.stt.enabled` | `AMSHA_STT_ENABLED` | `false` |
+| `amsha.stt.model` | `AMSHA_STT_MODEL` | `whisper-large-v3-turbo` |
+| `amsha.stt.timeout` | `AMSHA_STT_TIMEOUT` | `PT60S` |
+| `amsha.stt.max-bytes` | `AMSHA_STT_MAX_BYTES` | `26214400` |
+| `amsha.stt.max-transcript-chars` | `AMSHA_STT_MAX_TRANSCRIPT_CHARS` | `12000` |
+| `amsha.stt.ffmpeg-path` | `AMSHA_STT_FFMPEG_PATH` | `ffmpeg` |
+
+The OMLX API key and base URL are reused from `AMSHA_OMLX_API_KEY` and
+`AMSHA_OMLX_BASE_URL`. Provision the Whisper processor/tokenizer sidecars before starting
+OMLX; see `scripts/provision_omlx_whisper_stt.sh`.
+
+### OGG/Opus → WAV conversion
+
+OMLX Whisper cannot decode OGG/Opus voice notes, so `OmlxAudioTranscriptionProvider` transcodes
+them to mono 16 kHz PCM WAV before the transcription call. The conversion runs **after the
+governed media download and before the Whisper request** — never inside the Telegram adapter.
+
+* Detection is by MIME type and magic bytes (`OggS` for OGG/Opus, `RIFF…WAVE` for WAV).
+* WAV input passes through unchanged.
+* OGG/Opus is transcoded with an allowlisted `ffmpeg` invocation built via `ProcessBuilder`
+  (no shell); the executable path comes from `amsha.stt.ffmpeg-path`, not the attachment.
+  The output is forced to mono 16 kHz PCM WAV via `-c:a pcm_s16le`, and ffmpeg's own `-fs`
+  limit plus a post-transcode size check (stat before reading into memory) enforce the bound.
+* The 25 MB payload bound and the configured timeout are enforced; temporary files are removed
+  in a `finally` block. ffmpeg stderr is drained on a background thread to avoid a pipe deadlock.
+* If `ffmpeg` is missing or the transcode fails, the turn degrades safely to its text fallback
+  rather than sending an undecodable payload to Whisper.
+
+## Governed Speech Synthesis (P8 / Issue 12) — DISABLED by default
+
+`OmlxSpeechSynthesisProvider` implements the `SpeechSynthesisPort` execution seam for
+text-to-speech served by OMLX (Qwen3-TTS). It is output-only: never a chat-model
+capability, never an `AUDIO` route profile, never persisted, and never shares routing
+with P7 audio input. V1 only emits the directly verified WAV format from the OMLX
+Qwen3-TTS model — any other `response_format` is reported `UNSUPPORTED` rather than
+attempted. All egress is governed through `GovernedTransportService` with HITL never
+bypassed. The actor is resolved from the session (`WorkspaceContext.getUserIdOrUnknown()`).
+
+| Property | Environment variable | Default |
+|---|---|---|
+| `amsha.tts.enabled` | `AMSHA_TTS_ENABLED` | `false` |
+| `amsha.tts.model` | `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` |
+| `amsha.tts.voice` | `AMSHA_TTS_VOICE` | *(empty — field omitted)* |
+| `amsha.tts.response-format` | `AMSHA_TTS_RESPONSE_FORMAT` | `wav` |
+| `amsha.tts.timeout` | `AMSHA_TTS_TIMEOUT` | `PT120S` |
+| `amsha.tts.max-input-chars` | `AMSHA_TTS_MAX_INPUT_CHARS` | `1200` |
+| `amsha.tts.max-bytes` | `AMSHA_TTS_MAX_BYTES` | `8388608` |
+| `amsha.tts.max-concurrent` | `AMSHA_TTS_MAX_CONCURRENT` | `1` |
+| `amsha.tts.default-output-mode` | `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` |
+
+The OMLX API key and base URL are reused from `AMSHA_OMLX_API_KEY` and
+`AMSHA_OMLX_BASE_URL` (the key is optional — `not-needed` is treated as absent). The
+response stream is capped at `amsha.tts.max-bytes` by `BoundedAudioSubscriber`, which
+cancels upstream the moment the bound is exceeded (no post-allocation check). The
+`default-output-mode` and `max-input-chars` keys are consumed by `amsha-core`
+(`SpeechOutputPolicy` / `SpeechReplyService`); see the core module README for the
+resolution precedence.

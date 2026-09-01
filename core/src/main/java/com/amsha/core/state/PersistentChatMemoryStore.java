@@ -70,7 +70,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     RecallMemoryService recallService;
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public List<ChatMessage> getMessages(Object memoryId) {
         String id = String.valueOf(memoryId);
 
@@ -84,7 +84,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
         String id = String.valueOf(memoryId);
 
@@ -157,7 +157,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         }
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public List<Long> getTimestamps(String sessionId) {
         return readMetadata(sessionId).timestamps;
     }
@@ -202,7 +202,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     }
 
     @Override
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void deleteMessages(Object memoryId) {
         String id = String.valueOf(memoryId);
         memoryStore.deleteById(id);
@@ -213,7 +213,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
      * @param sessionId the session ID
      * @return SessionMetadata with cumulativeNonSystemCount and windowSize
      */
-    @Transactional
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public SessionMetadata getSessionMetadata(String sessionId) {
         ReadMetadata metadata = readMetadata(sessionId);
         return new SessionMetadata(metadata.cumulativeNonSystemCount, metadata.windowSize);

@@ -481,6 +481,11 @@ export class ArcShell extends LitElement {
                         ? html`
                           Chat Session 
                           <span class="status-badge status-${this._chatWsStatus}" style="font-size: 10px; padding: 2px 8px; border-radius: 4px; text-transform: uppercase;">${this._chatWsStatus}</span>
+                          <button @click="${() => (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.startNewSession(crypto.randomUUID())}" 
+                                  style="background:rgba(0,212,170,0.1); border:1px solid rgba(0,212,170,0.3); color:var(--accent-secondary); font-size:10px; font-weight:600; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;"
+                                  title="Start a new chat session">
+                            + New Session
+                          </button>
                           ${this._chatWsStatus === 'error' || this._chatWsStatus === 'closed' ? html`
                              <button @click="${() => (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect()}" 
                                      style="background:transparent; border:1px solid var(--border); color:var(--text-muted); font-size:10px; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;">

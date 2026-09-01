@@ -7,6 +7,8 @@ import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 
+import com.amsha.llm.api.MultimodalRequests;
+
 final class ChatRequestMetrics {
 
     private ChatRequestMetrics() {}
@@ -42,7 +44,7 @@ final class ChatRequestMetrics {
             return sm.text();
         }
         if (msg instanceof UserMessage um) {
-            return um.singleText();
+            return MultimodalRequests.textOf(um, "metrics");
         }
         if (msg instanceof AiMessage am) {
             return am.text();

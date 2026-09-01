@@ -46,6 +46,10 @@
             <groupId>com.amsha</groupId>
             <artifactId>amsha-llm-provider-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-channel-api</artifactId>
+        </dependency>
 
         <!-- Quarkus Arc CDI -->
         <dependency>

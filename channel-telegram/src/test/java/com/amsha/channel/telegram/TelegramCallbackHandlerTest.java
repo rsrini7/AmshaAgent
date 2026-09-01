@@ -89,6 +89,7 @@ class TelegramCallbackHandlerTest {
                 .thenReturn(result);
 
         assertDoesNotThrow(() -> handler.handleCallback(exchange));
+        verify(sender).editMessage(eq("chat-1"), eq(100), contains("⏳"), isNull());
         verify(sender).editMessage(eq("chat-1"), eq(100), contains("Approved"), isNull());
         verify(notificationService).flushPendingNotifications("chat-1");
     }
@@ -122,6 +123,7 @@ class TelegramCallbackHandlerTest {
                 .thenReturn(result);
 
         assertDoesNotThrow(() -> handler.handleCallback(exchange));
+        verify(sender).editMessage(eq("chat-2"), eq(200), contains("⏳"), isNull());
         verify(sender).editMessage(eq("chat-2"), eq(200), contains("Rejected"), isNull());
     }
 }

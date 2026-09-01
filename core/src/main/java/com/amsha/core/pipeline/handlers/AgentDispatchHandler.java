@@ -27,6 +27,7 @@ import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.skill.SkillRegistry;
+import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.core.util.TimeContextInjector;
@@ -73,6 +74,9 @@ public class AgentDispatchHandler implements MessageHandler {
     @InputSanitizer.PII
     InputSanitizer piiSanitizer;
 
+    @Inject
+    SpeechDeliveryService speechDeliveryService;
+
     @Override
     public int priority() {
         return 70;
@@ -88,6 +92,10 @@ public class AgentDispatchHandler implements MessageHandler {
 
         String sessionId = session.sessionId();
         String role = context.getAgentRole().orElse(AgentRoleEnum.COORDINATOR.toScopedName());
+
+        if (TurnDispatchService.hasInboundAudio(context)) {
+            TurnDispatchService.markInboundAudio(context);
+        }
 
         String goal = resolveGoal(context, session, sessionId);
         int maxIterations = resolveMaxIterations(context, role, sessionId);
@@ -254,6 +262,13 @@ public class AgentDispatchHandler implements MessageHandler {
         return HandleResult.STOP;
     }
 
+    /**
+     * Formats and delivers the agent result. Runs on the worker thread provided by
+     * {@link com.amsha.core.pipeline.TurnDispatchService#dispatchAsync} (a {@code ManagedExecutor}),
+     * never on the Vert.x event loop, so the synchronous speech synthesis inside
+     * {@link #deliverWithOptionalAudio} is safe to block. The event-loop guard in
+     * {@code SpeechReplyService} remains a defensive fail-closed net for any anomalous caller.
+     */
     private void formatAndSendReply(MessageContext context, AgentResult result, String sessionId) {
         channelPluginRegistry
                 .find(context.getChannelType())
@@ -266,7 +281,7 @@ public class AgentDispatchHandler implements MessageHandler {
                                         List.of(new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
                             } else {
                                 String output = AgentResultFormatter.format(result);
-                                s.sendRaw(context.getUser(), output);
+                                speechDeliveryService.deliver(context, s, context.getUser(), result, output);
                             }
                         },
                         () -> log.warnf(

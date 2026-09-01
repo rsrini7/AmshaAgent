@@ -7,8 +7,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Duration;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.RoutingChatModelProvider;
 
 import io.quarkus.arc.Unremovable;
@@ -34,7 +37,7 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
         // Hardening: Strip quotes and whitespace
         key = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
 
-        return GoogleAiGeminiChatModel.builder()
+        ChatModel model = GoogleAiGeminiChatModel.builder()
                 .apiKey(key)
                 .modelName(config.modelName())
                 .temperature(0.0)
@@ -44,5 +47,8 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
                 .logRequests(false)
                 .logResponses(false)
                 .build();
+        MultimodalCapability multimodalCap =
+                MultimodalCapabilities.defaultCapabilityForModel("gemini", config.modelName());
+        return CapabilityAwareChatModel.withCapabilities(model, false, multimodalCap);
     }
 }

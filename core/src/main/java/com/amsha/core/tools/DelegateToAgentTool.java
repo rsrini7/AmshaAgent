@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 import com.amsha.core.agent.loop.AgentLoop;
@@ -23,6 +24,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.AgentGuards;
 import com.amsha.persistence.api.CheckpointCrudPort;
@@ -266,17 +268,27 @@ public class DelegateToAgentTool implements AgentTool {
 
         log.infof("[DELEGATE] coordinator → agent=%s goal='%s' session=%s", agentName, goal, outerSessionId);
 
+        Optional<CheckpointDto> parentCp = checkpointCrud != null
+                ? checkpointCrud.findBySessionAndRole(outerSessionId, ctx.agentRole())
+                : Optional.empty();
+
         AutonomyLevel outerLevel = ctx.autonomyLevel();
         AutonomyLevel innerLevel =
                 switch (outerLevel) {
                     case READONLY -> AutonomyLevel.READONLY;
-                    default -> outerLevel;
+                    default -> AutonomyLevel.FULL;
                 };
 
         String channelType = ctx.channelType();
         String platformId = ctx.channelPlatformId();
         var childContext = DelegatedMessageContextFactory.create(
                 innerSessionId, userId, chatId, channelType, goal, targetRole.toScopedName(), innerLevel);
+        boolean parentHadAudio = parentCp.map(CheckpointDto::contextDataJson)
+                .filter(cd -> cd != null && cd.contains(TurnDispatchService.DATA_INBOUND_AUDIO))
+                .isPresent();
+        if (parentHadAudio) {
+            TurnDispatchService.markInboundAudio(childContext);
+        }
         AgentResult result = WorkspaceContext.run(
                 innerSessionId,
                 userId,

@@ -8,10 +8,13 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
 
@@ -81,22 +84,23 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
         if (resolvedModel.isBlank()) {
             throw new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_MODEL");
         }
-        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key,
-                resolvedModel,
-                "generic-openai",
-                (k, m) -> ChatModelFactory.createOpenAi(
-                        resolvedBaseUrl,
-                        k,
-                        m,
-                        agentConfig.maxTokens(),
-                        agentConfig.timeout(),
-                        agentConfig.maxRetries(),
-                        agentConfig.temperature(),
-                        agentConfig.logHttp(),
-                        ChatModelFactory.mergeCustomParameters(
-                                ChatModelFactory.deepSeekWorkaroundParams(m),
-                                ChatModelFactory.parseExtraBody(extraBody.orElse("")))));
+        List<MultiModelChatModel.ModelEntry> entries =
+                ChatModelFactory.buildMultiModelEntries(key, resolvedModel, "generic-openai", (k, m) -> {
+                    ChatModel raw = ChatModelFactory.createOpenAi(
+                            resolvedBaseUrl,
+                            k,
+                            m,
+                            agentConfig.maxTokens(),
+                            agentConfig.timeout(),
+                            agentConfig.maxRetries(),
+                            agentConfig.temperature(),
+                            agentConfig.logHttp(),
+                            ChatModelFactory.mergeCustomParameters(
+                                    ChatModelFactory.deepSeekWorkaroundParams(m),
+                                    ChatModelFactory.parseExtraBody(extraBody.orElse(""))));
+                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("generic-openai", m);
+                    return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
+                });
         if (entries.size() == 1) {
             return entries.get(0).model();
         }

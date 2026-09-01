@@ -300,6 +300,13 @@ public class SmartWebFetchTool implements AgentTool {
                 return fetchWithRedirects(redirectUri.toString(), maxChars, ctx, depth + 1);
             }
 
+            if (statusCode == 404) {
+                return ToolResponse.failure(
+                        404,
+                        "HTTP 404 Not Found fetching " + url
+                                + ". The page does not exist. Do NOT guess or hallucinate URLs. Search the web for actual links, or ask the user to provide the direct URL.");
+            }
+
             if (statusCode >= 400) {
                 return ToolResponse.failure(statusCode, "HTTP " + statusCode + " fetching " + url);
             }

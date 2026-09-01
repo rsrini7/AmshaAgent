@@ -108,8 +108,15 @@ public class TextPatternUtils {
             return false;
         }
 
-        boolean isObject = trimmed.startsWith("{") && trimmed.endsWith("}") && trimmed.contains(":");
-        boolean isArray = trimmed.startsWith("[") && trimmed.endsWith("]");
+        boolean isObject = trimmed.startsWith("{")
+                && trimmed.endsWith("}")
+                && (trimmed.contains("\":") || trimmed.contains("\" :") || trimmed.contains("':"));
+        boolean isArray = trimmed.equals("[]")
+                || (trimmed.startsWith("[")
+                        && trimmed.endsWith("]")
+                        && (trimmed.startsWith("[{")
+                                || trimmed.startsWith("[\"")
+                                || (trimmed.contains("\"") && trimmed.contains(","))));
         return isObject || isArray;
     }
 }

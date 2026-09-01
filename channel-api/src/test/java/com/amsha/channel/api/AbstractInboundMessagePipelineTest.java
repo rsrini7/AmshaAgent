@@ -222,6 +222,23 @@ class AbstractInboundMessagePipelineTest {
     }
 
     @Test
+    void testProcessInboundMessageAudioWithoutTextRequestsTranscription() {
+        ChannelUser user = new ChannelUser("u1", "chat1", "alice", ChannelType.TELEGRAM);
+        MediaAttachment attachment = MediaAttachment.ofInline(
+                "audio-1", AttachmentType.AUDIO, "audio/ogg", "voice.ogg", new byte[] {0x1}, Map.of());
+        ChannelMessage.TelegramMessage msg =
+                new ChannelMessage.TelegramMessage(user, null, "chat1", Instant.now(), List.of(attachment));
+
+        pipeline.processInboundMessage("chat1", null, user, msg);
+
+        assertNotNull(channelServices.lastProcessedMessage);
+        assertEquals(
+                "Please transcribe the attached audio and answer using its spoken content.",
+                channelServices.lastProcessedMessage.text());
+        assertEquals(1, channelServices.lastProcessedMessage.attachments().size());
+    }
+
+    @Test
     void testProcessInboundMessageMultimodalWithCaptionAdmitted_PopulatesCaptionText() {
         ChannelUser user = new ChannelUser("u1", "chat1", "alice", ChannelType.TELEGRAM);
         MediaAttachment attachment = MediaAttachment.ofInline(

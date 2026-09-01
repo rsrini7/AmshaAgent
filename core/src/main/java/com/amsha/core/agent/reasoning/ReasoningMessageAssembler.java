@@ -22,12 +22,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.amsha.channel.api.MediaAttachment;
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.loop.CodeGenerationPolicy;
 import com.amsha.core.agent.loop.LoopStuckDetector;
+import com.amsha.core.agent.reasoning.port.LlmProviderPort;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.config.CoreSpiResolutionValidator;
+import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tool.DynamicToolInvoker;
@@ -35,13 +40,19 @@ import com.amsha.core.tools.DynamicToolSchemaParser;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalRequests;
+import com.amsha.llm.api.audio.AudioTranscriptionPort;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.MediaDownloadPort;
 import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Encapsulates the logic for assembling the LLM message list, applying
@@ -57,6 +68,7 @@ public class ReasoningMessageAssembler {
     private final ToolRegistry toolRegistry;
     private final LoopStuckDetector loopStuckDetector;
     private final IntentClassificationService intentClassifier;
+    private final MultimodalHistoryProjector historyProjector;
 
     @Inject
     BeanManager beanManager;
@@ -80,15 +92,37 @@ public class ReasoningMessageAssembler {
     CodeGenerationPolicy codePolicy;
 
     @Inject
+    Instance<LlmProviderPort> llmProviderPortInstance;
+
+    @Inject
+    Instance<MediaDownloadPort> mediaDownloadPortInstance;
+
+    @Inject
+    Instance<AudioTranscriptionPort> audioTranscriptionPortInstance;
+
+    @Inject
+    Instance<MeterRegistry> meterRegistryInstance;
+
+    @Inject
+    public ReasoningMessageAssembler(
+            ChatHistoryAssembler historyAssembler,
+            ToolRegistry toolRegistry,
+            LoopStuckDetector loopStuckDetector,
+            IntentClassificationService intentClassifier,
+            MultimodalHistoryProjector historyProjector) {
+        this.historyAssembler = historyAssembler;
+        this.toolRegistry = toolRegistry;
+        this.loopStuckDetector = loopStuckDetector;
+        this.intentClassifier = intentClassifier;
+        this.historyProjector = historyProjector != null ? historyProjector : new MultimodalHistoryProjector();
+    }
+
     public ReasoningMessageAssembler(
             ChatHistoryAssembler historyAssembler,
             ToolRegistry toolRegistry,
             LoopStuckDetector loopStuckDetector,
             IntentClassificationService intentClassifier) {
-        this.historyAssembler = historyAssembler;
-        this.toolRegistry = toolRegistry;
-        this.loopStuckDetector = loopStuckDetector;
-        this.intentClassifier = intentClassifier;
+        this(historyAssembler, toolRegistry, loopStuckDetector, intentClassifier, new MultimodalHistoryProjector());
     }
 
     public ReasoningMessageAssembler(
@@ -97,7 +131,7 @@ public class ReasoningMessageAssembler {
     }
 
     protected ReasoningMessageAssembler() {
-        this(null, null, null, null);
+        this(null, null, null, null, null);
     }
 
     public record AssembledMessages(List<ChatMessage> messages, List<ToolSpecification> tools) {}
@@ -112,12 +146,52 @@ public class ReasoningMessageAssembler {
             boolean isWriteIntent,
             boolean isSimpleChitchat,
             boolean isHistoryQuery) {
+        TurnRequirements reqs = TurnRequirements.fromContext(context, goal);
+        ModelRoute route = null;
+        try {
+            if (llmProviderPortInstance != null && !llmProviderPortInstance.isUnsatisfied()) {
+                route = llmProviderPortInstance.get().resolveRoute(agentRole, reqs);
+            }
+        } catch (RuntimeException e) {
+            log.warnf(
+                    "[ReasoningAssembler] Route resolution failed; using text-only fallback: %s",
+                    LogUtil.rootMessage(e));
+            route = ModelRoute.textOnlyFallback();
+        }
+        return assemble(
+                context,
+                agentRole,
+                goal,
+                history,
+                systemPrompt,
+                allowedTools,
+                isWriteIntent,
+                isSimpleChitchat,
+                isHistoryQuery,
+                route);
+    }
+
+    public AssembledMessages assemble(
+            AgentExecutionContext context,
+            String agentRole,
+            String goal,
+            List<ReasoningStep> history,
+            String systemPrompt,
+            Set<String> allowedTools,
+            boolean isWriteIntent,
+            boolean isSimpleChitchat,
+            boolean isHistoryQuery,
+            ModelRoute route) {
+
+        String sessionId = context != null ? context.sessionId() : null;
+        boolean isForceFinishRetry = context != null && context.isForceFinishRetry();
+        AutonomyLevel autonomyLevel = context != null ? context.autonomyLevel() : null;
+        List<MediaAttachment> attachments = context != null ? context.mediaAttachments() : null;
 
         log.infof(
                 "[ReasoningAssembler] Assembling messages for session %s (role=%s, steps=%d, isChitchat=%b)",
-                context.sessionId(), agentRole, history.size(), isSimpleChitchat);
+                sessionId, agentRole, history.size(), isSimpleChitchat);
 
-        String sessionId = context.sessionId();
         List<ChatMessage> assembled = historyAssembler.assemble(sessionId, goal, history);
 
         List<ChatMessage> filteredAssembled = assembled.stream()
@@ -126,8 +200,7 @@ public class ReasoningMessageAssembler {
                 .toList();
 
         Optional<String> stuckHint = loopStuckDetector.detectStuckHint(history, agentRole);
-        String finalSystemPrompt =
-                resolveSystemPrompt(assembled, systemPrompt, isWriteIntent, context.isForceFinishRetry());
+        String finalSystemPrompt = resolveSystemPrompt(assembled, systemPrompt, isWriteIntent, isForceFinishRetry);
         if (stuckHint.isPresent()) {
             log.infof("[ReasoningAssembler] Injecting loop-stuck hint for session %s (role=%s)", sessionId, agentRole);
             finalSystemPrompt = finalSystemPrompt + "\n\n" + stuckHint.get();
@@ -136,39 +209,76 @@ public class ReasoningMessageAssembler {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.systemMessage(finalSystemPrompt));
 
-        if (context.autonomyLevel() == AutonomyLevel.BACKGROUND) {
+        if (autonomyLevel == AutonomyLevel.BACKGROUND) {
             messages.add(
                     SystemMessage.systemMessage("CAPABILITY CONSTRAINT: You do NOT have access to `schedule_task` or "
                             + "`manage_schedule` in this context. Do not attempt to call them. "
                             + "Use only the tools explicitly listed in your tool schema."));
         }
 
-        List<ChatMessage> historyToInclude =
-                filterHistory(filteredAssembled, isSimpleChitchat, context.isForceFinishRetry());
+        List<ChatMessage> historyToInclude = filterHistory(filteredAssembled, isSimpleChitchat, isForceFinishRetry);
+
+        MultimodalCapability cap =
+                route != null && route.capability() != null ? route.capability() : resolveLegacyCapability(agentRole);
+        String targetModelName = route != null && route.modelName() != null ? route.modelName() : agentRole;
+
+        MultimodalHistoryProjector projector =
+                historyProjector != null ? historyProjector : new MultimodalHistoryProjector();
+        List<ChatMessage> projectedHistory = projector.projectHistory(historyToInclude, cap, targetModelName);
 
         if (isSimpleChitchat && !isHistoryQuery) {
-            messages.addAll(recentConversationContext(historyToInclude, goal));
-            messages.add(UserMessage.userMessage(goal));
+            messages.addAll(recentConversationContext(projectedHistory, goal));
+            if (attachments != null && !attachments.isEmpty()) {
+                messages.add(mapMediaMessage(context, goal, cap, targetModelName));
+            } else {
+                messages.add(UserMessage.userMessage(goal));
+            }
         } else {
-            messages.addAll(historyToInclude);
-            if (context.isForceFinishRetry()) {
+            if (attachments != null && !attachments.isEmpty()) {
+                boolean replaced = false;
+                for (ChatMessage m : projectedHistory) {
+                    if (!replaced && m instanceof UserMessage um && Objects.equals(extractUserText(um), goal)) {
+                        messages.add(mapMediaMessage(context, goal, cap, targetModelName));
+                        replaced = true;
+                    } else {
+                        messages.add(m);
+                    }
+                }
+                if (!replaced) {
+                    messages.add(mapMediaMessage(context, goal, cap, targetModelName));
+                }
+            } else {
+                messages.addAll(projectedHistory);
+            }
+            if (isForceFinishRetry) {
                 messages.add(UserMessage.userMessage("Your previous response contained raw JSON or tool-call syntax. "
                         + "Answer in plain prose only. All tools have already returned their results "
                         + "- do NOT call any more tools. Summarize the findings and call FINISH."));
             }
         }
 
-        boolean isBackgroundSession = context.autonomyLevel() == AutonomyLevel.BACKGROUND
-                || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CRON_SESSION_PREFIX));
+        // Invariant guarantee: chat templates require at least one UserMessage (e.g. on resumed turns
+        // where history projection contains only tool calls/results). If missing, inject a goal-oriented
+        // UserMessage (preserving multimodal attachments via the target model's capability) right after
+        // any system messages and before assistant/tool messages.
+        boolean hasUserMessage = messages.stream().anyMatch(m -> m instanceof UserMessage);
+        if (!hasUserMessage) {
+            String userQuery = (goal != null && !goal.isBlank()) ? goal : "Please proceed.";
+            UserMessage fallbackUserMsg = (attachments != null && !attachments.isEmpty())
+                    ? mapMediaMessage(context, userQuery, cap, targetModelName)
+                    : UserMessage.userMessage(userQuery);
+            int insertIdx = 0;
+            while (insertIdx < messages.size() && messages.get(insertIdx) instanceof SystemMessage) {
+                insertIdx++;
+            }
+            messages.add(insertIdx, fallbackUserMsg);
+        }
+
+        boolean isBackgroundSession = autonomyLevel == AutonomyLevel.BACKGROUND
+                || (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX));
 
         List<ToolSpecification> toolSpecifications = resolveTools(
-                allowedTools,
-                isSimpleChitchat,
-                context.isForceFinishRetry(),
-                isBackgroundSession,
-                goal,
-                agentRole,
-                context.sessionId());
+                allowedTools, isSimpleChitchat, isForceFinishRetry, isBackgroundSession, goal, agentRole, sessionId);
 
         log.debugf(
                 "[ReasoningAssembler] Assembled %d messages and %d tools for session %s",
@@ -177,13 +287,73 @@ public class ReasoningMessageAssembler {
         return new AssembledMessages(messages, toolSpecifications);
     }
 
-    private List<ChatMessage> recentConversationContext(List<ChatMessage> history, String goal) {
-        if (intentClassifier != null && intentClassifier.isGreeting(goal)) {
-            return List.of();
+    private UserMessage mapMediaMessage(
+            AgentExecutionContext context, String goal, MultimodalCapability capability, String targetModelName) {
+        MediaDownloadPort downloadPort = resolveMediaDownloadPort();
+        MeterRegistry meterRegistry = resolveMeterRegistry();
+        // Autonomy is not an operator approval receipt. Keep media downloads behind the governed
+        // HITL policy until an explicit receipt can be carried through AgentExecutionContext.
+        return MultimodalMessageMapper.mapToUserMessage(
+                goal,
+                context != null ? context.mediaAttachments() : null,
+                capability,
+                targetModelName,
+                downloadPort,
+                context != null ? context.userId() : null,
+                TelegramMediaOriginValidator.hasTrustedTelegramMediaOrigin(context),
+                resolveAudioTranscriptionPort(),
+                meterRegistry);
+    }
+
+    private MultimodalCapability resolveLegacyCapability(String agentRole) {
+        if (llmProviderPortInstance == null || llmProviderPortInstance.isUnsatisfied()) {
+            return MultimodalCapability.TEXT_ONLY;
         }
+        try {
+            MultimodalCapability capability = llmProviderPortInstance.get().multimodalCapability(agentRole);
+            return capability != null ? capability : MultimodalCapability.TEXT_ONLY;
+        } catch (RuntimeException e) {
+            log.warnf(
+                    "[ReasoningAssembler] Legacy capability resolution failed; using text-only fallback: %s",
+                    LogUtil.rootMessage(e));
+            return MultimodalCapability.TEXT_ONLY;
+        }
+    }
+
+    private MeterRegistry resolveMeterRegistry() {
+        if (meterRegistryInstance == null || !meterRegistryInstance.isResolvable()) return null;
+        try {
+            return meterRegistryInstance.get();
+        } catch (Exception _) {
+            return null;
+        }
+    }
+
+    private MediaDownloadPort resolveMediaDownloadPort() {
+        if (mediaDownloadPortInstance == null || !mediaDownloadPortInstance.isResolvable()) return null;
+        try {
+            return mediaDownloadPortInstance.get();
+        } catch (Exception _) {
+            return null;
+        }
+    }
+
+    private AudioTranscriptionPort resolveAudioTranscriptionPort() {
+        if (audioTranscriptionPortInstance == null || !audioTranscriptionPortInstance.isResolvable()) {
+            return null;
+        }
+        try {
+            return audioTranscriptionPortInstance.get();
+        } catch (Exception _) {
+            return null;
+        }
+    }
+
+    private List<ChatMessage> recentConversationContext(List<ChatMessage> history, String goal) {
+        if (intentClassifier != null && intentClassifier.isGreeting(goal)) return List.of();
         List<ChatMessage> conversation = history.stream()
                 .filter(m -> m instanceof UserMessage || m instanceof AiMessage)
-                .filter(m -> !(m instanceof UserMessage user && Objects.equals(user.singleText(), goal)))
+                .filter(m -> !(m instanceof UserMessage user && Objects.equals(extractUserText(user), goal)))
                 .filter(m -> !containsCodeOrExecution(m))
                 .toList();
         int fromIndex = Math.max(0, conversation.size() - CHITCHAT_CONTEXT_MESSAGES);
@@ -203,7 +373,7 @@ public class ReasoningMessageAssembler {
                     || (codePolicy != null && codePolicy.isGeneratedCodeBlock(text, AgentRoleEnum.CODER.id()));
         }
         if (m instanceof UserMessage user) {
-            String text = user.singleText();
+            String text = extractUserText(user);
             if (text == null || text.isBlank()) return false;
             return text.contains("```")
                     || text.contains("[Tool Output")
@@ -212,6 +382,11 @@ public class ReasoningMessageAssembler {
                             && (textPatternUtils.goalRequestsExecution(text) || textPatternUtils.looksLikeJson(text)));
         }
         return false;
+    }
+
+    private static String extractUserText(UserMessage user) {
+        if (user == null) return null;
+        return MultimodalRequests.textOf(user, "history");
     }
 
     private String resolveSystemPrompt(
@@ -224,7 +399,6 @@ public class ReasoningMessageAssembler {
                 .orElse("");
 
         String finalSystemPrompt = summaryContent.isEmpty() ? systemPrompt : summaryContent + "\n\n" + systemPrompt;
-
         if (isWriteIntent && isForceFinishRetry) {
             finalSystemPrompt = "CRITICAL OVERRIDE: The user wants to STORE data. "
                     + "You MUST call ingest_document RIGHT NOW as your ONLY action. "

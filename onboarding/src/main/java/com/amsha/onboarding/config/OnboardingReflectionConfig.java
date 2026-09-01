@@ -10,6 +10,7 @@ import com.amsha.onboarding.dto.OnboardingStatusDto;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
 import com.amsha.onboarding.dto.SettingsDto;
+import com.amsha.onboarding.dto.VoiceSettingsUpdateRequest;
 import com.amsha.onboarding.extension.McpOnboardingExtension;
 import com.amsha.onboarding.spi.OnboardingContext;
 import com.amsha.onboarding.spi.OnboardingExtension;
@@ -42,6 +43,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnboardingStatusDto.class,
             ProviderUpdateRequest.class,
             PromptUpdateRequest.class,
+            VoiceSettingsUpdateRequest.class,
             SettingsDto.class,
             OnboardingCoordinator.class,
             OnboardingCommitSaga.class,

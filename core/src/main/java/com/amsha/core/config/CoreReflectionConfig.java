@@ -1,6 +1,8 @@
 package com.amsha.core.config;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.data.audio.Audio;
+import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.AudioContent;
 import dev.langchain4j.data.message.ChatMessage;
@@ -15,11 +17,15 @@ import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.message.VideoContent;
+import dev.langchain4j.data.pdf.PdfFile;
 
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
+import com.amsha.core.agent.loop.ResumeToolInfoFormatter;
 import com.amsha.core.agent.loop.TaskClassifierService;
+import com.amsha.core.agent.reasoning.MultimodalHistoryProjector;
+import com.amsha.core.agent.reasoning.MultimodalMessageMapper;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepDeserializer;
@@ -44,18 +50,24 @@ import com.amsha.core.observability.AmshaChatModelListener;
 import com.amsha.core.observability.ChatModelListenerMode;
 import com.amsha.core.observability.ChatModelListenerRuntimeControl;
 import com.amsha.core.routing.CapabilityAwareChatModel;
+import com.amsha.core.routing.CapabilityJsonParser;
 import com.amsha.core.routing.InfiniteLoopChatModel;
+import com.amsha.core.routing.LazyChatModel;
+import com.amsha.core.routing.ModalityRouteSeeder;
 import com.amsha.core.routing.ModelCacheInvalidator;
 import com.amsha.core.routing.ModelProfileCredentialResolver;
 import com.amsha.core.routing.ModelProfileResolverImpl;
+import com.amsha.core.routing.ModelRoute;
 import com.amsha.core.routing.ModelRouter;
 import com.amsha.core.routing.ModelRoutingException;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.core.routing.OrderedFailoverChatModel;
+import com.amsha.core.routing.ProfileRouteCandidateBuilder;
 import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
 import com.amsha.core.routing.RouteResolution;
 import com.amsha.core.routing.SystemProfileMigration;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.ExternalIdentityProvider;
@@ -64,6 +76,7 @@ import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
 import com.amsha.core.skill.SkillPromptParams;
+import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.tools.CheckList;
 import com.amsha.core.tools.CheckListEvent;
 import com.amsha.core.tools.CheckListItem;
@@ -124,15 +137,23 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CapabilityAwareChatModel.class,
             MultiModelChatModel.class,
             MultiModelChatModel.ModelEntry.class,
+            MultimodalMessageMapper.class,
             InfiniteLoopChatModel.class,
             InfiniteLoopChatModel.Slot.class,
             ResolvedProfile.class,
             RouteResolution.class,
+            TurnRequirements.class,
+            ModelRoute.class,
+            LazyChatModel.class,
+            CapabilityJsonParser.class,
+            ProfileRouteCandidateBuilder.class,
+            MultimodalHistoryProjector.class,
             ResolvedCredential.class,
             ModelProfileResolverImpl.class,
             ModelProfileCredentialResolver.class,
             ModelRoutingException.class,
             SystemProfileMigration.class,
+            ModalityRouteSeeder.class,
             ModelCacheInvalidator.class,
             NetworkPolicyEnforcer.class,
             GroupConsultationEngine.GroupConsultationResult.class,
@@ -155,6 +176,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AudioContent.class,
             VideoContent.class,
             PdfFileContent.class,
+            Image.class,
+            Audio.class,
+            PdfFile.class,
             OutboundHttpPolicyService.class,
             ExternalIdentityProvider.class,
             AgentSseService.HeartbeatEvent.class,
@@ -166,7 +190,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ChatModelListenerRuntimeControl.class,
             ChatModelListenerRuntimeControl.Snapshot.class,
             ChatModelListenerRuntimeControl.ToggleResult.class,
-            AmshaChatModelListener.class
+            AmshaChatModelListener.class,
+            SpeechDeliveryService.class,
+            ResumeToolInfoFormatter.class
         },
         classNames = {
             "dev.langchain4j.model.chat.listener.ChatModelListener",

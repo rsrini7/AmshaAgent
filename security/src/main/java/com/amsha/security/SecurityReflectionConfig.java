@@ -6,6 +6,8 @@ import com.amsha.security.http.GovernedHttpClient;
 import com.amsha.security.http.GovernedTransportService;
 import com.amsha.security.http.OutboundApprovalReceipt;
 import com.amsha.security.http.OutboundHttpException;
+import com.amsha.security.media.GovernedMediaDownloadService;
+import com.amsha.security.media.MediaSecurityValidator;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -25,6 +27,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OutboundHttpException.class,
             DnsRevalidationResult.class,
             PreparedBootstrapCredential.class,
-            IssuedCredential.class
-        })
+            IssuedCredential.class,
+            MediaSecurityValidator.class,
+            GovernedMediaDownloadService.class
+        },
+        classNames = {"com.amsha.security.media.GovernedTelegramMediaResolver"})
 public class SecurityReflectionConfig {}

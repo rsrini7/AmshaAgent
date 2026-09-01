@@ -13,6 +13,7 @@ import java.util.Set;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.llm.api.ChatModelCreationPort;
+import com.amsha.security.api.MediaDownloadPort;
 
 import org.junit.jupiter.api.Test;
 
@@ -156,6 +157,7 @@ class CoreSpiResolutionValidatorTest {
         assertDoesNotThrow(() -> validator.validateCardinality(SandboxExecutionPort.class));
         assertDoesNotThrow(() -> validator.validateCardinality(ToolSearchPort.class));
         assertDoesNotThrow(() -> validator.validateCardinality(ChatModelCreationPort.class));
+        assertDoesNotThrow(() -> validator.validateCardinality(MediaDownloadPort.class));
         assertDoesNotThrow(validator::validate);
     }
 }

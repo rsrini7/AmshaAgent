@@ -26,6 +26,7 @@ Amsha already uses LangChain4j as the common chat and embedding protocol, but th
   native-image, and failure semantics are proven equivalent.
 - The `mcp` module is an Amsha-owned bridge. It includes outbound client/lifecycle services, approval and credential handling, Podman and stdio transport, NDJSON handling, dynamic capability admission, and the `ExternalMcpToolAdapter`. The project uses Quarkus MCP server artifacts for its server surface, but has no `langchain4j-mcp` dependency. Replacing the bridge would risk bypassing `ToolInvocationGuard`, audit, category routing, and HITL.
 - RAG currently performs persistence-backed hybrid retrieval and RRF ordering through `TwoTierMemoryService` and `ScoredChunk`. LangChain4j `ScoringModel` is available in `1.17.2`, but no reranker stage exists. `ScoredChunk.score` is a synthetic fusion score and is not a raw relevance threshold, so a cross-encoder score cannot be substituted into that field without changing retrieval semantics.
+- `quarkus-langchain4j-easy-rag` is a member-BOM-managed starter extension (one `path` property, boot-time Tika scan into an in-memory `EmbeddingStore`, auto-wired default `RetrievalAugmentor`, no native-image support). Amsha already owns a production RAG subsystem and uses no LangChain4j `RetrievalAugmentor`/`ContentRetriever`; Easy RAG would bypass `ToolInvocationGuard`, the PII scan reflex, audit, the `EmbeddingIndexDescriptor` gate, and would break the GraalVM native contract. It is a convenience starter, not a like-for-like subsystem.
 - `AudioContent`, `ImageContent`, and `PdfFileContent` are registered for native reflection, but the channel contract and inbound handlers are still text-oriented. Multimodal support is therefore an ingestion and routing feature, not an already-adopted model capability.
 
 ## Decision
@@ -66,6 +67,20 @@ Amsha will not replace its MCP bridge with a general LangChain4j MCP execution p
 
 If that adapter requires a LangChain4j API newer than the current `1.17.2` ceiling, the executable evaluation waits for the next Quarkus/member-BOM checkpoint. This ADR does not authorize an ad-hoc version override.
 
+### Easy RAG
+
+Amsha will not adopt LangChain4j Easy RAG as its retrieval path. Easy RAG is a convention-over-configuration starter: a single `quarkus.langchain4j.easy-rag.path` property, a boot-time Apache Tika scan of a directory into an auto-registered in-memory `EmbeddingStore`, and a default `RetrievalAugmentor` auto-wired into an `@AiService`. It is explicitly not native-image compatible and performs vector-cosine retrieval only.
+
+Amsha's RAG subsystem is a governed, code-driven memory service: ingestion via `IngestDocumentTool` → `MemoryRetrievalPort.index()` (passing `ToolInvocationGuard`, PII scan, and audit), hybrid FTS5/BM25 + vector (sqlite-vec / pgvector) retrieval fused with Reciprocal Rank Fusion, optional `RerankingService` reranking with a deterministic fallback, and `RagContextEnricher` prompt enrichment with write-intent and cron-session exclusions. Retrieval is `userId`/session scoped and protected by an `EmbeddingIndexDescriptor` fingerprint gate that falls back non-destructively to BM25/FTS5 on model mismatch.
+
+Adopting Easy RAG would replace this with an unguarded boot-time folder scan, a single global vector store, no reranking, no descriptor safety, and a broken native build. The P6 evaluation (Issue 09, `evidence/08-easy-rag-evaluation/`) records the retain decision: 6× Amsha Superior, 1× Easy RAG Superior (onboarding simplicity only). No proof of equivalence means retain the current Amsha-owned implementation.
+
+### Turn-aware modality routing
+
+Within a single `sessionId`, routing selects a modality-compatible model per turn (image → vision, audio → voice, text → reasoning) without restart. The contract inverts today's role-static capability resolution: `TurnRequirements` are derived from the active attachments and goal first, then a `ModelRouteSelector` resolves an immutable `ModelRoute` (model, `MultimodalCapability`, same-modality fallbacks) that both `ReasoningMessageAssembler` and `LangChain4jLlmAdapter` consume, so the model is resolved once rather than twice and the assembler no longer fixes capability before the route is known.
+
+Comma-separated model lists continue to denote ordered same-modality failover, retaining the safe `MultimodalCapabilities.intersect(...)` contract; they are never reused for modality selection, because a modality-mixed chain collapses to `TEXT_ONLY` and would silently degrade every attachment to a text placeholder via `MultimodalRequests.forCandidate`. Route capability is sourced from `ModelProfileDto.capabilityJson` (with the `defaultCapabilityForModel` heuristic as fallback), not from model-name guessing. When the selected route cannot consume a prior turn's modality, `ChatHistoryAssembler` projects that history to bounded text (captions/transcripts/placeholders) instead of forwarding raw `ImageContent`/`AudioContent` to an incompatible model. Video is explicitly out of scope: there is no `AttachmentType.VIDEO` and `MultimodalRequests` rejects `VideoContent`. P7 Issue 10 Slabs A–D are complete and verified: contract, deep selector wiring, route-first assembler/history projection, and modality-safe failover admission are covered by focused tests with PMD/spotless clean (2026-08-30). Slab E remains for live OMLX multi-model modality evidence and current native runtime verification.
+
 ### Multimodal and deferred work
 
 Multimodal channel ingestion is deferred until a channel-neutral content contract, provider capability matrix, bounded download/extraction path, and safe text-only fallback are specified. Channel modules continue to communicate with core through channel APIs; they do not construct a parallel LangChain4j execution path. Output remains subject to Telegram sanitization and artifact transformation invariants.
@@ -73,6 +88,89 @@ Multimodal channel ingestion is deferred until a channel-neutral content contrac
 If Telegram is included in the implementation scope, the Telegram fixture must be updated as part of the acceptance work.
 
 New vector stores, additional embedding providers, and a parallel moderation/RAIL stack are deferred. They require separate demand and, where applicable, separate ADRs because they interact with persistence parity, embedding descriptor compatibility, and the existing classifier control plane.
+
+## P7 Operational Observation (2026-08-31)
+
+Native Telegram verification established that text and image turns reach the expected runtime
+paths, and that voice-note media passes Telegram mapping and governed download. Voice
+transcription is not yet a deterministic live PASS: one voice run produced a usable response,
+while another voice run reached the same governed download boundary and then degraded to the
+safe text fallback. The native log does not expose the categorical STT result when the runtime
+is stopped, so the next reproduction must capture `amsha_stt_transcription` metrics while the
+server remains running.
+
+There is no Amsha or Whisper age-based filter. Differences between adult and child recordings
+are treated as an STT-quality/provider-runtime observation, not as a routing policy. No age
+classifier or speaker-age metadata may be introduced to resolve this observation. The audio
+path remains Whisper STT → bounded transcript → the normal text model; Nemotron native
+audio-chat remains blocked because OMLX cannot serve that model.
+
+P7 therefore remains open pending repeatable live Telegram evidence showing
+`status="transcribed"` for representative voice recordings, with the categorical failure
+status captured for any fallback case. This observation does not change the ADR boundary or
+authorize an unmanaged provider/model dependency.
+
+## P8 Speech output decision (2026-08-30)
+
+Speech synthesis is a separate, optional output capability and is not an
+extension of P7 audio-input routing. The reasoning model continues to produce
+the final text answer; a separate `SpeechSynthesisPort` may render that answer
+as bounded audio after reasoning completes.
+
+**Status: Proposed — implemented, awaiting the live Telegram ↔ OMLX round-trip exit gate.**
+All build-time and unit/architecture gates pass (see the evidence report). The
+one open item is a live, credentialed round-trip that only a running Telegram
+bot plus a reachable OMLX Qwen3-TTS endpoint can confirm.
+
+The decision fixes ownership and model roles:
+
+- `SpeechSynthesisPort`, `SpeechSynthesisRequest`, and
+  `SpeechSynthesisResult` belong to `llm-provider-api` under
+  `com.amsha.llm.api.audio`.
+- The OMLX Qwen3-TTS adapter belongs to `llm-providers` and all provider egress
+  uses `GovernedTransportService` with `OutboundPurpose.PROVIDER_API_CALL`
+  (`preApproved=false`; HITL is never bypassed).
+- Output-mode resolution and speakable-text projection belong to `amsha-core`.
+- Channel delivery uses the channel API; Telegram maps the bounded result to
+  Camel `OutgoingAudioMessage`.
+
+Qwen3-TTS is output-only. It must never be added to the P7 model-profile or
+`AUDIO` chat-routing matrix. Whisper remains input-only, and Nemotron remains
+retired because OMLX cannot load its `nemotron_voicechat` model type.
+
+### Invariants (authoritative spec)
+
+The full invariant set, output-policy precedence, slab plan, configuration, and
+acceptance criteria live in
+[`Issue 12`](../../.scratch/lc4j-capability-adoption/issues/12-p8-speech-synthesis-output.md)
+§2–§6. The binding invariants are:
+
+1. Execution port, not persistence — no SQLite/PostgreSQL/filesystem state.
+2. Amsha-owned seam — core consumes only the port via `Instance<SpeechSynthesisPort>`.
+3. Governed provider egress with `preApproved=false`; HITL never bypassed.
+4. Fail closed to text for every disabled/unsupported/oversized/timed-out/denied/failed case.
+5. Bounded memory, time, bytes, and concurrency; bounded streaming body handler.
+6. Speakable projection — no reasoning traces, tool output, transcripts, or metadata synthesized.
+7. Final-result-only synthesis — never approval, intermediate, or failed results.
+8. Channel safety — separate Telegram message; MIME→extension mapping; untrusted file names ignored.
+9. Thread safety — synthesis runs off the Vert.x event loop (worker thread via
+   `TurnDispatchService.dispatchAsync`); the in-service guard fails closed.
+10. Payload-safe observability — categorical `[a-z0-9_]{1,64}` failure reasons only.
+
+### Exit gate
+
+P8 moves to Accepted once the live gate in
+[Issue 12 §6.2](../../.scratch/lc4j-capability-adoption/issues/12-p8-speech-synthesis-output.md#62-live-exit-gate)
+passes: a text request with an explicit audio directive yields text plus
+playable audio, an audio-input turn yields text plus audio when configured, and
+both paths safely return text when TTS is disabled or unavailable — verified in
+JAR and native modes with categorical-only metrics.
+
+### Evidence
+
+Implementation, test inventory, gate results, and the Telegram live-test steps
+are recorded in
+[`evidence/10-speech-synthesis-output/README.md`](../../.scratch/lc4j-capability-adoption/evidence/10-speech-synthesis-output/README.md).
 
 ## Priority and sequencing
 
@@ -84,8 +182,19 @@ New vector stores, additional embedding providers, and a parallel moderation/RAI
 | P3 | One-model observability listener migration pilot. | OTel/Micrometer parity, payload-safe redaction, context propagation, no duplicate instrumentation, and JVM/native verification pass before any manual code is removed. |
 | P4 — safety gated | Protocol-only MCP adapter evaluation. | A demonstrated protocol gap, compatibility corpus, and proof that discovery, admission, invocation, audit, HITL, and `FINISH` invariants remain intact. If the required API exceeds `1.17.2`, defer to the next member-BOM checkpoint; no proof means retain the current bridge. |
 | P5 — broad surface | Multimodal channel ingestion and provider-aware degradation. | Channel API contract, bounded media handling, capability routing, safe fallback, artifact/output sanitization, Telegram fixture updates when applicable, and channel integration tests pass. |
+| P6 — safety gated | Easy RAG capability evaluation. | Re-checked Easy RAG reference claims and a dimension matrix against Amsha's two-tier RAG (hybrid FTS5+vector+RRF, reranking, descriptor gate, tenant/session scope, native-verified). Explicit "retain Amsha RAG, do not adopt Easy RAG" decision; Easy RAG is a native-incompatible starter that would bypass guard/audit/PII/HITL. |
+| P7 — core evolution | Turn-aware per-turn modality routing and canonical multimodal history. | Slabs A–D complete and verified (TurnRequirements/ModelRoute contract, deep selector with `capabilityJson` + lazy history projector, route-first assembler, MIME wildcard, Telegram validator, modality-safe failover filtering — focused tests, PMD/Spotless clean); remaining gate is Slab E: live OMLX multi-model matrix evidence. |
 
 The sequence is normative for the follow-on specification and issues. A later phase must not be pulled into implementation because an upstream API is convenient; its exit gate and the relevant Amsha invariant remain the controlling boundary. Java implementation issues must use the focused-verification commands and module-scoped PMD requirements in [AGENTS.md](../../AGENTS.md); the detailed command matrix belongs in the later specification.
+
+### P8 sequencing
+
+P8 follows the P7 specification and remains a proposed output capability until
+Issue 12 passes its contract, provider, core, channel, governance, native-image,
+and live Telegram gates. Its exit gate is a text request with an explicit audio
+directive producing text plus playable audio, an audio-input turn producing
+text plus audio when configured, and both paths safely returning text when TTS
+is disabled or unavailable.
 
 ## Considered options
 

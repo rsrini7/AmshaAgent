@@ -3,16 +3,28 @@ package com.amsha.core.agent.reasoning.port;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
+import com.amsha.channel.api.AttachmentType;
 import com.amsha.core.routing.CapabilityAwareChatModel;
+import com.amsha.core.routing.DefaultModelRouteSelector;
+import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.ModelRouteSelector;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.core.routing.ProfileRouteCandidateBuilder;
+import com.amsha.core.routing.TurnRequirements;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.llm.api.error.LlmRateLimitException;
@@ -40,7 +52,8 @@ class LangChain4jLlmAdapterTest {
         globalModel = mock(ChatModel.class);
         modelRouter = mock(ModelRouter.class);
         meterRegistry = new SimpleMeterRegistry();
-        adapter = new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry);
+        adapter = new LangChain4jLlmAdapter(
+                globalModel, modelRouter, meterRegistry, new DefaultModelRouteSelector(), null);
         adapter.cbEnabled = true;
     }
 
@@ -331,6 +344,337 @@ class LangChain4jLlmAdapterTest {
                         .tag("operation", "agent")
                         .counter()
                         .count());
+    }
+
+    @Test
+    void multimodalCapability_returnsDeclaredCapability_whenModelIsMultimodalCapable() {
+        ChatModel delegate = mock(ChatModel.class);
+        MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+        ChatModel capableModel = CapabilityAwareChatModel.withCapabilities(delegate, false, cap);
+        when(modelRouter.resolve("researcher", false)).thenReturn(capableModel);
+
+        MultimodalCapability resolved = adapter.multimodalCapability("researcher");
+
+        assertEquals(cap, resolved);
+        assertTrue(resolved.isMultimodal());
+    }
+
+    @Test
+    void multimodalCapability_returnsTextOnly_whenModelIsNotMultimodalCapable() {
+        ChatModel plainModel = mock(ChatModel.class);
+        when(modelRouter.resolve("coder", false)).thenReturn(plainModel);
+
+        MultimodalCapability resolved = adapter.multimodalCapability("coder");
+
+        assertEquals(MultimodalCapability.TEXT_ONLY, resolved);
+        assertFalse(resolved.isMultimodal());
+    }
+
+    @Test
+    void multimodalCapability_delegatesToGlobalModel_whenRoleIsBlank() {
+        MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o");
+        ChatModel globalCapable = CapabilityAwareChatModel.withCapabilities(mock(ChatModel.class), false, cap);
+        LangChain4jLlmAdapter customAdapter = new LangChain4jLlmAdapter(
+                globalCapable, modelRouter, meterRegistry, new DefaultModelRouteSelector(), null);
+
+        MultimodalCapability resolved = customAdapter.multimodalCapability("  ");
+        assertEquals(cap, resolved);
+    }
+
+    @Test
+    void resolveRoute_usesSelectorAndBuilder_whenAvailable() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        TurnRequirements reqs = TurnRequirements.textOnly();
+        ModelRoute route1 = new ModelRoute(
+                "id-1", "prov", "model", null, mock(ChatModel.class), MultimodalCapability.TEXT_ONLY, List.of(), 1);
+        when(builder.buildCandidates("researcher")).thenReturn(List.of(route1));
+        when(selector.select("researcher", reqs, List.of(route1))).thenReturn(Optional.of(route1));
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", reqs);
+        assertEquals("id-1", resolved.routeId());
+    }
+
+    @Test
+    void resolveRoute_selectsByModalityFromMultipleCandidates() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        TurnRequirements imageReqs =
+                new TurnRequirements(Set.of(AttachmentType.IMAGE), Set.of("image/png"), 1024L, 1024L, 1, false, false);
+        ModelRoute textRoute = new ModelRoute(
+                "text-route",
+                "prov",
+                "text",
+                null,
+                mock(ChatModel.class),
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                1);
+        ModelRoute visionRoute = new ModelRoute(
+                "vision-route",
+                "prov",
+                "vision",
+                null,
+                mock(ChatModel.class),
+                new MultimodalCapability(Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10_000_000L, 5, true, true),
+                List.of(),
+                1);
+
+        when(builder.buildCandidates("researcher")).thenReturn(List.of(textRoute, visionRoute));
+        when(selector.select("researcher", imageReqs, List.of(textRoute, visionRoute)))
+                .thenReturn(Optional.of(visionRoute));
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", imageReqs);
+        assertEquals("vision-route", resolved.routeId());
+        assertTrue(resolved.capability().supportsType(AttachmentType.IMAGE));
+    }
+
+    @Test
+    void resolveRoute_fallsBackToLegacy_whenBuilderEmpty() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+
+        TurnRequirements reqs = TurnRequirements.textOnly();
+        when(builder.buildCandidates("researcher")).thenReturn(List.of());
+
+        // We expect it to create a legacy route and pass it to selector
+        when(selector.select(eq("researcher"), eq(reqs), any())).thenAnswer(inv -> {
+            List<ModelRoute> candidates = inv.getArgument(2);
+            assertEquals(1, candidates.size());
+            assertEquals("role:researcher", candidates.get(0).routeId());
+            return Optional.of(candidates.get(0));
+        });
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", reqs);
+        assertEquals("role:researcher", resolved.routeId());
+    }
+
+    @Test
+    void resolveRoute_fallsBackToLegacy_whenSelectorReturnsEmpty() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+
+        TurnRequirements reqs = TurnRequirements.textOnly();
+        ModelRoute route1 = new ModelRoute(
+                "id-1", "prov", "model", null, mock(ChatModel.class), MultimodalCapability.TEXT_ONLY, List.of(), 1);
+        when(builder.buildCandidates("researcher")).thenReturn(List.of(route1));
+
+        // Selector rejects the profile candidate
+        when(selector.select("researcher", reqs, List.of(route1))).thenReturn(Optional.empty());
+
+        when(selector.select(eq("researcher"), eq(reqs), any())).thenAnswer(inv -> {
+            List<ModelRoute> candidates = inv.getArgument(2);
+            if (candidates.size() == 1 && candidates.get(0).routeId().equals("role:researcher")) {
+                return Optional.of(candidates.get(0));
+            }
+            return Optional.empty();
+        });
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", reqs);
+        assertEquals("role:researcher", resolved.routeId());
+    }
+
+    @Test
+    void resolveRoute_returnsTextFallback_whenLegacyRouteFails() {
+        ProfileRouteCandidateBuilder builder = mock(ProfileRouteCandidateBuilder.class);
+        ModelRouteSelector selector = mock(ModelRouteSelector.class);
+        LangChain4jLlmAdapter customAdapter =
+                new LangChain4jLlmAdapter(globalModel, modelRouter, meterRegistry, selector, builder);
+
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+
+        TurnRequirements reqs = TurnRequirements.textOnly();
+        when(builder.buildCandidates("researcher")).thenReturn(List.of());
+
+        // Selector rejects everything
+        when(selector.select(eq("researcher"), eq(reqs), any())).thenReturn(Optional.empty());
+
+        ModelRoute resolved = customAdapter.resolveRoute("researcher", reqs);
+        assertEquals("fallback:text-only", resolved.routeId());
+    }
+
+    @Test
+    void multimodalCapability_handlesResolutionFailureSafely() {
+        when(modelRouter.resolve("faulty", false)).thenThrow(new RuntimeException("resolution failed"));
+
+        MultimodalCapability resolved = adapter.multimodalCapability("faulty");
+
+        assertEquals(MultimodalCapability.TEXT_ONLY, resolved);
+    }
+
+    @Test
+    void nextStep_withModelRoute_executesRouteModelDirectly() {
+        ChatModel routeModel = mock(ChatModel.class);
+        ChatResponse expectedResponse =
+                ChatResponse.builder().aiMessage(AiMessage.from("routed reply")).build();
+        when(routeModel.chat(any(ChatRequest.class))).thenReturn(expectedResponse);
+
+        ModelRoute route = new ModelRoute(
+                "route-1", "prov", "custom-model", null, routeModel, MultimodalCapability.TEXT_ONLY, List.of(), 1);
+
+        ChatResponse result = adapter.nextStep(request(), "researcher", route);
+
+        assertEquals("routed reply", result.aiMessage().text());
+        verify(routeModel).chat(any(ChatRequest.class));
+        verify(modelRouter, never()).resolve(anyString(), anyBoolean());
+    }
+
+    @Test
+    void nextStep_withModelRoute_failsOverToSameModalityFallback() {
+        ChatModel primaryModel = mock(ChatModel.class);
+        ChatModel fallbackModel = mock(ChatModel.class);
+        ChatResponse expectedResponse = ChatResponse.builder()
+                .aiMessage(AiMessage.from("fallback reply"))
+                .build();
+        when(primaryModel.chat(any(ChatRequest.class))).thenThrow(new RuntimeException("primary unavailable"));
+        when(fallbackModel.chat(any(ChatRequest.class))).thenReturn(expectedResponse);
+
+        ModelRoute fallback = new ModelRoute(
+                "route-fallback",
+                "prov",
+                "fallback-model",
+                null,
+                fallbackModel,
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                1);
+        ModelRoute primary = new ModelRoute(
+                "route-primary",
+                "prov",
+                "primary-model",
+                null,
+                primaryModel,
+                MultimodalCapability.TEXT_ONLY,
+                List.of(fallback),
+                1);
+
+        ChatResponse result = adapter.nextStep(request(), "researcher", primary);
+
+        assertEquals("fallback reply", result.aiMessage().text());
+        verify(primaryModel).chat(any(ChatRequest.class));
+        verify(fallbackModel).chat(any(ChatRequest.class));
+        verify(modelRouter, never()).resolve(anyString(), anyBoolean());
+    }
+
+    @Test
+    void nextStep_withFailedMediaRoute_usesTextFallbackWithoutRawMedia() {
+        ChatModel visionModel = mock(ChatModel.class);
+        ChatModel textModel = mock(ChatModel.class);
+        RuntimeException mediaFailure = new RuntimeException("vision unavailable");
+        when(visionModel.chat(any(ChatRequest.class))).thenThrow(mediaFailure);
+        when(textModel.chat(any(ChatRequest.class))).thenReturn(response());
+        when(modelRouter.resolve("researcher", false)).thenReturn(textModel);
+
+        MultimodalCapability visionCapability = new MultimodalCapability(
+                Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10_000_000L, 4, true, false);
+        ModelRoute visionRoute =
+                new ModelRoute("vision-route", "local", "vision", null, visionModel, visionCapability, List.of(), 1);
+
+        ArgumentCaptor<ChatRequest> requests = ArgumentCaptor.forClass(ChatRequest.class);
+        ChatResponse result = adapter.nextStep(imageRequest(), "researcher", visionRoute);
+
+        assertNotNull(result);
+        verify(visionModel).chat(any(ChatRequest.class));
+        verify(textModel).chat(requests.capture());
+        UserMessage fallbackMessage =
+                (UserMessage) requests.getValue().messages().getFirst();
+        assertTrue(fallbackMessage.hasSingleText());
+        assertTrue(fallbackMessage.singleText().contains("[Attached Media: Image"));
+        assertTrue(fallbackMessage.contents().stream().noneMatch(ImageContent.class::isInstance));
+    }
+
+    @Test
+    void nextStep_skipsIncompatibleMediaCandidateBeforeExecution() {
+        ChatModel textCandidate = mock(ChatModel.class);
+        ChatModel fallbackTextModel = mock(ChatModel.class);
+        when(fallbackTextModel.chat(any(ChatRequest.class))).thenReturn(response());
+        when(modelRouter.resolve("researcher", false)).thenReturn(fallbackTextModel);
+
+        ModelRoute incompatibleRoute = new ModelRoute(
+                "text-route", "local", "text", null, textCandidate, MultimodalCapability.TEXT_ONLY, List.of(), 1);
+
+        ChatResponse result = adapter.nextStep(imageRequest(), "researcher", incompatibleRoute);
+
+        assertNotNull(result);
+        verifyNoInteractions(textCandidate);
+        verify(fallbackTextModel).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void nextStep_preservesMediaFailureWhenTextFallbackAlsoFails() {
+        ChatModel visionModel = mock(ChatModel.class);
+        ChatModel textModel = mock(ChatModel.class);
+        RuntimeException mediaFailure = new RuntimeException("vision unavailable");
+        when(visionModel.chat(any(ChatRequest.class))).thenThrow(mediaFailure);
+        when(textModel.chat(any(ChatRequest.class))).thenThrow(new RuntimeException("text unavailable"));
+        when(modelRouter.resolve("researcher", false)).thenReturn(textModel);
+
+        MultimodalCapability visionCapability = new MultimodalCapability(
+                Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10_000_000L, 4, true, false);
+        ModelRoute visionRoute =
+                new ModelRoute("vision-route", "local", "vision", null, visionModel, visionCapability, List.of(), 1);
+
+        RuntimeException thrown =
+                assertThrows(RuntimeException.class, () -> adapter.nextStep(imageRequest(), "researcher", visionRoute));
+
+        assertTrue(thrown.getMessage().contains("vision unavailable"));
+        assertFalse(thrown.getMessage().contains("text unavailable"));
+    }
+
+    private ChatRequest imageRequest() {
+        return ChatRequest.builder()
+                .messages(List.of(UserMessage.from(
+                        "describe this",
+                        ImageContent.from(Image.builder()
+                                .mimeType("image/png")
+                                .base64Data("AQI=")
+                                .build()))))
+                .build();
+    }
+
+    @Test
+    void nextStep_withNullRoute_fallsBackToRoleResolution() {
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+        when(globalModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("global reply"))
+                        .build());
+
+        ChatResponse result = adapter.nextStep(request(), "researcher", (ModelRoute) null);
+
+        assertEquals("global reply", result.aiMessage().text());
+        verify(modelRouter).resolve("researcher", false);
+    }
+
+    @Test
+    void nextStep_withNullRouteModel_fallsBackToRoleResolution() {
+        when(modelRouter.resolve("researcher", false)).thenReturn(globalModel);
+        when(globalModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("global reply"))
+                        .build());
+
+        ModelRoute routeWithoutModel = new ModelRoute(
+                "route-empty", "prov", "custom-model", null, null, MultimodalCapability.TEXT_ONLY, List.of(), 1);
+
+        ChatResponse result = adapter.nextStep(request(), "researcher", routeWithoutModel);
+
+        assertEquals("global reply", result.aiMessage().text());
+        verify(modelRouter).resolve("researcher", false);
     }
 
     private static final String SCHEMA = "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}}}";

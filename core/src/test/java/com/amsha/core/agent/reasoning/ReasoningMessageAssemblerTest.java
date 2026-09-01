@@ -2,36 +2,57 @@ package com.amsha.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.lang.reflect.Field;
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
+import com.amsha.channel.api.AttachmentType;
+import com.amsha.channel.api.MediaAttachment;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.loop.CodeGenerationPolicy;
 import com.amsha.core.agent.loop.LoopStuckDetector;
+import com.amsha.core.agent.reasoning.port.LlmProviderPort;
+import com.amsha.core.routing.ModelRoute;
 import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.DownloadedMedia;
+import com.amsha.security.api.MediaDownloadPort;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 
@@ -215,6 +236,61 @@ class ReasoningMessageAssemblerTest {
         assertEquals("Hi", userMessages.getFirst().singleText());
     }
 
+    @Test
+    void testAssemble_guaranteesUserMessageWhenProjectedHistoryHasOnlyToolMessages() throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        // History from previous execution: AiMessage + ToolExecutionResultMessage without UserMessage
+        when(historyAssembler.assemble(any(), any(), any()))
+                .thenReturn(List.of(
+                        AiMessage.aiMessage("thinking"),
+                        ToolExecutionResultMessage.toolExecutionResultMessage("call_0", "web_fetch", "content")));
+
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+        AgentExecutionContext context = new AgentExecutionContext(
+                "sess-resume",
+                "u1",
+                "c1",
+                "coordinator",
+                "what is latest quarkus lts version",
+                AutonomyLevel.SUPERVISED,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "123",
+                null,
+                Map.of());
+
+        ReasoningMessageAssembler.AssembledMessages result = assembler.assemble(
+                context,
+                "coordinator",
+                "what is latest quarkus lts version",
+                Collections.emptyList(),
+                "system prompt",
+                Set.of(),
+                false,
+                false,
+                false);
+
+        List<UserMessage> userMessages = result.messages().stream()
+                .filter(m -> m instanceof UserMessage)
+                .map(m -> (UserMessage) m)
+                .toList();
+        assertFalse(
+                userMessages.isEmpty(),
+                "Messages list MUST contain at least one UserMessage for chat template compliance");
+        assertEquals(
+                "what is latest quarkus lts version", userMessages.getFirst().singleText());
+        // Verify UserMessage is inserted before AiMessage
+        int userIdx = -1;
+        int aiIdx = -1;
+        for (int i = 0; i < result.messages().size(); i++) {
+            if (result.messages().get(i) instanceof UserMessage && userIdx == -1) userIdx = i;
+            if (result.messages().get(i) instanceof AiMessage && aiIdx == -1) aiIdx = i;
+        }
+        assertTrue(userIdx < aiIdx, "UserMessage must precede AiMessage in conversation sequence");
+    }
+
     private static ReasoningMessageAssembler createAssembler() throws Exception {
         ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
         when(historyAssembler.assemble("sess-1", "goal", Collections.emptyList()))
@@ -303,8 +379,386 @@ class ReasoningMessageAssemblerTest {
                 .anyMatch(text -> text.contains(marker));
         boolean inUser = result.messages().stream()
                 .filter(m -> m instanceof UserMessage _)
-                .map(m -> ((UserMessage) m).singleText())
+                .map(m -> {
+                    UserMessage um = (UserMessage) m;
+                    if (um.hasSingleText()) return um.singleText();
+                    return um.contents().stream()
+                            .filter(c -> c instanceof TextContent)
+                            .map(c -> ((TextContent) c).text())
+                            .collect(Collectors.joining(" "));
+                })
                 .anyMatch(text -> text.contains(marker));
         return inSystem || inUser;
+    }
+
+    @Test
+    void testAssembleWithMediaAttachments_assemblesMultimodalUserMessage() throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        when(historyAssembler.assemble(eq("sess-1"), eq("what is this"), anyList()))
+                .thenReturn(List.of(UserMessage.userMessage("what is this")));
+
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        LlmProviderPort mockLlmPort = mock(LlmProviderPort.class);
+        when(mockLlmPort.multimodalCapability(any()))
+                .thenReturn(MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o"));
+
+        Instance<LlmProviderPort> instanceMock = mock(Instance.class);
+        when(instanceMock.isUnsatisfied()).thenReturn(false);
+        when(instanceMock.get()).thenReturn(mockLlmPort);
+        injectField(assembler, "llmProviderPortInstance", instanceMock);
+
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        MediaDownloadPort downloadPort = (attachment, _, approved) -> {
+            preApproved.set(approved);
+            return DownloadedMedia.ofInline(
+                    attachment.attachmentId(),
+                    attachment.type(),
+                    attachment.mimeType(),
+                    attachment.fileName(),
+                    attachment.inlineData());
+        };
+        Instance<MediaDownloadPort> mediaInstance = mock(Instance.class);
+        when(mediaInstance.isResolvable()).thenReturn(true);
+        when(mediaInstance.isUnsatisfied()).thenReturn(false);
+        when(mediaInstance.get()).thenReturn(downloadPort);
+        injectField(assembler, "mediaDownloadPortInstance", mediaInstance);
+
+        MediaAttachment att = new MediaAttachment(
+                "att-1", AttachmentType.IMAGE, "image/png", "img.png", 3L, null, new byte[] {1, 2, 3}, Map.of());
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "skill:test",
+                "what is this",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "123",
+                null,
+                Map.of(),
+                List.of(att));
+
+        ReasoningMessageAssembler.AssembledMessages result = assembler.assemble(
+                context,
+                "skill:test",
+                "what is this",
+                List.of(),
+                "system prompt",
+                Set.of(ToolCapability.SANDBOX_EXEC.toolName()),
+                false,
+                false,
+                false);
+
+        assertNotNull(result);
+        List<UserMessage> userMessages = result.messages().stream()
+                .filter(m -> m instanceof UserMessage)
+                .map(m -> (UserMessage) m)
+                .toList();
+        assertEquals(1, userMessages.size());
+        assertEquals(2, userMessages.get(0).contents().size());
+        assertInstanceOf(ImageContent.class, userMessages.get(0).contents().get(1));
+        assertFalse(preApproved.get(), "Autonomy level must not masquerade as HITL approval");
+    }
+
+    @Test
+    void telegramUserAttachmentCarriesScopedMediaAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(false);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(MediaAttachment.ofUri(
+                "tg-1",
+                AttachmentType.IMAGE,
+                "image/png",
+                "image.png",
+                3L,
+                URI.create("telegram://file/file-1"),
+                Map.of()));
+
+        assembler.assemble(
+                context, "skill:test", "what is this", List.of(), "system prompt", Set.of(), false, false, false);
+
+        assertTrue(preApproved.get(), "Verified Telegram media should carry channel-origin authorization");
+    }
+
+    @Test
+    void nonTelegramMediaDoesNotInheritTelegramAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(MediaAttachment.ofUri(
+                "remote-1",
+                AttachmentType.IMAGE,
+                "image/png",
+                "image.png",
+                3L,
+                URI.create("https://example.com/image.png"),
+                Map.of()));
+
+        assembler.assemble(
+                context, "skill:test", "what is this", List.of(), "system prompt", Set.of(), false, false, false);
+
+        assertFalse(preApproved.get(), "Generic media must remain behind outbound HITL");
+    }
+
+    @Test
+    void nonTelegramChannelDoesNotInheritTelegramAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(
+                "cli",
+                List.of(MediaAttachment.ofUri(
+                        "tg-1",
+                        AttachmentType.IMAGE,
+                        "image/png",
+                        "image.png",
+                        3L,
+                        URI.create("telegram://file/file-1"),
+                        Map.of())));
+
+        assembleMedia(assembler, context);
+
+        assertFalse(preApproved.get(), "Telegram-shaped media on another channel must remain governed");
+    }
+
+    @Test
+    void mixedTelegramAndGenericMediaFailsClosedForAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(
+                "TELEGRAM",
+                List.of(
+                        MediaAttachment.ofUri(
+                                "tg-1",
+                                AttachmentType.IMAGE,
+                                "image/png",
+                                "telegram.png",
+                                3L,
+                                URI.create("telegram://file/file-1"),
+                                Map.of()),
+                        MediaAttachment.ofUri(
+                                "remote-1",
+                                AttachmentType.IMAGE,
+                                "image/png",
+                                "remote.png",
+                                3L,
+                                URI.create("https://example.com/image.png"),
+                                Map.of())));
+
+        assembleMedia(assembler, context);
+
+        assertFalse(preApproved.get(), "Mixed-origin media must not inherit Telegram authorization");
+    }
+
+    @Test
+    void malformedTelegramReferenceFailsClosedForAuthorization() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(true);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+        AgentExecutionContext context = mediaContext(MediaAttachment.ofUri(
+                "tg-1",
+                AttachmentType.IMAGE,
+                "image/png",
+                "image.png",
+                3L,
+                URI.create("telegram://not-file/file-1"),
+                Map.of()));
+
+        assembleMedia(assembler, context);
+
+        assertFalse(preApproved.get(), "Non-canonical Telegram references must remain governed");
+    }
+
+    private static void assembleMedia(ReasoningMessageAssembler assembler, AgentExecutionContext context) {
+        assembler.assemble(
+                context, "skill:test", "what is this", List.of(), "system prompt", Set.of(), false, false, false);
+    }
+
+    private static ReasoningMessageAssembler createMediaAssembler(AtomicBoolean preApproved) throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        when(historyAssembler.assemble(eq("sess-1"), eq("what is this"), anyList()))
+                .thenReturn(List.of(UserMessage.userMessage("what is this")));
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        LlmProviderPort mockLlmPort = mock(LlmProviderPort.class);
+        when(mockLlmPort.multimodalCapability(any()))
+                .thenReturn(MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o"));
+        Instance<LlmProviderPort> llmInstance = mock(Instance.class);
+        when(llmInstance.isUnsatisfied()).thenReturn(false);
+        when(llmInstance.get()).thenReturn(mockLlmPort);
+        injectField(assembler, "llmProviderPortInstance", llmInstance);
+
+        MediaDownloadPort downloadPort = (attachment, _, approved) -> {
+            preApproved.set(approved);
+            return DownloadedMedia.ofInline(
+                    attachment.attachmentId(),
+                    attachment.type(),
+                    attachment.mimeType(),
+                    attachment.fileName(),
+                    new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        };
+        Instance<MediaDownloadPort> mediaInstance = mock(Instance.class);
+        when(mediaInstance.isResolvable()).thenReturn(true);
+        when(mediaInstance.isUnsatisfied()).thenReturn(false);
+        when(mediaInstance.get()).thenReturn(downloadPort);
+        injectField(assembler, "mediaDownloadPortInstance", mediaInstance);
+        return assembler;
+    }
+
+    private static AgentExecutionContext mediaContext(MediaAttachment attachment) {
+        return mediaContext("TELEGRAM", List.of(attachment));
+    }
+
+    private static AgentExecutionContext mediaContext(String channelType, List<MediaAttachment> attachments) {
+        return new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "skill:test",
+                "what is this",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                channelType,
+                "123",
+                null,
+                Map.of(),
+                attachments);
+    }
+
+    @Test
+    void assembleUsesRouteCapabilityOverRoleStaticCapability() throws Exception {
+        AtomicBoolean preApproved = new AtomicBoolean(false);
+        ReasoningMessageAssembler assembler = createMediaAssembler(preApproved);
+
+        MediaAttachment imageAtt = MediaAttachment.ofInline(
+                "img-1", AttachmentType.IMAGE, "image/png", "test.png", new byte[] {1, 2, 3}, null);
+        AgentExecutionContext context = mediaContext("WEB", List.of(imageAtt));
+
+        // Route explicitly provides TEXT_ONLY capability
+        ModelRoute textRoute = new ModelRoute(
+                "route-text",
+                "prov",
+                "text-model",
+                null,
+                mock(ChatModel.class),
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                1);
+
+        ReasoningMessageAssembler.AssembledMessages result = assembler.assemble(
+                context,
+                "researcher",
+                "what is this",
+                List.of(),
+                "system prompt",
+                Set.of(),
+                false,
+                false,
+                false,
+                textRoute);
+
+        List<UserMessage> userMessages = result.messages().stream()
+                .filter(UserMessage.class::isInstance)
+                .map(UserMessage.class::cast)
+                .toList();
+
+        assertEquals(1, userMessages.size());
+        UserMessage userMsg = userMessages.getFirst();
+        // Since route is TEXT_ONLY, the active attachment should degrade to text placeholder
+        assertTrue(userMsg.singleText().contains("Model text-model does not support IMAGE modality"));
+        assertFalse(userMsg.contents().stream().anyMatch(ImageContent.class::isInstance));
+    }
+
+    @Test
+    void assembleProjectsHistoricalMultimodalMessages() throws Exception {
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        UserMessage priorTurnWithImage = UserMessage.from(
+                TextContent.from("Prior turn goal"),
+                ImageContent.from(Image.builder()
+                        .mimeType("image/png")
+                        .base64Data(
+                                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+                        .build()));
+        UserMessage currentTurn = UserMessage.userMessage("Current question");
+
+        when(historyAssembler.assemble(eq("sess-1"), eq("Current question"), anyList()))
+                .thenReturn(List.of(priorTurnWithImage, currentTurn));
+
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "researcher",
+                "Current question",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                null,
+                null,
+                null,
+                Map.of(),
+                List.of());
+
+        // 1. When current turn routes to a TEXT_ONLY model: prior turn ImageContent should be projected to placeholder
+        ModelRoute textRoute = new ModelRoute(
+                "text-route",
+                "prov",
+                "text-model",
+                null,
+                mock(ChatModel.class),
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                1);
+        ReasoningMessageAssembler.AssembledMessages textResult = assembler.assemble(
+                context,
+                "researcher",
+                "Current question",
+                List.of(),
+                "system prompt",
+                Set.of(),
+                false,
+                false,
+                false,
+                textRoute);
+
+        List<UserMessage> textUserMessages = textResult.messages().stream()
+                .filter(UserMessage.class::isInstance)
+                .map(UserMessage.class::cast)
+                .toList();
+        assertEquals(2, textUserMessages.size());
+        assertTrue(textUserMessages
+                .get(0)
+                .singleText()
+                .contains("[Attached Media: Image (image/png) - Model text-model does not support vision modality]"));
+
+        // 2. When current turn routes to a VISION model: prior turn ImageContent is preserved
+        MultimodalCapability visionCap =
+                new MultimodalCapability(Set.of(AttachmentType.IMAGE), Set.of("image/png"), 10_000_000L, 5, true, true);
+        ModelRoute visionRoute =
+                new ModelRoute("vision-route", "prov", "qwen-vl", null, mock(ChatModel.class), visionCap, List.of(), 1);
+        ReasoningMessageAssembler.AssembledMessages visionResult = assembler.assemble(
+                context,
+                "researcher",
+                "Current question",
+                List.of(),
+                "system prompt",
+                Set.of(),
+                false,
+                false,
+                false,
+                visionRoute);
+
+        List<UserMessage> visionUserMessages = visionResult.messages().stream()
+                .filter(UserMessage.class::isInstance)
+                .map(UserMessage.class::cast)
+                .toList();
+        assertEquals(2, visionUserMessages.size());
+        assertTrue(visionUserMessages.get(0).contents().stream().anyMatch(ImageContent.class::isInstance));
     }
 }

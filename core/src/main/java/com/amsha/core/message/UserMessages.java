@@ -65,7 +65,7 @@ public final class UserMessages {
      * by the coordinator LLM only and must never reach the chat channel.
      */
     public static final String DELEGATION_PAUSED_FORMAT =
-            "Delegation to '%s' is " + DELEGATION_PAUSED_MARKER + ": tool '%s' needs human approval. "
+            "⏸ Delegation to '%s' is " + DELEGATION_PAUSED_MARKER + ": tool '%s' needs human approval. "
                     + "The delegated agent's result will be delivered automatically once it is granted."
                     + " This is a separate approval for the delegated tool. "
                     + "Reply with `/approve` again to continue, or `/deny` to cancel."
@@ -115,7 +115,7 @@ public final class UserMessages {
     // Generic Errors
     public static final String INTERNAL_ERROR = "⚠️ An internal error occurred. Please try again.";
     public static final String DELEGATION_PAUSED_USER_FALLBACK =
-            "⏳ Approval is pending — the delegated task's result will be delivered automatically once granted.";
+            "⏸ ⏳ Approval is pending — the delegated task's result will be delivered automatically once granted.";
     /** Stable prefix identifying the escalation handover notice; guards against double-prepend. */
     public static final String ESCALATION_NOTICE_MARKER = "ℹ️ Note:";
 

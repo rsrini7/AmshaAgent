@@ -39,6 +39,16 @@ public class CompactionModelProducerTest {
         }
     }
 
+    public static class OmlxFallbackProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                    "amsha.infinite-loop.compaction.providers", "omlx",
+                    "amsha.llm.omlx.base-url", "http://127.0.0.1:8000/v1",
+                    "amsha.llm.omlx.model", "qwen3-14b");
+        }
+    }
+
     @QuarkusTest
     @TestProfile(DefaultProfile.class)
     public static class DefaultFallbackTest {
@@ -64,6 +74,20 @@ public class CompactionModelProducerTest {
         @Test
         void testCompactionModelWithOverrideKey() {
             assertNotNull(compactionModel, "Produced compaction model should be non-null");
+        }
+    }
+
+    @QuarkusTest
+    @TestProfile(OmlxFallbackProfile.class)
+    public static class OmlxFallbackTest {
+
+        @Inject
+        @Identifier("compaction")
+        ChatModel compactionModel;
+
+        @Test
+        void testCompactionModelWithOmlxFallback() {
+            assertNotNull(compactionModel, "Produced compaction model should resolve from omlx configuration");
         }
     }
 }

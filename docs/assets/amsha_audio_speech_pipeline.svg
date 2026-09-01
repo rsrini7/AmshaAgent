@@ -1,0 +1,149 @@
+<svg width="100%" viewBox="0 0 980 660" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#9c9a92" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#71b7ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#63c7b7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#ef9f27" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#afa9ec" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="980" height="660" rx="12" fill="#171715"/>
+
+  <!-- Title / Subtitle -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <text x="490" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#f2f0e9">Bidirectional Speech Architecture (STT &amp; TTS)</text>
+    <text x="490" y="52" text-anchor="middle" font-size="12" fill="#b8b5aa">Speech-to-Text Recognition (Whisper) &amp; Text-to-Speech Synthesis (Qwen3-TTS) with Channel Delivery</text>
+  </g>
+
+  <!-- ==================== SECTION 1: INBOUND AUDIO (STT) & TEXT INPUT ==================== -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <!-- Container Group -->
+    <rect x="25" y="68" width="930" height="162" rx="10" fill="#20201d" stroke="#383834" stroke-width="0.8"/>
+    <text x="40" y="88" font-size="12" font-weight="700" fill="#71b7ee" letter-spacing="0.05em">1. INBOUND INPUTS: SPEECH-TO-TEXT (STT) &amp; TYPED TEXT</text>
+
+    <!-- Web Audio Inbound -->
+    <rect x="40" y="98" width="180" height="54" rx="8" fill="#184d42" stroke="#63c7b7" stroke-width="0.7"/>
+    <text x="130" y="118" text-anchor="middle" font-size="13" font-weight="600" fill="#9fe1d5">Web UI (Voice / Mic)</text>
+    <text x="130" y="136" text-anchor="middle" font-size="10" fill="#b5e8df">36 MiB WS Frame · Base64</text>
+
+    <!-- Telegram Audio Inbound -->
+    <rect x="235" y="98" width="180" height="54" rx="8" fill="#995700" stroke="#ef9f27" stroke-width="0.7"/>
+    <text x="325" y="118" text-anchor="middle" font-size="13" font-weight="600" fill="#fac775">Telegram Voice Note</text>
+    <text x="325" y="136" text-anchor="middle" font-size="10" fill="#f6d39a">Governed Media Download</text>
+
+    <!-- Direct Typed Text Input Box -->
+    <rect x="40" y="162" width="375" height="54" rx="8" fill="#24507a" stroke="#71b7ee" stroke-width="0.7"/>
+    <text x="227" y="184" text-anchor="middle" font-size="13" font-weight="600" fill="#acd9f7">Typed Text Messages (Web, Telegram, REST, CLI)</text>
+    <text x="227" y="202" text-anchor="middle" font-size="10" fill="#c0e2f8">Standard queries or explicit directives (e.g., "tell me in audio", "reply audio")</text>
+
+    <!-- Converge Audio to Transcoder -->
+    <line x1="130" y1="152" x2="130" y2="156" stroke="#63c7b7" stroke-width="1.2"/>
+    <line x1="325" y1="152" x2="325" y2="156" stroke="#ef9f27" stroke-width="1.2"/>
+    <line x1="130" y1="156" x2="435" y2="156" stroke="#9c9a92" stroke-width="1.2"/>
+    <line x1="325" y1="156" x2="435" y2="156" stroke="#9c9a92" stroke-width="1.2"/>
+    <line x1="435" y1="156" x2="445" y2="156" stroke="#9c9a92" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+    <!-- Transcoder & Normalizer -->
+    <rect x="450" y="98" width="235" height="118" rx="8" fill="#24507a" stroke="#71b7ee" stroke-width="0.7"/>
+    <text x="567" y="120" text-anchor="middle" font-size="13" font-weight="600" fill="#acd9f7">OggOpusToWavConverter</text>
+    <text x="567" y="138" text-anchor="middle" font-size="10" fill="#c0e2f8">ProcessBuilder ffmpeg</text>
+    <text x="567" y="154" text-anchor="middle" font-size="10" fill="#c0e2f8">Dynamic audio norm (-af dynaudnorm)</text>
+    <text x="567" y="170" text-anchor="middle" font-size="10" fill="#90caf9">PCM 16-bit 16kHz mono WAV</text>
+    <text x="567" y="186" text-anchor="middle" font-size="10" fill="#90caf9">Optimized for STT Acoustic Accuracy</text>
+
+    <!-- STT Model -->
+    <line x1="685" y1="157" x2="705" y2="157" stroke="#71b7ee" stroke-width="1.2" marker-end="url(#arrow-blue)"/>
+    <rect x="710" y="98" width="230" height="118" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.7"/>
+    <text x="825" y="122" text-anchor="middle" font-size="13" font-weight="600" fill="#cecbf6">SpeechToTextPort (STT)</text>
+    <text x="825" y="142" text-anchor="middle" font-size="11" fill="#afa9ec">OmlxSpeechToTextProvider</text>
+    <text x="825" y="160" text-anchor="middle" font-size="10" fill="#d1c4e9">Model: whisper-large-v3</text>
+    <text x="825" y="176" text-anchor="middle" font-size="10" fill="#b39ddb">Transcribes audio to text</text>
+    <text x="825" y="192" text-anchor="middle" font-size="10" fill="#b39ddb">Injects [Audio transcript: ...]</text>
+  </g>
+
+  <!-- Flow lines to Core Section -->
+  <line x1="227" y1="216" x2="227" y2="248" stroke="#71b7ee" stroke-width="1.2" marker-end="url(#arrow-blue)"/>
+  <line x1="825" y1="216" x2="825" y2="248" stroke="#afa9ec" stroke-width="1.2" marker-end="url(#arrow-purple)"/>
+
+  <!-- ==================== SECTION 2: CORE REASONING & SPEECH POLICY ==================== -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="25" y="248" width="930" height="116" rx="10" fill="#20201d" stroke="#383834" stroke-width="0.8"/>
+    <text x="40" y="268" font-size="12" font-weight="700" fill="#fac775" letter-spacing="0.05em">2. INTENT CLASSIFICATION &amp; SPEECH OUTPUT POLICY</text>
+
+    <!-- Intent Classification -->
+    <rect x="40" y="278" width="270" height="72" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.7"/>
+    <text x="175" y="298" text-anchor="middle" font-size="13" font-weight="600" fill="#d3d1c7">IntentClassificationService</text>
+    <text x="175" y="316" text-anchor="middle" font-size="10" fill="#b4b2a9">Voice-only turns: isSimpleConversational=false</text>
+    <text x="175" y="332" text-anchor="middle" font-size="10" fill="#9c9a92">Prevents premature chitchat fallback loops</text>
+
+    <!-- Agent Loop -->
+    <line x1="310" y1="314" x2="345" y2="314" stroke="#b4b2a9" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="350" y="278" width="260" height="72" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.7"/>
+    <text x="480" y="298" text-anchor="middle" font-size="13" font-weight="600" fill="#cecbf6">AgentStateMachineRunner</text>
+    <text x="480" y="316" text-anchor="middle" font-size="10" fill="#afa9ec">Tool Execution &amp; Memory Reasoning</text>
+    <text x="480" y="332" text-anchor="middle" font-size="10" fill="#cecbf6">Outputs structured answer prose</text>
+
+    <!-- Speech Policy -->
+    <line x1="610" y1="314" x2="645" y2="314" stroke="#afa9ec" stroke-width="1.2" marker-end="url(#arrow-purple)"/>
+    <rect x="650" y="278" width="290" height="72" rx="8" fill="#995700" stroke="#ef9f27" stroke-width="0.7"/>
+    <text x="795" y="298" text-anchor="middle" font-size="13" font-weight="600" fill="#fac775">SpeechOutputPolicy.resolve()</text>
+    <text x="795" y="316" text-anchor="middle" font-size="10" fill="#f6d39a">1. Text prompt directives ("reply audio", "voice only")</text>
+    <text x="795" y="332" text-anchor="middle" font-size="10" fill="#ffe0b2">2. Inbound audio fallback → AMSHA_TTS_MODE</text>
+  </g>
+
+  <!-- Flow to Outbound Section -->
+  <line x1="795" y1="364" x2="795" y2="384" stroke="#ef9f27" stroke-width="1.2" marker-end="url(#arrow-amber)"/>
+
+  <!-- ==================== SECTION 3: SYNTHESIS & CHANNEL DELIVERY (TTS) ==================== -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="25" y="384" width="930" height="252" rx="10" fill="#20201d" stroke="#383834" stroke-width="0.8"/>
+    <text x="40" y="404" font-size="12" font-weight="700" fill="#63c7b7" letter-spacing="0.05em">3. TEXT-TO-SPEECH (TTS) SYNTHESIS &amp; CHANNEL DELIVERY</text>
+
+    <!-- Speech Reply Service & Projection -->
+    <rect x="40" y="414" width="250" height="88" rx="8" fill="#24507a" stroke="#71b7ee" stroke-width="0.7"/>
+    <text x="165" y="436" text-anchor="middle" font-size="13" font-weight="600" fill="#acd9f7">SpeechReplyService</text>
+    <text x="165" y="454" text-anchor="middle" font-size="10" fill="#c0e2f8">projectSpeakableText()</text>
+    <text x="165" y="468" text-anchor="middle" font-size="10" fill="#90caf9">Strips code blocks, tables &amp; artifacts</text>
+    <text x="165" y="482" text-anchor="middle" font-size="10" fill="#90caf9">Passes clean prose to TTS port</text>
+
+    <!-- TTS Synthesis Port -->
+    <line x1="290" y1="458" x2="325" y2="458" stroke="#71b7ee" stroke-width="1.2" marker-end="url(#arrow-blue)"/>
+    <rect x="330" y="414" width="230" height="88" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.7"/>
+    <text x="445" y="436" text-anchor="middle" font-size="13" font-weight="600" fill="#cecbf6">SpeechSynthesisPort (TTS)</text>
+    <text x="445" y="454" text-anchor="middle" font-size="11" fill="#afa9ec">OmlxSpeechSynthesisProvider</text>
+    <text x="445" y="468" text-anchor="middle" font-size="10" fill="#d1c4e9">Model: Qwen3-TTS-12Hz-1.7B-Base-bf16</text>
+    <text x="445" y="482" text-anchor="middle" font-size="10" fill="#b39ddb">Synthesizes text into raw audio WAV</text>
+
+    <!-- Branching to WebSocket -->
+    <line x1="560" y1="442" x2="595" y2="442" stroke="#afa9ec" stroke-width="1.2" marker-end="url(#arrow-purple)"/>
+    <rect x="600" y="414" width="340" height="58" rx="8" fill="#184d42" stroke="#63c7b7" stroke-width="0.7"/>
+    <text x="770" y="434" text-anchor="middle" font-size="13" font-weight="600" fill="#9fe1d5">WebChannelSender (WebSocket)</text>
+    <text x="770" y="450" text-anchor="middle" font-size="10" fill="#b5e8df">36 MiB Frame Buffer · Base64 JSON · safeFileName()</text>
+    <text x="770" y="464" text-anchor="middle" font-size="10" fill="#a7ffeb">Frontend: Blob URL + Replay Button + &lt;audio controls&gt;</text>
+
+    <!-- Branching to Telegram -->
+    <line x1="560" y1="472" x2="575" y2="472" stroke="#afa9ec" stroke-width="1.2"/>
+    <line x1="575" y1="472" x2="575" y2="512" stroke="#afa9ec" stroke-width="1.2"/>
+    <line x1="575" y1="512" x2="595" y2="512" stroke="#afa9ec" stroke-width="1.2" marker-end="url(#arrow-purple)"/>
+    <rect x="600" y="482" width="340" height="74" rx="8" fill="#995700" stroke="#ef9f27" stroke-width="0.7"/>
+    <text x="770" y="502" text-anchor="middle" font-size="13" font-weight="600" fill="#fac775">TelegramChannelSender (Telegram Bot API)</text>
+    <text x="770" y="518" text-anchor="middle" font-size="10" fill="#f6d39a">WAV &gt; 1 MB auto-transcoded via ffmpeg → OGG Opus (~100 KB)</text>
+    <text x="770" y="532" text-anchor="middle" font-size="10" fill="#ffe0b2">Bypasses Camel Telegram 2 MB BufferOverflowException limit</text>
+    <text x="770" y="546" text-anchor="middle" font-size="10" fill="#ffe0b2">Native playback as Telegram Voice/Audio note</text>
+
+    <!-- Fallback Guard Bar -->
+    <rect x="40" y="568" width="900" height="40" rx="6" fill="#444441" stroke="#b4b2a9" stroke-width="0.7"/>
+    <text x="490" y="592" text-anchor="middle" font-size="11" font-weight="600" fill="#d3d1c7">Fail-Safe Fallback: If sendAudio() returns false or fails, AgentDispatchHandler delivers plaintext via sendRaw(text)</text>
+  </g>
+</svg>

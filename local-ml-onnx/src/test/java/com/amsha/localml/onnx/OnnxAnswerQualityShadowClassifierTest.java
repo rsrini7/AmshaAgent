@@ -15,6 +15,8 @@ import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class OnnxAnswerQualityShadowClassifierTest {
 
@@ -57,6 +59,37 @@ class OnnxAnswerQualityShadowClassifierTest {
         assertEquals(
                 AnswerQualityPrediction.RETRY_RECOMMENDED,
                 OnnxAnswerQualityShadowClassifier.parseLabel("retry recommended"));
+        assertEquals(AnswerQualityPrediction.ACCEPTABLE, OnnxAnswerQualityShadowClassifier.parseLabel("acceptable"));
+    }
+
+    @Test
+    void prepareAndRegisterReflectsReadinessCheck() {
+        OnnxClassifierRuntimeControl control = Mockito.mock(OnnxClassifierRuntimeControl.class);
+        OnnxClassifierRuntimeControl.Registration registration =
+                Mockito.mock(OnnxClassifierRuntimeControl.Registration.class);
+        Mockito.when(control.registerReadyImplementation(ArgumentMatchers.any()))
+                .thenReturn(registration);
+
+        OnnxAnswerQualityShadowClassifier readyClassifier =
+                new OnnxAnswerQualityShadowClassifier(true, new ObjectMapper(), input -> null, () -> true);
+        readyClassifier.prepareAndRegister(control);
+        Mockito.verify(control).registerReadyImplementation(OnnxClassifierRuntimeControl.Classifier.ANSWER_QUALITY);
+
+        OnnxAnswerQualityShadowClassifier notReadyClassifier =
+                new OnnxAnswerQualityShadowClassifier(true, new ObjectMapper(), input -> null, () -> false);
+        assertTrue(notReadyClassifier.prepareAndRegister(control).isEmpty());
+    }
+
+    @Test
+    void classifyUnderLeaseHandlesExceptionsGracefully() {
+        OnnxAnswerQualityShadowClassifier classifier =
+                new OnnxAnswerQualityShadowClassifier(true, new ObjectMapper(), input -> {
+                    throw new RuntimeException("Inference crash");
+                });
+
+        ClassifierResult<?> result = classifier.classifyUnderLease(context());
+        assertInstanceOf(ClassifierResult.NoOpinion.class, result);
+        assertEquals(NoOpinionReason.INFERENCE_ERROR, ((ClassifierResult.NoOpinion<?>) result).reason());
     }
 
     private static AnswerQualityShadowContext context() {

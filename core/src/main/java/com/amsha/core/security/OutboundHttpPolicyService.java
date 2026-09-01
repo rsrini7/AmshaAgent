@@ -141,18 +141,21 @@ public class OutboundHttpPolicyService {
 
     private OutboundPolicyDecision deny(String category, OutboundPurpose purpose, String actorUserId) {
         log.warnf("[OUTBOUND-POLICY] Denied category=%s purpose=%s", category, purpose);
+        SecurityEventType eventType = purpose == OutboundPurpose.MEDIA_DOWNLOAD
+                ? SecurityEventType.MEDIA_DOWNLOAD_DENIED
+                : SecurityEventType.MCP_CONNECTION_VALIDATION_FAILED;
         auditService.recordMandatory(
                 "outbound-policy",
                 actorUserId != null ? actorUserId : "system",
                 "system",
-                SecurityEventType.MCP_CONNECTION_VALIDATION_FAILED,
+                eventType,
                 "action=outbound_denied purpose=" + purpose + " category=" + category);
         return OutboundPolicyDecision.deny(category, purpose, actorUserId);
     }
 
     private static boolean requiresHitl(OutboundPurpose purpose) {
         return switch (purpose) {
-            case CATALOG_PROBE, OAUTH_CALLBACK, MCP_CONNECT, MCP_TOOL_ENABLE -> true;
+            case CATALOG_PROBE, OAUTH_CALLBACK, MCP_CONNECT, MCP_TOOL_ENABLE, MEDIA_DOWNLOAD -> true;
             case PROVIDER_API_CALL, PROVIDER_MODEL_DISCOVERY, MCP_TOOL_CALL -> false;
         };
     }
@@ -177,11 +180,33 @@ public class OutboundHttpPolicyService {
                 return true;
             }
             byte[] bytes = address.getAddress();
-            return bytes.length == 4
+            if (isIpv4MappedAddress(bytes)) {
+                return true;
+            }
+            if (bytes.length == 4
                     && (bytes[0] & 0xff) == 100
-                    && ((bytes[1] & 0xff) >= 64 && (bytes[1] & 0xff) <= 127);
+                    && ((bytes[1] & 0xff) >= 64 && (bytes[1] & 0xff) <= 127)) {
+                return true;
+            }
+            // IPv6 Unique Local Address (ULA) fc00::/7
+            if (bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc) {
+                return true;
+            }
+            return false;
         } catch (Exception _) {
             return true;
         }
+    }
+
+    private static boolean isIpv4MappedAddress(byte[] bytes) {
+        if (bytes.length != 16) {
+            return false;
+        }
+        for (int i = 0; i < 10; i++) {
+            if (bytes[i] != 0) {
+                return false;
+            }
+        }
+        return bytes[10] == (byte) 0xff && bytes[11] == (byte) 0xff;
     }
 }

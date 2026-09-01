@@ -125,3 +125,18 @@ python3 ./scripts/verify_docs.py
 ```
 
 The REST Client file contains inbound protocol, outbound self-connect, secure-header, error, and agent-registration examples.
+
+## P4 Safety-Gated Protocol-Adapter Evaluation — Retain Native Bridge (2026-08-28)
+
+**Evaluation ID `P4-MCP-01` — Decision: RETAIN.** `dev.langchain4j:langchain4j-mcp:1.17.2-beta27` is BOM-managed but not on the application classpath (`amsha-mcp` 193 tests passing). LangChain4j `1.17.2` MCP is tightly coupled to `McpToolProvider`/`ToolSpecification`/`ToolExecutor` for `AiServices` direct execution and exposes no standalone transport/DTO layer decouplable beneath `McpClientService`/`ExternalMcpToolAdapter`. Adopting it would bypass `ToolInvocationGuard`/`PreflightState`/`LoopStuckDetector`, `NETWORK_OUTBOUND`/`EXECUTE_SHELL` sensitive gating, `HostExecSkillGrant`, HITL `MCP_CONNECT`/`MCP_TOOL_ENABLE`, `SecretVault` `USER:<userId>` zeroing, user-scoped isolation, `FINISH` invariant, and GraalVM `McpReflectionConfig` verification; adding the beta artifact would also violate the `1.17.2` version ceiling (no ad-hoc pins per ADR §Non-goals).
+
+| Dimension | Amsha Native | LangChain4j 1.17.2 | Outcome |
+|---|---|---|---|
+| Multi-Tenant User Isolation | `USER:<userId>` per-tab | Process-global | **Amsha Superior** |
+| Security & HITL Pipeline | `ToolInvocationGuard` + approvals | Bypassed via `ToolExecutor` | **Amsha Superior** |
+| Credential Protection | `SecretVault`, zeroed `finally` | In-memory config | **Amsha Superior** |
+| Post-Tool Terminal `FINISH` | Enforced | Unenforced | **Amsha Superior** |
+| GraalVM Native Image | Verified, no proxies | Unproven | **Amsha Superior** |
+| Transport Protocols | HTTP/SSE + Governed STDIO + NDJSON | HTTP/SSE + STDIO | **Parity** |
+
+Disposition per [ADR-LangChain4j](../Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp) and [Issue 07](../.scratch/lc4j-capability-adoption/issues/07-p4-mcp-protocol-adapter-gate.md): retain native bridge, no version override, P4 gate closed. Evidence: [`.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md); tracker: [`.scratch/lc4j-capability-adoption/spec.md`](../.scratch/lc4j-capability-adoption/spec.md) P4 row.

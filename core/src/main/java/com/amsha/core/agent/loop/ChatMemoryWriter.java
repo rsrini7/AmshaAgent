@@ -51,7 +51,6 @@ public class ChatMemoryWriter {
         if (SKIP_GOALS.contains(goal)) return;
 
         String sanitizedGoal = piiScanReflex.sanitize(goal);
-
         List<ChatMessage> currentHistory = chatMemoryStore.getMessages(sessionId);
         if (currentHistory == null) currentHistory = new ArrayList<>();
         else currentHistory = new ArrayList<>(currentHistory);

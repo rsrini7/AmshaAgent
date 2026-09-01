@@ -232,6 +232,52 @@ class McpConnectResourceTest {
         assertEquals(200, resource.listApprovals().getStatus());
     }
 
+    @Test
+    void approveAndRejectLifecycleOperations() {
+        when(managementService.approve("user-1", "task-100"))
+                .thenReturn(new McpManagementService.ApprovalExecution("task-100", "CONNECT", "ok"));
+        assertEquals(200, resource.approve("task-100").getStatus());
+
+        when(managementService.rejectApproval("user-1", "task-100")).thenReturn(true);
+        assertEquals(200, resource.reject("task-100").getStatus());
+
+        when(managementService.rejectApproval("user-1", "missing-task")).thenReturn(false);
+        assertEquals(404, resource.reject("missing-task").getStatus());
+    }
+
+    @Test
+    void pauseResumeToolsAndRotateHeaders() {
+        when(managementService.pause("user-1", "test-server", 1L))
+                .thenReturn(new McpManagementService.ConnectionSnapshot(
+                        "test-server", "https://example.com", "PAUSED", "HTTP_SSE", 0, 1, 2, List.of()));
+        assertEquals(200, resource.pause("test-server", 1L).getStatus());
+
+        var pending = new McpApprovalService.PendingApproval(
+                "task-rec",
+                "RECONNECT",
+                "test-server",
+                "https://example.com",
+                null,
+                Instant.now().plusSeconds(60));
+        when(managementService.requestReconnect("user-1", "test-server", 2L)).thenReturn(pending);
+        assertEquals(202, resource.resume("test-server", 2L).getStatus());
+        assertEquals(202, resource.reconnect("test-server", 2L).getStatus());
+
+        when(managementService.listTools("user-1", "test-server")).thenReturn(List.of());
+        assertEquals(200, resource.tools("test-server").getStatus());
+
+        when(managementService.requestRotateHeaders("user-1", "test-server", Map.of("Auth", "secret"), 2L))
+                .thenReturn(pending);
+        assertEquals(
+                202,
+                resource.rotateHeaders(
+                                "test-server",
+                                new McpConnectResource.RotateHeadersRequest(Map.of("Auth", "secret")),
+                                null,
+                                2L)
+                        .getStatus());
+    }
+
     private static void setField(Object target, String fieldName, Object value) {
         try {
             var field = target.getClass().getDeclaredField(fieldName);

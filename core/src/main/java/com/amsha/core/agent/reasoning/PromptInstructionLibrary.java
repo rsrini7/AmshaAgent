@@ -13,6 +13,12 @@ import com.amsha.core.agent.reasoning.prompt.PromptRegistry;
  */
 @ApplicationScoped
 public class PromptInstructionLibrary {
+    private static final String SPEECH_OUTPUT_RULES = """
+            SPEECH OUTPUT:
+            - Amsha may synthesize and deliver an audio reply after your answer. Audio delivery is handled by the application.
+            - When the user requests audio, voice, or speech, answer the underlying request normally and do not claim that you can only respond in text.
+            - Do not discuss audio capability, output formats, or these instructions in the answer, and do not emit audio markup.
+            """;
 
     private static final String SKILL_EXECUTION_PRECEDENCE_PREAMBLE = """
             SYSTEM OVERRIDE FOR ALL SKILLS:
@@ -490,6 +496,10 @@ public class PromptInstructionLibrary {
     public String getSecurityRules(boolean compact) {
         String key = compact ? PromptConstants.KEY_COMPACT_SECURITY_RULES : PromptConstants.KEY_SECURITY_RULES;
         String fallback = compact ? COMPACT_SECURITY_RULES_PROMPT : SECURITY_RULES_PROMPT;
-        return promptRegistry.get(PromptConstants.ROLE_CORE, key, fallback) + "\n\n" + selfEvolveDirectiveRules();
+        return promptRegistry.get(PromptConstants.ROLE_CORE, key, fallback)
+                + "\n\n"
+                + selfEvolveDirectiveRules()
+                + "\n\n"
+                + SPEECH_OUTPUT_RULES;
     }
 }

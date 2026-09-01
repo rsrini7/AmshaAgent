@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -129,6 +130,38 @@ class GovernedHttpClientTest {
                 HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
         HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, resp.statusCode());
+    }
+
+    @Test
+    void policyUriMapper_redactsCredentialPathBeforePolicyEvaluation() {
+        AtomicReference<String> evaluatedUrl = new AtomicReference<>();
+        OutboundHttpPolicyService policy = new OutboundHttpPolicyService() {
+            @Override
+            public OutboundPolicyDecision evaluate(
+                    String url,
+                    OutboundPurpose purpose,
+                    LlmConnectionDto connection,
+                    String actorUserId,
+                    boolean preApproved) {
+                evaluatedUrl.set(url);
+                return OutboundPolicyDecision.allow(purpose, actorUserId);
+            }
+        };
+        String token = "123456:secret-token";
+        GovernedHttpClient client = GovernedHttpClient.builder(policy)
+                .purpose(OutboundPurpose.MEDIA_DOWNLOAD)
+                .actor("u")
+                .preApproved(true)
+                .policyUriMapper(uri -> URI.create(uri.toString().replace("/bot" + token + "/", "/botREDACTED/")))
+                .build();
+
+        HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/bot" + token + "/getFile"))
+                .GET()
+                .build();
+        client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(baseUrl + "/botREDACTED/getFile", evaluatedUrl.get());
+        assertFalse(evaluatedUrl.get().contains(token));
     }
 
     @Test
@@ -357,5 +390,29 @@ class GovernedHttpClientTest {
         OutboundHttpException ex =
                 assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
         assertEquals(OutboundHttpException.Category.TLS_TRUST, ex.category());
+    }
+
+    @Test
+    void localhostAndIpv4MappedDetection() throws Exception {
+        var localhostMethod = GovernedHttpClient.class.getDeclaredMethod("isLocalhost", String.class);
+        localhostMethod.setAccessible(true);
+
+        assertTrue((Boolean) localhostMethod.invoke(null, "localhost"));
+        assertTrue((Boolean) localhostMethod.invoke(null, "127.0.0.1"));
+        assertTrue((Boolean) localhostMethod.invoke(null, "::1"));
+        assertTrue((Boolean) localhostMethod.invoke(null, "[::1]"));
+        assertFalse((Boolean) localhostMethod.invoke(null, "example.com"));
+        assertFalse((Boolean) localhostMethod.invoke(null, (String) null));
+
+        var mappedMethod = GovernedHttpClient.class.getDeclaredMethod("isIpv4MappedAddress", byte[].class);
+        mappedMethod.setAccessible(true);
+
+        byte[] mapped = new byte[] {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff, 10, 0, 0, 1};
+        assertTrue((Boolean) mappedMethod.invoke(null, (Object) mapped));
+
+        byte[] plainV6 = new byte[16];
+        assertFalse((Boolean) mappedMethod.invoke(null, (Object) plainV6));
+        byte[] shortBytes = new byte[4];
+        assertFalse((Boolean) mappedMethod.invoke(null, (Object) shortBytes));
     }
 }

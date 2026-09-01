@@ -20,6 +20,8 @@ import java.util.Optional;
 import com.amsha.app.security.ApiKeyRegistry;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.security.ExternalIdentityProvider;
+import com.amsha.core.security.ExternalUserProfile;
+import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityInvitationStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.WebSessionDto;
@@ -155,5 +157,71 @@ class AuthResourceUnitTest {
         assertEquals(200, response.getStatus());
         verify(webSessionStore).save(any());
         verify(auditService).recordMandatory(eq("logout"), eq("u1"), anyString(), any(), anyString());
+    }
+
+    @Test
+    void testS256AndRandomUrlSafe() throws Exception {
+        var s256Method = AuthResource.class.getDeclaredMethod("s256", String.class);
+        s256Method.setAccessible(true);
+        String hash = (String) s256Method.invoke(null, "verifier-string-123");
+        assertNotNull(hash);
+        assertFalse(hash.isBlank());
+
+        var randomMethod = AuthResource.class.getDeclaredMethod("randomUrlSafe", int.class);
+        randomMethod.setAccessible(true);
+        String rand = (String) randomMethod.invoke(resource, 32);
+        assertNotNull(rand);
+        assertFalse(rand.isBlank());
+    }
+
+    @Test
+    void testEmailConstraintViolated() throws Exception {
+        var emailMethod = AuthResource.class.getDeclaredMethod(
+                "isEmailConstraintViolated", IdentityInvitationDto.class, ExternalUserProfile.class);
+        emailMethod.setAccessible(true);
+
+        IdentityInvitationDto invNoConstraint = new IdentityInvitationDto(
+                "inv-1",
+                "ws-1",
+                "user",
+                "digest",
+                null,
+                Instant.now().plusSeconds(3600),
+                null,
+                null,
+                0,
+                Instant.now(),
+                Instant.now());
+        ExternalUserProfile profile = new ExternalUserProfile("sub-1", "alice@example.com", true, "Alice", null);
+
+        assertFalse((Boolean) emailMethod.invoke(resource, invNoConstraint, profile));
+
+        IdentityInvitationDto invMatching = new IdentityInvitationDto(
+                "inv-1",
+                "ws-1",
+                "user",
+                "digest",
+                "alice@example.com",
+                Instant.now().plusSeconds(3600),
+                null,
+                null,
+                0,
+                Instant.now(),
+                Instant.now());
+        assertFalse((Boolean) emailMethod.invoke(resource, invMatching, profile));
+
+        IdentityInvitationDto invMismatched = new IdentityInvitationDto(
+                "inv-1",
+                "ws-1",
+                "user",
+                "digest",
+                "bob@example.com",
+                Instant.now().plusSeconds(3600),
+                null,
+                null,
+                0,
+                Instant.now(),
+                Instant.now());
+        assertTrue((Boolean) emailMethod.invoke(resource, invMismatched, profile));
     }
 }

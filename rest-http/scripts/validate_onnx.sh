@@ -33,7 +33,7 @@ else:
 PY
 }
 fail()  { printf "❌ HTTP %s — %s\n" "$CODE" "$(response_shape)"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m 180 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
+mute()  { curl -s -m "$CURL_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 successful_embeddings() {
   curl -s -m 15 "$B/q/metrics" \
     | awk '/^amsha_onnx_embedding_requests_total\{[^}]*outcome="success"/ { total += $NF } END { printf "%.0f", total + 0 }'

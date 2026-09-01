@@ -129,22 +129,44 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
         }
     }
 
+    static Path resolveEnvPath(Path workingDirectory) {
+        Path currentEnv = workingDirectory.toAbsolutePath().normalize().resolve(".env");
+        if (Files.exists(currentEnv)) {
+            return currentEnv;
+        }
+        Path parentDirectory = currentEnv.getParent();
+        if (parentDirectory != null && parentDirectory.getParent() != null) {
+            Path parentEnv = parentDirectory.getParent().resolve(".env");
+            if (Files.exists(parentEnv)) {
+                return parentEnv;
+            }
+        }
+        return currentEnv;
+    }
+
     private Path resolveEnvPath() {
+        Path workingDirectoryEnv = resolveEnvPath(Paths.get("."));
+        if (Files.exists(workingDirectoryEnv)) {
+            return workingDirectoryEnv;
+        }
         if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
             String command = ProcessHandle.current().info().command().orElse("");
             if (!command.isEmpty()) {
                 try {
                     Path binaryDir =
                             Path.of(command).toAbsolutePath().normalize().getParent();
-                    if (binaryDir != null && Files.exists(binaryDir)) {
-                        return binaryDir.resolve(".env");
+                    if (binaryDir != null) {
+                        Path binaryEnv = binaryDir.resolve(".env");
+                        if (Files.exists(binaryEnv)) {
+                            return binaryEnv;
+                        }
                     }
                 } catch (Exception e) {
                     // fall through to CWD
                 }
             }
         }
-        return Paths.get(".env");
+        return workingDirectoryEnv;
     }
 
     /**

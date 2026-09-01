@@ -5,7 +5,6 @@ import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { SettingsDto } from '../api/types';
 
-
 @customElement('arc-settings')
 export class ArcSettings extends LitElement {
   @consume({ context: arcContext, subscribe: true })
@@ -15,6 +14,10 @@ export class ArcSettings extends LitElement {
   @state() private _activeTab = 'prompt';
   @state() private _systemPrompt = '';
   @state() private _appVersion = '';
+  @state() private _voice = 'default';
+  @state() private _customVoice = '';
+  @state() private _speechOutputMode = 'default';
+  @state() private _availableVoices: string[] = ['default', 'vivian', 'serena', 'eric', 'ryan', 'alloy', 'onyx'];
 
   private get _client(): ArcClient {
     return new ArcClient('/api/v1', this._appContext?.apiKey || '');
@@ -49,7 +52,19 @@ export class ArcSettings extends LitElement {
     }
     .section { display: flex; flex-direction: column; gap: var(--space-4); }
 
+    .field-group {
+      display: flex; flex-direction: column; gap: var(--space-2);
+    }
     .field-label { display: block; font-size: var(--font-size-xs); font-weight: var(--font-weight-semi); text-transform: uppercase; color: var(--text-muted); }
+    .field-hint { font-size: var(--font-size-xs); color: var(--text-muted); }
+    .field-select, .field-input {
+      width: 100%; max-width: 400px; padding: var(--space-3) var(--space-4); background: var(--bg-elevated);
+      border: 1.5px solid var(--border); border-radius: var(--radius-md);
+      color: var(--text-primary); font-family: var(--font-family); font-size: var(--font-size-sm);
+      box-sizing: border-box;
+    }
+    .field-select:focus, .field-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-glow); }
+
     .field-textarea {
       width: 100%; padding: var(--space-3) var(--space-4); background: var(--bg-elevated);
       border: 1.5px solid var(--border); border-radius: var(--radius-md);
@@ -85,9 +100,20 @@ export class ArcSettings extends LitElement {
       this._settings = data;
       this._appVersion = data.appVersion;
       this._skipOnboarding = data.skipOnboarding;
+      if (data.availableVoices && data.availableVoices.length > 0) {
+        this._availableVoices = data.availableVoices;
+      }
+      if (data.voice && this._availableVoices.includes(data.voice)) {
+        this._voice = data.voice;
+      } else {
+        this._voice = 'default';
+      }
+      if (data.speechOutputMode) {
+        this._speechOutputMode = data.speechOutputMode;
+      } else {
+        this._speechOutputMode = 'default';
+      }
       // Load the full system prompt via the dedicated endpoint.
-      // getSettings returns displayPrompt truncated to 199 chars;
-      // saving a truncated prompt back would corrupt the vault.
       try {
         const promptData = await this._client.getPrompt();
         this._systemPrompt = promptData.systemPrompt;
@@ -106,6 +132,18 @@ export class ArcSettings extends LitElement {
       this._loading = true; this._error = ''; this._success = '';
       await this._client.patchPrompt(this._systemPrompt);
       this._success = 'Prompt updated successfully.';
+    } catch (e: any) {
+      this._error = e.message;
+    } finally {
+      this._loading = false;
+    }
+  }
+
+  private async _saveVoice() {
+    try {
+      this._loading = true; this._error = ''; this._success = '';
+      await this._client.patchVoice(this._voice, this._speechOutputMode);
+      this._success = 'Speech & voice settings updated successfully.';
     } catch (e: any) {
       this._error = e.message;
     } finally {
@@ -133,6 +171,7 @@ export class ArcSettings extends LitElement {
       
       <div class="tabs">
         <div class="tab ${this._activeTab === 'prompt' ? 'active' : ''}" @click="${() => this._activeTab = 'prompt'}">System Prompt</div>
+        <div class="tab ${this._activeTab === 'voice' ? 'active' : ''}" @click="${() => this._activeTab = 'voice'}">Speech & Voice</div>
         <div class="tab ${this._activeTab === 'danger' ? 'active' : ''}" @click="${() => this._activeTab = 'danger'}">Danger Zone</div>
       </div>
 
@@ -141,6 +180,7 @@ export class ArcSettings extends LitElement {
       ${this._renderConfigurationSummary()}
 
       ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
+      ${this._activeTab === 'voice' ? this._renderVoice() : ''}
       ${this._activeTab === 'danger' ? this._renderDanger() : ''}
     `;
   }
@@ -166,6 +206,47 @@ export class ArcSettings extends LitElement {
         <textarea class="field-textarea" .value="${this._systemPrompt}" @input="${(e: any) => this._systemPrompt = e.target.value}"></textarea>
         <div style="margin-top:var(--space-4)">
           <button class="btn-primary" ?disabled="${this._loading}" @click="${() => this._savePrompt()}">Save Prompt</button>
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderVoice() {
+    const voiceLabels: Record<string, string> = {
+      default: '🎲 Default (Random / Model Neutral)',
+      vivian: '👩 Vivian (Female 1)',
+      serena: '👩 Serena (Female 2)',
+      eric: '👨 Eric (Male 1)',
+      ryan: '👨 Ryan (Male 2)',
+      alloy: '🎙️ Alloy (Neutral / Standard)',
+      onyx: '🎙️ Onyx (Deep Male)'
+    };
+
+    return html`
+      <div class="section">
+        <div class="field-group">
+          <span class="field-label">Synthesized Voice</span>
+          <span class="field-hint">Select the TTS voice timbre and speaker identity for audio responses.</span>
+          <select class="field-select" .value="${this._voice}" @change="${(e: any) => this._voice = e.target.value}">
+            ${this._availableVoices.map(v => html`
+              <option value="${v}">${voiceLabels[v] || v}</option>
+            `)}
+          </select>
+        </div>
+
+        <div class="field-group" style="margin-top:var(--space-2)">
+          <span class="field-label">Default Speech Output Mode</span>
+          <span class="field-hint">Controls when audio voice replies are synthesized.</span>
+          <select class="field-select" .value="${this._speechOutputMode}" @change="${(e: any) => this._speechOutputMode = e.target.value}">
+            <option value="default">🎲 System Default (Follow Server Policy)</option>
+            <option value="TEXT_ONLY">💬 Text Only</option>
+            <option value="TEXT_AND_AUDIO">🔊 Text and Spoken Voice</option>
+            <option value="AUDIO_ONLY">🎙️ Spoken Voice Only</option>
+          </select>
+        </div>
+
+        <div style="margin-top:var(--space-4)">
+          <button class="btn-primary" ?disabled="${this._loading}" @click="${() => this._saveVoice()}">Save Speech & Voice Settings</button>
         </div>
       </div>
     `;

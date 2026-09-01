@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.channel.api.AttachmentType;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -17,6 +18,7 @@ import com.amsha.core.agent.sse.HitlEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.llm.api.ToolCallJsonKeys;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -111,6 +113,7 @@ public class ApprovalCheckpointManager {
             cp.setChannelType(context.channelType());
             cp.setChannelPlatformId(context.channelPlatformId());
         }
+        populateContextData(cp, context);
 
         // Save checkpoint metadata and reasoning steps in one atomic store write.
         agentStore.saveWithSteps(cp, history);
@@ -214,6 +217,7 @@ public class ApprovalCheckpointManager {
             cp.setChannelType(context.channelType());
             cp.setChannelPlatformId(context.channelPlatformId());
         }
+        populateContextData(cp, context);
 
         // 3. Save
         agentStore.saveWithSteps(cp, history);
@@ -270,10 +274,10 @@ public class ApprovalCheckpointManager {
             originalBatchJson = objectMapper.writeValueAsString(allCalls);
             preExecutedJson = objectMapper.writeValueAsString(results);
             for (ParallelToolCall call : allCalls) {
-                if (results.containsKey(call.toolName())) {
-                    decisions.put(call.toolName(), ToolDecision.APPROVED);
-                } else {
+                if (!results.containsKey(call.toolName())) {
                     decisions.put(call.toolName(), ToolDecision.PENDING);
+                } else if (!decisions.containsKey(call.toolName())) {
+                    decisions.put(call.toolName(), ToolDecision.APPROVED);
                 }
             }
         } catch (Exception e) {
@@ -283,7 +287,8 @@ public class ApprovalCheckpointManager {
         AgentCheckpoint cp = loadActiveOrCreate(sessionId, agentRole);
         agentStore.clearBatchResuming(sessionId);
 
-        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        boolean hasPending = decisions.values().stream().anyMatch(ToolDecision.PENDING::equals);
+        cp.setStatus(hasPending ? CheckpointStatus.AWAITING_APPROVAL : CheckpointStatus.COMPLETED);
         cp.setPendingToolName(compositeName);
         cp.setPendingToolRole(agentRole);
         cp.setPendingToolParametersJson(originalBatchJson);
@@ -303,6 +308,7 @@ public class ApprovalCheckpointManager {
             cp.setChannelType(context.channelType());
             cp.setChannelPlatformId(context.channelPlatformId());
         }
+        populateContextData(cp, context);
 
         agentStore.saveWithSteps(cp, history);
 
@@ -324,5 +330,26 @@ public class ApprovalCheckpointManager {
         ApprovalFrame frame =
                 new ApprovalFrame(compositeName, Map.of(ToolCallJsonKeys.BATCH, originalBatchJson), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
+    }
+
+    private void populateContextData(AgentCheckpoint cp, AgentExecutionContext context) {
+        Map<String, Object> contextData = new LinkedHashMap<>();
+        if (context.data() != null) {
+            contextData.putAll(context.data());
+        }
+        if (context.mediaAttachments() != null && !context.mediaAttachments().isEmpty()) {
+            boolean hasAudio =
+                    context.mediaAttachments().stream().anyMatch(a -> a != null && a.type() == AttachmentType.AUDIO);
+            if (hasAudio) {
+                contextData.put(TurnDispatchService.DATA_INBOUND_AUDIO, true);
+            }
+        }
+        if (!contextData.isEmpty()) {
+            try {
+                cp.setContextDataJson(objectMapper.writeValueAsString(contextData));
+            } catch (Exception e) {
+                log.debugf("Serialization fallback for context data (non-fatal): %s", LogUtil.rootMessage(e));
+            }
+        }
     }
 }

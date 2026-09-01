@@ -7,12 +7,26 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
+import com.amsha.core.routing.DefaultModelRouteSelector;
+import com.amsha.core.routing.ModelRoute;
+import com.amsha.core.routing.ModelRouteSelector;
 import com.amsha.core.routing.ModelRouter;
+import com.amsha.core.routing.ProfileRouteCandidateBuilder;
+import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.structured.StructuredOutputMetrics;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredSchemaRequests;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
@@ -39,6 +53,8 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     private final ChatModel globalChatModel;
     private final ModelRouter modelRouter;
     private final MeterRegistry meterRegistry;
+    private final ModelRouteSelector modelRouteSelector;
+    private final ProfileRouteCandidateBuilder candidateBuilder;
 
     @ConfigProperty(name = "amsha.llm.circuit-breaker.enabled", defaultValue = "true")
     boolean cbEnabled;
@@ -47,14 +63,21 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     private final ConcurrentHashMap<String, PerModelCircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
 
     @Inject
-    public LangChain4jLlmAdapter(ChatModel globalChatModel, ModelRouter modelRouter, MeterRegistry meterRegistry) {
+    public LangChain4jLlmAdapter(
+            ChatModel globalChatModel,
+            ModelRouter modelRouter,
+            MeterRegistry meterRegistry,
+            ModelRouteSelector modelRouteSelector,
+            ProfileRouteCandidateBuilder candidateBuilder) {
         this.globalChatModel = globalChatModel;
         this.modelRouter = modelRouter;
         this.meterRegistry = meterRegistry;
+        this.modelRouteSelector = modelRouteSelector;
+        this.candidateBuilder = candidateBuilder;
     }
 
     public LangChain4jLlmAdapter(ChatModel globalChatModel, ModelRouter modelRouter) {
-        this(globalChatModel, modelRouter, null);
+        this(globalChatModel, modelRouter, null, new DefaultModelRouteSelector(), null);
     }
 
     @Override
@@ -87,6 +110,150 @@ public class LangChain4jLlmAdapter implements LlmProviderPort {
     public ChatResponse nextStep(ChatRequest request, String agentRole, boolean bypassLightweightRouting) {
         ChatModel resolvedModel = resolveModel(agentRole, bypassLightweightRouting);
         return execute(request, resolvedModel);
+    }
+
+    @Override
+    public ChatResponse nextStep(ChatRequest request, String agentRole, ModelRoute route) {
+        if (route == null) {
+            return nextStep(request, agentRole);
+        }
+        List<ModelRoute> candidates = new ArrayList<>();
+        candidates.add(route);
+        candidates.addAll(route.fallbackRoutes());
+        RuntimeException firstFailure = null;
+        Set<ChatModel> attemptedModels = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (ModelRoute candidate : candidates) {
+            if (candidate == null || candidate.model() == null) {
+                continue;
+            }
+            if (!MultimodalRequests.supportsAllMultimodalContent(request, candidate.capability())) {
+                log.debugf(
+                        "[LLM-ADAPTER] Skipping route candidate %s; it cannot consume this turn's media",
+                        candidate.routeId());
+                continue;
+            }
+            if (!attemptedModels.add(candidate.model())) {
+                continue;
+            }
+            try {
+                ChatRequest candidateRequest =
+                        MultimodalRequests.forCandidate(request, candidate.capability(), candidate.modelName());
+                return execute(candidateRequest, candidate.model());
+            } catch (RuntimeException e) {
+                if (firstFailure == null) {
+                    firstFailure = e;
+                }
+                log.warnf(
+                        "[LLM-ADAPTER] Route candidate %s failed; trying next same-modality candidate: %s",
+                        candidate.routeId(), LogUtil.rootMessage(e));
+            }
+        }
+        if (MultimodalRequests.hasMultimodalContent(request)) {
+            return executeTextFallback(request, agentRole, attemptedModels, firstFailure);
+        }
+        if (firstFailure == null) {
+            ChatRequest fallbackRequest =
+                    MultimodalRequests.forCandidate(request, route.capability(), route.modelName());
+            return nextStep(fallbackRequest, agentRole);
+        }
+        throw firstFailure;
+    }
+
+    private ChatResponse executeTextFallback(
+            ChatRequest request, String agentRole, Set<ChatModel> attemptedModels, RuntimeException firstFailure) {
+        ChatRequest textRequest = MultimodalRequests.withoutMultimodalContent(request, "text-only fallback");
+        ModelRoute textRoute = resolveRoute(agentRole, TurnRequirements.textOnly());
+        List<ModelRoute> textCandidates = new ArrayList<>();
+        if (textRoute != null) {
+            textCandidates.add(textRoute);
+            textCandidates.addAll(textRoute.fallbackRoutes());
+        }
+        RuntimeException textFailure = null;
+        for (ModelRoute candidate : textCandidates) {
+            if (candidate == null || candidate.model() == null || attemptedModels.contains(candidate.model())) {
+                continue;
+            }
+            try {
+                return execute(textRequest, candidate.model());
+            } catch (RuntimeException e) {
+                if (textFailure == null) {
+                    textFailure = e;
+                }
+                log.warnf(
+                        "[LLM-ADAPTER] Text fallback route %s failed: %s", candidate.routeId(), LogUtil.rootMessage(e));
+            }
+        }
+        if (firstFailure != null) {
+            throw firstFailure;
+        }
+        if (textFailure != null) {
+            throw textFailure;
+        }
+        throw new IllegalStateException("No compatible text route is available for multimodal request");
+    }
+
+    @Override
+    public ChatResponse nextStep(
+            ChatRequest request, String agentRole, ModelRoute route, boolean bypassLightweightRouting) {
+        return nextStep(request, agentRole, route);
+    }
+
+    @Override
+    public MultimodalCapability multimodalCapability(String agentRole) {
+        ChatModel resolvedModel = resolveModel(agentRole, false);
+        return MultimodalCapabilities.resolveCapability(resolvedModel);
+    }
+
+    @Override
+    public ModelRoute resolveRoute(String agentRole, TurnRequirements requirements) {
+        // Slab B: Deep resolution — enumerate profile candidates, filter by TurnRequirements,
+        // select via ModelRouteSelector. Falls back to role-based resolution when no profile
+        // candidates exist or when the selector cannot satisfy the requirements.
+        if (candidateBuilder != null) {
+            List<ModelRoute> candidates = candidateBuilder.buildCandidates(agentRole);
+            if (!candidates.isEmpty()) {
+                Optional<ModelRoute> selected = modelRouteSelector.select(agentRole, requirements, candidates);
+                if (selected.isPresent()) {
+                    log.debugf(
+                            "[LLM-ADAPTER] Slab B route selected for role=%s: %s",
+                            agentRole, selected.get().routeId());
+                    return selected.get();
+                }
+                log.debugf(
+                        "[LLM-ADAPTER] Slab B selector returned empty for role=%s with %d candidates; "
+                                + "falling back to role-based route",
+                        agentRole, candidates.size());
+            }
+        }
+        // Fallback: role-based resolution (pre-Slab B path). Build a single-candidate route
+        // from the legacy ModelRouter and pass it through the selector for consistent ordering.
+        ChatModel resolvedModel = resolveModel(agentRole, false);
+        MultimodalCapability capability = MultimodalCapabilities.resolveCapability(resolvedModel);
+        ModelRoute legacyRoute = new ModelRoute(
+                "role:" + (agentRole == null ? "global" : agentRole),
+                null,
+                null,
+                null,
+                resolvedModel,
+                capability,
+                List.of(),
+                0L);
+        Optional<ModelRoute> selected = modelRouteSelector.select(agentRole, requirements, List.of(legacyRoute));
+        if (selected.isPresent()) {
+            return selected.get();
+        }
+        log.warnf(
+                "[LLM-ADAPTER] Legacy route %s does not cover turn requirements; degrading to text-only fallback",
+                legacyRoute.routeId());
+        return new ModelRoute(
+                "fallback:text-only",
+                legacyRoute.providerName(),
+                legacyRoute.modelName(),
+                null,
+                resolvedModel,
+                MultimodalCapability.TEXT_ONLY,
+                List.of(),
+                0L);
     }
 
     private ChatResponse execute(ChatRequest request, ChatModel resolvedModel) {

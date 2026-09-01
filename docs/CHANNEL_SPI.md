@@ -15,6 +15,14 @@ All interfaces live in `amsha-channel-api`. The core and app modules depend on t
 | `ChannelJobNotifier` | Sends cron and approval timeout notifications | Yes |
 | `ChannelDaemon` | Daemon lifecycle: `channelId()`, `isConfigured()`, `start()` | Yes |
 
+## Multimodal Media
+
+`channel-api` now carries optional multimodal payloads for inbound turns:
+
+* `MediaAttachment` (`attachmentType: IMAGE|DOCUMENT_PDF|AUDIO|OTHER`, `sourceUri`/`inlineData`, `mimeType`, `fileName`, `sizeBytes`) attached to `ChannelMessage` via `List<MediaAttachment> attachments()`.
+* Adapters (Telegram, WebSocket) populate `MediaAttachment` but **do not download**. Core resolves URI-backed media later through `MediaDownloadPort` (`amsha-security`) while `AbstractInboundMessagePipeline` admits the message and applies caption/default-prompt fallback. Telegram emits opaque `telegram://file/<file_id>` references resolved through `GovernedTelegramMediaResolver`.
+* Governed service: `GovernedMediaDownloadService` streams with `MediaBudgetLimits` (`10/25/50 MiB`), `MediaSecurityValidator` (SSRF IP blocklist + redirect revalidation), and `OutboundPurpose.MEDIA_DOWNLOAD` policy. Results are `DownloadedMedia` (`AutoCloseable` temp files). See [SECURITY.md#governed-media-download](./SECURITY.md#governed-media-download) and `amsha.media.*` in [CONFIGURATION.md](./CONFIGURATION.md#media-ingestion--download-limits).
+
 ## Supporting Types
 
 ### `ChannelType` (record)
@@ -55,8 +63,24 @@ public interface ChannelSender {
     void send(ChannelUser recipient, List<ReplyNode> nodes);  // Rendered delivery
     void sendRaw(ChannelUser recipient, String text);          // Pre-rendered plaintext
     default void sendBySession(String sessionId, String text)  // Session-based delivery (e.g. WebSocket tabs)
+    default boolean sendAudio(ChannelUser recipient, byte[] audio, String mimeType, String fileName) {
+        return false; // Speech synthesis audio delivery (returns false if unsupported/failed)
+    }
 }
 ```
+
+#### Audio Delivery Contracts & Limits
+
+1. **Fallback Safety**: If `sendAudio()` returns `false` or throws an exception, `AgentDispatchHandler` automatically falls back to `sendRaw(text)` plaintext delivery so no turn response is dropped.
+2. **WebSocket Channel (`WebChannelSender`)**:
+   - Emits a JSON frame containing Base64-encoded audio payload with MIME type and safe sanitized file name.
+   - Vert.x server configuration (`WebsocketServerCustomizer`) enforces a **36 MiB** frame buffer ceiling to safely transmit large audio replies and 25 MiB attachments.
+   - Frontend (`arc-chat-interface.ts`) decodes Base64 into browser `Blob` object URLs (`URL.createObjectURL`), avoiding DOM memory retention.
+3. **Telegram Channel (`TelegramChannelSender`)**:
+   - Delivers synthesized voice replies via `OutgoingAudioMessage` over Camel Telegram.
+   - Raw uncompressed WAV files exceeding 1 MB are automatically compressed to native Telegram **OGG Opus** (~100 KB) using local `ffmpeg`, preventing `BufferOverflowException` on Camel's internal multipart upload buffers.
+
+![Audio & Speech Synthesis Architecture](./assets/amsha_audio_speech_pipeline.svg)
 
 ### `ReplyRenderer`
 
@@ -360,4 +384,3 @@ At a minimum:
 - [Architecture Guide](ARCHITECTURE.md) - Context on message processing & pipeline visual flow
 - [Extension Guide](AMSHA_EXTENSION.md) - Overall guide to extending all parts of the agent
 - [Message Pipeline Diagram](assets/amsha_message_pipeline.svg) - Visual representation of message processing
-

@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/common_env.sh"
 FAIL=0; PASS=0
 SP=7            # sleep before each mutating call to respect 10 mutations/min
 RL_WAIT=62     # wait on 429 (retry-after ~60s)
-AGENT_TIMEOUT="${AGENT_TIMEOUT:-60}" # native local models may need >20s before reaching HITL
+AGENT_TIMEOUT="${AGENT_TIMEOUT:-180}" # native local models may need >60s before reaching HITL
 RESP_FILE=$(mktemp "${TMPDIR:-/tmp}/amsha-reflex-response.XXXXXX")
 trap 'rm -f "$RESP_FILE"' EXIT
 

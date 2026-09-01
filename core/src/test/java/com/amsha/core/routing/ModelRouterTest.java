@@ -9,6 +9,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
@@ -289,5 +290,36 @@ class ModelRouterTest {
         boolean distinct = router.hasDistinctEscalationTier("coder");
 
         assertFalse(distinct, "routing-metadata failures must read as 'no escalation tier'");
+    }
+
+    @Test
+    void testCurrentUserIdFallback() throws Exception {
+        Method m = ModelRouter.class.getDeclaredMethod("currentUserId");
+        m.setAccessible(true);
+
+        assertEquals("unknown", m.invoke(router));
+
+        String user = ScopedValue.where(WorkspaceContext.USER_ID, "alice").call(() -> {
+            try {
+                return (String) m.invoke(router);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        assertEquals("alice", user);
+    }
+
+    @Test
+    void testIsLightweightTask() throws Exception {
+        Method m = ModelRouter.class.getDeclaredMethod("isLightweightTask", String.class);
+        m.setAccessible(true);
+
+        assertTrue((Boolean) m.invoke(router, (String) null));
+        assertTrue((Boolean) m.invoke(router, "hi"));
+        assertTrue((Boolean) m.invoke(router, "hello"));
+        assertTrue((Boolean) m.invoke(router, "hey there"));
+        assertTrue((Boolean) m.invoke(router, "/status"));
+        assertTrue((Boolean) m.invoke(router, "clear"));
+        assertFalse((Boolean) m.invoke(router, "Please refactor the authentication service and write unit tests"));
     }
 }

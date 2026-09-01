@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.MultimodalRequests;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -105,7 +106,9 @@ public final class AgyCliExecutor {
             if (msg instanceof SystemMessage sys) {
                 sb.append("System Instructions:\n").append(sys.text()).append("\n\n");
             } else if (msg instanceof UserMessage usr) {
-                sb.append("User: ").append(usr.singleText()).append("\n\n");
+                sb.append("User: ")
+                        .append(MultimodalRequests.textOf(usr, "agy"))
+                        .append("\n\n");
             } else if (msg instanceof AiMessage ai
                     && ai.text() != null
                     && !ai.text().isBlank()) {

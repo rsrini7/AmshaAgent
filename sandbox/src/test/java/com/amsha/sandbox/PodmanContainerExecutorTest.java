@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -137,5 +138,34 @@ class PodmanContainerExecutorTest {
 
         Exception ex = assertThrows(Exception.class, () -> readOutput.invoke(executor, mockProc, List.of("echo")));
         assertTrue(ex.getCause() instanceof ToolExecutionException);
+    }
+
+    @Test
+    void testReadSandboxOutputExit125AndMissingImage() throws Exception {
+        Method readOutput = PodmanContainerExecutor.class.getDeclaredMethod(
+                "readSandboxOutputAndGetResult", Process.class, List.class);
+        readOutput.setAccessible(true);
+
+        // Exit 125
+        Process proc125 = mock(Process.class);
+        when(proc125.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(proc125.getErrorStream())
+                .thenReturn(new ByteArrayInputStream("engine error".getBytes(StandardCharsets.UTF_8)));
+        when(proc125.waitFor(anyLong(), any())).thenReturn(true);
+        when(proc125.exitValue()).thenReturn(125);
+
+        Exception ex1 = assertThrows(Exception.class, () -> readOutput.invoke(executor, proc125, List.of("echo")));
+        assertTrue(ex1.getCause() instanceof IOException);
+
+        // Missing image ("not found")
+        Process procMissing = mock(Process.class);
+        when(procMissing.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(procMissing.getErrorStream())
+                .thenReturn(new ByteArrayInputStream("image not found on host".getBytes(StandardCharsets.UTF_8)));
+        when(procMissing.waitFor(anyLong(), any())).thenReturn(true);
+        when(procMissing.exitValue()).thenReturn(1);
+
+        Exception ex2 = assertThrows(Exception.class, () -> readOutput.invoke(executor, procMissing, List.of("echo")));
+        assertTrue(ex2.getCause() instanceof SandboxImageMissingException);
     }
 }

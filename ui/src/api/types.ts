@@ -19,8 +19,16 @@ export interface ApprovalResultDto {
 }
 
 // WebSocket Message Shapes
-export type WsOutboundMessage = 
-  | { type: 'message'; text: string; }
+export type WsOutboundMessage =
+  | {
+      type: 'message';
+      text: string;
+      attachment?: {
+        mimeType: 'audio/mpeg' | 'audio/wav' | 'audio/ogg' | 'audio/webm';
+        fileName: string;
+        data: string;
+      };
+    }
   | { type: 'AUTH'; token: string; };
 
 export interface WsConnectedEvent {
@@ -29,10 +37,18 @@ export interface WsConnectedEvent {
   platformId: string;
 }
 
+export interface WsAssistantAudio {
+  mimeType: string;
+  fileName: string;
+  data: string;
+  url?: string;
+}
+
 export interface WsAssistantMessage {
   type: 'message';
   role: 'assistant';
   text: string;
+  audio?: WsAssistantAudio;
 }
 
 export type WsInboundFrame = WsConnectedEvent | WsAssistantMessage;
@@ -71,6 +87,14 @@ export interface SettingsDto {
   effectiveSource?: 'ENVIRONMENT' | 'VAULT' | 'DEFAULT' | 'NONE' | string;
   credentialState?: 'NOT_REQUIRED' | 'CONFIGURED' | 'MISSING' | string;
   credentialSource?: 'ENVIRONMENT' | 'VAULT' | 'NONE' | string;
+  voice?: string;
+  speechOutputMode?: string;
+  availableVoices?: string[];
+}
+
+export interface VoiceSettingsUpdateRequest {
+  voice?: string;
+  speechOutputMode?: string;
 }
 
 export interface ProviderCatalogModel {

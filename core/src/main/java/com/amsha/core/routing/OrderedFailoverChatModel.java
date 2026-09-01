@@ -12,6 +12,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
+import com.amsha.llm.api.MultimodalCapabilities;
+import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.llm.api.MultimodalCapable;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredSchemaRequests;
@@ -40,21 +44,27 @@ import org.jboss.logging.Logger;
  * <p>Health is keyed by route + profile revision so credential rotation or profile correction
  * clears stale permanent-disable state.</p>
  */
-public class OrderedFailoverChatModel implements ChatModel, StrictJsonSchemaCapable {
+public class OrderedFailoverChatModel implements ChatModel, StrictJsonSchemaCapable, MultimodalCapable {
 
     private static final Logger log = Logger.getLogger(OrderedFailoverChatModel.class);
     private static final int MAX_CONSECUTIVE_FAILURES = 3;
 
-    public record Entry(String label, ChatModel model, boolean advertisesStrictSchema) {
+    public record Entry(
+            String label, ChatModel model, boolean advertisesStrictSchema, MultimodalCapability multimodalCapability) {
+
+        public Entry(String label, ChatModel model, boolean advertisesStrictSchema) {
+            this(label, model, advertisesStrictSchema, MultimodalCapabilities.resolveCapability(model));
+        }
 
         public Entry(String label, ChatModel model) {
-            this(label, model, false);
+            this(label, model, false, MultimodalCapabilities.resolveCapability(model));
         }
     }
 
     private final String routeKey;
     private final List<Entry> entries;
     private final Set<Capability> compositeCapabilities;
+    private final MultimodalCapability compositeMultimodalCapability;
     private final Map<String, Health> health;
     private final int cooldownBaseSeconds;
     private final int cooldownMaxSeconds;
@@ -73,6 +83,8 @@ public class OrderedFailoverChatModel implements ChatModel, StrictJsonSchemaCapa
         this.entries = List.copyOf(entries);
         this.compositeCapabilities = StructuredOutputCapabilities.intersectionOf(
                 this.entries.stream().map(Entry::model).toList());
+        this.compositeMultimodalCapability = MultimodalCapabilities.intersect(
+                this.entries.stream().map(Entry::multimodalCapability).toList());
         this.health = new ConcurrentHashMap<>();
         for (Entry e : entries) {
             health.put(e.label(), new Health());
@@ -84,6 +96,11 @@ public class OrderedFailoverChatModel implements ChatModel, StrictJsonSchemaCapa
 
     public OrderedFailoverChatModel(String routeKey, List<Entry> entries, int cooldownTransientSeconds) {
         this(routeKey, entries, 10, 60, cooldownTransientSeconds);
+    }
+
+    @Override
+    public MultimodalCapability multimodalCapability() {
+        return compositeMultimodalCapability;
     }
 
     /**
@@ -127,9 +144,16 @@ public class OrderedFailoverChatModel implements ChatModel, StrictJsonSchemaCapa
                 log.debugf("OrderedFailover[%s] %s in cooldown, skipping.", routeKey, entry.label());
                 continue;
             }
+            if (!MultimodalRequests.supportsAllMultimodalContent(request, entry.multimodalCapability())) {
+                log.debugf(
+                        "OrderedFailover[%s] %s cannot consume request modality, skipping.", routeKey, entry.label());
+                continue;
+            }
+            ChatRequest candidateReq =
+                    MultimodalRequests.forCandidate(request, entry.multimodalCapability(), entry.label());
             ChatRequest outbound = schemaRejected
-                    ? StructuredSchemaRequests.withoutNativeJsonSchema(request)
-                    : StructuredSchemaRequests.forCandidate(request, candidateSupportsStrictSchema(entry));
+                    ? StructuredSchemaRequests.withoutNativeJsonSchema(candidateReq)
+                    : StructuredSchemaRequests.forCandidate(candidateReq, candidateSupportsStrictSchema(entry));
             boolean schemaAttached = StructuredSchemaRequests.hasNativeJsonSchema(outbound);
             try {
                 ChatResponse response = entry.model().chat(outbound);

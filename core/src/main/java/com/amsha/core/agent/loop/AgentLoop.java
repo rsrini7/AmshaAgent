@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.amsha.channel.api.MediaAttachment;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
@@ -25,6 +26,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.state.StatefulAgentStore;
@@ -364,6 +366,9 @@ public class AgentLoop {
                 mergedData.putAll(restored);
             }
         }
+        if (TurnDispatchService.hasInboundAudio(context)) {
+            mergedData.put(TurnDispatchService.DATA_INBOUND_AUDIO, true);
+        }
 
         String chatId = context != null && context.getChatId() != null ? context.getChatId() : sessionId;
         AutonomyLevel autonomy = context != null && context.getAutonomyLevel().isPresent()
@@ -385,6 +390,12 @@ public class AgentLoop {
             }
         }
 
+        List<MediaAttachment> attachments = (context != null
+                        && context.getMessage() != null
+                        && context.getMessage().attachments() != null)
+                ? context.getMessage().attachments()
+                : List.of();
+
         return new AgentExecutionContext(
                 sessionId,
                 capturedUserId,
@@ -398,7 +409,8 @@ public class AgentLoop {
                 channelTypeStr,
                 channelPlatformId,
                 systemNote,
-                mergedData);
+                mergedData,
+                attachments);
     }
 
     private AgentResult executeWithinScopes(

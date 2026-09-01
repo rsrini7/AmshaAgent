@@ -14,14 +14,7 @@ if ($IsWindows -and -not ([System.Management.Automation.PSTypeName]'WinCon').Typ
         }'
 }
 
-$envCopied = $false
 try {
-    if (-not (Test-Path '.env') -and (Test-Path '../.env')) {
-        Copy-Item -Path '../.env' -Destination '.env'
-        $envCopied = $true
-        Write-Host '[dev:debug] Copied ../.env -> app/.env for this session'
-    }
-
     $debugPort = if ($env:AMSHA_DEBUG_PORT) { $env:AMSHA_DEBUG_PORT } else { '5005' }
 
     $mvnw    = if ($IsWindows) { '..\mvnw.cmd' } else { '../mvnw' }
@@ -53,11 +46,6 @@ try {
 
     [Console]::TreatControlCAsInput = $false
     $host.UI.RawUI.FlushInputBuffer()
-
-    if ($envCopied) {
-        Remove-Item -Path '.env' -Force -ErrorAction SilentlyContinue
-        Write-Host '[dev:debug] Cleaned up temporary app/.env'
-    }
 
     Write-Host '[dev:debug] Terminal restored. Press Enter if cursor is missing.'
     # Ctrl+C → exit 130. Don't let mise report "ERROR task failed".

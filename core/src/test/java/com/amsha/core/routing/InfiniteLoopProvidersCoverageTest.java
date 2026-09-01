@@ -32,6 +32,28 @@ class InfiniteLoopProvidersCoverageTest {
     }
 
     @Test
+    void testIntentSanitizeAccountIdAndNormalizeBaseUrl() throws Exception {
+        Method sanitizeMethod =
+                InfiniteLoopIntentChatModelProvider.class.getDeclaredMethod("sanitizeAccountId", String.class);
+        sanitizeMethod.setAccessible(true);
+
+        assertEquals("", sanitizeMethod.invoke(null, (String) null));
+        assertEquals("", sanitizeMethod.invoke(null, "   "));
+        assertEquals("12345", sanitizeMethod.invoke(null, "12345"));
+        assertEquals("acc123", sanitizeMethod.invoke(null, "accounts/acc123/extra"));
+
+        Method normalizeMethod =
+                InfiniteLoopIntentChatModelProvider.class.getDeclaredMethod("normalizeBaseUrl", String.class);
+        normalizeMethod.setAccessible(true);
+
+        assertNull(normalizeMethod.invoke(null, (String) null));
+        assertEquals("   ", normalizeMethod.invoke(null, "   "));
+        assertEquals("http://example.com/v1", normalizeMethod.invoke(null, "http://example.com/v1/v1"));
+        assertEquals("http://example.com", normalizeMethod.invoke(null, "http://example.com}"));
+        assertThrows(Exception.class, () -> normalizeMethod.invoke(null, "http://example.com/bad}after"));
+    }
+
+    @Test
     void testCompactionSanitizeAccountId() throws Exception {
         Method m = InfiniteLoopCompactionChatModelProvider.class.getDeclaredMethod("sanitizeAccountId", String.class);
         m.setAccessible(true);
