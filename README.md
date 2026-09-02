@@ -10,7 +10,7 @@
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   ![Tests](https://img.shields.io/badge/Tests-5582_passing-brightgreen.svg?style=flat)
   ![Coverage](https://img.shields.io/badge/Coverage-71.89%25-brightgreen.svg?style=flat)
-  ![UI Tests](https://img.shields.io/badge/UI_Tests-72_passing-brightgreen.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-76_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-32.32%25-yellow.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)

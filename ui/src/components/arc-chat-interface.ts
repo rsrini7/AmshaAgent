@@ -122,7 +122,8 @@ export class ArcChatInterface extends LitElement {
       top: 0;
       z-index: 30;
       flex-shrink: 0;
-      padding: 16px 24px 12px;
+      padding: 12px 16px;
+      box-sizing: border-box;
       background: linear-gradient(180deg, color-mix(in srgb, var(--bg-base) 96%, transparent), color-mix(in srgb, var(--bg-base) 88%, transparent));
       backdrop-filter: blur(10px);
     }
@@ -194,11 +195,12 @@ export class ArcChatInterface extends LitElement {
     }
 
     .bubble { 
-      padding: 8px 12px; border-radius: 12px;
-      font-size: 13px; line-height: 1.4; color: var(--text-primary);
+      padding: 6px 12px; border-radius: 12px;
+      font-size: 13px; line-height: 1.35; color: var(--text-primary);
       word-break: break-word; position: relative;
       width: fit-content;
       max-width: 100%;
+      box-sizing: border-box;
     }
     .bubble-user { white-space: pre-wrap; }
     .bubble-user {
@@ -206,6 +208,8 @@ export class ArcChatInterface extends LitElement {
       color: white;
       border-radius: 18px 18px 4px 18px;
       box-shadow: 0 4px 12px rgba(108, 99, 255, 0.2);
+      padding: 6px 12px;
+      line-height: 1.35;
     }
     .bubble-assistant {
       background: var(--bg-elevated);
@@ -231,8 +235,9 @@ export class ArcChatInterface extends LitElement {
     }
     .progress-panel {
       width: 100%;
-      min-height: 96px;
-      padding: 14px 16px;
+      box-sizing: border-box;
+      min-height: 80px;
+      padding: 12px 14px;
       margin: 0;
       border: 1px solid color-mix(in srgb, var(--accent-secondary) 28%, var(--border));
       border-radius: 18px 18px 18px 4px;
@@ -370,7 +375,7 @@ export class ArcChatInterface extends LitElement {
     }
     .input-area {
       background: var(--bg-elevated); border: 1px solid var(--border);
-      border-radius: 16px; padding: 8px 12px;
+      border-radius: 16px; padding: 6px 10px;
       display: flex; align-items: flex-end; gap: 8px;
       transition: var(--transition);
       box-shadow: 0 8px 24px rgba(0,0,0,0.2);
@@ -382,9 +387,9 @@ export class ArcChatInterface extends LitElement {
     
     textarea {
       flex: 1; background: transparent; border: none;
-      color: var(--text-primary); padding: 8px 4px;
-      font-size: 14px; font-family: inherit; line-height: 1.5;
-      resize: none; max-height: 200px; min-height: 24px; outline: none;
+      color: var(--text-primary); padding: 4px 4px;
+      font-size: 14px; font-family: inherit; line-height: 1.4;
+      resize: none; max-height: 200px; min-height: 20px; outline: none;
     }
     .media-menu-container {
       position: relative;
@@ -994,6 +999,10 @@ export class ArcChatInterface extends LitElement {
     ];
     this._ws?.send(outbound as unknown as import('../api/types').WsOutboundMessage);
     this._input = '';
+    const textarea = this.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null;
+    if (textarea) {
+      textarea.style.height = 'auto';
+    }
     this._audioAttachment = null;
     this._attachmentError = '';
     const fileInput = this.shadowRoot?.querySelector('.attachment-input') as HTMLInputElement | null;
@@ -1490,7 +1499,7 @@ export class ArcChatInterface extends LitElement {
                </div>
                 <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">
                   ${m.role === 'user'
-                    ? html`<div>${m.text}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`
+                    ? html`<div>${m.text ? m.text.trim() : ''}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`
                     : html`
                         ${m.text ? this._renderMarkdown(m.id, m.text) : nothing}
                         ${m.audio ? html`<div class="assistant-audio-player"><div class="audio-header"><span class="audio-badge">🎵 Voice Reply</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}
