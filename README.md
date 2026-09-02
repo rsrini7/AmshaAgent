@@ -8,8 +8,10 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Tests](https://img.shields.io/badge/Tests-5579_passing-brightgreen.svg?style=flat)
+  ![Tests](https://img.shields.io/badge/Tests-5582_passing-brightgreen.svg?style=flat)
   ![Coverage](https://img.shields.io/badge/Coverage-71.89%25-brightgreen.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-68_passing-brightgreen.svg?style=flat)
+  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-32.32%25-yellow.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -258,10 +260,10 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 | [TELEGRAM_TESTING.md](./docs/TELEGRAM_TESTING.md) | Telegram bot end-to-end testing |
 | [rest-http/](./rest-http/) | IntelliJ / VSCode REST Client files |
 
-After `mise run build:test`, run `mise run test:summary` to view the total test count
-and reactor JaCoCo coverage, or `python3 ./scripts/analyze_jacoco_coverage.py --target 0.72` to see
-the coverage buffer, additional covered lines needed, and highest-value classes to test next.
-Use `--module app`, `--top 10`, `--badge`, or `--json` to narrow or automate reports.
+After `mise run build:test` or `mise run test:ui`, run `mise run test:summary` to view total test counts
+and coverage across both Java and UI suites. For detailed breakdowns:
+- **Java**: `python3 ./scripts/analyze_jacoco_coverage.py --target 0.72` (`--module <mod>`, `--top 10`, `--badge`, `--json`).
+- **UI**: `mise run test:ui` (runs Vitest with V8 coverage) and `python3 ./scripts/analyze_ui_coverage.py --target 0.50` (`--top 10`, `--badge`, `--badge-tests`, `--json`).
 
 ### ❓ Reference
 

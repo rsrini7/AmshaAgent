@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -36,4 +37,23 @@ export default defineConfig({
       },
     },
   ],
+  test: {
+    reporters: ['default', 'junit'],
+    outputFile: {
+      junit: './coverage/junit.xml',
+    },
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'json-summary', 'html'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/types/**',
+        'src/generated/**',
+        'src/api/generated/**',
+        'src/main.ts',
+      ],
+    },
+  },
 });
