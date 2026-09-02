@@ -7,6 +7,9 @@ import java.util.Map;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.tool.api.ToolResponse;
 
@@ -26,15 +29,17 @@ public class SequentialToolExecutor {
 
     private final ToolInvoker toolInvoker;
     private final ToolInvocationGuard guard;
+    private final TracePublisher tracePublisher;
 
     @Inject
-    public SequentialToolExecutor(ToolInvoker toolInvoker, ToolInvocationGuard guard) {
+    public SequentialToolExecutor(ToolInvoker toolInvoker, ToolInvocationGuard guard, TracePublisher tracePublisher) {
         this.toolInvoker = toolInvoker;
         this.guard = guard;
+        this.tracePublisher = tracePublisher;
     }
 
     protected SequentialToolExecutor() {
-        this(null, null);
+        this(null, null, null);
     }
 
     /**
@@ -73,8 +78,41 @@ public class SequentialToolExecutor {
 
     /**
      * Executes a single tool call and returns a ToolResponse.
+     *
+     * <p>This is the single shared chokepoint for every parallel-batch and pre-execution tool
+     * invocation, so the per-tool lifecycle trace (start / end / error) is emitted here rather
+     * than in the callers. This is what makes the parallel path observable in the Visual Cockpit:
+     * the sequential {@code ToolStepHandler} path emits its own trace, and the parallel path
+     * bypasses that handler entirely, so without this instrumentation parallel tools would be
+     * invisible on the live trace.
      */
     public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
-        return toolInvoker.invoke(toolName, params, sessionId);
+        publishToolTrace(TraceStage.TOOL_START, sessionId, toolName, "START");
+        try {
+            ToolResponse response = toolInvoker.invoke(toolName, params, sessionId);
+            if (response instanceof ToolResponse.ToolSuccess) {
+                publishToolTrace(TraceStage.TOOL_END, sessionId, toolName, "END");
+            } else if (response instanceof ToolResponse.ToolFailure) {
+                publishToolTrace(TraceStage.TOOL_ERROR, sessionId, toolName, "ERROR");
+            }
+            return response;
+        } catch (RuntimeException e) {
+            publishToolTrace(TraceStage.TOOL_ERROR, sessionId, toolName, "ERROR");
+            throw e;
+        }
+    }
+
+    /**
+     * Emits a tool-lifecycle trace. Best-effort: a missing publisher (e.g. a lightweight unit test
+     * built through the no-arg constructor) is skipped rather than changing the outcome of the step.
+     */
+    private void publishToolTrace(TraceStage stage, String sessionId, String toolName, String status) {
+        if (tracePublisher == null) {
+            return;
+        }
+        tracePublisher.publish(TracePublisher.newEvent(sessionId, stage)
+                .withStation(StationCode.STATION_07_TOOL_EXECUTION)
+                .withStatus(status)
+                .withDetail(toolName));
     }
 }

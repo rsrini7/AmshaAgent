@@ -19,6 +19,9 @@ import com.amsha.channel.api.hitl.ApprovalOutcome;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.CliResultBridge;
 import com.amsha.core.agent.sse.AgentSseService;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.audit.SessionAuditSequencer;
@@ -105,6 +108,9 @@ public class SessionReaper {
     AgentSseService agentSseService;
 
     @Inject
+    TracePublisher tracePublisher;
+
+    @Inject
     CliResultBridge cliResultBridge;
 
     @Inject
@@ -185,6 +191,12 @@ public class SessionReaper {
                 if (ChannelType.CLI.id().equalsIgnoreCase(dto.channelType())) {
                     cliResultBridge.cancel(dto.sessionId());
                 }
+                // Trace the denial so the Visual Cockpit never renders a post-restart
+                // checkpoint as "pending" — no approval can arrive after the JVM restarted.
+                // Published BEFORE the SSE stream is completed so a connected subscriber
+                // observes the terminal state.
+                publishStaleApprovalDenied(dto.sessionId(), dto.pendingToolName());
+
                 // Telegram: fire decision event so buttons are edited to "expired"
                 // UI: complete SSE stream so subscribers are notified
                 decisionEvents.fireAsync(new ApprovalDecisionEvent(
@@ -240,6 +252,7 @@ public class SessionReaper {
                 workspaceManager.terminateSession(sessionId);
                 heartbeatTracker.removeHeartbeat(sessionId);
                 auditSequencer.releaseStaleSession(sessionId);
+                TracePublisher.releaseSession(sessionId);
             });
         } catch (RuntimeException e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
@@ -309,6 +322,7 @@ public class SessionReaper {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
+        publishHitlTimeout(cp);
         auditService.recordMandatory(
                 cp.getSessionId(),
                 "system",
@@ -340,8 +354,45 @@ public class SessionReaper {
         workspaceManager.terminateSession(cp.getSessionId());
         heartbeatTracker.removeHeartbeat(cp.getSessionId());
         auditSequencer.releaseStaleSession(cp.getSessionId());
+        TracePublisher.releaseSession(cp.getSessionId());
 
         cleanupCronOnFailure(cp.getSessionId(), "Approval timed out after " + hitlTimeoutHours + " hours.");
+    }
+
+    /**
+     * Emits a {@code hitl_timeout} trace when a checkpoint's approval window expires.
+     * Best-effort: a missing publisher (e.g. lightweight unit test) is skipped.
+     */
+    void publishHitlTimeout(AgentCheckpoint cp) {
+        if (tracePublisher == null || cp == null) {
+            return;
+        }
+        tracePublisher.publish(TracePublisher.newEvent(cp.getSessionId(), TraceStage.HITL_TIMEOUT)
+                .withStation(StationCode.STATION_05_TOOL_GUARD)
+                .withStatus("TIMEOUT")
+                .withDetail(cp.getPendingToolName()));
+    }
+
+    /**
+     * Emits a {@code hitl_timeout} trace when a stale {@code AWAITING_APPROVAL} checkpoint is
+     * auto-denied during startup recovery (Issue 03, AC2).
+     *
+     * <p>Without this the cockpit would keep rendering the checkpoint as {@code pending} even
+     * though the JVM restarted and no approval can ever arrive. Status is {@code DENIED_RESTART}
+     * so the UI can distinguish a restart denial from a wall-clock expiry, while still mapping to
+     * the same {@code hitl_timeout} stage.
+     *
+     * <p>Best-effort and transaction-free (§5.9): a missing publisher (lightweight unit test) is
+     * skipped, and publishing can never change the denial outcome.
+     */
+    void publishStaleApprovalDenied(String sessionId, String toolName) {
+        if (tracePublisher == null || sessionId == null) {
+            return;
+        }
+        tracePublisher.publish(TracePublisher.newEvent(sessionId, TraceStage.HITL_TIMEOUT)
+                .withStation(StationCode.STATION_05_TOOL_GUARD)
+                .withStatus("DENIED_RESTART")
+                .withDetail(toolName));
     }
 
     private void cleanupCronOnFailure(String sessionId, String reason) {

@@ -15,6 +15,9 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.agent.sse.HitlEventType;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.governance.ApprovalFrame;
@@ -41,13 +44,24 @@ public class ApprovalCheckpointManager {
     private final StatefulAgentStore agentStore;
     private final ObjectMapper objectMapper;
     private final AgentSseService agentSseService;
+    private final TracePublisher tracePublisher;
 
     @Inject
     public ApprovalCheckpointManager(
-            StatefulAgentStore agentStore, AgentSseService agentSseService, ObjectMapper objectMapper) {
+            StatefulAgentStore agentStore,
+            AgentSseService agentSseService,
+            ObjectMapper objectMapper,
+            TracePublisher tracePublisher) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.objectMapper = objectMapper;
+        this.tracePublisher = tracePublisher;
+    }
+
+    /** Visible for tests that do not require trace publishing. */
+    public ApprovalCheckpointManager(
+            StatefulAgentStore agentStore, AgentSseService agentSseService, ObjectMapper objectMapper) {
+        this(agentStore, agentSseService, objectMapper, null);
     }
 
     public void save(AgentCheckpoint cp) {
@@ -134,6 +148,8 @@ public class ApprovalCheckpointManager {
                         frame.riskLevel().name(),
                         null,
                         Instant.now()));
+
+        publishHitlRequested(sessionId, toolName, frame.riskLevel().name());
 
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
@@ -236,6 +252,8 @@ public class ApprovalCheckpointManager {
                         null,
                         Instant.now()));
 
+        publishHitlRequested(sessionId, compositeName, RiskLevel.MEDIUM.name());
+
         // Create a synthetic frame for the result
         ApprovalFrame frame = new ApprovalFrame(compositeName, Map.of("batch", originalBatchJson), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
@@ -327,6 +345,8 @@ public class ApprovalCheckpointManager {
                         null,
                         Instant.now()));
 
+        publishHitlRequested(sessionId, compositeName, RiskLevel.MEDIUM.name());
+
         ApprovalFrame frame =
                 new ApprovalFrame(compositeName, Map.of(ToolCallJsonKeys.BATCH, originalBatchJson), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
@@ -351,5 +371,20 @@ public class ApprovalCheckpointManager {
                 log.debugf("Serialization fallback for context data (non-fatal): %s", LogUtil.rootMessage(e));
             }
         }
+    }
+
+    /**
+     * Emits a {@code hitl_requested} trace when a checkpoint is persisted awaiting approval.
+     * Best-effort: a missing publisher (e.g. lightweight unit test) is skipped.
+     */
+    private void publishHitlRequested(String sessionId, String toolName, String riskLevel) {
+        if (tracePublisher == null) {
+            return;
+        }
+        tracePublisher.publish(TracePublisher.newEvent(sessionId, TraceStage.HITL_REQUESTED)
+                .withStation(StationCode.STATION_05_TOOL_GUARD)
+                .withStatus("HITL_REQUIRED")
+                .withDetail(toolName)
+                .withRiskLevel(riskLevel));
     }
 }

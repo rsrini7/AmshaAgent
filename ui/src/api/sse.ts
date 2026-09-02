@@ -1,15 +1,26 @@
 import { AgentEvent } from './generated/models';
+import { EventDeduplicator } from './event-dedup';
+import { AgentTraceEvent, traceEventId } from '../types/trace';
+
+/**
+ * Anything the SSE channel can deliver: the pre-existing agent events plus the versioned
+ * execution trace added by the cockpit feature.
+ */
+export type SsePayload = AgentEvent | AgentTraceEvent;
 
 export class SseManager {
   private _reader: ReadableStreamDefaultReader<string> | null = null;
-  private _retryTimeout: number | null = null;
+  // Uses the global timer rather than `window.setTimeout` so the manager also works outside a
+  // browser (unit tests, SSR bootstrap). Both resolve to the same function in a browser.
+  private _retryTimeout: ReturnType<typeof setTimeout> | null = null;
   private _retryCount = 0;
   private _controller: AbortController | null = null;
+  private readonly _dedup = new EventDeduplicator();
 
   constructor(
     private readonly url: string,
     private readonly apiKey: string,
-    private readonly onEvent: (event: AgentEvent) => void,
+    private readonly onEvent: (event: SsePayload) => void,
     private readonly onStatusChange: (status: 'connected' | 'disconnected' | 'error') => void
   ) {}
 
@@ -65,8 +76,12 @@ export class SseManager {
           try {
             const raw = cleaned.slice(5).trim();
             if (!raw || raw === ': heartbeat') continue;
-            const event: AgentEvent = JSON.parse(raw);
-            this.onEvent(event);
+            const event: SsePayload = JSON.parse(raw);
+            // Reconnect replay is safe: the server re-sends pending events by eventId, and a
+            // duplicate must never pulse a station or double-count a run statistic.
+            if (this._dedup.accept(traceEventId(event))) {
+              this.onEvent(event);
+            }
           } catch { /* parse error - ignore */ }
         }
       }
@@ -87,7 +102,7 @@ export class SseManager {
     console.debug(`[SseManager] ${status}. Reconnecting in ${Math.round(delay)}ms (attempt ${this._retryCount + 1})`);
     
     this._retryCount++;
-    this._retryTimeout = window.setTimeout(() => {
+    this._retryTimeout = setTimeout(() => {
       this._retryTimeout = null;
       this.connect();
     }, delay);
@@ -111,5 +126,10 @@ export class SseManager {
   disconnect(): void {
     this._cleanup();
     this.onStatusChange('disconnected');
+  }
+
+  /** Resets the event de-duplicator; call when the run identity changes. */
+  resetDedup(): void {
+    this._dedup.reset();
   }
 }

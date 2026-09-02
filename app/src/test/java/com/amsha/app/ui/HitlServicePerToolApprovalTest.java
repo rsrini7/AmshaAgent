@@ -163,4 +163,45 @@ class HitlServicePerToolApprovalTest {
 
         verify(checkpointApprovalService).approveAll("s1", "bulk");
     }
+
+    @Test
+    void test_resolve_withUuidSessionId_findsLatestAwaitingApproval() {
+        CheckpointDto cp = new CheckpointDto(
+                42L,
+                "ebbda2ec-cfd2-4dd0-8c14-df7afab87544",
+                "coder",
+                CheckpointStatus.AWAITING_APPROVAL.name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null);
+
+        when(checkpointStorePort.findLatestAwaitingApproval("ebbda2ec-cfd2-4dd0-8c14-df7afab87544"))
+                .thenReturn(Optional.of(cp));
+
+        hitlService.resolve("ebbda2ec-cfd2-4dd0-8c14-df7afab87544", "sandbox_exec", true, "approved via UI");
+
+        verify(checkpointApprovalService)
+                .approveTool("ebbda2ec-cfd2-4dd0-8c14-df7afab87544", "sandbox_exec", "approved via UI");
+    }
 }

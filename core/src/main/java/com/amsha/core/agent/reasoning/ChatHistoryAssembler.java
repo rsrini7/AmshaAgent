@@ -21,6 +21,9 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.ToolCallJsonKeys;
@@ -77,6 +80,9 @@ public class ChatHistoryAssembler {
 
     @Inject
     Instance<DirectiveFeedbackPort> directiveFeedbackPortInstance;
+
+    @Inject
+    TracePublisher tracePublisher;
 
     @ConfigProperty(name = "amsha.chat.default-observation-max-length", defaultValue = "4000")
     int defaultObservationMaxLength;
@@ -142,6 +148,7 @@ public class ChatHistoryAssembler {
 
         // STEP 0.5: Budget enforcement (BEFORE any SystemMessage construction)
         PromptBudgetManager.BudgetEnforcedSections budget = budgetManager.enforce(coreText, rawSummary, archivalText);
+        publishMemoryDecisionTrace(sessionId, budget);
 
         // Build messages from budget-enforced sections
         if (budget.coreMemory() != null && !budget.coreMemory().isBlank()) {
@@ -444,5 +451,35 @@ public class ChatHistoryAssembler {
         String truncated = observation.substring(0, maxLength);
         String indicator = "\n[... truncated " + (observation.length() - maxLength) + " chars]";
         return truncated + indicator;
+    }
+
+    private void publishMemoryDecisionTrace(String sessionId, PromptBudgetManager.BudgetEnforcedSections budget) {
+        if (tracePublisher == null || sessionId == null) {
+            return;
+        }
+        boolean hasCore = budget != null
+                && budget.coreMemory() != null
+                && !budget.coreMemory().isBlank();
+        boolean hasSummary = budget != null
+                && budget.compactionSummary() != null
+                && !budget.compactionSummary().isBlank();
+        boolean hasArchival = budget != null
+                && budget.archivalContext() != null
+                && !budget.archivalContext().isBlank();
+        boolean retrieved = hasCore || hasSummary || hasArchival;
+
+        String status = retrieved ? "RETRIEVE" : "SKIP";
+        String detail = retrieved
+                ? (hasCore && hasSummary
+                        ? "core_and_summary_injected"
+                        : hasCore
+                                ? "core_memory_injected"
+                                : hasSummary ? "compaction_summary_injected" : "archival_context_injected")
+                : "context_sufficient_skip_retrieval";
+
+        tracePublisher.publish(TracePublisher.newEvent(sessionId, TraceStage.MEMORY_DECISION)
+                .withStation(StationCode.STATION_04_MEMORY_DECISION)
+                .withStatus(status)
+                .withDetail(detail));
     }
 }

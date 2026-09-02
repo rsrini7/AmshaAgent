@@ -128,8 +128,17 @@ public class HitlService {
 
     @Transactional(TxType.NOT_SUPPORTED)
     public void resolve(String taskId, String toolName, boolean approved, String reason) {
-        Long id = Long.valueOf(taskId);
-        CheckpointDto dto = checkpointStorePort.findById(id).orElse(null);
+        CheckpointDto dto = null;
+        try {
+            Long id = Long.valueOf(taskId);
+            dto = checkpointStorePort.findById(id).orElse(null);
+        } catch (NumberFormatException _) {
+            // taskId is not a numeric checkpoint ID; look up by sessionId
+        }
+
+        if (dto == null) {
+            dto = checkpointStorePort.findLatestAwaitingApproval(taskId).orElse(null);
+        }
 
         if (dto == null) {
             throw new IllegalArgumentException("No pending approval found for ID: " + taskId);

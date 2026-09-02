@@ -21,6 +21,7 @@ import java.util.List;
 import com.amsha.app.ui.dto.AgentEvent;
 import com.amsha.app.ui.dto.ChatMessageDto;
 import com.amsha.core.agent.event.AgentStateChangedEvent;
+import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.state.PersistentChatMemoryStore;
 import com.amsha.core.state.StatefulAgentStore;
 
@@ -44,6 +45,9 @@ public class ChatStreamResource {
 
     @Inject
     StatefulAgentStore statefulAgentStore;
+
+    @Inject
+    AgentSseService agentSseService;
 
     private final UnicastProcessor<AgentEvent> processor = UnicastProcessor.create();
 
@@ -69,15 +73,22 @@ public class ChatStreamResource {
     @GET
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
-    @Operation(summary = "Stream agent status changes and keep-alive heartbeats via SSE")
-    public Multi<AgentEvent> stream(@QueryParam("sessionId") String sessionId) {
-        Multi<AgentEvent> heartbeat = Multi.createFrom()
+    @Operation(summary = "Stream agent status changes, execution traces, and keep-alive heartbeats via SSE")
+    public Multi<Object> stream(@QueryParam("sessionId") String sessionId) {
+        Multi<Object> heartbeat = Multi.createFrom()
                 .ticks()
                 .every(Duration.ofSeconds(20))
-                .map(t -> new AgentEvent(sessionId, "heartbeat", "system", "keep-alive"));
+                .map(t -> (Object) new AgentEvent(sessionId, "heartbeat", "system", "keep-alive"));
 
-        // hotStream is shared - each subscriber gets their own downstream from the broadcast
-        return Multi.createBy().merging().streams(hotStream, heartbeat);
+        Multi<Object> base =
+                Multi.createBy().merging().streams(hotStream.onItem().castTo(Object.class), heartbeat);
+
+        if (sessionId != null && !sessionId.isBlank() && agentSseService != null) {
+            Multi<Object> traceStream =
+                    agentSseService.subscribe(sessionId).onItem().castTo(Object.class);
+            return Multi.createBy().merging().streams(base, traceStream);
+        }
+        return base;
     }
 
     @GET

@@ -17,6 +17,9 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.RoleRegistry;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.observability.AgentObserver;
@@ -71,6 +74,9 @@ public class FinishActionHandler {
 
     @Inject
     AnswerQualityDispatcher answerQualityDispatcher;
+
+    @Inject
+    TracePublisher tracePublisher;
 
     /**
      * Optional escalation-tier probe for memory-synthesis corrections. Null in
@@ -326,6 +332,7 @@ public class FinishActionHandler {
 
         // --- Quality guard (null/blank, short, echo strips, leaks) ---
         AnswerGuardStrategy.AnswerGuardResult guardResult = qualityGuard.guard(answer, history);
+        publishQualityTrace(sessionId, guardResult);
         answer = guardResult.answer();
         if (guardResult.isFailure()) {
             log.warnf(
@@ -489,5 +496,23 @@ public class FinishActionHandler {
     private static boolean isPermissionDenial(String observation) {
         String lower = observation.toLowerCase(Locale.ROOT);
         return PERMISSION_DENIAL_MARKERS.stream().anyMatch(lower::contains);
+    }
+
+    /**
+     * Emits the {@code quality_check} trace for the authoritative final-answer guard. Status
+     * reflects the genuine guard outcome: {@code FAILURE} when the guard decisively rejected the
+     * answer, {@code SALVAGED} when it stripped an echo/leak, otherwise {@code PASS}. Null-safe so
+     * manually-constructed test harnesses (no injected {@link TracePublisher}) degrade to a no-op.
+     */
+    private void publishQualityTrace(String sessionId, AnswerGuardStrategy.AnswerGuardResult guardResult) {
+        if (tracePublisher == null || sessionId == null || guardResult == null) {
+            return;
+        }
+        String status = guardResult.isFailure() ? "FAILURE" : (guardResult.salvaged() ? "SALVAGED" : "PASS");
+        String detail = guardResult.isFailure() ? guardResult.failureReason() : null;
+        tracePublisher.publish(TracePublisher.newEvent(sessionId, TraceStage.QUALITY_CHECK)
+                .withStation(StationCode.STATION_08_QUALITY)
+                .withStatus(status)
+                .withDetail(detail));
     }
 }

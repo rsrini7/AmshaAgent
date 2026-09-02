@@ -16,6 +16,7 @@ import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.channel.ChannelPluginRegistry;
+import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.state.StatefulAgentStore;
 
@@ -99,13 +100,18 @@ class CheckpointResumeHandlerTest {
     @Test
     void testPrepareResumeMessageContext() throws Exception {
         var method = CheckpointResumeHandler.class.getDeclaredMethod(
-                "prepareResumeMessageContext", String.class, ChannelUser.class, ChannelType.class, String.class);
+                "prepareResumeMessageContext",
+                String.class,
+                ChannelUser.class,
+                ChannelType.class,
+                String.class,
+                AgentCheckpoint.class);
         method.setAccessible(true);
 
         for (String cTypeId : List.of("telegram", "discord", "rest_api", "cli", "websocket", "slack")) {
             ChannelType type = ChannelType.of(cTypeId);
             ChannelUser user = new ChannelUser("u1", "c1", "Op", type);
-            MessageContext ctx = (MessageContext) method.invoke(handler, "chat-1", user, type, "resume goal");
+            MessageContext ctx = (MessageContext) method.invoke(handler, "chat-1", user, type, "resume goal", null);
             Assertions.assertNotNull(ctx);
             Assertions.assertTrue(ctx.isResumeSignal());
             Assertions.assertEquals("resume goal", ctx.getGoal());

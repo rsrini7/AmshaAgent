@@ -33,6 +33,10 @@ import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.agent.sse.HitlEventType;
+import com.amsha.core.agent.trace.AgentTraceEvent;
+import com.amsha.core.agent.trace.SafeSymbolMetadata;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.api.AgentResponseMapper;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.api.dto.AuditEventResponse;
@@ -186,15 +190,22 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AgentSseService.AgentStatusEvent.class,
             AgentSseService.SseEvent.class,
             HitlEventType.class,
+            AgentTraceEvent.class,
+            TraceStage.class,
+            StationCode.class,
             ChatModelListenerMode.class,
             ChatModelListenerRuntimeControl.class,
             ChatModelListenerRuntimeControl.Snapshot.class,
             ChatModelListenerRuntimeControl.ToggleResult.class,
             AmshaChatModelListener.class,
             SpeechDeliveryService.class,
-            ResumeToolInfoFormatter.class
+            ResumeToolInfoFormatter.class,
+            SafeSymbolMetadata.class
         },
         classNames = {
+            // Nested trace contract type: registered by binary name rather than adding a
+            // type-level @RegisterForReflection (§6.7 / AGENTS.md §8).
+            "com.amsha.core.agent.trace.AgentTraceEvent$TraceMetrics",
             "dev.langchain4j.model.chat.listener.ChatModelListener",
             "dev.langchain4j.model.chat.listener.ChatModelRequestContext",
             "dev.langchain4j.model.chat.listener.ChatModelResponseContext",

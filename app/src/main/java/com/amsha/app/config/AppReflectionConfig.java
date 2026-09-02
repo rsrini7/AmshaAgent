@@ -14,6 +14,7 @@ import com.amsha.app.api.SessionResource;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
 import com.amsha.app.skill.SkillResource;
+import com.amsha.app.ui.CockpitResource;
 import com.amsha.app.ui.dto.AgentEvent;
 import com.amsha.app.ui.dto.AgentStatusDto;
 import com.amsha.app.ui.dto.ChatMessageDto;
@@ -97,5 +98,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WorkspaceMembershipDto.class,
             ExternalIdentityDto.class,
             IdentityInvitationDto.class,
+            CockpitResource.class
         })
 public class AppReflectionConfig {}

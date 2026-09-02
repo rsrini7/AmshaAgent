@@ -6,7 +6,7 @@ import {
   ArcClient,
   clearPersistedOwnerApiKey,
 } from '../api/client';
-import { SseManager } from '../api/sse';
+import { SseManager, SsePayload } from '../api/sse';
 import { provide } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { ROUTES } from '../routes';
@@ -23,6 +23,9 @@ import './arc-scheduler-panel';
 import './arc-audit-panel';
 import './arc-settings';
 import './arc-theme-toggle';
+import './arc-flow-canvas';
+import { ResizeController } from '../composables/resize-controller';
+import { AgentTraceEvent, isAgentTraceEvent } from '../types/trace';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
@@ -42,9 +45,22 @@ export class ArcShell extends LitElement {
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @state() private _route = this._routeFromHash(window.location.hash || '#/onboarding');
+  @state() private _route =
+    typeof window !== 'undefined' ? this._routeFromHash(window.location?.hash || '#/onboarding') : '#/chat';
   @state() private _isNavOpen = false;
   @state() private _chatWsStatus: string = 'closed';
+  @state() private _dockWidth = 400;
+  @state() private _traceEvents: AgentTraceEvent[] = [];
+  @state() private _currentRunId = '';
+
+  private _resizeController = new ResizeController({
+    defaultWidth: 400,
+    minWidth: 280,
+    maxWidth: 800,
+    onResize: (w) => {
+      this._dockWidth = w;
+    },
+  });
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
@@ -56,6 +72,74 @@ export class ArcShell extends LitElement {
       display: flex; height: 100vh; overflow: hidden; 
       background: var(--bg-base); 
       color: var(--text-primary);
+    }
+    .cockpit-container {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .cockpit-canvas-area {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .cockpit-canvas-area::-webkit-scrollbar { width: 6px; height: 6px; }
+    .cockpit-canvas-area::-webkit-scrollbar-track { background: transparent; }
+    .cockpit-canvas-area::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    .cockpit-canvas-area::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+    .cockpit-splitter {
+      width: 6px;
+      cursor: col-resize;
+      background: var(--border);
+      transition: background-color 0.2s;
+      flex-shrink: 0;
+      position: relative;
+      user-select: none;
+    }
+    .cockpit-splitter:hover, .cockpit-splitter:focus {
+      background: var(--accent-secondary);
+      outline: none;
+    }
+    .cockpit-dock-area {
+      min-width: 280px;
+      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      min-height: 0;
+      border-left: 1px solid var(--border);
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .cockpit-dock-area::-webkit-scrollbar { width: 6px; height: 6px; }
+    .cockpit-dock-area::-webkit-scrollbar-track { background: transparent; }
+    .cockpit-dock-area::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    .cockpit-dock-area::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+    @media (max-width: 800px) {
+      .cockpit-container {
+        flex-direction: column;
+      }
+      .cockpit-splitter {
+        display: none;
+      }
+      .cockpit-dock-area {
+        width: 100% !important;
+        max-width: 100%;
+        flex: 1;
+      }
     }
     main { 
       flex: 1; overflow: hidden; display: flex; flex-direction: column; 
@@ -261,9 +345,12 @@ export class ArcShell extends LitElement {
   private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string }>) {
     // Only update if server assigned a different ID (fallback UUID case)
     if (this._sessionId !== e.detail.sessionId) {
-        this._sessionId = e.detail.sessionId;
-        sessionStorage.setItem('amsha-chat-session', this._sessionId);
-        this._updateContext();
+      this._sessionId = e.detail.sessionId;
+      sessionStorage.setItem('amsha-chat-session', this._sessionId);
+      this._updateContext();
+      this._traceEvents = [];
+      this._currentRunId = '';
+      this._sseManager?.resetDedup();
     }
 
     if (!this._sessionId) return;
@@ -273,6 +360,18 @@ export class ArcShell extends LitElement {
   // SSE event handlers
   private _handleSseEvent(event: any) {
     if (event.sessionId && this._sessionId && event.sessionId !== this._sessionId) {
+      return;
+    }
+
+    if (isAgentTraceEvent(event)) {
+      if (event.runId && this._currentRunId && event.runId !== this._currentRunId) {
+        this._sseManager?.resetDedup();
+        this._traceEvents = [];
+      }
+      if (event.runId) {
+        this._currentRunId = event.runId;
+      }
+      this._traceEvents = [...this._traceEvents, event];
       return;
     }
 
@@ -292,6 +391,26 @@ export class ArcShell extends LitElement {
     } else if (eventType === 'agent_status') {
       this._handleAgentEvent(event);
     }
+  }
+
+  private get _activeRunEvents(): AgentTraceEvent[] {
+    if (!this._currentRunId) {
+      return this._traceEvents;
+    }
+    return this._traceEvents.filter((e) => !e.runId || e.runId === this._currentRunId);
+  }
+
+  private get _activeParadigm(): string {
+    // Strictly read authoritative backend paradigm metadata emitted on trace events (e.g. TURN_START, ROUTE)
+    // Never guess or infer from arbitrary stage occurrences like llm_reasoning
+    const events = this._activeRunEvents;
+    for (let i = events.length - 1; i >= 0; i--) {
+      const p = events[i].paradigm;
+      if (p && typeof p === 'string' && p.trim().length > 0) {
+        return p.trim().toUpperCase();
+      }
+    }
+    return '';
   }
 
   private _publishProgress(phase: string, detail: string) {
@@ -410,7 +529,7 @@ export class ArcShell extends LitElement {
     this._sseManager = new SseManager(
       `/api/v1/chat/stream?sessionId=${encodeURIComponent(this._sessionId)}`,
       this._apiKey,
-      (event: AgentEvent) => this._handleSseEvent(event),
+      (event: SsePayload) => this._handleSseEvent(event),
       (status) => {
         const wasDown = this._sseStatus !== 'connected';
         this._sseStatus = status;
@@ -435,7 +554,34 @@ export class ArcShell extends LitElement {
     }
 
     return html`
-      <arc-chat-interface class="content-area" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"></arc-chat-interface>
+      <div class="cockpit-container" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}">
+        <div class="cockpit-canvas-area" role="region" aria-label="Visual Cockpit Canvas">
+          <arc-flow-canvas
+            .events=${this._activeRunEvents}
+            .runId=${this._currentRunId}
+            .paradigm=${this._activeParadigm}
+          ></arc-flow-canvas>
+        </div>
+        <div
+          class="cockpit-splitter"
+          role="separator"
+          tabindex="0"
+          aria-orientation="vertical"
+          aria-valuenow="${Math.round(this._dockWidth)}"
+          aria-valuemin="280"
+          aria-valuemax="800"
+          aria-label="Resize chat dock"
+          @pointerdown=${(e: PointerEvent) => this._onSplitterPointerDown(e)}
+          @keydown=${(e: KeyboardEvent) => this._onSplitterKeyDown(e)}
+        ></div>
+        <div class="cockpit-dock-area" style="width: ${this._dockWidth}px;">
+          <arc-chat-interface
+            class="content-area"
+            style="display: flex; flex: 1;"
+            .traceEvents=${this._activeRunEvents}
+          ></arc-chat-interface>
+        </div>
+      </div>
       ${this._route === '#/mcp' ? html`
         <arc-mcp-panel class="content-area"></arc-mcp-panel>
       ` : nothing}
@@ -458,6 +604,27 @@ export class ArcShell extends LitElement {
         <arc-settings class="content-area"></arc-settings>
       ` : nothing}
     `;
+  }
+
+  private _onSplitterPointerDown(e: PointerEvent) {
+    this._resizeController.handlePointerDown(e);
+    const onPointerMove = (ev: PointerEvent) => {
+      this._resizeController.handlePointerMove(ev);
+      this._dockWidth = this._resizeController.width;
+    };
+    const onPointerUp = () => {
+      this._resizeController.handlePointerUp();
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }
+
+  private _onSplitterKeyDown(e: KeyboardEvent) {
+    if (this._resizeController.handleKeyDown(e)) {
+      this._dockWidth = this._resizeController.width;
+    }
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────

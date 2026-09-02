@@ -138,6 +138,47 @@ export class ArcHitlPanel extends LitElement {
     return rtf.format(diffMins, 'minute');
   }
 
+  private _formatParams(rawParams: unknown): string {
+    if (!rawParams) {
+      return 'No parameters';
+    }
+    let paramsObj: Record<string, unknown>;
+    if (typeof rawParams === 'string') {
+      const trimmed = rawParams.trim();
+      if (!trimmed || trimmed === '{}') {
+        return 'No parameters';
+      }
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          paramsObj = parsed;
+        } else if (Array.isArray(parsed)) {
+          return JSON.stringify(parsed, null, 2);
+        } else {
+          return trimmed;
+        }
+      } catch (_) {
+        return trimmed;
+      }
+    } else if (typeof rawParams === 'object') {
+      if (Array.isArray(rawParams)) {
+        return JSON.stringify(rawParams, null, 2);
+      }
+      paramsObj = rawParams as Record<string, unknown>;
+    } else {
+      return String(rawParams);
+    }
+
+    const entries = Object.entries(paramsObj);
+    if (entries.length === 0) {
+      return 'No parameters';
+    }
+
+    return entries
+      .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v, null, 2) : v}`)
+      .join('\n');
+  }
+
   render() {
     return html`
       <div style="max-width: 1200px; margin: 0 auto;">
@@ -156,9 +197,7 @@ export class ArcHitlPanel extends LitElement {
                 <span class="requested-at">${this._formatTime(a.requestedAt)}</span>
               </div>
               
-              <pre class="params">${Object.keys(a.params).length === 0 
-                  ? 'No parameters'
-                  : Object.entries(a.params).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n')}</pre>
+              <pre class="params">${this._formatParams(a.params)}</pre>
               
               <div class="actions">
                 ${this._processing.has(a.taskId)

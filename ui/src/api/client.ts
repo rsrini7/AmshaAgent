@@ -162,14 +162,15 @@ export class ArcClient {
     return this.request<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }>(`/hitl?page=${page}&size=${size}`);
   }
 
-  async approveHitl(taskId: string): Promise<ApprovalResultDto> {
-    return this.request<ApprovalResultDto>(`/hitl/${taskId}/approve`, {
+  async approveHitl(taskId: string, reason = 'Approved by user'): Promise<ApprovalResultDto> {
+    return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/approve`, {
       method: 'POST',
+      body: JSON.stringify({ reason }),
     });
   }
 
   async rejectHitl(taskId: string, reason: string): Promise<ApprovalResultDto> {
-    return this.request<ApprovalResultDto>(`/hitl/${taskId}/reject`, {
+    return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/reject`, {
       method: 'POST',
       body: JSON.stringify({ reason: reason || 'Rejected by user' }),
     });
@@ -455,6 +456,19 @@ export class ArcClient {
   async verifyAuditChain(sessionId: string): Promise<any> {
     return this.request<any>(`/audit/${sessionId}/verify`);
   }
+
+  async symbolicate(symbol: string): Promise<SafeMetadata> {
+    return this.request<SafeMetadata>(`/cockpit/symbolicate?symbol=${encodeURIComponent(symbol)}`);
+  }
+}
+
+export interface SafeMetadata {
+  symbol: string;
+  station: string;
+  label: string;
+  auditHash: string;
+  subsystem?: string | null;
+  safetyInvariant?: string | null;
 }
 
 export async function getOnboardingComplete(baseUrl: string): Promise<import('./types').OnboardingCompleteDto> {

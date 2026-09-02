@@ -34,7 +34,7 @@ class SequentialToolExecutorTest {
 
     @BeforeEach
     void setUp() {
-        executor = new SequentialToolExecutor(toolInvoker, guard);
+        executor = new SequentialToolExecutor(toolInvoker, guard, null);
     }
 
     @Test
