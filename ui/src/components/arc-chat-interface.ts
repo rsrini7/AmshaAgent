@@ -16,6 +16,8 @@ interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   text: string;
   timestamp: number;
+  runId?: string;
+  runEvents?: AgentTraceEvent[];
   isApprovalPrompt?: boolean;
   approvalData?: {
     tool: string;
@@ -655,6 +657,36 @@ export class ArcChatInterface extends LitElement {
       this._connecting = true;
       this._connect();
     }
+    if (changedProperties.has('traceEvents') && this.traceEvents && this.traceEvents.length > 0) {
+      this._syncLatestAssistantRunEvents();
+    }
+  }
+
+  private _syncLatestAssistantRunEvents() {
+    if (!this.traceEvents || this.traceEvents.length === 0) return;
+    const activeRunId = this.traceEvents[0]?.runId;
+    if (!activeRunId) return;
+
+    for (let i = this._messages.length - 1; i >= 0; i--) {
+      const msg = this._messages[i];
+      if (msg.role === 'assistant') {
+        if (!msg.runId || msg.runId === activeRunId) {
+          const matching = this.traceEvents.filter((e) => e.runId === activeRunId);
+          if (matching.length > 0) {
+            if (!msg.runEvents || msg.runEvents.length !== matching.length || msg.runId !== activeRunId) {
+              const updated = [...this._messages];
+              updated[i] = {
+                ...msg,
+                runId: activeRunId,
+                runEvents: [...matching],
+              };
+              this._messages = updated;
+            }
+          }
+        }
+        break;
+      }
+    }
   }
 
   private async _loadHistory(sessionId?: string) {
@@ -872,6 +904,13 @@ export class ArcChatInterface extends LitElement {
         ? { ...frame.audio, url: this._base64ToBlobUrl(frame.audio.data, frame.audio.mimeType) }
         : undefined;
 
+      const activeRunId = this.traceEvents && this.traceEvents.length > 0
+        ? this.traceEvents[0]?.runId
+        : undefined;
+      const matchingEvents = activeRunId
+        ? this.traceEvents.filter((e) => e.runId === activeRunId)
+        : (this.traceEvents && this.traceEvents.length > 0 ? [...this.traceEvents] : undefined);
+
       this._messages = [...this._messages, {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -880,7 +919,9 @@ export class ArcChatInterface extends LitElement {
         isApprovalPrompt: !!isApproval,
         approvalData: frame.approval || null,
         targetSessionId: frame.sessionId || null,
-        audio: audioPayload
+        audio: audioPayload,
+        runId: activeRunId,
+        runEvents: matchingEvents && matchingEvents.length > 0 ? [...matchingEvents] : undefined,
       }];
       this._awaitingApproval = !!isApproval;
       if (frame.text && HALTED_MESSAGE_PATTERNS.some((pattern) => pattern.test(frame.text))) {
@@ -1453,13 +1494,15 @@ export class ArcChatInterface extends LitElement {
                     : html`
                         ${m.text ? this._renderMarkdown(m.id, m.text) : nothing}
                         ${m.audio ? html`<div class="assistant-audio-player"><div class="audio-header"><span class="audio-badge">🎵 Voice Reply</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}
-                        ${this.traceEvents && this.traceEvents.length > 0 ? html`
-                          <arc-run-flow-card
-                            .events=${this.traceEvents}
-                            .runId=${this.traceEvents[0]?.runId || ''}
-                            .turnNumber=${this.traceEvents[0]?.turnNumber || 1}
-                          ></arc-run-flow-card>
-                        ` : nothing}
+                        ${m.runEvents && m.runEvents.length > 0 && m.runId
+                          ? html`
+                              <arc-run-flow-card
+                                .events=${m.runEvents.filter((e) => e.runId === m.runId)}
+                                .runId=${m.runId}
+                                .turnNumber=${m.runEvents[0]?.turnNumber || 1}
+                              ></arc-run-flow-card>
+                            `
+                          : nothing}
                       `}
                   ${m.isApprovalPrompt && this._awaitingApproval
                     ? html`
