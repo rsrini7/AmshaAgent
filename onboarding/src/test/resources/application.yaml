@@ -27,6 +27,8 @@ amsha:
       bot-token: "test-bot-token"
   cron:
     max-lookback-window: PT999H
+  tts:
+    default-output-mode: AUDIO_ONLY
   mcp:
     server-enabled: false
 quarkus:
