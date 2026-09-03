@@ -21,7 +21,6 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpoint;
-import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.speech.SpeechDeliveryService;
@@ -30,11 +29,9 @@ import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.AgentGuards;
 import com.amsha.core.util.AgentResultFormatter;
-import com.amsha.core.util.CronScheduleUtil;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
-import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -162,7 +159,11 @@ public class CheckpointResumeHandler {
         }
 
         try {
-            syncCronStatus(sessionId);
+            if (!syncCronStatus(sessionId)) {
+                agentStore.releaseResumeClaim(sessionId, agentRole);
+                agentStore.clearBatchResuming(sessionId);
+                return false;
+            }
             executor.execute(() -> {
                 try {
                     Arc.container().requestContext().activate();
@@ -201,6 +202,13 @@ public class CheckpointResumeHandler {
             });
             return true;
         } catch (RejectedExecutionException e) {
+            CronSessionStatusSync.syncTerminal(
+                    sessionId,
+                    AgentResult.failed(
+                            "Resume executor rejected the session",
+                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                            List.of()),
+                    cronStore);
             releaseResumeClaimSafely(sessionId, agentRole);
             log.warnf("resumeAfterBatchDecision: executor rejected session %s: %s", sessionId, LogUtil.rootMessage(e));
             return false;
@@ -321,7 +329,10 @@ public class CheckpointResumeHandler {
             ChannelUser user,
             String sessionId,
             String toolInfo) {
-        syncCronTerminalStatus(sessionId, result);
+        if (!syncCronTerminalStatus(sessionId, result)) {
+            log.warnf("Skipping resume notification for session %s because cron ownership was lost", sessionId);
+            return;
+        }
 
         if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
             log.debugf("CheckpointResumeHandler: skipping async CLI notification for session %s", sessionId);
@@ -374,56 +385,12 @@ public class CheckpointResumeHandler {
         return ResumeToolInfoFormatter.format(checkpoint, objectMapper);
     }
 
-    private void syncCronStatus(String sessionId) {
-        if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            String sub = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
-            if (sub.length() >= 36) {
-                String jobId = sub.substring(0, 36);
-                try {
-                    cronStore.markRunning(jobId);
-                } catch (Exception e) {
-                    log.warnf("Failed to sync cron status for job %s: %s", jobId, LogUtil.rootMessage(e));
-                }
-            }
-        }
+    private boolean syncCronStatus(String sessionId) {
+        return CronSessionStatusSync.syncRunning(sessionId, cronStore);
     }
 
-    private void syncCronTerminalStatus(String sessionId, AgentResult result) {
-        if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            String sub = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
-            if (sub.length() >= 36) {
-                String jobId = sub.substring(0, 36);
-                try {
-                    markCronTerminal(jobId, result);
-                } catch (Exception e) {
-                    log.warnf("Failed to sync terminal cron status for job %s: %s", jobId, LogUtil.rootMessage(e));
-                }
-            }
-        }
-    }
-
-    private void markCronTerminal(String id, AgentResult result) {
-        var dto = cronStore.findById(id).orElse(null);
-        if (dto == null || result == null) return;
-        var cron = AgentCronRecord.fromDto(dto);
-
-        switch (result) {
-            case AgentResult.Finished _, AgentResult.StructuredFinished _ -> {
-                if (cron.isRunOnce()) {
-                    cronStore.markCompleted(id, Instant.now());
-                } else {
-                    cronStore.markFired(
-                            id,
-                            Instant.now(),
-                            CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
-                }
-            }
-            case AgentResult.Failed f -> cronStore.markFailed(id, f.reason());
-            case AgentResult.AwaitingApproval _ -> cronStore.markAwaitingApproval(id);
-            case AgentResult.AwaitingRetry _ -> {}
-            case AgentResult.LoopExceeded _ -> cronStore.markFailed(id, "Loop exceeded");
-            default -> {}
-        }
+    private boolean syncCronTerminalStatus(String sessionId, AgentResult result) {
+        return CronSessionStatusSync.syncTerminal(sessionId, result, cronStore);
     }
 
     @ActivateRequestContext
@@ -435,7 +402,10 @@ public class CheckpointResumeHandler {
             return null;
         }
 
-        syncCronStatus(sessionId);
+        if (!syncCronStatus(sessionId)) {
+            agentStore.releaseResumeClaim(sessionId, agentRole);
+            return null;
+        }
 
         try {
             AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);
@@ -443,6 +413,7 @@ public class CheckpointResumeHandler {
                 log.warnf(
                         "resumeAfterBatchDecisionSync: no checkpoint found for session %s role %s",
                         sessionId, agentRole);
+                agentStore.releaseResumeClaim(sessionId, agentRole);
                 return null;
             }
 
@@ -451,6 +422,7 @@ public class CheckpointResumeHandler {
                 log.warnf(
                         "resumeAfterBatchDecisionSync: no resume goal found for session %s role %s",
                         sessionId, agentRole);
+                agentStore.releaseResumeClaim(sessionId, agentRole);
                 return null;
             }
 

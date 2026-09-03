@@ -94,6 +94,8 @@ public class ScheduleTaskTool implements AgentTool {
     private static final Pattern NAKED_PRONOUN =
             Pattern.compile("\\b(this|the code|the file|the thing)\\b", Pattern.CASE_INSENSITIVE);
 
+    private static final String DEFAULT_EXECUTION_ROLE = AgentRoleEnum.RESEARCHER.toScopedName();
+
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
 
     /**
@@ -364,7 +366,7 @@ public class ScheduleTaskTool implements AgentTool {
         if (executionRole != null && executionRole.isBlank()) {
             executionRole = null;
         }
-        return executionRole;
+        return executionRole != null ? executionRole : DEFAULT_EXECUTION_ROLE;
     }
 
     private String resolveCron(Map<String, Object> params) {

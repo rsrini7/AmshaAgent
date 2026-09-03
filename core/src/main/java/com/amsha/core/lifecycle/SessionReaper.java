@@ -27,17 +27,12 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.audit.SessionAuditSequencer;
 import com.amsha.core.compaction.CompactionInFlightFlag;
 import com.amsha.core.domain.model.AgentCheckpoint;
-import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.BatchDecisionUtil;
-import com.amsha.core.util.CronScheduleUtil;
 import com.amsha.core.util.DatabaseSafetyGuard;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
-import com.amsha.persistence.api.CronRunDto;
-import com.amsha.persistence.api.CronRunStorePort;
-import com.amsha.persistence.api.CronStorePort;
 import com.amsha.persistence.api.SessionCatalogEntry;
 import com.amsha.persistence.api.SessionCatalogStore;
 import com.amsha.persistence.api.ToolDecision;
@@ -96,10 +91,7 @@ public class SessionReaper {
     CheckpointStorePort checkpointStore;
 
     @Inject
-    CronStorePort cronStore;
-
-    @Inject
-    CronRunStorePort cronRunStore;
+    CronFailureCleanup cronFailureCleanup;
 
     @Inject
     CompactionInFlightFlag compactionInFlight;
@@ -292,8 +284,6 @@ public class SessionReaper {
         try {
             Instant cutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours));
             List<AgentCheckpoint> stale = agentStore.findStaleAwaitingApproval(cutoff);
-            if (stale.isEmpty()) return;
-
             for (AgentCheckpoint cp : stale) {
                 log.warnf(
                         "[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
@@ -303,6 +293,8 @@ public class SessionReaper {
                         .increment();
                 markApprovalTimedOut(cp);
             }
+
+            cronFailureCleanup.sweepOrphanedApprovals(cutoff, hitlTimeoutHours);
         } catch (RuntimeException e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             String msg = e.getMessage() != null ? e.getMessage() : "";
@@ -396,56 +388,7 @@ public class SessionReaper {
     }
 
     private void cleanupCronOnFailure(String sessionId, String reason) {
-        if (sessionId != null && sessionId.startsWith("cron-")) {
-            String sub = sessionId.substring("cron-".length());
-            if (sub.length() >= 36) {
-                String jobId = sub.substring(0, 36);
-                String executionId = sub.substring(37);
-                try {
-                    cronRunStore.findById(executionId).ifPresent(existing -> {
-                        CronRunDto updated = new CronRunDto(
-                                existing.id(),
-                                existing.cronId(),
-                                existing.sessionId(),
-                                "FAILED",
-                                existing.startedAt(),
-                                Instant.now(),
-                                reason,
-                                existing.iterationsUsed(),
-                                existing.inputTokens(),
-                                existing.outputTokens(),
-                                existing.usdCost(),
-                                existing.createdAt());
-                        cronRunStore.save(updated);
-                    });
-                } catch (Exception e) {
-                    log.warnf(
-                            "Failed to update cron run status on failure for run %s: %s",
-                            executionId, LogUtil.rootMessage(e));
-                }
-
-                try {
-                    var dto = cronStore.findById(jobId).orElse(null);
-                    if (dto != null) {
-                        var cron = AgentCronRecord.fromDto(dto);
-                        if (!cron.isRunOnce()
-                                && cron.getCronExpression() != null
-                                && !cron.getCronExpression().isBlank()) {
-                            Instant next = CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone());
-                            cronStore.markFired(jobId, Instant.now(), next);
-                            log.infof(
-                                    "CRON-REAP-RETRY recurring cronId=%s failed/timed out (rescheduled for %s)",
-                                    jobId, next);
-                        } else {
-                            cronStore.markFailed(jobId, reason);
-                            log.warnf("CRON-REAP-FAILED one-shot cronId=%s failed/timed out", jobId);
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warnf("Failed to update cron status on failure for job %s: %s", jobId, LogUtil.rootMessage(e));
-                }
-            }
-        }
+        cronFailureCleanup.cleanupCronOnFailure(sessionId, reason);
     }
 
     // CHAT HISTORY RETENTION SWEEP - purges chat_memory rows for old sessions

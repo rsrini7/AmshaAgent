@@ -5,8 +5,10 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
@@ -69,7 +71,17 @@ public class CronDecisionRouter {
         AgentCron cron = resolveCronJob(cronId, cronSessionId);
         if (cron == null) return "❌ Cron task not found.";
 
+        String deliveryId = cron.getLastDeliveryId();
+        if (deliveryId == null || deliveryId.isBlank()) {
+            deliveryId = UUID.randomUUID().toString();
+            cron.setLastDeliveryId(deliveryId);
+        }
+        if (!cronStore.claimForResume(cron.getId(), deliveryId)) {
+            return ctx.alreadyProcessingMsg().get();
+        }
+
         if (!statefulAgentStore.claimForResume(cronSessionId, cronRole)) {
+            cronStore.markAwaitingApprovalIfOwner(cron.getId(), deliveryId);
             return ctx.alreadyProcessingMsg().get();
         }
 
@@ -99,6 +111,7 @@ public class CronDecisionRouter {
                             ctx.context));
 
             if (result == null) {
+                markCronFailedIfOwner(cron.getId(), deliveryId, "Cron approval resume returned no result");
                 return ctx.errorMsg().get();
             }
 
@@ -106,6 +119,9 @@ public class CronDecisionRouter {
             updateLatestRun(cronSessionId, result);
             ctx.jobNotifier().accept(cron, result);
             return ctx.successResponse().get(result);
+        } catch (Exception e) {
+            markCronFailedIfOwner(cron.getId(), deliveryId, LogUtil.rootMessage(e));
+            throw e;
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
             if (result != null && isTerminalResult(result)) {
@@ -115,6 +131,14 @@ public class CronDecisionRouter {
                     /* best effort */
                 }
             }
+        }
+    }
+
+    private void markCronFailedIfOwner(String cronId, String deliveryId, String reason) {
+        try {
+            cronStore.markFailedIfOwner(cronId, deliveryId, reason);
+        } catch (RuntimeException _) {
+            // Preserve the original resume failure when persistence is unavailable.
         }
     }
 

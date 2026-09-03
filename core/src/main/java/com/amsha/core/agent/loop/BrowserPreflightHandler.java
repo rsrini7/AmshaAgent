@@ -7,8 +7,10 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,6 +36,40 @@ public class BrowserPreflightHandler {
     private static final Logger log = Logger.getLogger(BrowserPreflightHandler.class);
 
     private static final Pattern URL_PATTERN = Pattern.compile("https?://[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=%]+");
+
+    private static final Pattern GET_GIST_INTENT_PATTERN =
+            Pattern.compile("(?i)\\b(?:get|fetch|list|show|retrieve|pull|find|read|check|display)\\b.*\\bgists?\\b");
+    private static final Pattern NEGATIVE_OR_INFO_PATTERN = Pattern.compile(
+            "(?i)\\b(?:not|don't|dont|never|can't|cant|cannot|couldn't|couldnt|wouldn't|wouldnt|shouldn't|shouldnt|won't|wont|no\\s+gists?|what\\s+is|how\\s+to|explain|create|delete)\\b");
+    private static final Pattern USER_PREFIX_PATTERN = Pattern.compile(
+            "(?i)(?:(?:(?:from|for|of)\\s+)?(?:github\\s+)?(?:user(?:id|name)?|account)|(?:from|for|of))\\s*[:=]?\\s*@?([a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38})");
+    private static final Pattern POSSESSIVE_USER_PATTERN =
+            Pattern.compile("(?i)@?([a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38})'s\\s+gists?");
+    private static final Set<String> GIST_STOP_WORDS = Set.of(
+            "my",
+            "me",
+            "the",
+            "a",
+            "an",
+            "all",
+            "our",
+            "github",
+            "user",
+            "userid",
+            "username",
+            "top",
+            "latest",
+            "recent",
+            "public",
+            "private",
+            "some",
+            "his",
+            "her",
+            "their",
+            "this",
+            "that",
+            "gist",
+            "gists");
 
     private final ToolRegistry toolRegistry;
     private final ToolInvoker toolInvoker;
@@ -62,6 +98,9 @@ public class BrowserPreflightHandler {
             return Optional.empty();
         }
         Optional<ReasoningStep> preflightOpt = buildScheduleStep(context);
+        if (preflightOpt.isEmpty()) {
+            preflightOpt = buildGithubGistStep(context);
+        }
         if (preflightOpt.isEmpty()) {
             preflightOpt = buildStep(context);
         }
@@ -208,6 +247,61 @@ public class BrowserPreflightHandler {
                 "Pre-flight: URL detected in goal, navigating directly.",
                 ToolCapability.BROWSER_NAVIGATE.toolName(),
                 Map.of("url", m.group(), "action", "extract_text")));
+    }
+
+    private Optional<ReasoningStep> buildGithubGistStep(AgentExecutionContext context) {
+        Optional<AgentTool> toolOpt = toolRegistry.findTool(ToolCapability.GITHUB.toolName());
+        if (toolOpt.isEmpty() || !toolOpt.map(AgentTool::isEnabled).orElse(false)) {
+            return Optional.empty();
+        }
+        String goal = context.goal();
+        if (goal == null || goal.isBlank()) {
+            return Optional.empty();
+        }
+        String normalized = goal.replaceFirst("^(?i)CRON\\s+", "").trim();
+        if (NEGATIVE_OR_INFO_PATTERN.matcher(normalized).find()) {
+            return Optional.empty();
+        }
+        if (!GET_GIST_INTENT_PATTERN.matcher(normalized).find()) {
+            return Optional.empty();
+        }
+
+        String target = extractGistTarget(normalized);
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        boolean hasGithubIntent =
+                lower.contains("github") || lower.contains("gh") || lower.contains("gist") || target != null;
+        if (!hasGithubIntent) {
+            return Optional.empty();
+        }
+
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("action", "gist");
+        input.put("command", "list");
+        if (target != null && !target.isBlank()) {
+            input.put("target", target);
+        }
+        return Optional.of(ReasoningStep.fastPath(
+                "Pre-flight: GitHub gist request detected, using github tool directly.",
+                ToolCapability.GITHUB.toolName(),
+                input));
+    }
+
+    private static String extractGistTarget(String text) {
+        Matcher posMatcher = POSSESSIVE_USER_PATTERN.matcher(text);
+        if (posMatcher.find()) {
+            String candidate = posMatcher.group(1).trim();
+            if (!GIST_STOP_WORDS.contains(candidate.toLowerCase(Locale.ROOT))) {
+                return candidate;
+            }
+        }
+        Matcher preMatcher = USER_PREFIX_PATTERN.matcher(text);
+        while (preMatcher.find()) {
+            String candidate = preMatcher.group(1).trim();
+            if (!GIST_STOP_WORDS.contains(candidate.toLowerCase(Locale.ROOT))) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private List<ReasoningStep> appendPendingStep(List<ReasoningStep> history, ReasoningStep step) {

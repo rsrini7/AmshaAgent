@@ -267,12 +267,14 @@ class CheckpointResumeHandlerUnitTest {
         syncCronStatus.setAccessible(true);
 
         String cronSessionId = "cron-12345678-1234-1234-1234-123456789012-session";
+        when(cronStore.claimForResume("12345678-1234-1234-1234-123456789012", "session"))
+                .thenReturn(true);
         syncCronStatus.invoke(handler, cronSessionId);
-        verify(cronStore).markRunning("12345678-1234-1234-1234-123456789012");
+        verify(cronStore).claimForResume("12345678-1234-1234-1234-123456789012", "session");
 
-        Method markCronTerminal =
-                CheckpointResumeHandler.class.getDeclaredMethod("markCronTerminal", String.class, AgentResult.class);
-        markCronTerminal.setAccessible(true);
+        Method syncCronTerminalStatus = CheckpointResumeHandler.class.getDeclaredMethod(
+                "syncCronTerminalStatus", String.class, AgentResult.class);
+        syncCronTerminalStatus.setAccessible(true);
 
         AgentCronDto cronDto = new AgentCronDto(
                 "12345678-1234-1234-1234-123456789012",
@@ -287,17 +289,16 @@ class CheckpointResumeHandlerUnitTest {
                 "prompt",
                 Instant.now(),
                 null,
-                CronStatus.ACTIVE.name(),
+                CronStatus.RUNNING.name(),
                 null,
                 null,
-                null,
+                "session",
                 Instant.now(),
                 Instant.now());
         when(cronStore.findById("12345678-1234-1234-1234-123456789012")).thenReturn(Optional.of(cronDto));
 
-        markCronTerminal.invoke(
-                handler, "12345678-1234-1234-1234-123456789012", AgentResult.finished("done", List.of()));
-        verify(cronStore).markCompleted(eq("12345678-1234-1234-1234-123456789012"), any());
+        syncCronTerminalStatus.invoke(handler, cronSessionId, AgentResult.finished("done", List.of()));
+        verify(cronStore).markCompletedIfOwner(eq("12345678-1234-1234-1234-123456789012"), eq("session"), any());
     }
 
     @Test

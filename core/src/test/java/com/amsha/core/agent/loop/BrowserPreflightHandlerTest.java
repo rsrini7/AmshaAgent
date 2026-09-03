@@ -32,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -115,6 +116,91 @@ class BrowserPreflightHandlerTest {
         verify(checkpointManager)
                 .persist(any(AgentExecutionContext.class), eq(frame), anyList(), anyString(), anyString());
         verify(toolInvoker, never()).invoke(anyString(), anyMap(), anyString());
+    }
+
+    @Test
+    void githubGistNaturalLanguageRequestRoutesToGithubToolDeterministically() throws Exception {
+        AgentTool githubTool = Mockito.mock(AgentTool.class);
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(githubTool));
+        when(githubTool.isEnabled()).thenReturn(true);
+
+        AgentExecutionContext context = context("Get the top 5 gists from GitHub user rsrini7");
+        when(invocationGuard.evaluate(
+                        anyString(),
+                        anyString(),
+                        eq(AutonomyLevel.SUPERVISED),
+                        eq(ToolCapability.GITHUB.toolName()),
+                        anyMap(),
+                        anyList(),
+                        anyString(),
+                        anyList()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
+        when(toolInvoker.invoke(eq(ToolCapability.GITHUB.toolName()), anyMap(), eq("session-1")))
+                .thenReturn(ToolResponse.success("Fetched 5 gists"));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        Optional<AgentResult> result = handler.run(context, history);
+
+        AgentResult.Finished finished = assertInstanceOf(AgentResult.Finished.class, result.orElseThrow());
+        assertEquals("Fetched 5 gists", finished.answer());
+        assertEquals(1, history.size());
+        assertEquals(ToolCapability.GITHUB.toolName(), history.getFirst().action());
+        assertEquals("gist", history.getFirst().actionInput().get("action"));
+        assertEquals("list", history.getFirst().actionInput().get("command"));
+        assertEquals("rsrini7", history.getFirst().actionInput().get("target"));
+        verify(toolInvoker).invoke(eq(ToolCapability.GITHUB.toolName()), anyMap(), eq("session-1"));
+    }
+
+    @Test
+    void githubGistCompositePrefixUsernameRoutesCorrectly() throws Exception {
+        AgentTool githubTool = Mockito.mock(AgentTool.class);
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(githubTool));
+        when(githubTool.isEnabled()).thenReturn(true);
+
+        AgentExecutionContext context = context("Fetch gists for username rsrini7");
+        when(invocationGuard.evaluate(
+                        anyString(),
+                        anyString(),
+                        eq(AutonomyLevel.SUPERVISED),
+                        eq(ToolCapability.GITHUB.toolName()),
+                        anyMap(),
+                        anyList(),
+                        anyString(),
+                        anyList()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
+        when(toolInvoker.invoke(eq(ToolCapability.GITHUB.toolName()), anyMap(), eq("session-1")))
+                .thenReturn(ToolResponse.success("Fetched gists"));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        Optional<AgentResult> result = handler.run(context, history);
+
+        assertTrue(result.isPresent());
+        assertEquals("rsrini7", history.getFirst().actionInput().get("target"));
+    }
+
+    @Test
+    void negativeAndInformationalGistRequestsDoNotRoute() throws Exception {
+        AgentTool githubTool = Mockito.mock(AgentTool.class);
+        when(toolRegistry.findTool(ToolCapability.GITHUB.toolName())).thenReturn(Optional.of(githubTool));
+        when(githubTool.isEnabled()).thenReturn(true);
+
+        // Informational question
+        AgentExecutionContext infoContext = context("What is a gist?");
+        Optional<AgentResult> infoResult = handler.run(infoContext, new ArrayList<>());
+        assertTrue(infoResult.isEmpty());
+
+        // Negative intent, including contracted and uncontracted forms.
+        for (String goal : List.of(
+                "Do not fetch any gists",
+                "I can't fetch any gists",
+                "I cannot fetch any gists",
+                "I couldn't get any gists",
+                "Please don't list any gists",
+                "Never show any gists")) {
+            AgentExecutionContext negContext = context(goal);
+            Optional<AgentResult> negResult = handler.run(negContext, new ArrayList<>());
+            assertTrue(negResult.isEmpty(), () -> "Negative request was routed: " + goal);
+        }
     }
 
     private static AgentExecutionContext context(String goal) {

@@ -80,6 +80,15 @@ class GithubToolTest {
     }
 
     @Test
+    void testGistListRejectsInvalidUsername() {
+        Map<String, Object> params = Map.of(
+                "action", "gist",
+                "command", "list",
+                "target", "../invalid;injection");
+        assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
+    }
+
+    @Test
     void testGistViewRequiresTarget() {
         Map<String, Object> params = Map.of(
                 "action", "gist",

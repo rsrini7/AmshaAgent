@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -241,15 +242,16 @@ public class AgentCronScheduler {
 
         MDC.put(MdcKeys.USER_ID, job.getUserId());
         try {
-            if (cronStore.claimForFire(job.getId())) {
-                log.infof("CRON-PRECISE-FIRE id=%s", job.getId());
+            String executionId = UUID.randomUUID().toString();
+            if (cronStore.claimForFire(job.getId(), executionId)) {
+                log.infof("CRON-PRECISE-FIRE id=%s deliveryId=%s", job.getId(), executionId);
 
                 final String capturedUserId = (String) MDC.get(MdcKeys.USER_ID);
                 try {
                     vThreads.execute(() -> {
                         if (capturedUserId != null) MDC.put(MdcKeys.USER_ID, capturedUserId);
                         try {
-                            jobRunner.execute(job);
+                            jobRunner.execute(job, executionId);
                         } catch (Exception e) {
                             log.errorf("CRON-EXEC-FAIL id=%s:\n%s", job.getId(), LogUtil.trimmedStack(e));
                         } finally {
@@ -316,8 +318,14 @@ public class AgentCronScheduler {
                 return; // Not the leader this cycle
             }
 
-            // Step 0.1 - Crash recovery
-            cronStore.reclaimStaleCrons(Instant.now().minus(5, ChronoUnit.MINUTES));
+            // Step 0.1 - Crash recovery (§5.12 isolated failure boundary)
+            try {
+                cronStore.reclaimStaleCrons(Instant.now().minus(5, ChronoUnit.MINUTES));
+            } catch (Exception e) {
+                if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
+                log.warnf("Zombie-cron reclaim failed (skipping cycle): %s", LogUtil.rootMessage(e));
+                return;
+            }
 
             // Step 1 - Query due rows
             List<AgentCron> due = cronStore.findDueCrons().stream()
@@ -363,7 +371,8 @@ public class AgentCronScheduler {
             // Step 2 - Dispatch loop
             for (AgentCron job : due) {
                 if (!active) break;
-                if (!cronStore.claimForFire(job.getId())) continue;
+                String executionId = UUID.randomUUID().toString();
+                if (!cronStore.claimForFire(job.getId(), executionId)) continue;
 
                 if (!concurrencyLimiter.tryAcquire()) {
                     log.warnf("CRON-THROTTLED cronId=%s, releasing claim", job.getId());
@@ -375,7 +384,7 @@ public class AgentCronScheduler {
                     vThreads.execute(() -> {
                         MDC.put(MdcKeys.USER_ID, job.getUserId());
                         try {
-                            jobRunner.execute(job);
+                            jobRunner.execute(job, executionId);
                         } finally {
                             concurrencyLimiter.release();
                             MdcCleaner.clearAll();

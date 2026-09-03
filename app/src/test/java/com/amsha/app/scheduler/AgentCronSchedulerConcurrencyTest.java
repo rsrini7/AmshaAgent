@@ -100,7 +100,7 @@ class AgentCronSchedulerConcurrencyTest {
         AgentCronDto job3 = createDueJob(false);
 
         when(cronStore.findDueCrons()).thenReturn(List.of(job1, job2, job3));
-        when(cronStore.claimForFire(anyString())).thenReturn(true);
+        when(cronStore.claimForFire(anyString(), anyString())).thenReturn(true);
 
         CountDownLatch startLatch = new CountDownLatch(2);
         CountDownLatch gateLatch = new CountDownLatch(1);
@@ -116,7 +116,7 @@ class AgentCronSchedulerConcurrencyTest {
                     }
                 })
                 .when(jobRunner)
-                .execute(any());
+                .execute(any(), anyString());
 
         scheduler.pollAndDispatch();
 
@@ -151,7 +151,7 @@ class AgentCronSchedulerConcurrencyTest {
         AgentCronDto job3 = createDueJob(true);
 
         when(cronStore.findDueCrons()).thenReturn(List.of(job1, job2)).thenReturn(List.of(job3));
-        when(cronStore.claimForFire(anyString())).thenReturn(true);
+        when(cronStore.claimForFire(anyString(), anyString())).thenReturn(true);
 
         CountDownLatch startLatch = new CountDownLatch(2);
         CountDownLatch gateLatch = new CountDownLatch(1);
@@ -167,7 +167,7 @@ class AgentCronSchedulerConcurrencyTest {
                     }
                 })
                 .when(jobRunner)
-                .execute(any());
+                .execute(any(), anyString());
 
         // Fire first two jobs
         scheduler.pollAndDispatch();
@@ -190,12 +190,12 @@ class AgentCronSchedulerConcurrencyTest {
                     }
                 })
                 .when(jobRunner)
-                .execute(any());
+                .execute(any(), anyString());
 
         scheduler.pollAndDispatch();
         assertTrue(finishLatch3.await(60, TimeUnit.SECONDS), "Job 3 did not finish after release");
 
-        verify(jobRunner, times(3)).execute(any());
+        verify(jobRunner, times(3)).execute(any(), anyString());
     }
 
     private void assertTrue(boolean condition, String msg) {
@@ -210,7 +210,7 @@ class AgentCronSchedulerConcurrencyTest {
         AgentCronDto job3 = createDueJob(true);
 
         when(cronStore.findDueCrons()).thenReturn(List.of(job1, job2)).thenReturn(List.of(job3));
-        when(cronStore.claimForFire(anyString())).thenReturn(true);
+        when(cronStore.claimForFire(anyString(), anyString())).thenReturn(true);
 
         CountDownLatch startLatch = new CountDownLatch(2);
         CountDownLatch finishLatch = new CountDownLatch(2);
@@ -224,7 +224,7 @@ class AgentCronSchedulerConcurrencyTest {
                     }
                 })
                 .when(jobRunner)
-                .execute(any());
+                .execute(any(), anyString());
 
         // Fire first two jobs that throw
         scheduler.pollAndDispatch();
@@ -244,11 +244,11 @@ class AgentCronSchedulerConcurrencyTest {
                     }
                 })
                 .when(jobRunner)
-                .execute(any());
+                .execute(any(), anyString());
 
         scheduler.pollAndDispatch();
         assertTrue(finishLatch3.await(60, TimeUnit.SECONDS), "Job 3 did not execute after exceptions");
 
-        verify(jobRunner, times(3)).execute(any());
+        verify(jobRunner, times(3)).execute(any(), anyString());
     }
 }

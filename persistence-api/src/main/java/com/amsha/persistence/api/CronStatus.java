@@ -8,6 +8,7 @@ public enum CronStatus {
     COMPLETED,
     FAILED,
     AWAITING_APPROVAL,
+    AWAITING_RETRY,
     SKIPPED;
 
     /** SQLite text representation - stable across renames */
@@ -23,6 +24,7 @@ public enum CronStatus {
             case "COMPLETED" -> COMPLETED;
             case "FAILED" -> FAILED;
             case "AWAITING_APPROVAL" -> AWAITING_APPROVAL;
+            case "AWAITING_RETRY" -> AWAITING_RETRY;
             case "SKIPPED" -> SKIPPED;
             default -> throw new IllegalArgumentException("Unknown CronStatus: " + value);
         };

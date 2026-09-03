@@ -15,6 +15,7 @@ import java.util.Map;
 
 import com.amsha.core.events.ToolExecutionEvent;
 import com.amsha.core.governance.RequiresApprovalException;
+import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.tool.api.ToolResponse;
@@ -94,5 +95,32 @@ class ToolInvokerTest {
         when(toolRegistry.invokeTool(anyString(), anyMap())).thenThrow(ex);
 
         assertThrows(RequiresApprovalException.class, () -> invoker.invoke("tool", Map.of(), "s1"));
+    }
+
+    @Test
+    void testInvokeTool_haltedSessionAbortsToolInvocation() {
+        String sessionId = "s-halted-" + System.currentTimeMillis();
+        WorkspaceManager.haltSession(sessionId);
+        try {
+            ToolResponse response = invoker.invoke("any_tool", Map.of(), sessionId);
+            assertFalse(response.success());
+            assertEquals(499, response.exitCode());
+            assertTrue(response.output().contains("Execution aborted"));
+        } finally {
+            WorkspaceManager.clearHalted(sessionId);
+        }
+    }
+
+    @Test
+    void testInvokeTool_interruptedThreadAbortsToolInvocation() {
+        Thread.currentThread().interrupt();
+        try {
+            ToolResponse response = invoker.invoke("any_tool", Map.of(), "s-normal");
+            assertFalse(response.success());
+            assertEquals(499, response.exitCode());
+            assertTrue(response.output().contains("Execution aborted"));
+        } finally {
+            Thread.interrupted(); // clear interrupted status
+        }
     }
 }

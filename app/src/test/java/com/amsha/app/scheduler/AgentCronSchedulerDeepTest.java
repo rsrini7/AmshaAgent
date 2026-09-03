@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -181,7 +182,7 @@ class AgentCronSchedulerDeepTest {
     void testPollAndDispatch_claimFails_continues() {
         AgentCronDto job = createDueJob(true, "test goal");
         when(cronStore.findDueCrons()).thenReturn(List.of(job));
-        when(cronStore.claimForFire(job.id())).thenReturn(false);
+        when(cronStore.claimForFire(eq(job.id()), anyString())).thenReturn(false);
 
         scheduler.pollAndDispatch();
 
@@ -192,7 +193,7 @@ class AgentCronSchedulerDeepTest {
     void testPollAndDispatch_throttled_noDispatch() {
         AgentCronDto job = createDueJob(true, "test goal");
         when(cronStore.findDueCrons()).thenReturn(List.of(job));
-        when(cronStore.claimForFire(job.id())).thenReturn(true);
+        when(cronStore.claimForFire(eq(job.id()), anyString())).thenReturn(true);
 
         // Drain all permits to force throttle
         scheduler.resetConcurrencyLimit(0);
@@ -200,14 +201,14 @@ class AgentCronSchedulerDeepTest {
         scheduler.pollAndDispatch();
 
         // Should not dispatch when throttled
-        verify(jobRunner, never()).execute(any());
+        verify(jobRunner, never()).execute(any(), anyString());
     }
 
     @Test
     void testPollAndDispatch_rejectedExecution_releasesSemaphore() {
         AgentCronDto job = createDueJob(true, "test goal");
         when(cronStore.findDueCrons()).thenReturn(List.of(job));
-        when(cronStore.claimForFire(job.id())).thenReturn(true);
+        when(cronStore.claimForFire(eq(job.id()), anyString())).thenReturn(true);
 
         doAnswer(invocation -> {
                     throw new RejectedExecutionException("pool full");
@@ -393,11 +394,11 @@ class AgentCronSchedulerDeepTest {
                 Instant.now(),
                 null);
         when(cronStore.findById(dto.id())).thenReturn(Optional.of(dto));
-        when(cronStore.claimForFire(dto.id())).thenReturn(false);
+        when(cronStore.claimForFire(eq(dto.id()), anyString())).thenReturn(false);
 
         scheduler.executeSoonInternal(dto.id());
 
-        verify(jobRunner, never()).execute(any());
+        verify(jobRunner, never()).execute(any(), anyString());
     }
 
     @Test
@@ -422,11 +423,11 @@ class AgentCronSchedulerDeepTest {
                 Instant.now(),
                 null);
         when(cronStore.findById(dto.id())).thenReturn(Optional.of(dto));
-        when(cronStore.claimForFire(dto.id())).thenReturn(true);
+        when(cronStore.claimForFire(eq(dto.id()), anyString())).thenReturn(true);
 
         scheduler.executeSoonInternal(dto.id());
 
-        verify(jobRunner).execute(any());
+        verify(jobRunner).execute(any(), anyString());
     }
 
     @Test

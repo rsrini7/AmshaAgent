@@ -920,7 +920,7 @@ export class ArcChatInterface extends LitElement {
       return;
     }
 
-    const sessionId = this.currentSessionId();
+    const sessionId = this._activeBackgroundCronSessionId || this.currentSessionId();
     if (!sessionId) {
       this._progressPhase = 'Status unavailable';
       this._progressDetail = 'No server session is attached. Reconnect and try again.';
@@ -938,13 +938,15 @@ export class ArcChatInterface extends LitElement {
       const history = terminal ? await this._loadHistory(sessionId, true) : [];
       const lastMessage = history[history.length - 1];
 
-      if (terminal && lastMessage?.role === 'assistant' && !lastMessage.isApprovalPrompt) {
+      if (terminal) {
         this._clearTurnWatchdog();
         this._isTyping = false;
         this._awaitingApproval = false;
         this._turnStalled = false;
-        this._resetProgress();
-        return;
+        if (lastMessage?.role === 'assistant' && !lastMessage.isApprovalPrompt) {
+          this._resetProgress();
+          return;
+        }
       }
 
       if (backendStatus === 'AWAITING_APPROVAL') {

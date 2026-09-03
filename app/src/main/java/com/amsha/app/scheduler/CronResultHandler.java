@@ -80,8 +80,17 @@ public class CronResultHandler {
         if (result instanceof AgentResult.AwaitingApproval a) {
             handleApprovalPause(job, cronSessionId, executionId, a);
         } else if (result instanceof AgentResult.AwaitingRetry) {
-            updateRunStatus(executionId, "AWAITING_RETRY", null, result);
-            log.infof("CronResultHandler: Session kept alive for cron=%s AWAITING_RETRY (rate limit).", cronSessionId);
+            boolean marked = cronStore.markAwaitingRetryIfOwner(job.getId(), executionId);
+            if (!marked) {
+                log.warnf("CronResultHandler: Failed to mark cron %s as AWAITING_RETRY - lease lost", job.getId());
+                updateRunStatus(executionId, "LOST", "Lease lost before transitioning to retry backoff", result);
+                workspaceManager.terminateSession(cronSessionId);
+            } else {
+                updateRunStatus(executionId, "AWAITING_RETRY", null, result);
+                log.infof(
+                        "CronResultHandler: Session kept alive for cron=%s AWAITING_RETRY (rate limit).",
+                        cronSessionId);
+            }
         } else {
             handleNormalCompletion(job, cronSessionId, executionId, result);
         }
@@ -114,18 +123,26 @@ public class CronResultHandler {
 
     // Handles Finished, Failed, LoopExceeded - always terminates session
     private void handleNormalCompletion(AgentCron job, String cronSessionId, String executionId, AgentResult result) {
+        boolean finalized = handleFinalResult(job, cronSessionId, executionId, result);
+        if (!finalized) {
+            log.warnf(
+                    "CRON-LEASE-LOST cronId=%s deliveryId=%s lease lost or stolen during completion - skipping notification",
+                    job.getId(), executionId);
+            updateRunStatus(executionId, "LOST", "Lease lost or stolen by another execution", result);
+            workspaceManager.terminateSession(cronSessionId);
+            return;
+        }
+
         String answer = AgentResultFormatter.format(result);
         String finalAnswer = answer.trim().isEmpty()
                 ? "⚠️ Task executed, but the agent returned an empty response for goal: " + job.getGoal()
                 : answer;
 
-        if (result instanceof AgentResult.Finished) {
+        if (result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished) {
             updateRunStatus(executionId, "COMPLETED", null, result);
         } else {
             updateRunStatus(executionId, "FAILED", answer, result);
         }
-
-        handleFinalResult(job, cronSessionId, result);
 
         fireCompletionEvent(job, executionId, finalAnswer, null, cronSessionId, null);
         workspaceManager.terminateSession(cronSessionId);
@@ -157,14 +174,23 @@ public class CronResultHandler {
     // Handles AwaitingApproval - session must stay alive for ApproveReflex
     private void handleApprovalPause(
             AgentCron job, String cronSessionId, String executionId, AgentResult.AwaitingApproval result) {
+        boolean paused = cronStore.markAwaitingApprovalIfOwner(job.getId(), executionId);
+        if (!paused) {
+            log.warnf(
+                    "CRON-LEASE-LOST cronId=%s deliveryId=%s lease lost or stolen during approval pause - aborting",
+                    job.getId(), executionId);
+            updateRunStatus(executionId, "LOST", "Lease lost or stolen before approval pause", null);
+            workspaceManager.terminateSession(cronSessionId);
+            return;
+        }
+
         updateRunStatus(executionId, "AWAITING_APPROVAL", null, null);
-        cronStore.markAwaitingApproval(job.getId());
         log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s", job.getId(), result.toolName());
 
         auditService.record(
                 cronSessionId,
                 job.getUserId(),
-                AgentRoleEnum.COORDINATOR.toScopedName(),
+                auditRole(job),
                 SecurityEventType.LOOP_AWAITING_APPROVAL,
                 "cronId=" + job.getId() + " pendingTool=" + result.toolName());
 
@@ -193,13 +219,22 @@ public class CronResultHandler {
 
     @ActivateRequestContext
     public void handleFailure(AgentCron job, String cronSessionId, String executionId, Throwable t) {
+        boolean failed = cronStore.markFailedIfOwner(job.getId(), executionId, t.getMessage());
+        if (!failed) {
+            log.warnf(
+                    "CRON-LEASE-LOST cronId=%s deliveryId=%s lease lost or stolen during failure handling - aborting",
+                    job.getId(), executionId);
+            updateRunStatus(executionId, "LOST", "Lease lost or stolen before failure handling", null);
+            workspaceManager.terminateSession(cronSessionId);
+            return;
+        }
+
         updateRunStatus(executionId, "FAILED", t.getMessage(), null);
-        cronStore.markFailed(job.getId(), t.getMessage());
 
         auditService.record(
                 cronSessionId,
                 job.getUserId(),
-                AgentRoleEnum.COORDINATOR.toScopedName(),
+                auditRole(job),
                 SecurityEventType.CRONFAILED,
                 "cronId=" + job.getId() + " reason=" + t.getMessage());
 
@@ -216,27 +251,31 @@ public class CronResultHandler {
         workspaceManager.terminateSession(cronSessionId);
     }
 
-    private void handleFinalResult(AgentCron job, String cronSessionId, AgentResult result) {
-        if (result instanceof AgentResult.Finished) {
+    private boolean handleFinalResult(AgentCron job, String cronSessionId, String executionId, AgentResult result) {
+        if (result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished) {
             if (job.isRunOnce()) {
-                cronStore.markCompleted(job.getId(), Instant.now());
+                boolean ok = cronStore.markCompletedIfOwner(job.getId(), executionId, Instant.now());
+                if (!ok) return false;
                 auditService.record(
                         cronSessionId,
                         job.getUserId(),
-                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        auditRole(job),
                         SecurityEventType.CRONFIRED,
                         "cronId=" + job.getId() + " runOnce=true status=COMPLETED");
                 log.infof("CRON-COMPLETED one-shot cronId=%s", job.getId());
+                return true;
             } else {
                 Instant next = CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone());
-                cronStore.markFired(job.getId(), Instant.now(), next);
+                boolean ok = cronStore.markFiredIfOwner(job.getId(), executionId, Instant.now(), next);
+                if (!ok) return false;
                 auditService.record(
                         cronSessionId,
                         job.getUserId(),
-                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        auditRole(job),
                         SecurityEventType.CRONFIRED,
                         "cronId=" + job.getId() + " runOnce=false nextFire=" + next);
                 log.infof("CRON-FIRED cronId=%s nextFire=%s", job.getId(), next);
+                return true;
             }
         } else {
             if (!job.isRunOnce()
@@ -246,28 +285,39 @@ public class CronResultHandler {
                 // Free-tier LLMs fail intermittently; marking permanently FAILED
                 // would kill the recurring schedule after the first transient error.
                 Instant next = CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone());
-                cronStore.markFired(job.getId(), Instant.now(), next);
+                boolean ok = cronStore.markFiredIfOwner(job.getId(), executionId, Instant.now(), next);
+                if (!ok) return false;
                 log.warnf(
                         "CRON-RETRY recurring cronId=%s failed (will retry at %s): %s",
                         job.getId(), next, AgentResultFormatter.format(result));
                 auditService.record(
                         cronSessionId,
                         job.getUserId(),
-                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        auditRole(job),
                         SecurityEventType.CRONFAILED,
                         "cronId=" + job.getId() + " status=RETRY nextFire=" + next + " result="
                                 + result.getClass().getSimpleName());
+                return true;
             } else {
-                cronStore.markFailed(job.getId(), AgentResultFormatter.format(result));
+                boolean ok = cronStore.markFailedIfOwner(job.getId(), executionId, AgentResultFormatter.format(result));
+                if (!ok) return false;
                 auditService.record(
                         cronSessionId,
                         job.getUserId(),
-                        AgentRoleEnum.COORDINATOR.toScopedName(),
+                        auditRole(job),
                         SecurityEventType.CRONFAILED,
                         "cronId=" + job.getId() + " status=FAILED result="
                                 + result.getClass().getSimpleName());
+                return true;
             }
         }
+    }
+
+    private String auditRole(AgentCron job) {
+        String executionRole = job.getExecutionRole();
+        return executionRole == null || executionRole.isBlank()
+                ? AgentRoleEnum.COORDINATOR.toScopedName()
+                : executionRole;
     }
 
     private void fireCompletionEvent(
@@ -294,7 +344,7 @@ public class CronResultHandler {
             auditService.record(
                     legacySessionId,
                     job.getUserId(),
-                    AgentRoleEnum.COORDINATOR.toScopedName(),
+                    auditRole(job),
                     SecurityEventType.LEGACY_CHANNEL_FALLBACK,
                     "cronId=" + job.getId() + " channelType=" + job.getChannelType());
             return;

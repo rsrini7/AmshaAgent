@@ -160,9 +160,9 @@ public class PromptInstructionLibrary {
             GENERAL FACT FINDING & SEARCH PREFERENCE:
             1. For general world knowledge, versions, dates, or comparisons, use
                `garuda(agent=saraswati)` or a web search.
-            2. Do NOT use the `github` tool for non-repository questions.
+            2. Do NOT use the `github` tool for non-GitHub questions.
             3. Use the `github` tool ONLY when the user provides an owner/repo or
-               asks specifically about GitHub resources.
+               asks specifically about GitHub resources or user gists (for gists use action='gist', command='list', target='<username>').
             4. If the information is already in history, answer directly.
 
             SCHEDULING DELEGATION RULE:
@@ -465,7 +465,7 @@ public class PromptInstructionLibrary {
                 + "`, hand off to the appropriate specialist execution role.\n");
         sb.append("   - NEVER tell user to \"use another role\". Call `garuda` yourself.\n");
         sb.append(
-                "6. For general world knowledge, versions, or comparisons, use `garuda(agent=saraswati)`. Do NOT use `github` for non-repository questions. Use `github` ONLY for explicit owner/repo requests.\n");
+                "6. For general world knowledge, versions, or comparisons, use `garuda(agent=saraswati)`. Do NOT use `github` for non-GitHub questions. Use `github` ONLY for explicit owner/repo or user gist requests (gist: action='gist', command='list', target='<username>').\n");
         sb.append(
                 "7. Use `recall_memory_search` for exact past-session text. Use `archival_memory_search` for semantic knowledge (patterns, facts, preferences).\n");
         sb.append(selfEvolveDirectiveRules()).append('\n');
@@ -479,7 +479,7 @@ public class PromptInstructionLibrary {
         sb.append(
                 "12. If you encounter a request you cannot fulfill, use `garuda` (set agent to persona name) to handoff. If you are 'coordinator', do NOT delegate to 'coordinator'; call tools directly.\n");
         sb.append("13. For capability/self-description questions, answer directly without recall_memory_search.\n");
-        sb.append("14. For explicit owner/repo GitHub requests, prefer `github` over text-only fallback.\n");
+        sb.append("14. For explicit owner/repo or gist GitHub requests, prefer `github` over text-only fallback.\n");
         sb.append(
                 "15. AMBIGUITY: If a request could mean two different things (e.g. \"java 25\" = version or quantity?), ask ONE clarifying question before executing. Never assume the complex interpretation.\n");
         sb.append(

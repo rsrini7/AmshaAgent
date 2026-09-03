@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -69,8 +70,30 @@ public class FsCronStoreAdapter implements CronStorePort {
     }
 
     @Override
-    public boolean claimForFire(String id) {
-        return atomicStatusUpdate(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name());
+    public synchronized boolean claimForFire(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        if (!CronStatus.ACTIVE.name().equals(dto.status())) return false;
+        store.write(
+                List.of(DOMAIN, BY_ID, id + ".json"),
+                withStatusAndDelivery(dto, CronStatus.RUNNING.name(), deliveryId));
+        return true;
+    }
+
+    @Override
+    public synchronized boolean claimForResume(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        if (!CronStatus.AWAITING_APPROVAL.name().equals(dto.status())
+                && !CronStatus.AWAITING_RETRY.name().equals(dto.status())) return false;
+        store.write(
+                List.of(DOMAIN, BY_ID, id + ".json"),
+                withStatusAndDelivery(dto, CronStatus.RUNNING.name(), deliveryId));
+        return true;
     }
 
     @Override
@@ -82,50 +105,21 @@ public class FsCronStoreAdapter implements CronStorePort {
     public void markFired(String id, Instant lastFireTime, Instant nextFireTime) {
         updateWithLock(
                 id,
-                dto -> new AgentCronDto(
-                        dto.id(),
-                        dto.sessionId(),
-                        dto.userId(),
-                        dto.chatId(),
-                        dto.channelType(),
-                        dto.channelPlatformId(),
-                        dto.cronExpression(),
-                        dto.timezone(),
-                        dto.runOnce(),
-                        dto.goal(),
+                dto -> copyWith(
+                        dto,
                         nextFireTime,
                         lastFireTime,
                         CronStatus.ACTIVE.name(),
-                        dto.executionRole(),
                         dto.errorReason(),
-                        dto.lastDeliveryId(),
-                        dto.createdAt(),
-                        Instant.now()));
+                        dto.lastDeliveryId()));
     }
 
     @Override
     public void markCompleted(String id, Instant lastFireTime) {
         updateWithLock(
                 id,
-                dto -> new AgentCronDto(
-                        dto.id(),
-                        dto.sessionId(),
-                        dto.userId(),
-                        dto.chatId(),
-                        dto.channelType(),
-                        dto.channelPlatformId(),
-                        dto.cronExpression(),
-                        dto.timezone(),
-                        dto.runOnce(),
-                        dto.goal(),
-                        null,
-                        lastFireTime,
-                        CronStatus.COMPLETED.name(),
-                        dto.executionRole(),
-                        dto.errorReason(),
-                        dto.lastDeliveryId(),
-                        dto.createdAt(),
-                        Instant.now()));
+                dto -> copyWith(
+                        dto, null, lastFireTime, CronStatus.COMPLETED.name(), dto.errorReason(), dto.lastDeliveryId()));
     }
 
     @Override
@@ -182,87 +176,150 @@ public class FsCronStoreAdapter implements CronStorePort {
     public void setDeliveryId(String id, String deliveryId) {
         updateWithLock(
                 id,
-                dto -> new AgentCronDto(
-                        dto.id(),
-                        dto.sessionId(),
-                        dto.userId(),
-                        dto.chatId(),
-                        dto.channelType(),
-                        dto.channelPlatformId(),
-                        dto.cronExpression(),
-                        dto.timezone(),
-                        dto.runOnce(),
-                        dto.goal(),
-                        dto.nextFireTime(),
-                        dto.lastFireTime(),
-                        dto.status(),
-                        dto.executionRole(),
-                        dto.errorReason(),
-                        deliveryId,
-                        dto.createdAt(),
-                        Instant.now()));
+                dto -> copyWith(
+                        dto, dto.nextFireTime(), dto.lastFireTime(), dto.status(), dto.errorReason(), deliveryId));
     }
 
     @Override
     public void markFailed(String id, String errorReason) {
         updateWithLock(
                 id,
-                dto -> new AgentCronDto(
-                        dto.id(),
-                        dto.sessionId(),
-                        dto.userId(),
-                        dto.chatId(),
-                        dto.channelType(),
-                        dto.channelPlatformId(),
-                        dto.cronExpression(),
-                        dto.timezone(),
-                        dto.runOnce(),
-                        dto.goal(),
+                dto -> copyWith(
+                        dto,
                         dto.nextFireTime(),
                         dto.lastFireTime(),
                         CronStatus.FAILED.name(),
-                        dto.executionRole(),
                         errorReason,
-                        dto.lastDeliveryId(),
-                        dto.createdAt(),
-                        Instant.now()));
+                        dto.lastDeliveryId()));
     }
 
     @Override
     public void markSkipped(String id, Instant nextFireTime, Instant now) {
         updateWithLock(
                 id,
-                dto -> new AgentCronDto(
-                        dto.id(),
-                        dto.sessionId(),
-                        dto.userId(),
-                        dto.chatId(),
-                        dto.channelType(),
-                        dto.channelPlatformId(),
-                        dto.cronExpression(),
-                        dto.timezone(),
-                        dto.runOnce(),
-                        dto.goal(),
+                dto -> copyWith(
+                        dto,
                         nextFireTime,
                         dto.lastFireTime(),
                         CronStatus.SKIPPED.name(),
-                        dto.executionRole(),
                         dto.errorReason(),
-                        dto.lastDeliveryId(),
-                        dto.createdAt(),
-                        now != null ? now : Instant.now()));
+                        dto.lastDeliveryId()));
     }
 
     @Override
-    public void reclaimStaleCrons(Instant threshold) {
+    public synchronized void reclaimStaleCrons(Instant threshold) {
         for (AgentCronDto dto : loadAll()) {
             if (CronStatus.RUNNING.name().equals(dto.status())) {
-                Instant ref = dto.lastFireTime() != null ? dto.lastFireTime() : dto.createdAt();
-                if (ref != null && ref.isBefore(threshold)) {
-                    atomicStatusUpdate(dto.id(), CronStatus.RUNNING.name(), CronStatus.ACTIVE.name());
+                Optional<AgentCronDto> curOpt = findById(dto.id());
+                if (curOpt.isPresent()) {
+                    AgentCronDto cur = curOpt.get();
+                    if (CronStatus.RUNNING.name().equals(cur.status())) {
+                        Instant ref = cur.updatedAt() != null ? cur.updatedAt() : cur.createdAt();
+                        if (ref != null && (ref.isBefore(threshold) || ref.equals(threshold))) {
+                            updateWithLock(
+                                    cur.id(), ignored -> withStatusAndDelivery(cur, CronStatus.ACTIVE.name(), null));
+                        }
+                    }
                 }
             }
         }
+    }
+
+    @Override
+    public synchronized boolean renewLease(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        if (CronStatus.RUNNING.name().equals(dto.status()) && deliveryId.equals(dto.lastDeliveryId())) {
+            store.write(List.of(DOMAIN, BY_ID, id + ".json"), withStatus(dto, dto.status()));
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public synchronized boolean markCompletedIfOwner(String id, String deliveryId, Instant lastFireTime) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        if (!deliveryId.equals(dto.lastDeliveryId())
+                || !CronStatus.RUNNING.name().equals(dto.status())) {
+            return false;
+        }
+        markCompleted(id, lastFireTime);
+        return true;
+    }
+
+    @Override
+    public synchronized boolean markFiredIfOwner(
+            String id, String deliveryId, Instant lastFireTime, Instant nextFireTime) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        if (!deliveryId.equals(dto.lastDeliveryId())
+                || !CronStatus.RUNNING.name().equals(dto.status())) {
+            return false;
+        }
+        markFired(id, lastFireTime, nextFireTime);
+        return true;
+    }
+
+    @Override
+    public synchronized boolean markAwaitingApprovalIfOwner(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        if (!deliveryId.equals(dto.lastDeliveryId())
+                || !CronStatus.RUNNING.name().equals(dto.status())) {
+            return false;
+        }
+        markAwaitingApproval(id);
+        return true;
+    }
+
+    @Override
+    public synchronized boolean markAwaitingRetryIfOwner(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        if (!deliveryId.equals(dto.lastDeliveryId())
+                || !CronStatus.RUNNING.name().equals(dto.status())) {
+            return false;
+        }
+        updateWithLock(id, cur -> withStatus(cur, CronStatus.AWAITING_RETRY.name()));
+        return true;
+    }
+
+    @Override
+    public synchronized boolean markFailedIfOwner(String id, String deliveryId, String errorReason) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        boolean validStatus = CronStatus.RUNNING.name().equals(dto.status())
+                || CronStatus.AWAITING_APPROVAL.name().equals(dto.status())
+                || CronStatus.AWAITING_RETRY.name().equals(dto.status());
+        if (!deliveryId.equals(dto.lastDeliveryId()) || !validStatus) {
+            return false;
+        }
+        markFailed(id, errorReason);
+        return true;
+    }
+
+    @Override
+    public synchronized boolean markFailedIfStatus(String id, String expectedStatus, String errorReason) {
+        if (id == null || id.isBlank()) return false;
+        Optional<AgentCronDto> opt = findById(id);
+        if (opt.isEmpty()) return false;
+        AgentCronDto dto = opt.get();
+        if (expectedStatus != null && !expectedStatus.equals(dto.status())) return false;
+        markFailed(id, errorReason);
+        return true;
     }
 
     @Override
@@ -314,12 +371,8 @@ public class FsCronStoreAdapter implements CronStorePort {
             all = all.stream().filter(dto -> status.equals(dto.status())).toList();
         }
         all = all.stream()
-                .sorted((a, b) -> {
-                    if (a.nextFireTime() == null && b.nextFireTime() == null) return 0;
-                    if (a.nextFireTime() == null) return 1;
-                    if (b.nextFireTime() == null) return -1;
-                    return a.nextFireTime().compareTo(b.nextFireTime());
-                })
+                .sorted(Comparator.comparing(
+                        AgentCronDto::nextFireTime, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
         int end = Math.min(offset + limit, all.size());
         if (offset >= all.size()) return List.of();
@@ -339,12 +392,8 @@ public class FsCronStoreAdapter implements CronStorePort {
         List<AgentCronDto> all = loadAll().stream()
                 .filter(dto -> userId.equals(dto.userId()))
                 .filter(dto -> status == null || status.isBlank() || status.equals(dto.status()))
-                .sorted((a, b) -> {
-                    if (a.nextFireTime() == null && b.nextFireTime() == null) return 0;
-                    if (a.nextFireTime() == null) return 1;
-                    if (b.nextFireTime() == null) return -1;
-                    return a.nextFireTime().compareTo(b.nextFireTime());
-                })
+                .sorted(Comparator.comparing(
+                        AgentCronDto::nextFireTime, Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
         int end = Math.min(offset + limit, all.size());
         if (offset >= all.size()) return List.of();
@@ -366,36 +415,16 @@ public class FsCronStoreAdapter implements CronStorePort {
                 .toList();
     }
 
-    private boolean atomicStatusUpdate(String id, String fromStatus, String toStatus) {
+    private synchronized boolean atomicStatusUpdate(String id, String fromStatus, String toStatus) {
         Optional<AgentCronDto> existing = findById(id);
         if (existing.isEmpty()) return false;
         AgentCronDto dto = existing.get();
         if (!fromStatus.equals(dto.status())) return false;
-        updateWithLock(
-                id,
-                ignored -> new AgentCronDto(
-                        dto.id(),
-                        dto.sessionId(),
-                        dto.userId(),
-                        dto.chatId(),
-                        dto.channelType(),
-                        dto.channelPlatformId(),
-                        dto.cronExpression(),
-                        dto.timezone(),
-                        dto.runOnce(),
-                        dto.goal(),
-                        dto.nextFireTime(),
-                        dto.lastFireTime(),
-                        toStatus,
-                        dto.executionRole(),
-                        dto.errorReason(),
-                        dto.lastDeliveryId(),
-                        dto.createdAt(),
-                        Instant.now()));
+        updateWithLock(id, ignored -> withStatus(dto, toStatus));
         return true;
     }
 
-    private void updateWithLock(String id, UnaryOperator<AgentCronDto> updater) {
+    private synchronized void updateWithLock(String id, UnaryOperator<AgentCronDto> updater) {
         if (id == null || id.isBlank()) {
             log.warnf("updateWithLock called with null/blank id - skipping");
             return;
@@ -425,6 +454,42 @@ public class FsCronStoreAdapter implements CronStorePort {
     private UserIndex loadUserIndex(String userId) {
         return store.readOptional(List.of(DOMAIN, INDICES, BY_USER, userId + ".json"), UserIndex.class)
                 .orElse(new UserIndex());
+    }
+
+    private static AgentCronDto copyWith(
+            AgentCronDto dto,
+            Instant nextFireTime,
+            Instant lastFireTime,
+            String status,
+            String errorReason,
+            String deliveryId) {
+        return new AgentCronDto(
+                dto.id(),
+                dto.sessionId(),
+                dto.userId(),
+                dto.chatId(),
+                dto.channelType(),
+                dto.channelPlatformId(),
+                dto.cronExpression(),
+                dto.timezone(),
+                dto.runOnce(),
+                dto.goal(),
+                nextFireTime,
+                lastFireTime,
+                status,
+                dto.executionRole(),
+                errorReason,
+                deliveryId,
+                dto.createdAt(),
+                Instant.now());
+    }
+
+    private static AgentCronDto withStatus(AgentCronDto dto, String status) {
+        return copyWith(dto, dto.nextFireTime(), dto.lastFireTime(), status, dto.errorReason(), dto.lastDeliveryId());
+    }
+
+    private static AgentCronDto withStatusAndDelivery(AgentCronDto dto, String status, String deliveryId) {
+        return copyWith(dto, dto.nextFireTime(), dto.lastFireTime(), status, dto.errorReason(), deliveryId);
     }
 
     @SuppressWarnings("EffectivelyPrivate") // public field needed for Jackson serialization

@@ -292,6 +292,29 @@ class ScheduleTaskToolTest {
     }
 
     @Test
+    void omittedExecutionRoleDefaultsToResearcher() throws Exception {
+        ScheduleTaskTool tool = createTool();
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "test-session-id",
+                "test-user",
+                "test-chat",
+                "coordinator",
+                AutonomyLevel.SUPERVISED,
+                "trace",
+                "TELEGRAM",
+                "platform1",
+                "remind me in 1 minute to list gists",
+                null,
+                null,
+                "UTC");
+
+        ToolResponse result = tool.execute(ctx, Map.of("goal", "List gists", "runOnce", true));
+
+        assertTrue(result.success(), result.output());
+        verify(cronStore).save(argThat(dto -> "researcher".equals(((AgentCronDto) dto).executionRole())));
+    }
+
+    @Test
     void testRunOnceWithoutCronSynthesizesCronExpression() throws Exception {
         ScheduleTaskTool tool = createTool();
 

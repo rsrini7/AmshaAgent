@@ -423,6 +423,26 @@ describe('Chat Dock & HITL Panel integration', () => {
     expect((chat as any)._progressDetail).toContain('AWAITING_APPROVAL');
   });
 
+  it('clears a stalled turn when the backend is terminal without history', async () => {
+    const chat = new ArcChatInterface();
+    (chat as any)._appContext = { apiKey: '', sessionId: 'session-1' };
+    (chat as any)._isTyping = false;
+    (chat as any)._turnStalled = true;
+    (chat as any)._awaitingApproval = true;
+    vi.spyOn(ArcClient.prototype as any, 'getSessionStatus').mockResolvedValue({
+      status: 'COMPLETED',
+    });
+    vi.spyOn(chat as any, '_loadHistory').mockResolvedValue([]);
+
+    await (chat as any)._checkStalledTurn();
+
+    expect((chat as any)._isTyping).toBe(false);
+    expect((chat as any)._awaitingApproval).toBe(false);
+    expect((chat as any)._turnStalled).toBe(false);
+    expect((chat as any)._progressPhase).toBe('Status checked');
+    expect((chat as any)._progressDetail).toContain('COMPLETED');
+  });
+
   it('resumes the chat turn after an approval event from the separate HITL view', () => {
     const chat = new ArcChatInterface();
     (chat as any)._awaitingApproval = true;

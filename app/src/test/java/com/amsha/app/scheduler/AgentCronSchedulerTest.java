@@ -157,23 +157,23 @@ class AgentCronSchedulerTest {
     void testDueJobClaimedAndDispatched() {
         AgentCronDto job = createDueJob(true);
         when(cronStore.findDueCrons()).thenReturn(List.of(job));
-        when(cronStore.claimForFire(job.id())).thenReturn(true);
+        when(cronStore.claimForFire(eq(job.id()), anyString())).thenReturn(true);
 
         scheduler.pollAndDispatch();
 
-        verify(cronStore).claimForFire(job.id());
-        verify(jobRunner).execute(any());
+        verify(cronStore).claimForFire(eq(job.id()), anyString());
+        verify(jobRunner).execute(any(), anyString());
     }
 
     @Test
     void testDoubleFirePrevented() {
         AgentCronDto job = createDueJob(true);
         when(cronStore.findDueCrons()).thenReturn(List.of(job, job));
-        when(cronStore.claimForFire(job.id())).thenReturn(true).thenReturn(false);
+        when(cronStore.claimForFire(eq(job.id()), anyString())).thenReturn(true).thenReturn(false);
 
         scheduler.pollAndDispatch();
 
-        verify(jobRunner, atMost(1)).execute(any());
+        verify(jobRunner, atMost(1)).execute(any(), anyString());
     }
 
     @Test
@@ -185,8 +185,8 @@ class AgentCronSchedulerTest {
 
         verify(cronStore).markFailed(eq(job.id()), ArgumentMatchers.contains("One-shot"));
         verify(cronStore, never()).markSkipped(anyString(), any(), any());
-        verify(cronStore, never()).claimForFire(anyString());
-        verify(jobRunner, never()).execute(any());
+        verify(cronStore, never()).claimForFire(anyString(), anyString());
+        verify(jobRunner, never()).execute(any(), anyString());
     }
 
     @Test
@@ -198,8 +198,8 @@ class AgentCronSchedulerTest {
 
         verify(cronStore).markFired(eq(job.id()), any(Instant.class), any(Instant.class));
         verify(cronStore, never()).markSkipped(anyString(), any(), any());
-        verify(cronStore, never()).claimForFire(anyString());
-        verify(jobRunner, never()).execute(any());
+        verify(cronStore, never()).claimForFire(anyString(), anyString());
+        verify(jobRunner, never()).execute(any(), anyString());
     }
 
     @Test
@@ -225,7 +225,7 @@ class AgentCronSchedulerTest {
     void preciseDispatchRejectionReleasesClaim() {
         AgentCronDto job = createDueJob(true);
         when(cronStore.findById(job.id())).thenReturn(Optional.of(job));
-        when(cronStore.claimForFire(job.id())).thenReturn(true);
+        when(cronStore.claimForFire(eq(job.id()), anyString())).thenReturn(true);
         doAnswer(invocation -> {
                     throw new RejectedExecutionException("precise executor stopped");
                 })
@@ -253,7 +253,7 @@ class AgentCronSchedulerTest {
     void testSemaphoreReleasedOnRejection() {
         AgentCronDto job = createDueJob(true);
         when(cronStore.findDueCrons()).thenReturn(List.of(job));
-        when(cronStore.claimForFire(job.id())).thenReturn(true);
+        when(cronStore.claimForFire(eq(job.id()), anyString())).thenReturn(true);
 
         // Mock executor to throw RejectedExecutionException
         doAnswer(invocation -> {

@@ -67,17 +67,29 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     }
 
     @Override
-    public boolean claimForFire(String id) {
-        if (id == null || id.isBlank()) return false;
+    public boolean claimForFire(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
         return jdbi.withExtension(
-                CronJdbiDao.class, dao -> dao.claimForFire(id, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name()));
+                CronJdbiDao.class,
+                dao -> dao.claimForFire(id, deliveryId, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name(), now));
+    }
+
+    @Override
+    public boolean claimForResume(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
+        int updated = jdbi.withExtension(CronJdbiDao.class, dao -> dao.claimForResume(id, deliveryId, now));
+        return updated > 0;
     }
 
     @Override
     public void releaseClaimToActive(String id) {
         if (id == null || id.isBlank()) return;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
         jdbi.useExtension(
-                CronJdbiDao.class, dao -> dao.releaseClaim(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name()));
+                CronJdbiDao.class,
+                dao -> dao.releaseClaim(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(), now));
     }
 
     @Override
@@ -154,10 +166,78 @@ public class SqliteCronStoreAdapter implements CronStorePort {
     @Override
     public void reclaimStaleCrons(Instant threshold) {
         if (threshold == null) return;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
         jdbi.useExtension(
                 CronJdbiDao.class,
                 dao -> dao.reclaimStale(
-                        CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(), TemporalUtils.formatIsoLex(threshold)));
+                        CronStatus.ACTIVE.name(),
+                        CronStatus.RUNNING.name(),
+                        TemporalUtils.formatIsoLex(threshold),
+                        now));
+    }
+
+    @Override
+    public boolean renewLease(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
+        int updated = jdbi.withExtension(CronJdbiDao.class, dao -> dao.renewLease(id, deliveryId, now));
+        return updated > 0;
+    }
+
+    @Override
+    public boolean markCompletedIfOwner(String id, String deliveryId, Instant lastFireTime) {
+        if (id == null || id.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
+        String lastFire = lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null;
+        int updated =
+                jdbi.withExtension(CronJdbiDao.class, dao -> dao.markCompletedIfOwner(id, deliveryId, lastFire, now));
+        return updated > 0;
+    }
+
+    @Override
+    public boolean markFiredIfOwner(String id, String deliveryId, Instant lastFireTime, Instant nextFireTime) {
+        if (id == null || id.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
+        String lastFire = lastFireTime != null ? TemporalUtils.formatIsoLex(lastFireTime) : null;
+        String nextFire = nextFireTime != null ? TemporalUtils.formatIsoLex(nextFireTime) : null;
+        int updated = jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.markFiredIfOwner(id, deliveryId, lastFire, nextFire, now));
+        return updated > 0;
+    }
+
+    @Override
+    public boolean markAwaitingApprovalIfOwner(String id, String deliveryId) {
+        if (id == null || id.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
+        int updated =
+                jdbi.withExtension(CronJdbiDao.class, dao -> dao.markAwaitingApprovalIfOwner(id, deliveryId, now));
+        return updated > 0;
+    }
+
+    @Override
+    public boolean markAwaitingRetryIfOwner(String id, String deliveryId) {
+        if (id == null || id.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
+        int updated = jdbi.withExtension(CronJdbiDao.class, dao -> dao.markAwaitingRetryIfOwner(id, deliveryId, now));
+        return updated > 0;
+    }
+
+    @Override
+    public boolean markFailedIfOwner(String id, String deliveryId, String errorReason) {
+        if (id == null || id.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
+        int updated =
+                jdbi.withExtension(CronJdbiDao.class, dao -> dao.markFailedIfOwner(id, deliveryId, errorReason, now));
+        return updated > 0;
+    }
+
+    @Override
+    public boolean markFailedIfStatus(String id, String expectedStatus, String errorReason) {
+        if (id == null || id.isBlank()) return false;
+        String now = TemporalUtils.formatIsoLex(Instant.now());
+        int updated = jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.markFailedIfStatus(id, expectedStatus, errorReason, now));
+        return updated > 0;
     }
 
     @Override

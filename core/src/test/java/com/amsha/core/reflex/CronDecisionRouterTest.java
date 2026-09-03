@@ -71,6 +71,7 @@ public class CronDecisionRouterTest {
     @BeforeEach
     public void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
+        when(cronStore.claimForResume(anyString(), anyString())).thenReturn(true);
     }
 
     @AfterEach
@@ -101,7 +102,7 @@ public class CronDecisionRouterTest {
                 "goal",
                 Instant.now(),
                 Instant.now(),
-                "ACTIVE",
+                "AWAITING_APPROVAL",
                 "coder",
                 null,
                 null,
