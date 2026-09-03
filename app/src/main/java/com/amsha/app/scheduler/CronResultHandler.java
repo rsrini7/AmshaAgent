@@ -127,7 +127,7 @@ public class CronResultHandler {
 
         handleFinalResult(job, cronSessionId, result);
 
-        fireCompletionEvent(job, executionId, finalAnswer, null);
+        fireCompletionEvent(job, executionId, finalAnswer, null, cronSessionId, null);
         workspaceManager.terminateSession(cronSessionId);
     }
 
@@ -178,7 +178,10 @@ public class CronResultHandler {
                     cronSessionId);
         };
 
-        if (statefulAgentStore != null && statefulAgentStore.hasPendingApprovalForChat(job.getChatId())) {
+        boolean queueForInteractiveChat = !ChannelType.WEBSOCKET.id().equalsIgnoreCase(job.getChannelType())
+                && statefulAgentStore != null
+                && statefulAgentStore.hasPendingApprovalForChat(job.getChatId());
+        if (queueForInteractiveChat) {
             queuedNotifications
                     .computeIfAbsent(job.getChatId(), k -> new CopyOnWriteArrayList<>())
                     .add(notifyTask);
@@ -297,7 +300,16 @@ public class CronResultHandler {
             return;
         }
         ChannelType chType = resolvedType.get();
-        String platformId = job.getChannelPlatformId() != null ? job.getChannelPlatformId() : job.getChatId();
+        String platformId = job.getChannelPlatformId();
+        if (platformId == null || platformId.isBlank()) {
+            platformId = job.getChatId();
+        }
+        if (platformId == null || platformId.isBlank()) {
+            log.warnf(
+                    "CRON-NOTIFY cronId=%s has no channel platform or chat ID; skipping notification safely",
+                    job.getId());
+            return;
+        }
 
         try {
             jobCompletedEvent.fire(new AgentJobCompleted(

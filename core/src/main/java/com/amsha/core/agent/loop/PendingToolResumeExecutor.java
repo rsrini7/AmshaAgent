@@ -182,6 +182,11 @@ final class PendingToolResumeExecutor {
                 String safeOutput = UserMessages.stripInternalDirectiveTail(success.output());
                 return AgentResult.finished(safeOutput, List.copyOf(request.history()));
             }
+            if (ToolCapability.SCHEDULE_TASK.toolName().equals(request.toolName())) {
+                String safeOutput = UserMessages.stripInternalDirectiveTail(success.output());
+                completeInProgressCheckpoint(request.checkpoint());
+                return AgentResult.finished("✅ " + safeOutput, List.copyOf(request.history()));
+            }
             completeInProgressCheckpoint(request.checkpoint());
             return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
         }

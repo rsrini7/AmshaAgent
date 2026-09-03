@@ -85,3 +85,51 @@ describe('owner API key persistence', () => {
     expect(request.cache).toBe('no-store');
   });
 });
+
+describe('bounded HITL requests', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', new MemoryStorage());
+    vi.stubGlobal('sessionStorage', new MemoryStorage());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('sends a stable idempotency key and a bounded approval signal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: 'approved', taskId: 'task-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new ArcClient('/api/v1').approveHitl('task-1', 'approve', {
+      idempotencyKey: 'hitl-approve-task-1',
+    });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(new Headers(request.headers).get('X-Idempotency-Key')).toBe('hitl-approve-task-1');
+    expect(request.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('aborts a stalled approval request instead of waiting indefinitely', async () => {
+    vi.useFakeTimers();
+    let requestSignal: AbortSignal | null | undefined;
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      requestSignal = init.signal;
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = new ArcClient('/api/v1').approveHitl('task-timeout');
+    void request.catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(10_001);
+
+    expect(requestSignal?.aborted).toBe(true);
+  });
+});

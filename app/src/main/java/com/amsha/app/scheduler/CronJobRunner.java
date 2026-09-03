@@ -102,6 +102,9 @@ public class CronJobRunner {
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
 
         try {
+            ChannelType type = ChannelType.fromString(job.getChannelType())
+                    .orElseThrow(() -> new IllegalArgumentException("Cron job " + job.getId()
+                            + " has missing or unknown channelType: " + job.getChannelType()));
             String stripped = job.getGoal() != null
                     ? CRON_PREFIX_PATTERN
                             .matcher(job.getGoal())
@@ -132,12 +135,11 @@ public class CronJobRunner {
 
             String systemNote = "CRON MODE";
 
-            ChannelType type = ChannelType.fromString(job.getChannelType()).orElse(ChannelType.TELEGRAM);
             String role = resolveRole(finalGoal, job.getExecutionRole());
             String channel = type.name();
 
             Callable<AgentResult> op = () -> {
-                MessageContext context = createCronContext(job, cronSessionId, executionId, finalGoal, type);
+                MessageContext context = createCronContext(job, cronSessionId, finalGoal, type);
                 return agentLoop.run(cronSessionId, role, finalGoal, systemNote, engine, cronMaxIterations, context);
             };
 
@@ -336,11 +338,21 @@ public class CronJobRunner {
         return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 
-    private MessageContext createCronContext(
-            AgentCron job, String _sessionId, String _executionId, String goal, ChannelType channelType) {
-        ChannelUser user = new ChannelUser(job.getUserId(), job.getUserId(), "Cron User", channelType);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(
-                user, goal, AgentSentinels.CRON_SESSION_PREFIX + job.getId(), Instant.now());
-        return new MessageContext(job.getChatId(), user, msg);
+    private MessageContext createCronContext(AgentCron job, String sessionId, String goal, ChannelType channelType) {
+        String platformId = job.getChannelPlatformId();
+        if (platformId == null || platformId.isBlank()) {
+            platformId = job.getChatId();
+        }
+        if (platformId == null || platformId.isBlank()) {
+            throw new IllegalArgumentException("Cron job " + job.getId() + " has no channel platform or chat ID");
+        }
+        String chatId = job.getChatId();
+        if (chatId == null || chatId.isBlank()) {
+            throw new IllegalArgumentException("Cron job " + job.getId() + " has no channel chat ID");
+        }
+        ChannelUser user = new ChannelUser(platformId, chatId, "Cron User", channelType);
+        ChannelMessage msg =
+                new ChannelMessage.GenericChannelMessage(user, goal, sessionId, Instant.now(), channelType);
+        return new MessageContext(chatId, user, msg);
     }
 }

@@ -115,7 +115,34 @@ public class AgentCronScheduler {
      * but whose sessions are now dead (as all sessions are non-persistent §5.17).
      */
     void onStartup(@Observes StartupEvent ev) {
-        if (active) sweepOrphanedApprovalJobs();
+        if (!active) return;
+        sweepOrphanedApprovalJobs();
+        scheduleStartupRecovery();
+    }
+
+    private void scheduleStartupRecovery() {
+        if (!active || preciseScheduler == null) return;
+        long delay = Math.max(0L, startupDelayMs);
+        try {
+            var _ = preciseScheduler.schedule(this::runStartupRecovery, delay, TimeUnit.MILLISECONDS);
+            log.infof("AgentCronScheduler: startup recovery poll scheduled in %dms.", delay);
+        } catch (RejectedExecutionException e) {
+            if (active) {
+                log.warnf("AgentCronScheduler: startup recovery poll was rejected: %s", LogUtil.rootMessage(e));
+            }
+        }
+    }
+
+    private void runStartupRecovery() {
+        if (!active) return;
+        try {
+            AgentCronScheduler proxy = selfProxy.get();
+            if (proxy != null) proxy.pollAndDispatch();
+        } catch (RuntimeException e) {
+            if (active) {
+                log.errorf("AgentCronScheduler: startup recovery poll failed: %s", LogUtil.rootMessage(e));
+            }
+        }
     }
 
     void onShutdown(@Observes ShutdownEvent ev) {
@@ -179,6 +206,7 @@ public class AgentCronScheduler {
      * soon.
      */
     public void scheduleSoon(String jobId) {
+        if (!active || preciseScheduler == null) return;
         AgentCron job = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
         if (job == null || !job.isRunOnce() || job.getNextFireTime() == null) return;
 
@@ -187,16 +215,22 @@ public class AgentCronScheduler {
 
         if (delayMillis < 120_000) {
             log.infof("CRON-PRECISE-SCHEDULE id=%s, firing in %dms", job.getId(), Math.max(0, delayMillis));
-            var _ = preciseScheduler.schedule(
-                    () -> {
-                        try {
-                            selfProxy.get().executeSoonInternal(jobId);
-                        } catch (Exception e) {
-                            log.errorf("CRON-PRECISE-FAIL id=%s:\n%s", jobId, LogUtil.trimmedStack(e));
-                        }
-                    },
-                    Math.max(0, delayMillis),
-                    TimeUnit.MILLISECONDS);
+            try {
+                var _ = preciseScheduler.schedule(
+                        () -> {
+                            try {
+                                selfProxy.get().executeSoonInternal(jobId);
+                            } catch (Exception e) {
+                                log.errorf("CRON-PRECISE-FAIL id=%s:\n%s", jobId, LogUtil.trimmedStack(e));
+                            }
+                        },
+                        Math.max(0, delayMillis),
+                        TimeUnit.MILLISECONDS);
+            } catch (RejectedExecutionException e) {
+                if (active) {
+                    log.warnf("CRON-PRECISE-SCHEDULE-REJECT id=%s: %s", jobId, LogUtil.rootMessage(e));
+                }
+            }
         }
     }
 
@@ -211,19 +245,32 @@ public class AgentCronScheduler {
                 log.infof("CRON-PRECISE-FIRE id=%s", job.getId());
 
                 final String capturedUserId = (String) MDC.get(MdcKeys.USER_ID);
-                vThreads.execute(() -> {
-                    if (capturedUserId != null) MDC.put(MdcKeys.USER_ID, capturedUserId);
-                    try {
-                        jobRunner.execute(job);
-                    } catch (Exception e) {
-                        log.errorf("CRON-EXEC-FAIL id=%s:\n%s", job.getId(), LogUtil.trimmedStack(e));
-                    } finally {
-                        MdcCleaner.clearAll();
-                    }
-                });
+                try {
+                    vThreads.execute(() -> {
+                        if (capturedUserId != null) MDC.put(MdcKeys.USER_ID, capturedUserId);
+                        try {
+                            jobRunner.execute(job);
+                        } catch (Exception e) {
+                            log.errorf("CRON-EXEC-FAIL id=%s:\n%s", job.getId(), LogUtil.trimmedStack(e));
+                        } finally {
+                            MdcCleaner.clearAll();
+                        }
+                    });
+                } catch (RuntimeException e) {
+                    releasePreciseClaim(job.getId());
+                    log.warnf("CRON-PRECISE-DISPATCH-REJECT id=%s: %s", job.getId(), LogUtil.rootMessage(e));
+                }
             }
         } finally {
             MdcCleaner.clearAll();
+        }
+    }
+
+    private void releasePreciseClaim(String jobId) {
+        try {
+            cronStore.releaseClaimToActive(jobId);
+        } catch (RuntimeException e) {
+            log.warnf("CRON-PRECISE-CLAIM-RELEASE-FAIL id=%s: %s", jobId, LogUtil.rootMessage(e));
         }
     }
 
@@ -285,14 +332,26 @@ public class AgentCronScheduler {
                 if (!active) return;
                 AgentCron job = iter.next();
                 if (job.getNextFireTime().isBefore(lookbackCutoff)) {
-                    log.warnf(
-                            "Cron job [%s] missed fire time %s - outside %s lookback window. Marking SKIPPED and rescheduling.",
-                            job.getId(), job.getNextFireTime(), lookbackCutoff);
-                    Instant newNext = (job.getCronExpression() != null
-                                    && !job.getCronExpression().isBlank())
-                            ? CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone())
-                            : null;
-                    cronStore.markSkipped(job.getId(), newNext, Instant.now());
+                    if (job.isRunOnce()) {
+                        log.warnf(
+                                "Cron one-shot job [%s] missed fire time %s - marking FAILED instead of rolling to a future occurrence.",
+                                job.getId(), job.getNextFireTime());
+                        cronStore.markFailed(
+                                job.getId(), "One-shot schedule expired before execution and was not rescheduled.");
+                    } else {
+                        log.warnf(
+                                "Cron job [%s] missed fire time %s - outside %s lookback window. Marking SKIPPED and rescheduling.",
+                                job.getId(), job.getNextFireTime(), lookbackCutoff);
+                        Instant newNext = (job.getCronExpression() != null
+                                        && !job.getCronExpression().isBlank())
+                                ? CronScheduleUtil.computeNext(job.getCronExpression(), job.getTimezone())
+                                : null;
+                        // A missed recurring occurrence is a skipped fire, not a terminal
+                        // schedule state.  markSkipped stores SKIPPED, and findDueCrons only
+                        // reads ACTIVE rows; use the normal reschedule transition so the job
+                        // remains eligible for its next occurrence.
+                        cronStore.markFired(job.getId(), Instant.now(), newNext);
+                    }
                     iter.remove();
                 }
             }

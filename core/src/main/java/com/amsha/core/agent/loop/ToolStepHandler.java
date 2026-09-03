@@ -376,15 +376,9 @@ public class ToolStepHandler {
         String exceptionClass = "none";
 
         try {
-            final String suggestedCron = (context != null && context.data() != null)
-                    ? String.valueOf(context.data().get("SUGGESTED_CRON"))
-                    : null;
-            final String suggestedNextFireTime = (context != null && context.data() != null)
-                    ? String.valueOf(context.data().get("SUGGESTED_NEXT_FIRE_TIME"))
-                    : null;
-            final String suggestedCronSource = (context != null && context.data() != null)
-                    ? String.valueOf(context.data().get("SUGGESTED_CRON_SOURCE"))
-                    : null;
+            final String suggestedCron = suggestedContextValue(context, "SUGGESTED_CRON");
+            final String suggestedNextFireTime = suggestedContextValue(context, "SUGGESTED_NEXT_FIRE_TIME");
+            final String suggestedCronSource = suggestedContextValue(context, "SUGGESTED_CRON_SOURCE");
 
             return WorkspaceContext.run(
                     context.sessionId(),
@@ -420,6 +414,20 @@ public class ToolStepHandler {
     private String extractParam(Map<String, Object> params, String key) {
         Object val = params.get(key);
         return val instanceof String s ? s : (val != null ? val.toString() : "");
+    }
+
+    /**
+     * Reads a scheduling hint from the execution context.
+     *
+     * <p>Returns "" — never {@code String.valueOf(null)}'s "null" — when the key is absent.
+     * A literal "null" is non-blank, so consumers treat a missing hint as a real value and
+     * silently skip their cron fallback; {@code ScopedValue} also rejects null bindings, so
+     * an empty string is the only safe representation of "not provided".
+     */
+    private static String suggestedContextValue(AgentExecutionContext context, String key) {
+        if (context == null || context.data() == null) return "";
+        Object value = context.data().get(key);
+        return value == null ? "" : String.valueOf(value);
     }
 
     private ToolResponse invokeToolWithParams(

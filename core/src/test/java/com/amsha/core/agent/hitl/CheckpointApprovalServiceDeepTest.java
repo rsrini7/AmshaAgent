@@ -401,6 +401,9 @@ class CheckpointApprovalServiceDeepTest {
 
             when(resumeHandlerInstance.isResolvable()).thenReturn(true);
             when(resumeHandlerInstance.get()).thenReturn(resumeHandler);
+            doReturn(true)
+                    .when(resumeHandler)
+                    .resumeAfterBatchDecision(anyString(), anyString(), anyString(), anyString(), anyString());
             when(agentStore.findLatestNonArchivedCheckpoint("s1")).thenReturn(Optional.of(cp));
 
             service.triggerResume(cp);
@@ -432,7 +435,7 @@ class CheckpointApprovalServiceDeepTest {
         }
 
         @Test
-        void triggerResume_handlerNotResolvable_stillPublishesResumedEvent() {
+        void triggerResume_handlerNotResolvable_doesNotPublishResumedEvent() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
             cp.setBatchToolDecisions("{\"github\":\"APPROVED\"}");
 
@@ -440,11 +443,11 @@ class CheckpointApprovalServiceDeepTest {
 
             service.triggerResume(cp);
 
-            verify(agentSseService).publish(eq("s1"), any(AgentSseService.HitlEvent.class));
+            verify(agentSseService, never()).publish(any(), any());
         }
 
         @Test
-        void triggerResume_handlerThrows_stillPublishesResumedEvent() {
+        void triggerResume_handlerThrows_doesNotPublishResumedEvent() {
             AgentCheckpointRecord cp = createCheckpoint("s1", "coordinator");
             cp.setBatchToolDecisions("{\"github\":\"APPROVED\"}");
 
@@ -453,8 +456,7 @@ class CheckpointApprovalServiceDeepTest {
 
             service.triggerResume(cp);
 
-            // Should still publish RESUMED even if handler fails
-            verify(agentSseService).publish(eq("s1"), any(AgentSseService.HitlEvent.class));
+            verify(agentSseService, never()).publish(any(), any());
         }
 
         @Test

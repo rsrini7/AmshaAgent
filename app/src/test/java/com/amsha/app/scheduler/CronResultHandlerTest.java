@@ -1,7 +1,9 @@
 package com.amsha.app.scheduler;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -69,6 +71,21 @@ class CronResultHandlerTest {
     }
 
     @Test
+    void websocketCronApprovalIsNotQueuedBehindInteractiveApproval() {
+        job.setChannelType("WEBSOCKET");
+
+        handler.handleSuccess(
+                job,
+                "cron-cron-1-exec-1",
+                execId,
+                AgentResult.awaitingApproval("sandbox_exec", "{}", sessionId, List.of()));
+
+        verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
+        verify(statefulAgentStore, never()).hasPendingApprovalForChat(job.getChatId());
+        assertTrue(CronResultHandler.queuedNotifications.isEmpty());
+    }
+
+    @Test
     void testFinishedRunOnce_marksCompleted() {
         job.setRunOnce(true);
         AgentResult result = AgentResult.finished("Done", List.of());
@@ -77,7 +94,7 @@ class CronResultHandlerTest {
 
         verify(cronStore).markCompleted(eq(job.getId()), any(Instant.class));
         verify(workspaceManager).terminateSession(sessionId);
-        verify(jobCompletedEvent).fire(any(AgentJobCompleted.class));
+        verify(jobCompletedEvent).fire(argThat(event -> sessionId.equals(event.cronSessionId())));
         verify(auditService)
                 .record(
                         anyString(),

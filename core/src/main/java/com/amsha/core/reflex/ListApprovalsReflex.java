@@ -19,6 +19,7 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -59,6 +60,7 @@ public class ListApprovalsReflex implements AgentReflex {
         List<String> lines = new ArrayList<>();
 
         List<AgentCheckpoint> pendingSessions = heartbeatTracker.activeSessionsByOwner(userId).keySet().stream()
+                .filter(session -> !session.startsWith(AgentSentinels.CRON_SESSION_PREFIX))
                 .map(statefulAgentStore::findLatestAwaitingApproval)
                 .flatMap(opt -> opt.stream())
                 .filter(cp -> cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL)

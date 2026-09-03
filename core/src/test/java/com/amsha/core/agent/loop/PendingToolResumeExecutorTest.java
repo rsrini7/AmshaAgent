@@ -155,4 +155,37 @@ class PendingToolResumeExecutorTest {
 
         assertEquals("Safe delegation status.", ((AgentResult.Finished) result).answer());
     }
+
+    @Test
+    void testExecute_scheduleTaskResumeCompletesDirectlyWithoutFinishPass() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s-sched",
+                "u1",
+                "c1",
+                "coordinator",
+                "schedule a task",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn("schedule_task");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(toolRegistry.invokeTool(any(), any(), any()))
+                .thenReturn(
+                        ToolResponse.success(
+                                "Task scheduled successfully. ID: 123 | Next fire: 2026-09-02T16:00:00Z\n\nCRITICAL DIRECTIVE: FINISH now."));
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "CLI", stateMachineRunner);
+
+        assertNotNull(result);
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertEquals(
+                "✅ Task scheduled successfully. ID: 123 | Next fire: 2026-09-02T16:00:00Z",
+                ((AgentResult.Finished) result).answer());
+        verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
+    }
 }

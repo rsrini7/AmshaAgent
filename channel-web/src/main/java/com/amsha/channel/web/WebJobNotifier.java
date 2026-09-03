@@ -4,11 +4,16 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.json.Json;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 import com.amsha.channel.api.ChannelJobNotifier;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
 
 import org.jboss.logging.Logger;
+
+import io.quarkus.websockets.next.WebSocketConnection;
 
 @ApplicationScoped
 public class WebJobNotifier implements ChannelJobNotifier {
@@ -36,7 +41,7 @@ public class WebJobNotifier implements ChannelJobNotifier {
                 .build()
                 .toString();
 
-        sendToSession(recipient, payload);
+        sendToSession(recipient, cronSessionId, payload);
     }
 
     @Override
@@ -49,7 +54,7 @@ public class WebJobNotifier implements ChannelJobNotifier {
                 .build()
                 .toString();
 
-        sendToSession(recipient, payload);
+        sendToSession(recipient, sessionId, payload);
     }
 
     @Override
@@ -65,22 +70,32 @@ public class WebJobNotifier implements ChannelJobNotifier {
                 .build()
                 .toString();
 
-        sendToSession(recipient, payload);
+        sendToSession(recipient, sessionId, payload);
     }
 
-    private void sendToSession(String sessionId, String payload) {
-        sessionStore
-                .get(sessionId)
-                .ifPresentOrElse(
-                        conn -> {
-                            conn.sendText(payload)
-                                    .subscribe()
-                                    .with(
-                                            id -> {},
-                                            err -> log.warnf(
-                                                    "Failed to send to session %s: %s",
-                                                    sessionId, LogUtil.rootMessage(err)));
-                        },
-                        () -> log.warnf("WebJobNotifier: no WS session for id=%s", sessionId));
+    private void sendToSession(String recipient, String relatedSessionId, String payload) {
+        Set<WebSocketConnection> targets = new LinkedHashSet<>();
+        if (recipient != null && !recipient.isBlank()) {
+            sessionStore.get(recipient).ifPresent(targets::add);
+        }
+        targets.addAll(sessionStore.getConnectionsByOwner(recipient));
+        targets.addAll(sessionStore.getConnectionsByAmshaSession(relatedSessionId));
+
+        if (targets.isEmpty()) {
+            log.warnf(
+                    "WebJobNotifier: no active WS connection for recipient=%s relatedSession=%s",
+                    recipient, relatedSessionId);
+            return;
+        }
+
+        for (WebSocketConnection conn : targets) {
+            conn.sendText(payload)
+                    .subscribe()
+                    .with(
+                            _ -> {},
+                            err -> log.warnf(
+                                    "Failed to send WS notification recipient=%s connection=%s: %s",
+                                    recipient, conn.id(), LogUtil.rootMessage(err)));
+        }
     }
 }

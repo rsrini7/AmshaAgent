@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.amsha.channel.api.ChannelMessage;
@@ -190,7 +191,7 @@ class WebChatEndpointTest {
 
         endpoint.onOpen(conn);
         assertDoesNotThrow(() -> endpoint.onClose(conn));
-        verify(sessionStore).unregister("plat-3");
+        verify(sessionStore).unregister("plat-3", conn);
     }
 
     @Test
@@ -206,9 +207,10 @@ class WebChatEndpointTest {
                 .thenReturn("sess-old");
 
         endpoint.onOpen(conn);
+        when(sessionStore.get("plat-4")).thenReturn(Optional.of(conn));
 
         SessionRotatedEvent evt = new SessionRotatedEvent("sess-old", "sess-new", "owner-1", "websocket");
         assertDoesNotThrow(() -> endpoint.onSessionRotated(evt));
-        verify(sessionStore).updateAmshaSession("plat-4", "sess-new");
+        verify(sessionStore).updateAmshaSession("plat-4", conn, "sess-new");
     }
 }

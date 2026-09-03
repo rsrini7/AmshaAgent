@@ -4,10 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,8 +21,11 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 
 import com.amsha.persistence.api.AdvisoryLockPort;
@@ -65,6 +71,10 @@ class AgentCronSchedulerTest {
     AgentCronScheduler scheduler;
 
     private AgentCronDto createDueJob(boolean runOnce) {
+        return createJob(runOnce, Instant.now().minus(1, ChronoUnit.MINUTES));
+    }
+
+    private AgentCronDto createJob(boolean runOnce, Instant nextFireTime) {
         String id = UUID.randomUUID().toString();
         return new AgentCronDto(
                 id,
@@ -77,7 +87,7 @@ class AgentCronSchedulerTest {
                 "UTC",
                 runOnce,
                 "CRON: Test goal",
-                Instant.now().minus(1, ChronoUnit.MINUTES),
+                nextFireTime,
                 null,
                 "ACTIVE",
                 null,
@@ -164,6 +174,67 @@ class AgentCronSchedulerTest {
         scheduler.pollAndDispatch();
 
         verify(jobRunner, atMost(1)).execute(any());
+    }
+
+    @Test
+    void staleOneShotIsFailedInsteadOfRescheduled() {
+        AgentCronDto job = createJob(true, Instant.now().minus(10, ChronoUnit.MINUTES));
+        when(cronStore.findDueCrons()).thenReturn(List.of(job));
+
+        scheduler.pollAndDispatch();
+
+        verify(cronStore).markFailed(eq(job.id()), ArgumentMatchers.contains("One-shot"));
+        verify(cronStore, never()).markSkipped(anyString(), any(), any());
+        verify(cronStore, never()).claimForFire(anyString());
+        verify(jobRunner, never()).execute(any());
+    }
+
+    @Test
+    void staleRecurringJobIsRescheduledAndRemainsActive() {
+        AgentCronDto job = createJob(false, Instant.now().minus(10, ChronoUnit.MINUTES));
+        when(cronStore.findDueCrons()).thenReturn(List.of(job));
+
+        scheduler.pollAndDispatch();
+
+        verify(cronStore).markFired(eq(job.id()), any(Instant.class), any(Instant.class));
+        verify(cronStore, never()).markSkipped(anyString(), any(), any());
+        verify(cronStore, never()).claimForFire(anyString());
+        verify(jobRunner, never()).execute(any());
+    }
+
+    @Test
+    void startupSchedulesRecoveryPollForPersistedJobs() throws Exception {
+        ScheduledExecutorService startupExecutor = Executors.newSingleThreadScheduledExecutor();
+        try {
+            setField("preciseScheduler", startupExecutor);
+            setField("startupDelayMs", 0L);
+            when(cronStore.findAllAwaitingApproval()).thenReturn(List.of());
+
+            AgentCronScheduler proxy = mock(AgentCronScheduler.class);
+            when(selfProxy.get()).thenReturn(proxy);
+
+            scheduler.onStartup(null);
+
+            verify(proxy, timeout(1000)).pollAndDispatch();
+        } finally {
+            startupExecutor.shutdownNow();
+        }
+    }
+
+    @Test
+    void preciseDispatchRejectionReleasesClaim() {
+        AgentCronDto job = createDueJob(true);
+        when(cronStore.findById(job.id())).thenReturn(Optional.of(job));
+        when(cronStore.claimForFire(job.id())).thenReturn(true);
+        doAnswer(invocation -> {
+                    throw new RejectedExecutionException("precise executor stopped");
+                })
+                .when(vThreadsMock)
+                .execute(any(Runnable.class));
+
+        scheduler.executeSoonInternal(job.id());
+
+        verify(cronStore).releaseClaimToActive(job.id());
     }
 
     @Test

@@ -103,7 +103,14 @@ export interface McpApprovalExecution<T = McpConnection | McpDiscoveryPreview> {
   result: T;
 }
 
+export interface HitlRequestOptions {
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
 export class ArcClient {
+  private static readonly DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+  private static readonly HITL_REQUEST_TIMEOUT_MS = 10_000;
   constructor(
     public readonly baseUrl: string,
     private readonly apiKey?: string,
@@ -131,49 +138,121 @@ export class ArcClient {
     return revision === undefined ? {} : { 'If-MCP-Revision': String(revision) };
   }
 
-  private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    timeoutMs = ArcClient.DEFAULT_REQUEST_TIMEOUT_MS,
+  ): Promise<T> {
     const headers = new Headers(this.headers());
-    new Headers(options?.headers).forEach((value, key) => headers.set(key, value));
-    if (options?.body instanceof FormData) headers.delete('Content-Type');
-    const res = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      credentials: 'include',
-      headers,
-    });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
+    new Headers(options.headers).forEach((value, key) => headers.set(key, value));
+    if (options.body instanceof FormData) headers.delete('Content-Type');
+
+    const requestSignal = this.createRequestSignal(options.signal, timeoutMs);
+    try {
+      const res = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
+        credentials: 'include',
+        headers,
+        signal: requestSignal.signal,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
         throw new ArcApiError(
           res.status,
           errorData.error || `Request to ${endpoint} failed with status ${res.status}`,
         );
+      }
+      if (res.status === 204) {
+        return {} as T;
+      }
+      const text = await res.text();
+      return text ? JSON.parse(text) : {} as T;
+    } finally {
+      requestSignal.dispose();
     }
-    if (res.status === 204) {
-      return {} as T;
+  }
+
+  private createRequestSignal(callerSignal: AbortSignal | null | undefined, timeoutMs: number) {
+    const controller = new AbortController();
+    const abortFromCaller = () => controller.abort(callerSignal?.reason);
+    if (callerSignal?.aborted) {
+      abortFromCaller();
+    } else {
+      callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
     }
-    const text = await res.text();
-    return text ? JSON.parse(text) : {} as T;
+    const timeoutId = globalThis.setTimeout(() => {
+      controller.abort(new DOMException('The request timed out', 'TimeoutError'));
+    }, timeoutMs);
+    return {
+      signal: controller.signal,
+      dispose: () => {
+        globalThis.clearTimeout(timeoutId);
+        callerSignal?.removeEventListener('abort', abortFromCaller);
+      },
+    };
+  }
+
+  private static hitlOptions(options?: HitlRequestOptions | string): HitlRequestOptions {
+    return typeof options === 'string' ? { idempotencyKey: options } : options || {};
   }
 
   async getAgents(): Promise<AgentStatusDto[]> {
     return this.request<AgentStatusDto[]>('/agents');
   }
 
-  async getHitl(page = 0, size = 20): Promise<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }> {
-    return this.request<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }>(`/hitl?page=${page}&size=${size}`);
+  async getSessionStatus(
+    sessionId: string,
+    role = 'coordinator',
+  ): Promise<{ sessionId: string; status: string; steps?: unknown[]; failReason?: string | null }> {
+    return this.request<{ sessionId: string; status: string; steps?: unknown[]; failReason?: string | null }>(
+      `/sessions/${encodeURIComponent(sessionId)}/status/${encodeURIComponent(role)}`,
+      {},
+      ArcClient.HITL_REQUEST_TIMEOUT_MS,
+    );
   }
 
-  async approveHitl(taskId: string, reason = 'Approved by user'): Promise<ApprovalResultDto> {
+  async getHitl(
+    page = 0,
+    size = 20,
+    signal?: AbortSignal,
+  ): Promise<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }> {
+    return this.request<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }>(
+      `/hitl?page=${page}&size=${size}`,
+      { signal },
+      ArcClient.HITL_REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  async approveHitl(
+    taskId: string,
+    reason = 'Approved by user',
+    options?: HitlRequestOptions | string,
+  ): Promise<ApprovalResultDto> {
+    const requestOptions = ArcClient.hitlOptions(options);
     return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/approve`, {
       method: 'POST',
+      headers: requestOptions.idempotencyKey
+        ? { 'X-Idempotency-Key': requestOptions.idempotencyKey }
+        : {},
+      signal: requestOptions.signal,
       body: JSON.stringify({ reason }),
-    });
+    }, ArcClient.HITL_REQUEST_TIMEOUT_MS);
   }
 
-  async rejectHitl(taskId: string, reason: string): Promise<ApprovalResultDto> {
+  async rejectHitl(
+    taskId: string,
+    reason: string,
+    options?: HitlRequestOptions | string,
+  ): Promise<ApprovalResultDto> {
+    const requestOptions = ArcClient.hitlOptions(options);
     return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/reject`, {
       method: 'POST',
+      headers: requestOptions.idempotencyKey
+        ? { 'X-Idempotency-Key': requestOptions.idempotencyKey }
+        : {},
+      signal: requestOptions.signal,
       body: JSON.stringify({ reason: reason || 'Rejected by user' }),
-    });
+    }, ArcClient.HITL_REQUEST_TIMEOUT_MS);
   }
 
   async getTools(): Promise<ToolDto[]> {

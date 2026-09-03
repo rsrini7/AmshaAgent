@@ -260,13 +260,20 @@ export class ArcShell extends LitElement {
         this._sseManager?.connect();
       }
       if (this._route === '#/chat' && this._chatWsStatus !== 'open') {
-        this._chatWsStatus = 'connecting';
-        (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect();
+        this._handleReconnectChat();
       }
       this._fetchAgents();
       this._fetchApprovals();
     }
   };
+
+  private _handleReconnectChat(): void {
+    this._chatWsStatus = 'connecting';
+    const chat = this.shadowRoot?.querySelector('arc-chat-interface') as any;
+    if (chat?.reconnect) {
+      chat.reconnect();
+    }
+  }
 
   private _resolvePlatformId() {
     let id = sessionStorage.getItem('amsha-platform-id');
@@ -343,18 +350,25 @@ export class ArcShell extends LitElement {
   }
 
   private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string }>) {
-    // Only update if server assigned a different ID (fallback UUID case)
-    if (this._sessionId !== e.detail.sessionId) {
-      this._sessionId = e.detail.sessionId;
-      sessionStorage.setItem('amsha-chat-session', this._sessionId);
-      this._updateContext();
+    const sessionId = e.detail?.sessionId?.trim();
+    if (!sessionId) {
+      return;
+    }
+    const sessionChanged = this._sessionId !== sessionId;
+    this._sessionId = sessionId;
+    sessionStorage.setItem('amsha-chat-session', sessionId);
+    const platformId = e.detail?.platformId?.trim();
+    if (platformId && platformId !== this._platformId) {
+      this._platformId = platformId;
+      sessionStorage.setItem('amsha-platform-id', platformId);
+    }
+    this._updateContext();
+    if (sessionChanged) {
       this._traceEvents = [];
       this._currentRunId = '';
       this._sseManager?.resetDedup();
     }
-
-    if (!this._sessionId) return;
-    this._startSse(); // Re-start all SSEs with new session context
+    this._startSse();
   }
 
   // SSE event handlers
@@ -380,7 +394,7 @@ export class ArcShell extends LitElement {
       this._fetchAgents();
       this._fetchApprovals();
     } else if (eventType === 'progress') {
-      this._publishProgress(event.agentName || 'Working', event.payload || '');
+      this._publishProgress(event.agentName || 'Working', event.payload || '', event.sessionId);
     } else if (
       eventType === 'AWAITING_APPROVAL' ||
       eventType === 'APPROVED' ||
@@ -413,12 +427,13 @@ export class ArcShell extends LitElement {
     return '';
   }
 
-  private _publishProgress(phase: string, detail: string) {
+  private _publishProgress(phase: string, detail: string, sessionId?: string) {
     window.dispatchEvent(
       new CustomEvent('amsha-agent-progress', {
         detail: {
           phase,
-          detail
+          detail,
+          ...(sessionId ? { sessionId } : {})
         }
       })
     );
@@ -463,16 +478,16 @@ export class ArcShell extends LitElement {
   private _publishHitlProgress(event: any) {
     switch (event?.type) {
       case 'AWAITING_APPROVAL':
-        this._publishProgress('Waiting for approval', 'Approve or deny the tool request');
+        this._publishProgress('Waiting for approval', 'Approve or deny the tool request', event.sessionId);
         break;
       case 'APPROVED':
-        this._publishProgress('Approval granted', 'Tool request approved. Resuming work.');
+        this._publishProgress('Approval granted', 'Tool request approved. Resuming work.', event.sessionId);
         break;
       case 'DENIED':
-        this._publishProgress('Approval denied', 'Tool request denied.');
+        this._publishProgress('Approval denied', 'Tool request denied.', event.sessionId);
         break;
       case 'RESUMED':
-        this._publishProgress('Resuming work', 'Picking up where the agent left off.');
+        this._publishProgress('Resuming work', 'Picking up where the agent left off.', event.sessionId);
         break;
     }
   }
@@ -654,10 +669,14 @@ export class ArcShell extends LitElement {
                             + New Session
                           </button>
                           ${this._chatWsStatus === 'error' || this._chatWsStatus === 'closed' ? html`
-                             <button @click="${() => (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect()}" 
-                                     style="background:transparent; border:1px solid var(--border); color:var(--text-muted); font-size:10px; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;">
+                             <button @click="${() => this._handleReconnectChat()}"
+                                     style="background:transparent; border:1px solid var(--border); color:var(--text-muted); font-size:10px; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;"
+                                     title="Reconnect WebSocket to Amsha Agent">
                                Reconnect
                              </button>
+                          ` : nothing}
+                          ${this._chatWsStatus === 'connecting' ? html`
+                             <span style="font-size:10px; color:var(--text-muted); margin-left:4px; font-style:italic;">Connecting…</span>
                           ` : nothing}
                         `
                         : ROUTES.find(r => r.hash === this._route)?.label || ''}

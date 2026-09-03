@@ -108,7 +108,7 @@ public class WebChatEndpoint {
                 log.infof(
                         "Closing stale WebSocket %s for platformId %s (replaced by %s)", oldConn.id(), pid, conn.id());
                 connections.remove(oldConn.id());
-                sessionStore.unregister(pid);
+                sessionStore.unregister(pid, oldConn);
                 oldConn.close().subscribe().with(v -> {}, err -> {});
             });
 
@@ -328,7 +328,7 @@ public class WebChatEndpoint {
         String amshaSessionId = removed != null ? removed.amshaSessionId() : null;
 
         if (platformId != null) {
-            sessionStore.unregister(platformId);
+            sessionStore.unregister(platformId, conn);
         }
 
         // A browser refresh or tab close must not terminate the session.
@@ -361,27 +361,31 @@ public class WebChatEndpoint {
     void onSessionRotated(@Observes SessionRotatedEvent event) {
         connections.forEach((connId, state) -> {
             if (state.amshaSessionId().equals(event.oldSessionId())) {
+                Optional<WebSocketConnection> currentConnection =
+                        sessionStore.get(state.platformId()).filter(connection -> connId.equals(connection.id()));
+                if (currentConnection.isEmpty()) {
+                    return;
+                }
                 ConnectionState updated = new ConnectionState(
                         state.platformId(), event.newSessionId(), state.authenticated(), state.ownerKeyName());
                 connections.put(connId, updated);
-                sessionStore.updateAmshaSession(state.platformId(), event.newSessionId());
+                sessionStore.updateAmshaSession(state.platformId(), currentConnection.get(), event.newSessionId());
                 log.infof(
                         "WebSocket: rotated session for connId=%s %s → %s",
                         connId, event.oldSessionId(), event.newSessionId());
 
-                sessionStore.get(state.platformId()).ifPresent(conn -> {
-                    conn.sendText(Json.createObjectBuilder()
-                                    .add("type", "session-rotated")
-                                    .add("sessionId", event.newSessionId())
-                                    .build()
-                                    .toString())
-                            .subscribe()
-                            .with(
-                                    v -> {},
-                                    err -> log.warnf(
-                                            "Failed to send session-rotated to %s: %s",
-                                            conn.id(), LogUtil.rootMessage(err)));
-                });
+                currentConnection
+                        .get()
+                        .sendText(Json.createObjectBuilder()
+                                .add("type", "session-rotated")
+                                .add("sessionId", event.newSessionId())
+                                .build()
+                                .toString())
+                        .subscribe()
+                        .with(
+                                v -> {},
+                                err -> log.warnf(
+                                        "Failed to send session-rotated to %s: %s", connId, LogUtil.rootMessage(err)));
             }
         });
     }

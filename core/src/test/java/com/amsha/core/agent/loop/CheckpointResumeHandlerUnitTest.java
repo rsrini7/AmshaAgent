@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.RejectedExecutionException;
 
 import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
@@ -153,6 +154,21 @@ class CheckpointResumeHandlerUnitTest {
         doReturn(Optional.empty()).when(agentStore).load("s-2", "r-1");
         assertDoesNotThrow(() -> handler.resumeAfterBatchDecision("s-2", "r-1", "u-1", "c-1", "cli"));
         verify(agentStore).releaseResumeClaim("s-2", "r-1");
+    }
+
+    @Test
+    void testResumeAfterBatchDecisionExecutorRejectedReleasesClaim() {
+        when(agentStore.claimForResume("s-rejected", "r-1")).thenReturn(true);
+        AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
+        doReturn(Optional.of(checkpoint)).when(agentStore).load("s-rejected", "r-1");
+        doThrow(new RejectedExecutionException("executor is closed"))
+                .when(executor)
+                .execute(any(Runnable.class));
+
+        assertFalse(handler.resumeAfterBatchDecision("s-rejected", "r-1", "u-1", "c-1", "cli"));
+
+        verify(agentStore).releaseResumeClaim("s-rejected", "r-1");
+        verify(agentStore).clearBatchResuming("s-rejected");
     }
 
     @Test
