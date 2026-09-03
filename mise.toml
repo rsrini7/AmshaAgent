@@ -123,9 +123,9 @@ TEST_SUMMARY=$(rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" . 2
 END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d", t, f, e, s }')
 echo "Java Tests: $TEST_SUMMARY"
 python3 ./scripts/analyze_jacoco_coverage.py --summary 2>/dev/null
-if [ -f "ui/coverage/coverage-summary.json" ]; then
+if [ -f "ui/coverage/coverage-summary.json" ] || [ -f "ui/coverage/junit.xml" ]; then
     echo "---"
-    python3 ./scripts/analyze_ui_coverage.py --summary 2>/dev/null
+    python3 ./scripts/analyze_ui_coverage.py --summary --sync-readme 2>/dev/null
 fi
 """
 

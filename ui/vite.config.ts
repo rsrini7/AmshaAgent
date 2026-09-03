@@ -43,6 +43,7 @@ export default defineConfig({
       junit: './coverage/junit.xml',
     },
     coverage: {
+      enabled: true,
       provider: 'v8',
       reporter: ['text', 'text-summary', 'json-summary', 'html'],
       reportsDirectory: './coverage',

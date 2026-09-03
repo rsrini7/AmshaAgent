@@ -93,11 +93,36 @@ def main() -> int:
     parser.add_argument("--badge", action="store_true", help="emit shields.io Markdown badge for UI coverage")
     parser.add_argument("--badge-tests", action="store_true", help="emit shields.io Markdown badge for UI tests")
     parser.add_argument("--summary", action="store_true", help="emit single-line coverage summary")
+    parser.add_argument(
+        "--sync-readme",
+        action="store_true",
+        help="automatically sync UI tests and coverage badges in README.md",
+    )
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parent.parent
     summary_file = root / "ui" / "coverage" / "coverage-summary.json"
     junit_file = root / "ui" / "coverage" / "junit.xml"
+
+    # Auto-refresh: If coverage-summary is missing or stale compared to junit.xml, refresh it automatically
+    is_stale = (
+        junit_file.is_file()
+        and summary_file.is_file()
+        and junit_file.stat().st_mtime > summary_file.stat().st_mtime + 2
+    )
+    if not summary_file.is_file() or is_stale:
+        import subprocess
+
+        try:
+            subprocess.run(
+                ["npm", "test"],
+                cwd=str(root / "ui"),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
 
     total_info, gaps = read_coverage(summary_file)
     junit_info = read_junit(junit_file)
@@ -120,6 +145,23 @@ def main() -> int:
     errors = junit_info.get("errors", 0)
     skipped = junit_info.get("skipped", 0)
     test_files = junit_info.get("test_files", 0)
+
+    if args.sync_readme:
+        readme_file = root / "README.md"
+        if readme_file.is_file():
+            import re
+
+            status = f"{test_count}_passing" if (failures == 0 and errors == 0) else f"{failures}_failed"
+            tests_color = "brightgreen" if (failures == 0 and errors == 0) else "red"
+            cov_color = "brightgreen" if pct >= 0.70 else "yellow" if pct >= 0.30 else "red"
+
+            tests_badge = f"![UI Tests](https://img.shields.io/badge/UI_Tests-{status}-{tests_color}.svg?style=flat)"
+            cov_badge = f"![UI Coverage](https://img.shields.io/badge/UI_Coverage-{pct * 100:.2f}%25-{cov_color}.svg?style=flat)"
+
+            text = readme_file.read_text(encoding="utf-8")
+            text = re.sub(r"!\[UI Tests\]\(https://img\.shields\.io/badge/UI_Tests-[^\)]+\)", tests_badge, text)
+            text = re.sub(r"!\[UI Coverage\]\(https://img\.shields\.io/badge/UI_Coverage-[^\)]+\)", cov_badge, text)
+            readme_file.write_text(text, encoding="utf-8")
 
     if args.badge_tests:
         status = f"{test_count}_passing" if (failures == 0 and errors == 0) else f"{failures}_failed"
