@@ -38,6 +38,7 @@ import com.amsha.core.agent.trace.SafeSymbolMetadata;
 import com.amsha.core.agent.trace.StationCode;
 import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.api.AgentResponseMapper;
+import com.amsha.core.api.dto.ActiveAgentResponse;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.api.dto.AuditEventResponse;
 import com.amsha.core.api.dto.CreateSessionRequest;
@@ -101,6 +102,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AgentResponseMapper.AgentResponse.class,
             AgentResponseMapper.ApprovalRequiredResponse.class,
             AgentResponseMapper.AgentErrorResponse.class,
+            ActiveAgentResponse.class,
             AmshaErrorResponse.class,
             AgentResult.Finished.class,
             AgentResult.AwaitingApproval.class,
@@ -206,6 +208,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             // Nested trace contract type: registered by binary name rather than adding a
             // type-level @RegisterForReflection (§6.7 / AGENTS.md §8).
             "com.amsha.core.agent.trace.AgentTraceEvent$TraceMetrics",
+            "com.amsha.core.api.dto.ActiveAgentResponse$AgentSummary",
             "dev.langchain4j.model.chat.listener.ChatModelListener",
             "dev.langchain4j.model.chat.listener.ChatModelRequestContext",
             "dev.langchain4j.model.chat.listener.ChatModelResponseContext",

@@ -160,6 +160,8 @@ public final class CronSessionStatusSync {
         if (sub.length() <= 37 || sub.charAt(36) != '-') {
             return "";
         }
-        return sub.substring(37);
+        String rest = sub.substring(37);
+        int delIdx = rest.indexOf(AgentSentinels.DELEGATE_SESSION_SENTINEL);
+        return delIdx >= 0 ? rest.substring(0, delIdx) : rest;
     }
 }

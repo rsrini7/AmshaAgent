@@ -15,6 +15,7 @@ import java.util.Map;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -187,5 +189,36 @@ class PendingToolResumeExecutorTest {
                 "✅ Task scheduled successfully. ID: 123 | Next fire: 2026-09-02T16:00:00Z",
                 ((AgentResult.Finished) result).answer());
         verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void testExecute_delegationPausedReturnsAwaitingApprovalWithoutCompletingCheckpoint() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s-cron",
+                "u1",
+                "c1",
+                "researcher",
+                "run delegated task",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn("garuda");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        String pausedObs = UserMessages.delegationPaused("brahma", "sandbox_exec");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.success(pausedObs));
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "TELEGRAM", stateMachineRunner);
+
+        assertNotNull(result);
+        assertInstanceOf(AgentResult.AwaitingApproval.class, result);
+        AgentResult.AwaitingApproval aa = (AgentResult.AwaitingApproval) result;
+        assertEquals("sandbox_exec", aa.toolName());
+        assertEquals("s-cron", aa.sessionId());
+        verify(checkpoint, Mockito.never()).setStatus(CheckpointStatus.COMPLETED);
     }
 }

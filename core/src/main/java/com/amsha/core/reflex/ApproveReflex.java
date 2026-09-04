@@ -60,6 +60,15 @@ public class ApproveReflex extends AbstractDecisionReflex {
         return cronMultipleAwaiting(list);
     }
 
+    /**
+     * Returns an empty string because {@link CronDecisionRouter} already dispatches the execution result
+     * to the user's channel via {@code ctx.jobNotifier().accept(cron, result)} (publishing an
+     * {@code AgentJobCompleted} event consumed by {@code TelegramJobNotifier}).
+     *
+     * <p>Returning a non-empty formatted message here causes {@code CommandDispatchHandler} to send a
+     * duplicate message to the user for the same approval. Blank responses are safely dropped by channel
+     * senders (e.g. {@code TelegramChannelSender}). <b>DO NOT change this to return {@code AgentResultFormatter.format(result)}.</b>
+     */
     @Override
     public String getCronSuccessResponse(AgentResult result) {
         return "";

@@ -70,7 +70,7 @@ public interface CheckpointJdbiDao {
 
     @SqlQuery(
             "SELECT " + ALL_COLUMNS
-                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND status IN ('AWAITING_APPROVAL', 'RESUMING', 'IN_PROGRESS') ORDER BY checkpoint_id DESC LIMIT 1")
+                    + " FROM agent_checkpoint WHERE session_id = :sessionId AND status = 'AWAITING_APPROVAL' ORDER BY checkpoint_id DESC LIMIT 1")
     Optional<CheckpointDto> findLatestAwaiting(@Bind("sessionId") String sessionId);
 
     @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE status = :status ORDER BY checkpoint_id DESC")
@@ -98,7 +98,7 @@ public interface CheckpointJdbiDao {
 
     @SqlQuery(
             "SELECT " + ALL_COLUMNS
-                    + " FROM agent_checkpoint WHERE session_id LIKE '%' || :segment || '%' AND status IN ('AWAITING_APPROVAL', 'RESUMING', 'IN_PROGRESS') ORDER BY checkpoint_id DESC LIMIT 1")
+                    + " FROM agent_checkpoint WHERE session_id LIKE '%' || :segment || '%' AND status = 'AWAITING_APPROVAL' ORDER BY checkpoint_id DESC LIMIT 1")
     Optional<CheckpointDto> findLatestAwaitingBySegment(@Bind("segment") String segment);
 
     @SqlQuery(

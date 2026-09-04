@@ -389,25 +389,8 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         }
 
         // 2. Not a session — try as cron task (owner can approve their own tasks)
-        try {
-            var cronCtx = new CronDecisionRouter.CronContext(
-                    finalTargetId,
-                    userId,
-                    chatId,
-                    reason,
-                    context,
-                    (sid, rsn) -> applyDecisionToAll(sid, rsn),
-                    () -> getAlreadyProcessingMessage(),
-                    (cronSid, cronRole) -> getCronResumeGoal(cronSid, cronRole),
-                    (cron, rsn, result) -> postProcessCronDecision(cron, rsn, result),
-                    result -> getCronSuccessResponse(result),
-                    () -> getErrorMessage(),
-                    notificationService.createJobNotifier());
-            String cronRes = cronDecisionRouter.execute(cronCtx);
-            if (cronRes != null) return cronRes;
-        } catch (Exception e) {
-            log.debugf("Cron resolution failed for %s: %s", finalTargetId, LogUtil.rootMessage(e));
-        }
+        String cronRes = executeCronDecision(finalTargetId, userId, chatId, reason, context);
+        if (cronRes != null) return cronRes;
 
         // 3. Nothing found
         if (statefulAgentStore.isSessionActive(finalTargetId)) return getTargetNotAwaitingMessage();
@@ -440,5 +423,29 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         return dtos == null
                 ? List.of()
                 : dtos.stream().<AgentCron>map(AgentCronRecord::fromDto).toList();
+    }
+
+    private String executeCronDecision(
+            String cronId, String userId, String chatId, String reason, MessageContext context) {
+        try {
+            var cronCtx = new CronDecisionRouter.CronContext(
+                    cronId,
+                    userId,
+                    chatId,
+                    reason,
+                    context,
+                    (sid, rsn) -> applyDecisionToAll(sid, rsn),
+                    () -> getAlreadyProcessingMessage(),
+                    (cronSid, cronRole) -> getCronResumeGoal(cronSid, cronRole),
+                    (cron, rsn, result) -> postProcessCronDecision(cron, rsn, result),
+                    result -> getCronSuccessResponse(result),
+                    () -> getErrorMessage(),
+                    notificationService.createJobNotifier());
+            String cronRes = cronDecisionRouter.execute(cronCtx);
+            if (cronRes != null) return cronRes;
+        } catch (Exception e) {
+            log.debugf("Cron resolution failed for %s: %s", cronId, LogUtil.rootMessage(e));
+        }
+        return null;
     }
 }

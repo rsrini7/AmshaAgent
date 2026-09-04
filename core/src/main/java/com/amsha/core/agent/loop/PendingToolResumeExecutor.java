@@ -2,12 +2,14 @@ package com.amsha.core.agent.loop;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
@@ -15,6 +17,7 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -178,7 +181,14 @@ final class PendingToolResumeExecutor {
                             + "Summarize what was stored for the user in a natural conversational tone."));
         }
         if (response instanceof ToolResponse.ToolSuccess success) {
-            if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(request.toolName())) {
+            if (success.output() != null && success.output().contains(UserMessages.DELEGATION_PAUSED_MARKER)) {
+                String pausedTool = extractPausedTool(success.output());
+                ApprovalFrame frame = new ApprovalFrame(pausedTool, Map.of(), RiskLevel.HIGH);
+                return AgentResult.awaitingApproval(frame, request.sessionId(), List.copyOf(request.history()));
+            }
+            if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(request.toolName())
+                    || "garuda".equals(request.toolName())) {
+                completeInProgressCheckpoint(request.checkpoint());
                 String safeOutput = UserMessages.stripInternalDirectiveTail(success.output());
                 return AgentResult.finished(safeOutput, List.copyOf(request.history()));
             }
@@ -191,6 +201,18 @@ final class PendingToolResumeExecutor {
             return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
         }
         return handleFailure(request, response);
+    }
+
+    private static final Pattern PAUSED_TOOL_PATTERN = Pattern.compile("tool '([^']+)' needs human approval");
+
+    private static String extractPausedTool(String obs) {
+        if (obs != null) {
+            var matcher = PAUSED_TOOL_PATTERN.matcher(obs);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+        return ToolCapability.DELEGATE_TO_AGENT.toolName();
     }
 
     private Map<String, Object> parseParams(String paramsJson) throws Exception {

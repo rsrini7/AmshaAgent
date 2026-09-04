@@ -23,7 +23,6 @@ import com.amsha.app.ui.dto.CheckpointApprovalRequest;
 import com.amsha.app.ui.dto.CheckpointApprovalResponse;
 import com.amsha.app.ui.dto.PageDto;
 import com.amsha.app.ui.dto.PendingApprovalDto;
-import com.amsha.core.api.dto.ActiveAgentResponse;
 import com.amsha.onboarding.BootstrapResource;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
@@ -67,7 +66,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RecallMemoryAdminResource.PurgeResponse.class,
             CoreMemoryAdminResource.CoreMemoryUpdateRequest.class,
             PromptAdminResource.PromptUpdateRequest.class,
-            ActiveAgentResponse.class,
             // Identity / Access / Workspace Sharing / Bootstrap ──
             // Onboarding bootstrap records
             BootstrapResource.BootstrapStatusResponse.class,

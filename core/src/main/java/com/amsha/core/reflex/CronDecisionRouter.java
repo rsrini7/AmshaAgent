@@ -61,15 +61,10 @@ public class CronDecisionRouter {
 
         String resolvedSessionId = resolveSessionId(cronId);
 
-        AgentCheckpoint pendingCheckpoint = ctx.applyDecisionToAll().apply(resolvedSessionId, ctx.reason);
-        if (pendingCheckpoint == null || BatchDecisionUtil.hasPendingToolNames(pendingCheckpoint, objectMapper)) {
-            return ctx.errorMsg().get();
-        }
-        String cronSessionId = pendingCheckpoint.getSessionId();
-        String cronRole = pendingCheckpoint.getAgentRole();
-
-        AgentCron cron = resolveCronJob(cronId, cronSessionId);
+        AgentCron cron = resolveCronJob(cronId, resolvedSessionId);
         if (cron == null) return "❌ Cron task not found.";
+
+        String cronRole = resolveSessionRole(resolvedSessionId, cron);
 
         String deliveryId = cron.getLastDeliveryId();
         if (deliveryId == null || deliveryId.isBlank()) {
@@ -80,14 +75,28 @@ public class CronDecisionRouter {
             return ctx.alreadyProcessingMsg().get();
         }
 
-        if (!statefulAgentStore.claimForResume(cronSessionId, cronRole)) {
+        AgentCheckpoint pendingCheckpoint;
+        try {
+            pendingCheckpoint = ctx.applyDecisionToAll().apply(resolvedSessionId, ctx.reason);
+        } catch (Exception e) {
+            cronStore.markAwaitingApprovalIfOwner(cron.getId(), deliveryId);
+            throw e;
+        }
+        if (pendingCheckpoint == null || BatchDecisionUtil.hasPendingToolNames(pendingCheckpoint, objectMapper)) {
+            cronStore.markAwaitingApprovalIfOwner(cron.getId(), deliveryId);
+            return ctx.errorMsg().get();
+        }
+        String cronSessionId = pendingCheckpoint.getSessionId();
+        String finalRole = pendingCheckpoint.getAgentRole() != null ? pendingCheckpoint.getAgentRole() : cronRole;
+
+        if (!statefulAgentStore.claimForResume(cronSessionId, finalRole)) {
             cronStore.markAwaitingApprovalIfOwner(cron.getId(), deliveryId);
             return ctx.alreadyProcessingMsg().get();
         }
 
         AgentResult result = null;
         try {
-            String goal = ctx.cronResumeGoal().get(cronSessionId, cronRole);
+            String goal = ctx.cronResumeGoal().get(cronSessionId, finalRole);
             ctx.context.setResumeSignal(true);
             ctx.context.setGoal(goal);
 
@@ -100,10 +109,10 @@ public class CronDecisionRouter {
                     cron.getUserId(),
                     cron.getChatId(),
                     AutonomyLevel.SUPERVISED,
-                    cronRole,
+                    finalRole,
                     () -> agentLoop.run(
                             cronSessionId,
-                            cronRole,
+                            finalRole,
                             goal,
                             pendingCheckpoint.getSystemNote(),
                             reasoningEngine,
@@ -200,10 +209,22 @@ public class CronDecisionRouter {
         return match.map(AgentCheckpoint::getSessionId).orElse(cronId);
     }
 
+    private String resolveSessionRole(String resolvedSessionId, AgentCron cron) {
+        if (resolvedSessionId != null) {
+            Optional<AgentCheckpoint> cp = statefulAgentStore
+                    .findLatestAwaitingApproval(resolvedSessionId)
+                    .or(() -> statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(resolvedSessionId));
+            if (cp.isPresent() && cp.get().getAgentRole() != null) {
+                return cp.get().getAgentRole();
+            }
+        }
+        return cron != null && cron.getExecutionRole() != null ? cron.getExecutionRole() : "researcher";
+    }
+
     private AgentCron resolveCronJob(String cronId, String cronSessionId) {
         String jobId = extractJobId(cronId);
         AgentCron cron = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
-        if (cron == null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+        if (cron == null && cronSessionId != null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
             jobId = extractJobId(cronSessionId);
             cron = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
         }
