@@ -9,6 +9,8 @@ import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.CronRunDto;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
+import com.amsha.persistence.api.ExecutionRunSummaryDto;
+import com.amsha.persistence.api.ExecutionTraceDto;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityUserDto;
@@ -44,6 +46,7 @@ import com.amsha.persistence.sqlite.jdbi.CompactionJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CoreMemoryJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CronJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.CronRunJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.ExecutionTraceJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.IdentityInvitationJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.IdentityJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.JdbiProducer;
@@ -98,7 +101,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ModelRouteAssignmentDto.class,
             WorkspaceConnectionGrantDto.class,
             EmbeddingIndexDescriptor.class,
+            ExecutionTraceDto.class,
+            ExecutionRunSummaryDto.class,
             // JDBI DAOs (SQL Object proxies)
+            ExecutionTraceJdbiDao.class,
             CheckpointJdbiDao.class,
             CronJdbiDao.class,
             CronRunJdbiDao.class,
@@ -131,6 +137,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FtsSchemaInitializer.class,
             // Store adapters (CDI beans)
             SqlitePersistenceAdapter.class,
+            SqliteExecutionTraceStoreAdapter.class,
             SqliteAuditEventStoreAdapter.class,
             SqliteChatMemoryStoreAdapter.class,
             SqliteCheckpointStoreAdapter.class,

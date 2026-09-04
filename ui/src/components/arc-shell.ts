@@ -1,6 +1,6 @@
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { AgentStatusDto, AgentEvent } from '../api/generated/models';
+import { AgentStatusDto } from '../api/generated/models';
 import { PendingApprovalDto } from '../api/types';
 import {
   ArcClient,
@@ -25,7 +25,13 @@ import './arc-settings';
 import './arc-theme-toggle';
 import './arc-flow-canvas';
 import { ResizeController } from '../composables/resize-controller';
-import { AgentTraceEvent, isAgentTraceEvent } from '../types/trace';
+import {
+  AgentTraceEvent,
+  isAgentTraceEvent,
+  ExecutionRunSummaryDto,
+  ExecutionTraceDto,
+  toAgentTraceEvent,
+} from '../types/trace';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
@@ -52,6 +58,12 @@ export class ArcShell extends LitElement {
   @state() private _dockWidth = 400;
   @state() private _traceEvents: AgentTraceEvent[] = [];
   @state() private _currentRunId = '';
+  @state() private _isReplayMode = false;
+  @state() private _replayRunId = '';
+  @state() private _replayTraceEvents: AgentTraceEvent[] = [];
+  @state() private _replayRuns: ExecutionRunSummaryDto[] = [];
+  /** Live trace events that arrived while replay was active, pending merge on exit. */
+  @state() private _replayBufferedEvents: AgentTraceEvent[] = [];
 
   private _resizeController = new ResizeController({
     defaultWidth: 400,
@@ -65,6 +77,9 @@ export class ArcShell extends LitElement {
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
   private _boundSessionReady = ((e: Event) => this._onSessionReady(e as CustomEvent)) as EventListener;
+  private _boundWsStatusChange = (e: CustomEvent<{ status: string }>) => {
+    this._chatWsStatus = e.detail.status;
+  };
   private _pendingMcpSetupHash: string | null = null;
 
   static styles = css`
@@ -229,7 +244,7 @@ export class ArcShell extends LitElement {
     super();
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
-    window.addEventListener('ws-status-change', ((e: CustomEvent) => this._chatWsStatus = e.detail.status) as EventListener);
+    window.addEventListener('ws-status-change', this._boundWsStatusChange as EventListener);
     window.addEventListener('session-ready', this._boundSessionReady);
 
     this._platformId = this._resolvePlatformId();
@@ -307,6 +322,7 @@ export class ArcShell extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener('hashchange', this._boundHashChange);
     window.removeEventListener('session-ready', this._boundSessionReady);
+    window.removeEventListener('ws-status-change', this._boundWsStatusChange as EventListener);
     this._sseManager?.disconnect();
   }
 
@@ -366,18 +382,27 @@ export class ArcShell extends LitElement {
     if (sessionChanged) {
       this._traceEvents = [];
       this._currentRunId = '';
+      this._isReplayMode = false;
+      this._replayTraceEvents = [];
       this._sseManager?.resetDedup();
+      this._fetchSessionRuns(sessionId);
     }
     this._startSse();
   }
 
   // SSE event handlers
-  private _handleSseEvent(event: any) {
+  private _handleSseEvent(event: SsePayload) {
     if (event.sessionId && this._sessionId && event.sessionId !== this._sessionId) {
       return;
     }
 
     if (isAgentTraceEvent(event)) {
+      if (this._isReplayMode) {
+        // While replay is active, live events do not overwrite or mutate the active replay view.
+        // Buffer them so they can be merged back when replay ends (otherwise they are lost).
+        this._replayBufferedEvents = [...this._replayBufferedEvents, event];
+        return;
+      }
       if (event.runId && this._currentRunId && event.runId !== this._currentRunId) {
         this._sseManager?.resetDedup();
         this._traceEvents = [];
@@ -389,7 +414,7 @@ export class ArcShell extends LitElement {
       return;
     }
 
-    const eventType = event.eventType ?? event.type;
+    const eventType = event.eventType ?? '';
     if (eventType === 'status_change') {
       this._fetchAgents();
       this._fetchApprovals();
@@ -408,10 +433,53 @@ export class ArcShell extends LitElement {
   }
 
   private get _activeRunEvents(): AgentTraceEvent[] {
+    if (this._isReplayMode) {
+      return this._replayTraceEvents;
+    }
     if (!this._currentRunId) {
       return this._traceEvents;
     }
     return this._traceEvents.filter((e) => !e.runId || e.runId === this._currentRunId);
+  }
+
+  async _fetchSessionRuns(sessionId: string) {
+    if (!sessionId) return;
+    try {
+      const client = this._client ?? new ArcClient('/api/v1', this._apiKey);
+      const runs = await client.getSessionRuns(sessionId, 50);
+      if (Array.isArray(runs)) {
+        this._replayRuns = runs;
+      }
+    } catch {
+      // Best-effort
+    }
+  }
+
+  async _startReplay(runId: string) {
+    if (!runId) return;
+    try {
+      const client = this._client ?? new ArcClient('/api/v1', this._apiKey);
+      const traces = await client.getRunTrace(runId, 500);
+      if (Array.isArray(traces)) {
+        this._replayTraceEvents = traces.map(toAgentTraceEvent);
+        this._replayRunId = runId;
+        this._isReplayMode = true;
+      }
+    } catch {
+      // Best-effort
+    }
+  }
+
+  _exitReplay() {
+    this._isReplayMode = false;
+    this._replayTraceEvents = [];
+    this._replayRunId = '';
+    // Merge any live trace events that arrived during replay back into the live buffer so
+    // they are not permanently lost.
+    if (this._replayBufferedEvents.length > 0) {
+      this._traceEvents = [...this._traceEvents, ...this._replayBufferedEvents];
+      this._replayBufferedEvents = [];
+    }
   }
 
   private get _activeParadigm(): string {
@@ -573,8 +641,13 @@ export class ArcShell extends LitElement {
         <div class="cockpit-canvas-area" role="region" aria-label="Visual Cockpit Canvas">
           <arc-flow-canvas
             .events=${this._activeRunEvents}
-            .runId=${this._currentRunId}
+            .runId=${this._isReplayMode ? this._replayRunId : this._currentRunId}
             .paradigm=${this._activeParadigm}
+            .isReplayMode=${this._isReplayMode}
+            .replayRuns=${this._replayRuns}
+            @start-replay=${(e: CustomEvent) => this._startReplay(e.detail.runId)}
+            @exit-replay=${() => this._exitReplay()}
+            @refresh-runs=${() => this._fetchSessionRuns(this._sessionId)}
           ></arc-flow-canvas>
         </div>
         <div

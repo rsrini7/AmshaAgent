@@ -42,6 +42,11 @@ in the existing Lit UI. Concretely:
 6. **Protect trace data by default.** Server-side redaction, per-session ownership checks, and
    an operator-gated safe-metadata model for any X-Ray disclosure. Raw Java source, tool
    parameters, audit keys, and model text are never published by default.
+7. **Durable trace storage, retention, replay, and scrubbing (Issue 08).** Persist already-redacted
+   trace events durably using a dedicated store port with semantic parity across SQLite, PostgreSQL,
+   and filesystem backends. Enforce server-side session ownership and operator authorization for
+   replay reads, keeping durable replay separate from the transient pending-approval SSE replay
+   path. Provide bounded sequence/time scrubbing in the cockpit UI without client-side step synthesis.
 
 ## 3. Alternatives Rejected
 

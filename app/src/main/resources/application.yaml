@@ -883,6 +883,13 @@ amsha:
   chat-memory:
     max-messages: ${AMSHA_CHAT_MEMORY_MAX_MESSAGES:20}
     retention-days: ${AMSHA_CHAT_MEMORY_RETENTION_DAYS:30}
+  trace:
+    persistence:
+      queue-capacity: ${AMSHA_TRACE_PERSISTENCE_QUEUE_CAPACITY:10000}
+    retention:
+      max-age-days: ${AMSHA_TRACE_RETENTION_MAX_AGE_DAYS:7}
+      max-runs-per-session: ${AMSHA_TRACE_RETENTION_MAX_RUNS_PER_SESSION:50}
+      interval: ${AMSHA_TRACE_RETENTION_INTERVAL:24h}
   session-catalog:
     archive-after-days: ${AMSHA_SESSION_CATALOG_ARCHIVE_AFTER_DAYS:90}
   self-evolve:

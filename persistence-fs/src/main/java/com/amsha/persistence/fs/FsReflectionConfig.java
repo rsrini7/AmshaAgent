@@ -4,6 +4,8 @@ import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
+import com.amsha.persistence.api.ExecutionRunSummaryDto;
+import com.amsha.persistence.api.ExecutionTraceDto;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityUserDto;
@@ -42,6 +44,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsCompactionStoreAdapter.class,
             FsAuditEventStoreAdapter.class,
             FsAuditSchemaEnforcer.class,
+            FsExecutionTraceStoreAdapter.class,
+            ExecutionTraceDto.class,
+            ExecutionRunSummaryDto.class,
             FsCronStoreAdapter.class,
             FsCronRunStoreAdapter.class,
             FsCheckpointStoreAdapter.class,
@@ -156,6 +161,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "com.amsha.persistence.fs.FsEvolutionEventStore$EventBatch",
             "com.amsha.persistence.fs.FsSecretStoreAdapter$SecretRecord",
             "com.amsha.persistence.fs.FsAuditEventStoreAdapter$IndexEntry",
-            "com.amsha.persistence.fs.FsMemoryRetrievalAdapter$IndexEntry"
+            "com.amsha.persistence.fs.FsMemoryRetrievalAdapter$IndexEntry",
+            "com.amsha.persistence.fs.FsExecutionTraceStoreAdapter$RunEvents",
+            "com.amsha.persistence.fs.FsExecutionTraceStoreAdapter$SessionIndex",
+            "com.amsha.persistence.fs.FsExecutionTraceStoreAdapter$RunIndex"
         })
 public class FsReflectionConfig {}

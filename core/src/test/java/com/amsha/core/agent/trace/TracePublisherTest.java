@@ -9,13 +9,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import jakarta.enterprise.inject.Instance;
 
 import com.amsha.core.agent.sse.AgentSseService;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class TracePublisherTest {
+
+    @BeforeEach
+    @AfterEach
+    void resetState() {
+        TracePublisher.resetStateForTesting();
+    }
 
     private static AgentTraceEvent sampleEvent(String detail) {
         return AgentTraceEvent.of(
@@ -112,5 +123,37 @@ class TracePublisherTest {
         } finally {
             TracePublisher.releaseSession(sessionId);
         }
+    }
+
+    @Test
+    void publishEnqueuesRedactedEventToPersistenceEngine() {
+        AgentSseService sse = mock(AgentSseService.class);
+        @SuppressWarnings("unchecked")
+        Instance<TracePersistenceEngine> persistenceInstance = mock(Instance.class);
+        TracePersistenceEngine engine = mock(TracePersistenceEngine.class);
+        when(persistenceInstance.isResolvable()).thenReturn(true);
+        when(persistenceInstance.get()).thenReturn(engine);
+
+        TracePublisher publisher = new TracePublisher(sse, new TraceRedactor(), persistenceInstance);
+        publisher.publish(sampleEvent("api_key=sk-secret-value"));
+
+        ArgumentCaptor<AgentTraceEvent> captor = ArgumentCaptor.forClass(AgentTraceEvent.class);
+        verify(engine).enqueue(captor.capture());
+
+        AgentTraceEvent enqueued = captor.getValue();
+        assertNotNull(enqueued);
+        assertFalse(enqueued.detail().contains("sk-secret-value"));
+        assertTrue(enqueued.detail().contains(TraceRedactor.REDACTED));
+    }
+
+    @Test
+    void resetStateForTestingClearsTurnState() {
+        String sessionId = "sess-reset-test-" + System.nanoTime();
+        TracePublisher.startTurn(sessionId);
+        TracePublisher.startTurn(sessionId);
+        assertEquals(2, TracePublisher.currentTurnNumber(sessionId));
+
+        TracePublisher.resetStateForTesting();
+        assertEquals(TracePublisher.DEFAULT_TURN_NUMBER, TracePublisher.currentTurnNumber(sessionId));
     }
 }

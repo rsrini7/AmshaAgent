@@ -29,6 +29,7 @@ class SecurityEventTypeTest {
         assertTrue(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_ACCEPTED.isMandatory());
         assertTrue(SecurityEventType.CLASSIFIER_RUNTIME_CHANGE_REJECTED.isMandatory());
         assertTrue(SecurityEventType.ONNX_MODEL_UNLOAD_REQUESTED.isMandatory());
+        assertTrue(SecurityEventType.SESSION_INSPECTED.isMandatory());
 
         // Non-mandatory - fire-and-forget
         assertFalse(SecurityEventType.REFLEX_COMMAND.isMandatory());

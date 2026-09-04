@@ -1,6 +1,7 @@
 package com.amsha.core.agent.trace;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,11 +54,20 @@ public class TracePublisher {
 
     private final AgentSseService agentSseService;
     private final TraceRedactor redactor;
+    private final Instance<TracePersistenceEngine> persistenceEngine;
 
     @Inject
-    public TracePublisher(AgentSseService agentSseService, TraceRedactor redactor) {
+    public TracePublisher(
+            AgentSseService agentSseService,
+            TraceRedactor redactor,
+            Instance<TracePersistenceEngine> persistenceEngine) {
         this.agentSseService = agentSseService;
         this.redactor = redactor;
+        this.persistenceEngine = persistenceEngine;
+    }
+
+    public TracePublisher(AgentSseService agentSseService, TraceRedactor redactor) {
+        this(agentSseService, redactor, null);
     }
 
     /**
@@ -152,7 +162,11 @@ public class TracePublisher {
         }
         try {
             AgentTraceEvent sequenced = event.withSequence(nextSequence(event.runId()));
-            agentSseService.publish(sequenced.sessionId(), redactor.redact(sequenced));
+            AgentTraceEvent redacted = redactor.redact(sequenced);
+            agentSseService.publish(sequenced.sessionId(), redacted);
+            if (persistenceEngine != null && persistenceEngine.isResolvable()) {
+                persistenceEngine.get().enqueue(redacted);
+            }
         } catch (RuntimeException | LinkageError e) {
             log.debugf(
                     "TracePublisher: dropped trace event for session %s: %s",
@@ -198,5 +212,13 @@ public class TracePublisher {
             }
             sequences.remove(oldest);
         }
+    }
+
+    /**
+     * Resets internal session turn state. Intended strictly for test isolation within this package.
+     */
+    static void resetStateForTesting() {
+        sessionTurns.clear();
+        sessionOrder.clear();
     }
 }

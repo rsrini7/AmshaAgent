@@ -1,6 +1,7 @@
 import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
 import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto } from './types';
+import { ExecutionRunSummaryDto, ExecutionTraceDto } from '../types/trace';
 
 export class ArcApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -538,6 +539,26 @@ export class ArcClient {
 
   async symbolicate(symbol: string): Promise<SafeMetadata> {
     return this.request<SafeMetadata>(`/cockpit/symbolicate?symbol=${encodeURIComponent(symbol)}`);
+  }
+
+  async getSessionRuns(
+    sessionId: string,
+    limit = 50,
+    offset = 0,
+  ): Promise<ExecutionRunSummaryDto[]> {
+    return this.request<ExecutionRunSummaryDto[]>(
+      `/cockpit/sessions/${encodeURIComponent(sessionId)}/runs?limit=${limit}&offset=${offset}`,
+    );
+  }
+
+  async getRunTrace(
+    runId: string,
+    limit = 500,
+    offset = 0,
+  ): Promise<ExecutionTraceDto[]> {
+    return this.request<ExecutionTraceDto[]>(
+      `/cockpit/runs/${encodeURIComponent(runId)}/trace?limit=${limit}&offset=${offset}`,
+    );
   }
 }
 

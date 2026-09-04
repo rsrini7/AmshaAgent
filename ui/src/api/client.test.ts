@@ -133,3 +133,53 @@ describe('bounded HITL requests', () => {
     expect(requestSignal?.aborted).toBe(true);
   });
 });
+
+describe('cockpit trace client', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', new MemoryStorage());
+    vi.stubGlobal('sessionStorage', new MemoryStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('filters dummy authenticated key and passes credentials: include', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ runId: 'run-1', sessionId: 'sess-1' }]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new ArcClient('/api/v1', 'authenticated');
+    const runs = await client.getSessionRuns('sess-1', 50, 0);
+
+    expect(runs).toHaveLength(1);
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/v1/cockpit/sessions/sess-1/runs?limit=50&offset=0');
+    expect(request.credentials).toBe('include');
+    expect(new Headers(request.headers).has('X-AMSHA-API-KEY')).toBe(false);
+  });
+
+  it('fetches run traces with bounded parameters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ eventId: 'ev-1', runId: 'run-1' }]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new ArcClient('/api/v1', 'real-owner-key');
+    const traces = await client.getRunTrace('run-1', 500, 10);
+
+    expect(traces).toHaveLength(1);
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/v1/cockpit/runs/run-1/trace?limit=500&offset=10');
+    expect(request.credentials).toBe('include');
+    expect(new Headers(request.headers).get('X-AMSHA-API-KEY')).toBe('real-owner-key');
+  });
+});
+

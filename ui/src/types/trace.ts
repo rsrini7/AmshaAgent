@@ -48,6 +48,52 @@ export type StationCode =
   | 'station_09_consolidation'
   | 'station_10_outbound';
 
+/** Known `TraceStage` wire values, used to validate untrusted DTO strings. */
+const TRACE_STAGES: readonly TraceStage[] = [
+  'turn_start',
+  'preflight',
+  'route',
+  'memory_decision',
+  'guard_check',
+  'hitl_requested',
+  'hitl_resolved',
+  'llm_reasoning',
+  'tool_start',
+  'tool_end',
+  'tool_error',
+  'quality_check',
+  'retry',
+  'hitl_timeout',
+  'loop_stuck',
+  'consolidation',
+  'turn_end',
+];
+
+/** Known `StationCode` wire values, used to validate untrusted DTO strings. */
+const STATION_CODES: readonly StationCode[] = [
+  'station_01_inbound',
+  'station_02_preflight',
+  'station_03_routing',
+  'station_04_memory_decision',
+  'station_05_tool_guard',
+  'station_06_reasoning',
+  'station_07_tool_execution',
+  'station_08_quality',
+  'station_09_consolidation',
+  'station_10_outbound',
+];
+
+/** Validates an untrusted stage string against the closed `TraceStage` union. */
+function asTraceStage(value: string): TraceStage {
+  return (TRACE_STAGES as readonly string[]).includes(value) ? (value as TraceStage) : 'turn_start';
+}
+
+/** Validates an untrusted station string against the closed `StationCode` union. */
+function asStationCode(value: string | null | undefined): StationCode | null {
+  if (!value) return null;
+  return (STATION_CODES as readonly string[]).includes(value) ? (value as StationCode) : null;
+}
+
 /** Numeric telemetry only — never content. Mirrors `AgentTraceEvent.TraceMetrics`. */
 export interface TraceMetrics {
   promptTokens?: number | null;
@@ -101,4 +147,70 @@ export function isAgentTraceEvent(value: unknown): value is AgentTraceEvent {
  */
 export function traceEventId(value: unknown): string | undefined {
   return isAgentTraceEvent(value) ? value.eventId : undefined;
+}
+
+/** Summary record for an execution run across its trace events. */
+export interface ExecutionRunSummaryDto {
+  runId: string;
+  sessionId: string;
+  turnNumber: number;
+  paradigm: string | null;
+  eventCount: number;
+  maxSequence: number;
+  terminalStatus: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+/** Persisted execution trace record returned by the replay REST API. */
+export interface ExecutionTraceDto {
+  eventId: string;
+  runId: string;
+  sessionId: string;
+  turnNumber: number;
+  sequence: number;
+  stage: string;
+  station: string | null;
+  status: string | null;
+  riskLevel: string | null;
+  detail: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  durationMs: number | null;
+  iteration: number | null;
+  attempt: number | null;
+  timestamp: string;
+  paradigm: string | null;
+  version: number;
+  createdAt: string;
+}
+
+/** Maps a persisted ExecutionTraceDto to an AgentTraceEvent for canvas consumption. */
+export function toAgentTraceEvent(dto: ExecutionTraceDto): AgentTraceEvent {
+  return {
+    eventId: dto.eventId,
+    runId: dto.runId,
+    sessionId: dto.sessionId,
+    turnNumber: dto.turnNumber,
+    sequence: dto.sequence,
+    stage: asTraceStage(dto.stage),
+    station: asStationCode(dto.station),
+    status: dto.status,
+    riskLevel: dto.riskLevel,
+    detail: dto.detail,
+    metrics:
+      dto.promptTokens != null || dto.completionTokens != null || dto.durationMs != null
+        ? {
+            promptTokens: dto.promptTokens,
+            completionTokens: dto.completionTokens,
+            durationMs: dto.durationMs,
+            iteration: dto.iteration,
+            attempt: dto.attempt,
+          }
+        : null,
+    timestamp: dto.timestamp,
+    paradigm: dto.paradigm,
+    eventType: TRACE_EVENT_TYPE,
+    version: dto.version || TRACE_CONTRACT_VERSION,
+  };
 }

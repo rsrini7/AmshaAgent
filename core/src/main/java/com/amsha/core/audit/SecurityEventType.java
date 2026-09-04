@@ -63,6 +63,7 @@ public enum SecurityEventType {
 
     // Session isolation (Per-key isolation)
     UNAUTHORIZED_ACCESS, // Cross-key session access attempt blocked
+    SESSION_INSPECTED, // Privileged replay inspection of another user's session
 
     // Session lifecycle
     SESSION_CREATED, // new agent session created via REST
@@ -138,6 +139,7 @@ public enum SecurityEventType {
                     MCP_TOOL_INVOKED,
                     DELEGATE_APPROVAL,
                     UNAUTHORIZED_ACCESS,
+                    SESSION_INSPECTED,
                     MEMORY_INGESTED,
                     MEDIA_DOWNLOADED,
                     AUTH_REJECTED,
