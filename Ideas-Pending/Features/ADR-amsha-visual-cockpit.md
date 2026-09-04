@@ -33,7 +33,7 @@ in the existing Lit UI. Concretely:
 3. **Server-side redaction + bounded live stream.** A `TraceRedactor` (core) strips raw
    prompts/completions, secrets, tool parameters, and audit keys, and caps payload size, *before*
    publication. The initial trace is a **bounded live stream** (per-run, in-memory bounded);
-   durable replay/scrubbing is a separate later design with its own store.
+   durable replay/scrubbing was implemented in Issue 08 across SQLite, PostgreSQL, and filesystem stores.
 4. **Reuse the existing Lit shell.** Render in the existing `arc-*` components
    (`arc-shell`, `arc-chat-interface`, `arc-hitl-panel`) extended with new cockpit components;
    keep visualization modules out of channel modules.
@@ -47,6 +47,14 @@ in the existing Lit UI. Concretely:
    and filesystem backends. Enforce server-side session ownership and operator authorization for
    replay reads, keeping durable replay separate from the transient pending-approval SSE replay
    path. Provide bounded sequence/time scrubbing in the cockpit UI without client-side step synthesis.
+8. **Evaluated and rejected third-party animation libraries (Issue 09).** Evaluated optional GSAP
+   motion enhancement under strict evidence gates. The evaluation concluded with **Rejected**:
+   no non-fabricating target for MotionPath exists (trace events are discrete lifecycle stages,
+   not continuous spatial travel, and synthesizing particles or intermediate motion violates
+   no-fabrication), cross-Shadow-DOM morphing violates encapsulation, and compositor-eligible
+   transform and opacity transitions are already handled natively by existing CSS. Calm SVG/CSS
+   is confirmed as the permanent visual representation, avoiding third-party licensing risks,
+   memory lifecycle leaks, and bundle bloat.
 
 ## 3. Alternatives Rejected
 
@@ -58,6 +66,10 @@ in the existing Lit UI. Concretely:
   violates ownership/authz invariants.
 - **Copying third-party visualization code into the repository**: rejected — visualization
   patterns are reimplemented natively within Amsha's own modules.
+- **Third-party animation libraries (GSAP / MotionPath / Flip)**: rejected (Issue 09) — no safe,
+  non-fabricating target exists for MotionPath in discrete agent stage transitions; compositor-eligible
+  transform and opacity transitions are already handled natively by CSS without bundle size,
+  licensing, or lifecycle risks.
 
 ## 4. Consequences
 
