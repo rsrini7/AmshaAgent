@@ -70,7 +70,8 @@ try {
     # Phase 2: Build UI (prebuild auto-generates TypeScript DTOs from OpenAPI spec)
     try {
         Push-Location ui
-        npm install
+        Write-Host 'ℹ️   Building UI...'
+        npm install --prefer-offline --no-audit
         npm run build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '✅  UI built.'

@@ -5,7 +5,8 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path 'ui')) { Write-Host '❌  ui/ not found.'; exit 1 }
 Push-Location ui
 try {
-  npm install
+  Write-Host 'ℹ️   Building UI...'
+  npm install --prefer-offline --no-audit
   npm run build
 } finally {
   Pop-Location
