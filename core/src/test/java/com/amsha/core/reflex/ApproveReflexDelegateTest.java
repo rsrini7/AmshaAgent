@@ -193,11 +193,6 @@ class ApproveReflexDelegateTest {
         // 2. Not an active main-chat session either — so handleCronDecision won't bail
         when(agentStore.isSessionActive(cronUUID)).thenReturn(false);
 
-        // Mock the checkpoint approval so we reach the cron repository lookup
-        AgentCheckpoint cp = mock(AgentCheckpointRecord.class);
-        when(cp.getSessionId()).thenReturn("cron-job123-exec456");
-        when(checkpointApprovalService.approveAll(eq(cronUUID), any())).thenReturn(cp);
-
         MessageContext context = createTestContext(sessionId, userId, input);
 
         var result = reflex.execute(sessionId, userId, "chat1", input, context);

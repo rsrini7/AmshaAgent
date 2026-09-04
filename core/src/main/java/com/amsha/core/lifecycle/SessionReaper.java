@@ -388,7 +388,9 @@ public class SessionReaper {
     }
 
     private void cleanupCronOnFailure(String sessionId, String reason) {
-        cronFailureCleanup.cleanupCronOnFailure(sessionId, reason);
+        if (cronFailureCleanup != null) {
+            cronFailureCleanup.cleanupCronOnFailure(sessionId, reason);
+        }
     }
 
     // CHAT HISTORY RETENTION SWEEP - purges chat_memory rows for old sessions

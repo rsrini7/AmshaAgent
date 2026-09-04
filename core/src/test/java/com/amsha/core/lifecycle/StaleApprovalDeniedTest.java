@@ -63,6 +63,9 @@ class StaleApprovalDeniedTest {
     @Mock
     TracePublisher tracePublisher;
 
+    @Mock
+    CronFailureCleanup cronFailureCleanup;
+
     @InjectMocks
     SessionReaper reaper;
 
