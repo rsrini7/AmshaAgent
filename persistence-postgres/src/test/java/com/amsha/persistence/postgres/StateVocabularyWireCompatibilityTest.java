@@ -44,7 +44,7 @@ public class StateVocabularyWireCompatibilityTest {
 
     /** Legacy cron statuses as persisted before the package move. */
     private static final Set<String> LEGACY_CRON_STATUSES =
-            Set.of("ACTIVE", "RUNNING", "COMPLETED", "FAILED", "AWAITING_APPROVAL", "SKIPPED");
+            Set.of("ACTIVE", "RUNNING", "COMPLETED", "FAILED", "AWAITING_APPROVAL", "AWAITING_RETRY", "SKIPPED");
 
     /** Legacy tool decisions as embedded in checkpoint documents. */
     private static final Set<String> LEGACY_TOOL_DECISIONS = Set.of("PENDING", "APPROVED", "DENIED");
@@ -75,6 +75,7 @@ public class StateVocabularyWireCompatibilityTest {
                 "CronStatus constants drifted from the persisted legacy set");
         assertEquals("ACTIVE", new CronStatus[] {CronStatus.ACTIVE}[0].toStorageValue());
         assertEquals("AWAITING_APPROVAL", CronStatus.AWAITING_APPROVAL.toStorageValue());
+        assertEquals("AWAITING_RETRY", CronStatus.AWAITING_RETRY.toStorageValue());
         assertEquals("SKIPPED", CronStatus.SKIPPED.toStorageValue());
         assertEquals("\"FAILED\"", objectMapper.writeValueAsString(CronStatus.FAILED));
         assertEquals(CronStatus.RUNNING, CronStatus.fromStorageValue("RUNNING"));
@@ -82,6 +83,7 @@ public class StateVocabularyWireCompatibilityTest {
         assertEquals(CronStatus.ACTIVE, CronStatus.fromStorageValue(null));
         assertEquals(CronStatus.ACTIVE, CronStatus.fromStorageValue("   "));
         assertEquals(CronStatus.COMPLETED, CronStatus.fromStorageValue("completed"));
+        assertEquals(CronStatus.AWAITING_RETRY, CronStatus.fromStorageValue("awaiting_retry"));
     }
 
     @Test
