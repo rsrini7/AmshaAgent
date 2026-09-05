@@ -22,6 +22,7 @@ public record OnnxModelBundleManifest(
         OnnxEmbeddingBundleSpec embedding,
         OnnxClassifierBundleSpec classifier,
         OnnxScoringBundleSpec scoring,
+        OnnxAudioTranscriptionBundleSpec audioTranscription,
         OnnxModelBundleSource source) {
 
     private static final Set<String> ALLOWED_SOURCE_LICENSES =
@@ -33,6 +34,9 @@ public record OnnxModelBundleManifest(
         if (source == null) {
             throw new IllegalArgumentException("source metadata is required");
         }
+        if (!revision.equals(source.revision())) {
+            throw new IllegalArgumentException("revision and source.revision must match");
+        }
         modelFile = requireRelativeFile(modelFile, "modelFile");
         modelSha256 = requireSha256(modelSha256, "modelSha256");
         if (modelBytes <= 0) throw new IllegalArgumentException("modelBytes must be positive");
@@ -43,6 +47,18 @@ public record OnnxModelBundleManifest(
         tokenizerSha256 = requireSha256(tokenizerSha256, "tokenizerSha256");
         if (tokenizerBytes <= 0) throw new IllegalArgumentException("tokenizerBytes must be positive");
         long verifiedBundleBytes = addExact(modelBytes, tokenizerBytes, "verified bundle bytes overflow");
+        if (audioTranscription != null) {
+            verifiedBundleBytes =
+                    addExact(verifiedBundleBytes, audioTranscription.decoderBytes(), "verified bundle bytes overflow");
+            if (source.decoderPath() == null || source.decoderPath().isBlank()) {
+                throw new IllegalArgumentException(
+                        "source.decoderPath is required when audioTranscription is declared");
+            }
+            if (modelFile.equals(audioTranscription.decoderFile())
+                    || tokenizerFile.equals(audioTranscription.decoderFile())) {
+                throw new IllegalArgumentException("decoderFile must be distinct from modelFile and tokenizerFile");
+            }
+        }
         if (estimatedResidentBytes == 0) {
             estimatedResidentBytes = multiplyExact(verifiedBundleBytes, 2, "default resident estimate overflow");
         }
@@ -53,9 +69,10 @@ public record OnnxModelBundleManifest(
         if (embedding != null) declaredContracts++;
         if (classifier != null) declaredContracts++;
         if (scoring != null) declaredContracts++;
+        if (audioTranscription != null) declaredContracts++;
         if (declaredContracts > 1) {
             throw new IllegalArgumentException(
-                    "A model bundle can declare at most one of embedding, classifier, or scoring contracts");
+                    "A model bundle can declare at most one of embedding, classifier, scoring, or audioTranscription contracts");
         }
     }
 
@@ -64,16 +81,33 @@ public record OnnxModelBundleManifest(
      * or release-provenance attestation; those remain external release evidence.
      */
     public record OnnxModelBundleSource(
-            String repository, String revision, String modelPath, String tokenizerPath, String license) {
+            String repository,
+            String revision,
+            String modelPath,
+            String tokenizerPath,
+            String decoderPath,
+            String decoderRevision,
+            String license) {
         public OnnxModelBundleSource {
             repository = requireHttpsRepository(repository);
             revision = requireNonBlank(revision, "revision");
             modelPath = requireRelativeFile(modelPath, "modelPath");
             tokenizerPath = requireRelativeFile(tokenizerPath, "tokenizerPath");
+            decoderPath = decoderPath != null && !decoderPath.isBlank()
+                    ? requireRelativeFile(decoderPath, "decoderPath")
+                    : null;
+            decoderRevision = decoderRevision != null && !decoderRevision.isBlank()
+                    ? requireNonBlank(decoderRevision, "decoderRevision")
+                    : null;
             license = requireNonBlank(license, "license");
             if (!ALLOWED_SOURCE_LICENSES.contains(license)) {
                 throw new IllegalArgumentException("license is not in the Phase 0 SPDX allowlist");
             }
+        }
+
+        public OnnxModelBundleSource(
+                String repository, String revision, String modelPath, String tokenizerPath, String license) {
+            this(repository, revision, modelPath, tokenizerPath, null, null, license);
         }
     }
 
@@ -155,6 +189,43 @@ public record OnnxModelBundleManifest(
         return Optional.ofNullable(scoring);
     }
 
+    /** Returns the audio transcription contract when this bundle is explicitly declared for STT. */
+    public Optional<OnnxAudioTranscriptionBundleSpec> audioTranscriptionSpec() {
+        return Optional.ofNullable(audioTranscription);
+    }
+
+    /** Compatibility constructor for manifests created before audio transcription contracts were added. */
+    public OnnxModelBundleManifest(
+            String bundleId,
+            String revision,
+            String modelFile,
+            String modelSha256,
+            long modelBytes,
+            String tokenizerFile,
+            String tokenizerSha256,
+            long tokenizerBytes,
+            long estimatedResidentBytes,
+            OnnxEmbeddingBundleSpec embedding,
+            OnnxClassifierBundleSpec classifier,
+            OnnxScoringBundleSpec scoring,
+            OnnxModelBundleSource source) {
+        this(
+                bundleId,
+                revision,
+                modelFile,
+                modelSha256,
+                modelBytes,
+                tokenizerFile,
+                tokenizerSha256,
+                tokenizerBytes,
+                estimatedResidentBytes,
+                embedding,
+                classifier,
+                scoring,
+                null,
+                source);
+    }
+
     private static String requireIdentifier(String value, String name) {
         String result = requireNonBlank(value, name);
         if (!result.matches("[a-zA-Z0-9][a-zA-Z0-9._-]*")) {
@@ -163,15 +234,20 @@ public record OnnxModelBundleManifest(
         return result;
     }
 
-    private static String requireRelativeFile(String value, String name) {
+    static String requireRelativeFile(String value, String name) {
         String result = requireNonBlank(value, name);
-        if (result.startsWith("/") || result.startsWith("\\\\") || result.contains("..") || result.contains("\\\\")) {
+        if (result.startsWith("/")
+                || result.startsWith("\\")
+                || result.contains("..")
+                || result.contains("\\")
+                || result.contains(":")
+                || result.matches("^[a-zA-Z]:.*")) {
             throw new IllegalArgumentException(name + " must be a safe relative path");
         }
         return result;
     }
 
-    private static String requireSha256(String value, String name) {
+    static String requireSha256(String value, String name) {
         String result = requireNonBlank(value, name).toLowerCase(Locale.ROOT);
         if (!result.matches("[0-9a-f]{64}")) throw new IllegalArgumentException(name + " must be a SHA-256 hex digest");
         return result;
@@ -201,9 +277,9 @@ public record OnnxModelBundleManifest(
         return result;
     }
 
-    private static String requireNonBlank(String value, String name) {
+    static String requireNonBlank(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
-        return value;
+        return value.trim();
     }
 }

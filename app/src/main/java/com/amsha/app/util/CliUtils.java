@@ -112,6 +112,10 @@ public class CliUtils {
      * Called by BinaryBootstrap for interactive first-run setup.
      */
     public static List<VarSpec> getMissingVarSpecs(String[] args) {
+        if (args != null && args.length > 0 && "models".equalsIgnoreCase(args[0])) {
+            return List.of();
+        }
+
         List<VarSpec> missing = new ArrayList<>();
 
         // 1. LLM Primary Key first
@@ -202,8 +206,12 @@ public class CliUtils {
     public static void validateRequiredEnvVars(String[] args) {
         String mode = args.length > 0 ? args[0].toLowerCase(Locale.ROOT) : "";
 
-        // No validation needed for help/version flags
-        if (mode.equals("--help") || mode.equals("-h") || mode.equals("--version") || mode.equals("-v")) {
+        // No validation needed for help/version flags or models management command
+        if (mode.equals("--help")
+                || mode.equals("-h")
+                || mode.equals("--version")
+                || mode.equals("-v")
+                || mode.equals("models")) {
             return;
         }
 

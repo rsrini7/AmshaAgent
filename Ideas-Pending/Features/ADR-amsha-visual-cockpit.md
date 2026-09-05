@@ -58,9 +58,12 @@ in the existing Lit UI. Concretely:
 9. **Optional local offline Whisper transcription (Issue 10).** Evaluated in-process local Whisper
    transcription under strict evidence gates (local model provisioning, zero network egress,
    reproducible STFT/mel feature extraction, encoder-decoder session leasing, and no transaction leakage).
-   The evaluation concluded with **Deferred**: existing OMLX audio transcription remains an external HTTP
-   provider integration and is not in-process Whisper. In-process local Whisper is held in the evidence registry
-   until a pinned model bundle, audio DSP pipeline, and seq2seq ONNX runner are provisioned.
+   Following successful feasibility spike evidence and human operator authorization on 2026-09-05,
+   the implementation concluded with **Approved & Implemented**: pinned `whisper-tiny-en-v1` bundle
+   with SHA-256 verified manifests (including decoder provenance and config digests), pure Java STFT/Mel DSP,
+   in-process ONNX seq2seq runner behind `OnnxSessionLeaseManager`, and `CompositeAudioTranscriptionPort`
+   providing priority routing (local first, OMLX fallback) with per-delegate exception isolation and cascading.
+   The feature remains disabled by default (`amsha.stt.local.enabled=false`) with zero runtime downloads and zero egress.
 
 ## 3. Alternatives Rejected
 

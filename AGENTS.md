@@ -94,6 +94,14 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 - Static data is immutable (`Map.copyOf()`); records validate cross-field rules in
   compact constructors. Qualifier literals extend `AnnotationLiteral<T>` and
   implement `T` (suppress `java:S2176`).
+- Do not use raw `volatile` for compound state mutations, check-then-act lifecycle
+  transitions, or multi-variable coordination. Use `AtomicReference`, `AtomicBoolean`,
+  or immutable records swapped via `AtomicReference`. Virtual threads do not pin
+  carrier threads on `synchronized` in JDK 25; prefer `synchronized` blocks or
+  `computeIfAbsent` over fragile lock-free volatile schemes. Use `VarHandle` when
+  zero-allocation field access modes (`getAcquire`/`setRelease`) are required. See
+  [§24.6](docs/Architecture_Invariants.md#246-volatile-field-invariants--modern-jdk-25-concurrency-alternatives-246-invariant).
+
 
 ### Routing, channels, and prompts
 

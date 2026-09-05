@@ -20,6 +20,7 @@ import sys
 import urllib.request
 
 DEFAULT_TARGET_DIR = pathlib.Path(__file__).resolve().parent.parent / "data" / "models" / "whisper-tiny-en-v1"
+BUNDLE_ID = "whisper-tiny-en-v1"
 UPSTREAM_REPO = "Xenova/whisper-tiny.en"
 UPSTREAM_REV = "79fb389fc764e7c395bd330e9531d9d32ada7049"
 UPSTREAM_LICENSE = "Apache-2.0"
@@ -64,7 +65,7 @@ def compute_sha256(path: pathlib.Path) -> str:
 def generate_manifest(target_dir: pathlib.Path) -> dict:
     total_bytes = sum(meta["size"] for meta in BUNDLE_FILES.values())
     return {
-        "bundleId": "whisper-tiny-en-v1",
+        "bundleId": BUNDLE_ID,
         "revision": UPSTREAM_REV,
         "modelFile": "encoder_model.onnx",
         "modelSha256": BUNDLE_FILES["encoder_model.onnx"]["sha256"],
@@ -78,7 +79,9 @@ def generate_manifest(target_dir: pathlib.Path) -> dict:
             "decoderSha256": BUNDLE_FILES["decoder_model.onnx"]["sha256"],
             "decoderBytes": BUNDLE_FILES["decoder_model.onnx"]["size"],
             "preprocessorConfigFile": "preprocessor_config.json",
+            "preprocessorConfigSha256": BUNDLE_FILES["preprocessor_config.json"]["sha256"],
             "configFile": "config.json",
+            "configSha256": BUNDLE_FILES["config.json"]["sha256"],
             "sampleRate": 16000,
             "numChannels": 1,
             "numMelBins": 80,
@@ -93,6 +96,7 @@ def generate_manifest(target_dir: pathlib.Path) -> dict:
             "revision": UPSTREAM_REV,
             "modelPath": BUNDLE_FILES["encoder_model.onnx"]["remote_path"],
             "tokenizerPath": BUNDLE_FILES["tokenizer.json"]["remote_path"],
+            "decoderPath": BUNDLE_FILES["decoder_model.onnx"]["remote_path"],
             "license": UPSTREAM_LICENSE,
         },
     }
@@ -141,8 +145,9 @@ def main():
         if actual_sha != meta["sha256"] or actual_size != meta["size"]:
             print(f"CORRUPT    {local_name} (size: {actual_size}, sha: {actual_sha})", file=sys.stderr)
             corrupt += 1
-            if not args.check and args.force:
+            if not args.check:
                 file_path.unlink()
+                print(f"deleted    corrupt file {local_name}", file=sys.stderr)
         else:
             print(f"verified   {local_name} ({actual_size:,} bytes, sha: {actual_sha[:16]}...)")
 
@@ -150,12 +155,27 @@ def main():
         print(f"\nFailed check: {missing} missing, {corrupt} corrupt file(s).", file=sys.stderr)
         sys.exit(1)
 
-    # Write manifest.json
-    manifest = generate_manifest(target_dir)
     manifest_path = target_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    print(f"manifest   written to {manifest_path}")
-    print("\nLocal Whisper bundle successfully provisioned and verified.")
+    if args.check:
+        if not manifest_path.exists():
+            print("MISSING    manifest.json", file=sys.stderr)
+            sys.exit(1)
+        try:
+            stored = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if stored.get("bundleId") != BUNDLE_ID:
+                print("CORRUPT    manifest.json: bundleId mismatch", file=sys.stderr)
+                sys.exit(1)
+            print("verified   manifest.json")
+        except Exception as e:
+            print(f"CORRUPT    manifest.json: {e}", file=sys.stderr)
+            sys.exit(1)
+        print("\nLocal Whisper bundle check passed.")
+    else:
+        # Write manifest.json
+        manifest = generate_manifest(target_dir)
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        print(f"manifest   written to {manifest_path}")
+        print("\nLocal Whisper bundle successfully provisioned and verified.")
 
 
 if __name__ == "__main__":

@@ -313,7 +313,7 @@ class WhisperStrongFeasibilitySpikeTest {
             assertTrue(recoveredRes.transcript().contains("observability"));
 
             // 4. Audio duration exceeded (>30s)
-            byte[] largeAudio = new byte[16000 * 2 * 35]; // 35 seconds of 16k PCM
+            byte[] largeAudio = create16kMonoWav(16000 * 35, (short) 100); // 35 seconds of 16k PCM
             AudioTranscriptionRequest overDurationReq = AudioTranscriptionRequest.ofInline(
                     "req-over", "audio/wav", largeAudio, "en", Duration.ofSeconds(30));
             AudioTranscriptionResult overRes = port.transcribe(overDurationReq);
@@ -551,5 +551,26 @@ class WhisperStrongFeasibilitySpikeTest {
                         ? Path.of("data/models/whisper-tiny-en-v1")
                         : Path.of("../data/models/whisper-tiny-en-v1"))
                 .toAbsolutePath();
+    }
+
+    private static byte[] create16kMonoWav(int numSamples, short sampleVal) {
+        ByteBuffer bb = ByteBuffer.allocate(44 + numSamples * 2).order(ByteOrder.LITTLE_ENDIAN);
+        bb.put("RIFF".getBytes(StandardCharsets.US_ASCII));
+        bb.putInt(36 + numSamples * 2);
+        bb.put("WAVE".getBytes(StandardCharsets.US_ASCII));
+        bb.put("fmt ".getBytes(StandardCharsets.US_ASCII));
+        bb.putInt(16);
+        bb.putShort((short) 1);
+        bb.putShort((short) 1);
+        bb.putInt(16000);
+        bb.putInt(32000);
+        bb.putShort((short) 2);
+        bb.putShort((short) 16);
+        bb.put("data".getBytes(StandardCharsets.US_ASCII));
+        bb.putInt(numSamples * 2);
+        for (int i = 0; i < numSamples; i++) {
+            bb.putShort(sampleVal);
+        }
+        return bb.array();
     }
 }

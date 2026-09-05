@@ -11,6 +11,7 @@ import com.amsha.app.api.OnnxModelAdminResource;
 import com.amsha.app.api.PromptAdminResource;
 import com.amsha.app.api.RecallMemoryAdminResource;
 import com.amsha.app.api.SessionResource;
+import com.amsha.app.cli.ModelInstaller;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
 import com.amsha.app.skill.SkillResource;
@@ -96,6 +97,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WorkspaceMembershipDto.class,
             ExternalIdentityDto.class,
             IdentityInvitationDto.class,
-            CockpitResource.class
+            CockpitResource.class,
+            ModelInstaller.ModelCatalogEntry.class,
+            ModelInstaller.ModelFileSpec.class,
+            ModelInstaller.ModelStatus.class
         })
 public class AppReflectionConfig {}

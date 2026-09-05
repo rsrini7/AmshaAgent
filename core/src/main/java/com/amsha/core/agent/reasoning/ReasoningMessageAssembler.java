@@ -14,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -46,6 +45,7 @@ import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import io.micrometer.core.instrument.MeterRegistry;
@@ -95,6 +95,10 @@ public class ReasoningMessageAssembler {
 
     @Inject
     Instance<AudioTranscriptionPort> audioTranscriptionPortInstance;
+
+    @Inject
+    @ConfigProperty(name = "amsha.stt.allow-fallback-on-failure", defaultValue = "false")
+    boolean allowFallbackOnFailure;
 
     @Inject
     Instance<MeterRegistry> meterRegistryInstance;
@@ -241,24 +245,10 @@ public class ReasoningMessageAssembler {
                 messages.add(UserMessage.userMessage(goal));
             }
         } else {
-            if (attachments != null && !attachments.isEmpty()) {
-                boolean replaced = false;
-                for (ChatMessage m : projectedHistory) {
-                    if (!replaced
-                            && m instanceof UserMessage um
-                            && Objects.equals(ReasoningMessageHelpers.extractUserText(um), goal)) {
-                        messages.add(mapMediaMessage(context, goal, cap, targetModelName));
-                        replaced = true;
-                    } else {
-                        messages.add(m);
-                    }
-                }
-                if (!replaced) {
-                    messages.add(mapMediaMessage(context, goal, cap, targetModelName));
-                }
-            } else {
-                messages.addAll(projectedHistory);
-            }
+            UserMessage mediaMessage = (attachments != null && !attachments.isEmpty())
+                    ? mapMediaMessage(context, goal, cap, targetModelName)
+                    : null;
+            ReasoningMessageHelpers.appendProjectedHistory(messages, projectedHistory, mediaMessage, goal);
             if (isForceFinishRetry) {
                 messages.add(UserMessage.userMessage("Your previous response contained raw JSON or tool-call syntax. "
                         + "Answer in plain prose only. All tools have already returned their results "
@@ -348,12 +338,21 @@ public class ReasoningMessageAssembler {
     }
 
     private AudioTranscriptionPort resolveAudioTranscriptionPort() {
-        if (audioTranscriptionPortInstance == null || !audioTranscriptionPortInstance.isResolvable()) {
+        if (audioTranscriptionPortInstance == null || audioTranscriptionPortInstance.isUnsatisfied()) {
             return null;
         }
         try {
-            return audioTranscriptionPortInstance.get();
-        } catch (Exception _) {
+            List<AudioTranscriptionPort> ports =
+                    audioTranscriptionPortInstance.stream().toList();
+            if (ports.isEmpty()) {
+                return null;
+            }
+            if (ports.size() == 1) {
+                return ports.getFirst();
+            }
+            return new CompositeAudioTranscriptionPort(ports, allowFallbackOnFailure);
+        } catch (Exception e) {
+            log.debugf("Failed to resolve AudioTranscriptionPort: %s", LogUtil.rootMessage(e));
             return null;
         }
     }

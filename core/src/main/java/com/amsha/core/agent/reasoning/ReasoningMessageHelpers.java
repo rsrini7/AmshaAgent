@@ -129,4 +129,29 @@ final class ReasoningMessageHelpers {
         }
         return filteredAssembled;
     }
+
+    static void appendProjectedHistory(
+            List<ChatMessage> messages, List<ChatMessage> projectedHistory, UserMessage mediaMessage, String goal) {
+        if (mediaMessage == null) {
+            messages.addAll(projectedHistory);
+            return;
+        }
+        int targetIdx = findLastMatchingUserMessageIndex(projectedHistory, goal);
+        for (int i = 0; i < projectedHistory.size(); i++) {
+            messages.add(i == targetIdx ? mediaMessage : projectedHistory.get(i));
+        }
+        if (targetIdx < 0) {
+            messages.add(mediaMessage);
+        }
+    }
+
+    static int findLastMatchingUserMessageIndex(List<ChatMessage> history, String goal) {
+        if (history == null || history.isEmpty()) return -1;
+        for (int i = history.size() - 1; i >= 0; i--) {
+            if (history.get(i) instanceof UserMessage um && Objects.equals(extractUserText(um), goal)) {
+                return i;
+            }
+        }
+        return -1;
+    }
 }

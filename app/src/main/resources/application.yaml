@@ -640,6 +640,13 @@ amsha:
     max-bytes: ${AMSHA_STT_MAX_BYTES:26214400}
     max-transcript-chars: ${AMSHA_STT_MAX_TRANSCRIPT_CHARS:12000}
     ffmpeg-path: ${AMSHA_STT_FFMPEG_PATH:ffmpeg}
+    allow-fallback-on-failure: ${AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE:false}
+    local:
+      enabled: ${AMSHA_STT_LOCAL_ENABLED:false}
+      bundle-id: "${AMSHA_STT_LOCAL_BUNDLE_ID:whisper-tiny-en-v1}"
+      timeout: ${AMSHA_STT_LOCAL_TIMEOUT:PT30S}
+      max-audio-bytes: ${AMSHA_STT_LOCAL_MAX_AUDIO_BYTES:26214400}
+      max-transcript-chars: ${AMSHA_STT_LOCAL_MAX_TRANSCRIPT_CHARS:12000}
   tts:
     # P8 speech synthesis (Issue 12). Output-only; disabled by default. V1 supports only the
     # directly verified WAV format from the OMLX Qwen3-TTS model — any other response_format is

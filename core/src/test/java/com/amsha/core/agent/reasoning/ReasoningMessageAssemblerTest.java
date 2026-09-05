@@ -761,4 +761,74 @@ class ReasoningMessageAssemblerTest {
         assertEquals(2, visionUserMessages.size());
         assertTrue(visionUserMessages.get(0).contents().stream().anyMatch(ImageContent.class::isInstance));
     }
+
+    @Test
+    void assemble_withRepeatedGoalTextInHistory_attachesMediaToLatestTurnNotEarlierTurn() throws Exception {
+        String repeatedGoal = "Please transcribe the attached audio and answer using its spoken content.";
+        ChatHistoryAssembler historyAssembler = mock(ChatHistoryAssembler.class);
+        when(historyAssembler.assemble(eq("sess-1"), eq(repeatedGoal), anyList()))
+                .thenReturn(List.of(
+                        UserMessage.userMessage(repeatedGoal),
+                        AiMessage.aiMessage("Turn 1 response"),
+                        UserMessage.userMessage(repeatedGoal)));
+
+        ReasoningMessageAssembler assembler = createAssembler(historyAssembler);
+
+        LlmProviderPort mockLlmPort = mock(LlmProviderPort.class);
+        when(mockLlmPort.multimodalCapability(any()))
+                .thenReturn(MultimodalCapabilities.defaultCapabilityForModel("openai", "gpt-4o"));
+
+        Instance<LlmProviderPort> instanceMock = mock(Instance.class);
+        when(instanceMock.isUnsatisfied()).thenReturn(false);
+        when(instanceMock.get()).thenReturn(mockLlmPort);
+        injectField(assembler, "llmProviderPortInstance", instanceMock);
+
+        MediaDownloadPort downloadPort = (attachment, _, approved) -> DownloadedMedia.ofInline(
+                attachment.attachmentId(),
+                attachment.type(),
+                attachment.mimeType(),
+                attachment.fileName(),
+                attachment.inlineData());
+        Instance<MediaDownloadPort> mediaInstance = mock(Instance.class);
+        when(mediaInstance.isResolvable()).thenReturn(true);
+        when(mediaInstance.isUnsatisfied()).thenReturn(false);
+        when(mediaInstance.get()).thenReturn(downloadPort);
+        injectField(assembler, "mediaDownloadPortInstance", mediaInstance);
+
+        MediaAttachment att = new MediaAttachment(
+                "att-current", AttachmentType.IMAGE, "image/png", "img.png", 3L, null, new byte[] {1, 2, 3}, Map.of());
+
+        AgentExecutionContext context = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coordinator",
+                repeatedGoal,
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "123",
+                null,
+                Map.of(),
+                List.of(att));
+
+        ReasoningMessageAssembler.AssembledMessages result = assembler.assemble(
+                context, "coordinator", repeatedGoal, List.of(), "system prompt", Set.of(), false, false, false, null);
+
+        List<UserMessage> userMessages = result.messages().stream()
+                .filter(UserMessage.class::isInstance)
+                .map(UserMessage.class::cast)
+                .toList();
+
+        assertEquals(2, userMessages.size(), "Expected exactly 2 UserMessages in assembled messages");
+        // Turn 1 (earlier turn) must retain original plain text without media attachment
+        assertEquals(repeatedGoal, userMessages.get(0).singleText());
+        assertFalse(userMessages.get(0).contents().stream().anyMatch(ImageContent.class::isInstance));
+        // Turn 2 (current turn) must have the image attachment attached
+        assertTrue(
+                userMessages.get(1).contents().stream().anyMatch(ImageContent.class::isInstance),
+                "Latest turn must contain the media attachment");
+    }
 }

@@ -44,6 +44,7 @@ public class BootstrapOrchestrator {
 
         SandboxValidator.validateSandboxTools(binaryDir);
         MandatoryConfigValidator.validateMandatoryConfig();
+        LocalModelValidator.validateLocalModels(binaryDir, args);
 
         InteractiveSetupWizard.run(binaryDir, args);
         PlaywrightSetupPrompter.promptPlaywrightSetupIfNeeded(binaryDir);
