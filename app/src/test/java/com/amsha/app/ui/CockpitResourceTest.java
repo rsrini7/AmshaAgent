@@ -107,6 +107,37 @@ class CockpitResourceTest {
     }
 
     @Test
+    void symbolicateInternalUserPassesTrueToService() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        SafeSymbolMetadata internalMeta = SafeSymbolMetadata.internalMetadata(
+                "ToolInvocationGuard",
+                "station_05_tool_guard",
+                "Tool Guard Check",
+                "hash123",
+                "Governance",
+                "§4.12 Guard Invariant");
+        when(symbolicationService.symbolicate("ToolInvocationGuard", true)).thenReturn(Optional.of(internalMeta));
+
+        Response response = resource.symbolicate("ToolInvocationGuard");
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals(internalMeta, response.getEntity());
+        verify(symbolicationService).symbolicate("ToolInvocationGuard", true);
+    }
+
+    @Test
+    void symbolicatePathTraversalOrArbitrarySourceReturnsNotFound() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        when(symbolicationService.symbolicate("../../etc/passwd", true)).thenReturn(Optional.empty());
+        when(symbolicationService.symbolicate("class Malicious { ... }", true)).thenReturn(Optional.empty());
+
+        Response response1 = resource.symbolicate("../../etc/passwd");
+        assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response1.getStatus());
+
+        Response response2 = resource.symbolicate("class Malicious { ... }");
+        assertEquals(Response.Status.NOT_FOUND.getStatusCode(), response2.getStatus());
+    }
+
+    @Test
     void listRunsSessionNotFoundReturns404() {
         when(sessionCatalogStore.bySessionId("missing-session")).thenReturn(Optional.empty());
 
