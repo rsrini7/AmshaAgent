@@ -55,6 +55,12 @@ in the existing Lit UI. Concretely:
    transform and opacity transitions are already handled natively by existing CSS. Calm SVG/CSS
    is confirmed as the permanent visual representation, avoiding third-party licensing risks,
    memory lifecycle leaks, and bundle bloat.
+9. **Optional local offline Whisper transcription (Issue 10).** Evaluated in-process local Whisper
+   transcription under strict evidence gates (local model provisioning, zero network egress,
+   reproducible STFT/mel feature extraction, encoder-decoder session leasing, and no transaction leakage).
+   The evaluation concluded with **Deferred**: existing OMLX audio transcription remains an external HTTP
+   provider integration and is not in-process Whisper. In-process local Whisper is held in the evidence registry
+   until a pinned model bundle, audio DSP pipeline, and seq2seq ONNX runner are provisioned.
 
 ## 3. Alternatives Rejected
 
@@ -70,6 +76,9 @@ in the existing Lit UI. Concretely:
   non-fabricating target exists for MotionPath in discrete agent stage transitions; compositor-eligible
   transform and opacity transitions are already handled natively by CSS without bundle size,
   licensing, or lifecycle risks.
+- **Equating external OMLX STT with local in-process Whisper**: rejected — outbound HTTP audio
+  transcription requires an external provider service; in-process local Whisper requires pinned local ONNX
+  weights, STFT/mel feature extraction, and zero-egress verification.
 
 ## 4. Consequences
 
