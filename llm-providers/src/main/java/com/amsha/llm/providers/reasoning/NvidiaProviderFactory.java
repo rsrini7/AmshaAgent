@@ -66,8 +66,9 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
 
     private ChatModel doCreate(String modelName) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Nvidia requires AMSHA_NVIDIA_API_KEY"));
+        String cleanKey = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
         List<MultiModelChatModel.ModelEntry> entries =
-                ChatModelFactory.buildMultiModelEntries(key, modelName, "nvidia", (k, m) -> {
+                ChatModelFactory.buildMultiModelEntries(cleanKey, modelName, "nvidia", (k, m) -> {
                     ChatModel raw = new NvidiaMessageSanitizer(ChatModelFactory.createOpenAi(
                             baseUrl,
                             k,

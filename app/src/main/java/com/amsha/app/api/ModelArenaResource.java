@@ -312,7 +312,9 @@ public class ModelArenaResource {
             int outTokens;
             int inTokens = ModelArenaHelper.estimateTokens(prompt);
             if (response != null && response.aiMessage() != null) {
-                output = response.aiMessage().text();
+                output = response.aiMessage().text() != null
+                        ? response.aiMessage().text()
+                        : "";
                 outTokens =
                         (response.tokenUsage() != null && response.tokenUsage().outputTokenCount() != null)
                                 ? response.tokenUsage().outputTokenCount()
@@ -334,6 +336,9 @@ public class ModelArenaResource {
                 return new ArenaModelResult(slot, "ARENA_REDACTION_UNAVAILABLE", 0, 0, durationMs, 0.0);
             }
             String safeOutput = traceRedactor.redactText(output, 2048);
+            if (safeOutput == null) {
+                safeOutput = "";
+            }
 
             // Estimated USD – placeholder rates based on common blended token pricing
             double cost = (inTokens * 0.0000015) + (outTokens * 0.000002);

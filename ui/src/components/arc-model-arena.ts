@@ -719,9 +719,10 @@ export class ArcModelArena extends LitElement {
             </div>
             <div class="results-grid">
               ${this._response.results.map((res) => {
-                const isEvaluating = res.output === 'Evaluating...';
-                const isTimeout = res.output.includes('TIMEOUT');
-                const isError = !isTimeout && (res.output.includes('ERROR') || res.output.startsWith('PROVIDER_'));
+                const outputStr = res.output ?? '';
+                const isEvaluating = outputStr === 'Evaluating...';
+                const isTimeout = outputStr.includes('TIMEOUT');
+                const isError = !isTimeout && (outputStr.includes('ERROR') || outputStr.startsWith('PROVIDER_'));
 
                 return html`
                   <div class="model-card">

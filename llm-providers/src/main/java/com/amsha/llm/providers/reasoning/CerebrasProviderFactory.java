@@ -65,8 +65,9 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
 
     private ChatModel doCreate(String modelName) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Cerebras requires AMSHA_CEREBRAS_API_KEY"));
+        String cleanKey = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
         List<MultiModelChatModel.ModelEntry> entries =
-                ChatModelFactory.buildMultiModelEntries(key, modelName, "cerebras", (k, m) -> {
+                ChatModelFactory.buildMultiModelEntries(cleanKey, modelName, "cerebras", (k, m) -> {
                     ChatModel raw = ChatModelFactory.createOpenAi(
                             baseUrl,
                             k,

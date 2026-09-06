@@ -5,6 +5,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Duration;
+import java.util.Map;
 
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
@@ -30,11 +31,14 @@ public class OpenCodeLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public ChatModel create(LlmModelConfig config) {
+        String cleanKey = config.apiKey()
+                .orElseThrow(() ->
+                        new IllegalStateException("OpenCode provider requires an API key (AMSHA_OPENCODE_API_KEY)"))
+                .replaceAll("[\\p{Cntrl}\\s\"']", "")
+                .trim();
         var builder = ChatModelFactory.openAiBuilder(
                 config.baseUrl(),
-                config.apiKey()
-                        .orElseThrow(() -> new IllegalStateException(
-                                "OpenCode provider requires an API key (AMSHA_OPENCODE_API_KEY)")),
+                cleanKey,
                 config.modelName(),
                 config.maxTokens().orElse(null),
                 config.timeout().orElse(Duration.ofSeconds(30)),
@@ -42,6 +46,7 @@ public class OpenCodeLlmProviderFactory implements RoutingChatModelProvider {
                 0.0,
                 false,
                 false);
+        builder.customHeaders(Map.of("User-Agent", "AmshaAgent/1.0"));
 
         ChatModelFactory.applyJsonResponseFormat(
                 builder, config.structuredOutputMode(), config.toolless(), config.baseUrl());

@@ -46,8 +46,8 @@ public final class ModelDefaults {
     public static final String DEFAULT_OLLAMA_MODEL = "mistral-small:latest";
     public static final String DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5";
     public static final String DEFAULT_CLAUDE_CODE_MODEL = "claude-sonnet-4-5";
-    public static final String DEFAULT_OPENROUTER_MODEL = "openai/gpt-oss-20b:free";
-    public static final String DEFAULT_NVIDIA_MODEL = "bytedance/seed-oss-36b-instruct";
+    public static final String DEFAULT_OPENROUTER_MODEL = "minimax/minimax-m3:free";
+    public static final String DEFAULT_NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct";
     public static final String DEFAULT_CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
     public static final String DEFAULT_SARVAM_MODEL = "sarvam-105b";
     public static final String DEFAULT_OPENCODE_MODEL = "deepseek-v4-flash-free";

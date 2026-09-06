@@ -28,11 +28,14 @@ public class CerebrasLlmProviderFactory implements RoutingChatModelProvider {
 
     @Override
     public ChatModel create(LlmModelConfig config) {
+        String cleanKey = config.apiKey()
+                .orElseThrow(() ->
+                        new IllegalStateException("Cerebras provider requires an API key (AMSHA_CEREBRAS_API_KEY)"))
+                .replaceAll("[\\p{Cntrl}\\s\"']", "")
+                .trim();
         var builder = ChatModelFactory.openAiBuilder(
                 config.baseUrl(),
-                config.apiKey()
-                        .orElseThrow(() ->
-                                new IllegalStateException("Cerebras provider requires an API key (AMSHA_LLM_API_KEY)")),
+                cleanKey,
                 config.modelName(),
                 config.maxTokens().orElse(null),
                 config.timeout().orElse(Duration.ofSeconds(30)),

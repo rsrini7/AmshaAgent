@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.routing.CapabilityAwareChatModel;
@@ -66,9 +67,10 @@ public class OpenCodeProviderFactory implements AgentChatModelProvider {
 
     private ChatModel createModel(String model) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("OpenCode requires AMSHA_OPENCODE_API_KEY"));
+        String cleanKey = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key, model, ModelDefaults.PROVIDER_OPENCODE, (entryKey, entryModel) -> {
-                    ChatModel raw = ChatModelFactory.createOpenAi(
+                cleanKey, model, ModelDefaults.PROVIDER_OPENCODE, (entryKey, entryModel) -> {
+                    var builder = ChatModelFactory.openAiBuilder(
                             baseUrl,
                             entryKey,
                             entryModel,
@@ -76,7 +78,10 @@ public class OpenCodeProviderFactory implements AgentChatModelProvider {
                             agentConfig.timeout(),
                             agentConfig.maxRetries(),
                             agentConfig.temperature(),
-                            agentConfig.logHttp());
+                            agentConfig.logHttp(),
+                            false);
+                    builder.customHeaders(Map.of("User-Agent", "AmshaAgent/1.0"));
+                    ChatModel raw = builder.build();
                     MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel(
                             ModelDefaults.PROVIDER_OPENCODE, entryModel);
                     return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
