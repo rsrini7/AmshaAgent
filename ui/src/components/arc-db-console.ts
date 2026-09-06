@@ -110,6 +110,9 @@ export class ArcDbConsole extends LitElement {
       background: var(--bg-base, #0a0b0f);
       color: var(--text-primary, #ffffff);
       overflow-y: auto;
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
     }
 
     .header {
@@ -387,6 +390,10 @@ export class ArcDbConsole extends LitElement {
       gap: 10px;
       flex: 1;
       min-height: 0;
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .meta-bar {
@@ -415,15 +422,43 @@ export class ArcDbConsole extends LitElement {
 
     .table-container {
       flex: 1;
-      min-height: 0;
-      overflow: auto;
+      min-height: 250px;
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
+      overflow-x: auto;
+      overflow-y: auto;
       background: var(--bg-surface, #131722);
       border: 1px solid var(--border, #242938);
       border-radius: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--accent, #6c63ff) 35%, var(--border, #242938)) var(--bg-surface, #131722);
+    }
+
+    .table-container::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    .table-container::-webkit-scrollbar-track {
+      background: var(--bg-surface, #131722);
+      border-radius: 4px;
+    }
+
+    .table-container::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--accent, #6c63ff) 35%, var(--border, #242938));
+      border-radius: 4px;
+      border: 2px solid var(--bg-surface, #131722);
+    }
+
+    .table-container::-webkit-scrollbar-thumb:hover {
+      background: var(--accent, #6c63ff);
     }
 
     table {
-      width: 100%;
+      width: max-content;
+      min-width: 100%;
       border-collapse: collapse;
       font-size: 12px;
       font-family: monospace;
@@ -439,13 +474,14 @@ export class ArcDbConsole extends LitElement {
       color: var(--text-muted, #8b949e);
       font-weight: 600;
       white-space: nowrap;
+      z-index: 2;
     }
 
     td {
       padding: 6px 12px;
       border-bottom: 1px solid color-mix(in srgb, var(--border, #242938) 50%, transparent);
       white-space: nowrap;
-      max-width: 300px;
+      max-width: 400px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
@@ -690,7 +726,7 @@ export class ArcDbConsole extends LitElement {
                     ${(this._response.rows || []).map(
                       (row) => html`
                         <tr>
-                          ${(row || []).map((val) => html`<td>${val === null ? 'NULL' : String(val)}</td>`)}
+                          ${(row || []).map((val) => html`<td title="${val === null ? 'NULL' : String(val)}">${val === null ? 'NULL' : String(val)}</td>`)}
                         </tr>
                       `
                     )}

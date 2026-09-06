@@ -224,6 +224,31 @@ describe('ArcDbConsole Component & Fallback Behavior (Issue 13)', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('configures horizontal scrollbar, max-content table sizing, and cell tooltips for wide result grids', () => {
+    // Assert CSS contains required rules for horizontal scrollbar without flex blowout
+    const cssText = ArcDbConsole.styles.toString();
+    expect(cssText).toContain('overflow-x: auto');
+    expect(cssText).toContain('width: max-content');
+    expect(cssText).toContain('min-width: 0');
+    expect(cssText).toContain('scrollbar-width: thin');
+
+    // Assert rendered table assigns title tooltip to cells for truncated values
+    const consoleComp = new ArcDbConsole();
+    (consoleComp as any)._response = {
+      columns: ['id', 'session_id', 'workspace_id', 'model', 'prompt', 'response', 'created_at'],
+      rows: [
+        ['1', 'sess-abc', 'ws-default', 'sarvam-105b-conversations', 'Test prompt for checking scroll', 'Response data', '2026-09-06'],
+      ],
+      executionMs: 3,
+      truncated: false,
+    };
+    const rendered = consoleComp.render();
+    const str = JSON.stringify(rendered);
+    expect(str).toContain('table-container');
+    expect(str).toContain('sarvam-105b-conversations');
+    expect(str).toContain('title');
+  });
 });
 
 describe('ArcModelArena Component & Fallback Behavior (Issue 13)', () => {
