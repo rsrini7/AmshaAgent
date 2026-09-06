@@ -4,6 +4,43 @@ import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { ArcClient, ArcApiError, ArenaCompareResponse, ArenaModelResult } from '../api/client';
 
+interface ArenaProvider {
+  id: string;
+  name: string;
+  category: string;
+  defaultModel: string;
+}
+
+const ARENA_PROVIDERS: ArenaProvider[] = [
+  // Local / Self-Hosted
+  { id: 'omlx', name: 'OMLX (Apple Silicon MLX)', category: 'Local / Self-Hosted', defaultModel: 'mlx-community/Qwen3.6-35B-A3B-4bit' },
+  { id: 'ollama', name: 'Ollama (Local)', category: 'Local / Self-Hosted', defaultModel: 'mistral-small:latest' },
+  { id: 'llamacpp', name: 'llama.cpp Server', category: 'Local / Self-Hosted', defaultModel: 'qwen3' },
+
+  // Ultra-Fast Cloud
+  { id: 'groq', name: 'Groq (LPU)', category: 'Ultra-Fast Cloud', defaultModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
+  { id: 'cerebras', name: 'Cerebras (CS-3)', category: 'Ultra-Fast Cloud', defaultModel: 'qwen-3-235b-a22b-instruct-2507' },
+  { id: 'cloudflare', name: 'Cloudflare Workers AI', category: 'Ultra-Fast Cloud', defaultModel: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
+
+  // Frontier APIs
+  { id: 'openai', name: 'OpenAI', category: 'Frontier APIs', defaultModel: 'gpt-4o-mini' },
+  { id: 'gemini', name: 'Google Gemini', category: 'Frontier APIs', defaultModel: 'gemini-2.5-flash-lite' },
+  { id: 'anthropic', name: 'Anthropic Claude', category: 'Frontier APIs', defaultModel: 'claude-haiku-4-5' },
+  { id: 'mistral', name: 'Mistral AI', category: 'Frontier APIs', defaultModel: 'codestral-latest' },
+  { id: 'nvidia', name: 'NVIDIA NIM', category: 'Frontier APIs', defaultModel: 'bytedance/seed-oss-36b-instruct' },
+  { id: 'cohere', name: 'Cohere Command', category: 'Frontier APIs', defaultModel: 'command-r-plus-08-2024' },
+
+  // Aggregators & Gateways
+  { id: 'generic-openai', name: 'Generic OpenAI Gateway', category: 'Aggregators & Gateways', defaultModel: 'gpt-4o-mini' },
+  { id: 'openrouter', name: 'OpenRouter', category: 'Aggregators & Gateways', defaultModel: 'openai/gpt-oss-20b:free' },
+  { id: 'sarvam', name: 'Sarvam AI (Indic)', category: 'Aggregators & Gateways', defaultModel: 'sarvam-105b' },
+  { id: 'opencode', name: 'OpenCode Zen', category: 'Aggregators & Gateways', defaultModel: 'deepseek-v4-flash-free' },
+  { id: 'huggingface', name: 'Hugging Face Router', category: 'Aggregators & Gateways', defaultModel: 'meta-llama/Llama-3.3-70B-Instruct' },
+  { id: 'foundry', name: 'Foundry (Local/VLLM)', category: 'Aggregators & Gateways', defaultModel: 'qwen3-14b' },
+];
+
+const POPULAR_SLOTS = ['omlx', 'groq', 'cerebras', 'generic-openai', 'openai', 'gemini', 'anthropic'];
+
 @customElement('arc-model-arena')
 export class ArcModelArena extends LitElement {
   @consume({ context: arcContext, subscribe: true })
@@ -14,12 +51,14 @@ export class ArcModelArena extends LitElement {
   @property({ type: Array }) selectedModels: string[] = ['omlx', 'generic-openai'];
   @property({ type: Number }) maxTokens = 512;
 
-  @state() private _availableSlots = ['omlx', 'generic-openai', 'cerebras', 'groq'];
+  @state() private _availableSlots = POPULAR_SLOTS;
   @state() private _loading = false;
   @state() private _error: string | null = null;
   @state() private _isUnavailable = false;
   @state() private _authStatus: 401 | 403 | null = null;
   @state() private _response: ArenaCompareResponse | null = null;
+  @state() private _customSlot = '';
+  @state() private _slotError: string | null = null;
 
   static styles = css`
     :host {
@@ -105,6 +144,127 @@ export class ArcModelArena extends LitElement {
       background: color-mix(in srgb, var(--accent, #6c63ff) 20%, transparent);
       color: var(--text-primary, #ffffff);
       font-weight: 600;
+    }
+
+    .active-models-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .active-models-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .active-model-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--accent, #6c63ff);
+      background: color-mix(in srgb, var(--accent, #6c63ff) 18%, transparent);
+      color: #ffffff;
+      font-size: 12px;
+      font-family: monospace;
+      font-weight: 600;
+    }
+
+    .remove-tag-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted, #8b949e);
+      cursor: pointer;
+      padding: 0 2px;
+      font-size: 14px;
+      line-height: 1;
+      border-radius: 3px;
+    }
+
+    .remove-tag-btn:hover:not(:disabled) {
+      color: #ef4444;
+    }
+
+    .remove-tag-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .slot-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border, #242938);
+    }
+
+    .provider-dropdown {
+      padding: 5px 8px;
+      font-size: 12px;
+      background: var(--bg-elevated, #1a202c);
+      border: 1px solid var(--border, #242938);
+      color: var(--text-primary, #ffffff);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .provider-dropdown:focus {
+      border-color: var(--accent, #6c63ff);
+      outline: none;
+    }
+
+    .custom-slot-form {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .custom-slot-input {
+      background: var(--bg-elevated, #1a202c);
+      border: 1px solid var(--border, #242938);
+      color: var(--text-primary, #ffffff);
+      padding: 5px 8px;
+      font-size: 12px;
+      border-radius: 6px;
+      font-family: monospace;
+      min-width: 240px;
+    }
+
+    .custom-slot-input:focus {
+      border-color: var(--accent, #6c63ff);
+      outline: none;
+    }
+
+    .add-slot-btn {
+      padding: 5px 10px;
+      font-size: 11px;
+      background: color-mix(in srgb, var(--accent, #6c63ff) 20%, transparent);
+      border: 1px solid var(--accent, #6c63ff);
+      color: #ffffff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .add-slot-btn:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--accent, #6c63ff) 35%, transparent);
+    }
+
+    .add-slot-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .slot-error {
+      font-size: 11px;
+      color: #f59e0b;
     }
 
     textarea {
@@ -268,6 +428,7 @@ export class ArcModelArena extends LitElement {
   `;
 
   private _toggleModel(slot: string) {
+    this._slotError = null;
     if (this.selectedModels.includes(slot)) {
       if (this.selectedModels.length > 1) {
         this.selectedModels = this.selectedModels.filter((m) => m !== slot);
@@ -275,8 +436,56 @@ export class ArcModelArena extends LitElement {
     } else {
       if (this.selectedModels.length < 3) {
         this.selectedModels = [...this.selectedModels, slot];
+      } else {
+        this._slotError = 'Maximum of 3 models can be benchmarked at once';
       }
     }
+  }
+
+  private _removeModel(slot: string) {
+    this._slotError = null;
+    if (this.selectedModels.length > 1) {
+      this.selectedModels = this.selectedModels.filter((m) => m !== slot);
+    }
+  }
+
+  private _onSelectProvider(e: Event) {
+    const select = e.target as HTMLSelectElement;
+    const val = select.value;
+    if (!val) return;
+    this._toggleModel(val);
+    select.value = '';
+  }
+
+  private _addCustomSlot() {
+    this._slotError = null;
+    const raw = this._customSlot.trim();
+    if (!raw) return;
+
+    if (this.selectedModels.includes(raw)) {
+      this._slotError = `Model slot '${raw}' is already selected`;
+      return;
+    }
+
+    if (this.selectedModels.length >= 3) {
+      this._slotError = 'Maximum of 3 models can be benchmarked at once';
+      return;
+    }
+
+    const providerPart = raw.includes(':') ? raw.substring(0, raw.indexOf(':')) : raw;
+    const cleanProv = providerPart.trim().toLowerCase();
+    const isAllowed =
+      ARENA_PROVIDERS.some((p) => p.id === cleanProv) ||
+      POPULAR_SLOTS.includes(cleanProv) ||
+      cleanProv === 'default';
+
+    if (!isAllowed) {
+      this._slotError = `Unrecognized provider prefix '${cleanProv}'. Use an allowlisted provider.`;
+      return;
+    }
+
+    this.selectedModels = [...this.selectedModels, raw];
+    this._customSlot = '';
   }
 
   private _formatModelOutput(output: string): string {
@@ -378,7 +587,27 @@ export class ArcModelArena extends LitElement {
 
       <div class="config-box">
         <div class="model-selector">
-          <span class="section-label">Select Models (1 - 3):</span>
+          <div class="active-models-header">
+            <span class="section-label">Active Comparison Models (${this.selectedModels.length}/3 max):</span>
+            ${this._slotError ? html`<span class="slot-error">⚠️ ${this._slotError}</span>` : nothing}
+          </div>
+          <div class="active-models-bar">
+            ${this.selectedModels.map(
+              (m) => html`
+                <span class="active-model-tag">
+                  <span>${m}</span>
+                  <button
+                    class="remove-tag-btn"
+                    @click="${() => this._removeModel(m)}"
+                    title="Remove ${m}"
+                    ?disabled="${this.selectedModels.length <= 1}"
+                  >×</button>
+                </span>
+              `
+            )}
+          </div>
+
+          <span class="section-label" style="margin-top: 4px;">Quick Select:</span>
           <div class="model-chips">
             ${this._availableSlots.map(
               (slot) => html`
@@ -393,6 +622,54 @@ export class ArcModelArena extends LitElement {
                 </div>
               `
             )}
+          </div>
+
+          <div class="slot-controls">
+            <label style="font-size: 11px; color: var(--text-muted, #8b949e); display: flex; align-items: center; gap: 6px;">
+              <span>More Providers:</span>
+              <select class="provider-dropdown" @change="${this._onSelectProvider}">
+                <option value="">+ Add Provider from Catalog...</option>
+                ${['Local / Self-Hosted', 'Ultra-Fast Cloud', 'Frontier APIs', 'Aggregators & Gateways'].map(
+                  (cat) => html`
+                    <optgroup label="${cat}">
+                      ${ARENA_PROVIDERS.filter((p) => p.category === cat).map(
+                        (p) => html`
+                          <option
+                            value="${p.id}"
+                            ?disabled="${this.selectedModels.includes(p.id) || this.selectedModels.length >= 3}"
+                          >
+                            ${p.name} (${p.id})
+                          </option>
+                        `
+                      )}
+                    </optgroup>
+                  `
+                )}
+              </select>
+            </label>
+
+            <form
+              class="custom-slot-form"
+              @submit="${(e: Event) => {
+                e.preventDefault();
+                this._addCustomSlot();
+              }}"
+            >
+              <input
+                class="custom-slot-input"
+                type="text"
+                placeholder="Custom slot (e.g. groq:llama-3.3-70b-versatile)..."
+                .value="${this._customSlot}"
+                @input="${(e: Event) => (this._customSlot = (e.target as HTMLInputElement).value)}"
+              />
+              <button
+                type="submit"
+                class="add-slot-btn"
+                ?disabled="${!this._customSlot.trim() || this.selectedModels.length >= 3}"
+              >
+                + Add Slot
+              </button>
+            </form>
           </div>
         </div>
 

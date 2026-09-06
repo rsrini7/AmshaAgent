@@ -481,4 +481,57 @@ describe('ArcModelArena Component & Fallback Behavior (Issue 13)', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('supports schema catalog explorer in ArcDbConsole with categorized tables and PRAGMA queries', () => {
+    const consoleComp = new ArcDbConsole();
+    expect((consoleComp as any)._schemaCatalogOpen).toBe(false);
+
+    (consoleComp as any)._schemaCatalogOpen = true;
+    const rendered = consoleComp.render();
+    const str = JSON.stringify(rendered);
+
+    expect(str).toContain('Database Schema Explorer');
+    expect(str).toContain('Core Memory & Context');
+    expect(str).toContain('recall_messages');
+    expect(str).toContain('model_profile');
+    expect(str).toContain('execution_trace');
+
+    // Clicking a table sets PRAGMA table_info query
+    (consoleComp as any)._setQuery('PRAGMA table_info(model_profile);');
+    expect(consoleComp.sql).toBe('PRAGMA table_info(model_profile);');
+  });
+
+  it('allows adding and removing models via active tags, catalog dropdown, and custom slots in ArcModelArena', () => {
+    const arena = new ArcModelArena();
+    expect(arena.selectedModels).toEqual(['omlx', 'generic-openai']);
+
+    // Remove a model
+    (arena as any)._removeModel('generic-openai');
+    expect(arena.selectedModels).toEqual(['omlx']);
+
+    // Cannot remove the last remaining model
+    (arena as any)._removeModel('omlx');
+    expect(arena.selectedModels).toEqual(['omlx']);
+
+    // Add model via catalog dropdown handler
+    (arena as any)._onSelectProvider({ target: { value: 'anthropic' } } as any);
+    expect(arena.selectedModels).toContain('anthropic');
+
+    // Add valid custom model slot
+    (arena as any)._customSlot = 'groq:llama-3.3-70b-versatile';
+    (arena as any)._addCustomSlot();
+    expect(arena.selectedModels).toContain('groq:llama-3.3-70b-versatile');
+    expect(arena.selectedModels).toHaveLength(3);
+
+    // Attempting to add a 4th slot sets error
+    (arena as any)._customSlot = 'cerebras:llama3.1-8b';
+    (arena as any)._addCustomSlot();
+    expect((arena as any)._slotError).toContain('Maximum of 3 models');
+
+    // Invalid provider prefix is rejected
+    (arena as any)._removeModel('anthropic');
+    (arena as any)._customSlot = 'fake_provider:model-x';
+    (arena as any)._addCustomSlot();
+    expect((arena as any)._slotError).toContain('Unrecognized provider prefix');
+  });
 });

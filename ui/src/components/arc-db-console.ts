@@ -4,6 +4,84 @@ import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { ArcClient, ArcApiError, DbQueryResponse } from '../api/client';
 
+interface SchemaItem {
+  name: string;
+  type: 'view' | 'table';
+  query: string;
+  desc: string;
+}
+
+interface SchemaCategory {
+  title: string;
+  badge: string;
+  description: string;
+  items: SchemaItem[];
+}
+
+const DB_SCHEMA_CATALOG: SchemaCategory[] = [
+  {
+    title: 'Tenant Views (Queryable Rows)',
+    badge: 'Queryable Data',
+    description: 'Scoped to active workspace and session context with parameter injection',
+    items: [
+      { name: 'session_catalog_view', type: 'view', query: 'SELECT * FROM session_catalog_view LIMIT 20;', desc: 'Session catalog and agent lifecycle states' },
+      { name: 'session_history_view', type: 'view', query: 'SELECT * FROM session_history_view LIMIT 20;', desc: 'Conversation message history and user turns' },
+      { name: 'recent_traces_view', type: 'view', query: 'SELECT * FROM recent_traces_view LIMIT 20;', desc: 'Execution trace events and tool spans' },
+      { name: 'memory_chunks_view', type: 'view', query: 'SELECT * FROM memory_chunks_view LIMIT 20;', desc: 'Archival memory chunks and semantic blocks' },
+    ],
+  },
+  {
+    title: 'Core Memory & Context',
+    badge: 'Schema Only',
+    description: 'Physical memory tables — inspect structure with PRAGMA table_info',
+    items: [
+      { name: 'recall_messages', type: 'table', query: 'PRAGMA table_info(recall_messages);', desc: 'Message recall store' },
+      { name: 'chat_memory', type: 'table', query: 'PRAGMA table_info(chat_memory);', desc: 'Short-term conversational memory' },
+      { name: 'archival_chunks', type: 'table', query: 'PRAGMA table_info(archival_chunks);', desc: 'Long-term vector/FTS chunks' },
+      { name: 'core_memory_blocks', type: 'table', query: 'PRAGMA table_info(core_memory_blocks);', desc: 'Working memory block state' },
+      { name: 'compaction_summary', type: 'table', query: 'PRAGMA table_info(compaction_summary);', desc: 'Context compaction history' },
+      { name: 'extracted_memories', type: 'table', query: 'PRAGMA table_info(extracted_memories);', desc: 'Extracted semantic facts' },
+    ],
+  },
+  {
+    title: 'Agent Execution & Scheduling',
+    badge: 'Schema Only',
+    description: 'Execution lifecycle, checkpoints, cron schedules, and skills',
+    items: [
+      { name: 'execution_trace', type: 'table', query: 'PRAGMA table_info(execution_trace);', desc: 'Execution span logs' },
+      { name: 'agent_checkpoint', type: 'table', query: 'PRAGMA table_info(agent_checkpoint);', desc: 'Agent loop state checkpoints' },
+      { name: 'agent_cron', type: 'table', query: 'PRAGMA table_info(agent_cron);', desc: 'Scheduled cron tasks' },
+      { name: 'agent_cron_run', type: 'table', query: 'PRAGMA table_info(agent_cron_run);', desc: 'Cron run history and results' },
+      { name: 'agent_skill', type: 'table', query: 'PRAGMA table_info(agent_skill);', desc: 'Registered agent skills' },
+      { name: 'reasoning_step', type: 'table', query: 'PRAGMA table_info(reasoning_step);', desc: 'Step-by-step reasoning steps' },
+    ],
+  },
+  {
+    title: 'Models, Routing & Prompt Registry',
+    badge: 'Schema Only',
+    description: 'LLM connections, persona route assignments, and prompt versions',
+    items: [
+      { name: 'model_profile', type: 'table', query: 'PRAGMA table_info(model_profile);', desc: 'Configured LLM model profiles' },
+      { name: 'model_route_assignment', type: 'table', query: 'PRAGMA table_info(model_route_assignment);', desc: 'Persona model assignments' },
+      { name: 'llm_connection', type: 'table', query: 'PRAGMA table_info(llm_connection);', desc: 'Configured LLM endpoints' },
+      { name: 'prompt_registry', type: 'table', query: 'PRAGMA table_info(prompt_registry);', desc: 'System and persona prompts' },
+    ],
+  },
+  {
+    title: 'Identity, Workspace & Security',
+    badge: 'Schema Only',
+    description: 'Workspaces, user accounts, security audit trail, and migrations',
+    items: [
+      { name: 'identity_workspace', type: 'table', query: 'PRAGMA table_info(identity_workspace);', desc: 'Workspace tenancy records' },
+      { name: 'identity_user', type: 'table', query: 'PRAGMA table_info(identity_user);', desc: 'User principal accounts' },
+      { name: 'workspace_membership', type: 'table', query: 'PRAGMA table_info(workspace_membership);', desc: 'User-workspace memberships' },
+      { name: 'audit_event', type: 'table', query: 'PRAGMA table_info(audit_event);', desc: 'Security audit events' },
+      { name: 'bootstrap_state', type: 'table', query: 'PRAGMA table_info(bootstrap_state);', desc: 'Bootstrap initialization state' },
+      { name: 'flyway_schema_history', type: 'table', query: 'PRAGMA table_info(flyway_schema_history);', desc: 'Database migration history' },
+    ],
+  },
+];
+
 @customElement('arc-db-console')
 export class ArcDbConsole extends LitElement {
   @consume({ context: arcContext, subscribe: true })
@@ -18,6 +96,8 @@ export class ArcDbConsole extends LitElement {
   @state() private _isUnavailable = false;
   @state() private _authStatus: 401 | 403 | null = null;
   @state() private _response: DbQueryResponse | null = null;
+  @state() private _schemaCatalogOpen = false;
+  @state() private _schemaFilter = '';
 
   static styles = css`
     :host {
@@ -89,6 +169,129 @@ export class ArcDbConsole extends LitElement {
 
     .quick-btn:hover {
       background: color-mix(in srgb, var(--accent, #6c63ff) 25%, transparent);
+    }
+
+    .catalog-toggle-btn {
+      background: color-mix(in srgb, var(--accent, #6c63ff) 18%, transparent);
+      border: 1px solid var(--accent, #6c63ff);
+      color: #ffffff;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-left: auto;
+    }
+
+    .catalog-toggle-btn:hover {
+      background: color-mix(in srgb, var(--accent, #6c63ff) 35%, transparent);
+    }
+
+    .schema-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--bg-surface, #131722);
+      border: 1px solid var(--border, #242938);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 4px;
+    }
+
+    .schema-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .schema-search {
+      background: var(--bg-elevated, #1a202c);
+      border: 1px solid var(--border, #242938);
+      color: var(--text-primary, #ffffff);
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 4px;
+      outline: none;
+      min-width: 200px;
+    }
+
+    .schema-search:focus {
+      border-color: var(--accent, #6c63ff);
+    }
+
+    .schema-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+
+    .schema-group {
+      background: var(--bg-elevated, #1a202c);
+      border: 1px solid var(--border, #242938);
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .schema-group-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent, #6c63ff);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .schema-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .table-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: color-mix(in srgb, var(--bg-surface, #131722) 80%, transparent);
+      border: 1px solid var(--border, #242938);
+      color: var(--text-muted, #8b949e);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: monospace;
+      cursor: pointer;
+    }
+
+    .table-tag:hover {
+      border-color: var(--accent, #6c63ff);
+      color: var(--text-primary, #ffffff);
+    }
+
+    .table-tag.view {
+      border-color: color-mix(in srgb, #10b981 40%, transparent);
+      color: #10b981;
+      background: color-mix(in srgb, #10b981 10%, transparent);
+    }
+
+    .table-tag.view:hover {
+      background: color-mix(in srgb, #10b981 20%, transparent);
+    }
+
+    .schema-notice {
+      font-size: 11px;
+      color: var(--text-muted, #8b949e);
+      background: color-mix(in srgb, var(--bg-elevated, #1a202c) 60%, transparent);
+      padding: 6px 10px;
+      border-radius: 4px;
+      border-left: 3px solid var(--accent, #6c63ff);
+      line-height: 1.4;
     }
 
     textarea {
@@ -362,7 +565,72 @@ export class ArcDbConsole extends LitElement {
           <button class="quick-btn" @click="${() => this._setQuery('PRAGMA table_info(session_catalog);')}">
             table_info
           </button>
+          <button
+            class="catalog-toggle-btn"
+            @click="${() => (this._schemaCatalogOpen = !this._schemaCatalogOpen)}"
+            aria-expanded="${this._schemaCatalogOpen}"
+          >
+            <span>${this._schemaCatalogOpen ? '▲ Hide Schema Catalog' : '📖 All Tables & Views'}</span>
+          </button>
         </div>
+
+        ${this._schemaCatalogOpen
+          ? html`
+              <div class="schema-panel">
+                <div class="schema-panel-header">
+                  <span style="font-size: 12px; font-weight: 700; color: #fff;">
+                    Database Schema Explorer (60+ Tables & Views)
+                  </span>
+                  <input
+                    class="schema-search"
+                    type="text"
+                    placeholder="Filter tables/views..."
+                    .value="${this._schemaFilter}"
+                    @input="${(e: Event) =>
+                      (this._schemaFilter = (e.target as HTMLInputElement).value)}"
+                  />
+                </div>
+                <div class="schema-notice">
+                  🔒 <strong>Tenant Isolation Invariant</strong>: Direct <code>SELECT</code> on raw data tables is restricted to prevent cross-tenant data leakage. Use the allowlisted parameterized views (<code>*_view</code>) for row queries, or click any table to inspect its column schema via <code>PRAGMA table_info(table)</code>.
+                </div>
+                <div class="schema-grid">
+                  ${DB_SCHEMA_CATALOG.map((cat) => {
+                    const filter = this._schemaFilter.trim().toLowerCase();
+                    const filteredItems = filter
+                      ? cat.items.filter(
+                          (i) =>
+                            i.name.toLowerCase().includes(filter) ||
+                            i.desc.toLowerCase().includes(filter)
+                        )
+                      : cat.items;
+                    if (filteredItems.length === 0) return nothing;
+                    return html`
+                      <div class="schema-group">
+                        <div class="schema-group-title">
+                          <span>${cat.title}</span>
+                          <span style="font-size: 10px; opacity: 0.8; font-weight: normal;">${cat.badge}</span>
+                        </div>
+                        <div class="schema-items">
+                          ${filteredItems.map(
+                            (item) => html`
+                              <button
+                                class="table-tag ${item.type === 'view' ? 'view' : ''}"
+                                @click="${() => this._setQuery(item.query)}"
+                                title="${item.desc} (${item.query})"
+                              >
+                                <span>${item.type === 'view' ? '👁' : '📋'}</span>
+                                <span>${item.name}</span>
+                              </button>
+                            `
+                          )}
+                        </div>
+                      </div>
+                    `;
+                  })}
+                </div>
+              </div>
+            `
+          : nothing}
 
         <textarea
           .value="${this.sql}"
