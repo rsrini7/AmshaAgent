@@ -42,7 +42,7 @@ class ModelDefaultsResourceUnitTest {
         Response response = resource.getDefaultForProvider("sarvam");
         assertEquals(200, response.getStatus());
         Map<?, ?> map = (Map<?, ?>) response.getEntity();
-        assertEquals("sarvam-105b", map.get("defaultModel"));
+        assertEquals("sarvam-105b-conversations", map.get("defaultModel"));
         assertEquals("https://api.sarvam.ai/v1", map.get("defaultBaseUrl"));
     }
 

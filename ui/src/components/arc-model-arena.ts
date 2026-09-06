@@ -19,7 +19,7 @@ const ARENA_PROVIDERS: ArenaProvider[] = [
 
   // Ultra-Fast Cloud
   { id: 'groq', name: 'Groq (LPU)', category: 'Ultra-Fast Cloud', defaultModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
-  { id: 'cerebras', name: 'Cerebras (CS-3)', category: 'Ultra-Fast Cloud', defaultModel: 'qwen-3-235b-a22b-instruct-2507' },
+  { id: 'cerebras', name: 'Cerebras (CS-3)', category: 'Ultra-Fast Cloud', defaultModel: 'qwen-3.8-27b' },
   { id: 'cloudflare', name: 'Cloudflare Workers AI', category: 'Ultra-Fast Cloud', defaultModel: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
 
   // Frontier APIs
@@ -27,14 +27,14 @@ const ARENA_PROVIDERS: ArenaProvider[] = [
   { id: 'gemini', name: 'Google Gemini', category: 'Frontier APIs', defaultModel: 'gemini-2.5-flash-lite' },
   { id: 'anthropic', name: 'Anthropic Claude', category: 'Frontier APIs', defaultModel: 'claude-haiku-4-5' },
   { id: 'mistral', name: 'Mistral AI', category: 'Frontier APIs', defaultModel: 'codestral-latest' },
-  { id: 'nvidia', name: 'NVIDIA NIM', category: 'Frontier APIs', defaultModel: 'bytedance/seed-oss-36b-instruct' },
+  { id: 'nvidia', name: 'NVIDIA NIM', category: 'Frontier APIs', defaultModel: 'meta/llama-3.2-11b-vision-instruct' },
   { id: 'cohere', name: 'Cohere Command', category: 'Frontier APIs', defaultModel: 'command-r-plus-08-2024' },
 
   // Aggregators & Gateways
   { id: 'generic-openai', name: 'Generic OpenAI Gateway', category: 'Aggregators & Gateways', defaultModel: 'gpt-4o-mini' },
-  { id: 'openrouter', name: 'OpenRouter', category: 'Aggregators & Gateways', defaultModel: 'openai/gpt-oss-20b:free' },
-  { id: 'sarvam', name: 'Sarvam AI (Indic)', category: 'Aggregators & Gateways', defaultModel: 'sarvam-105b' },
-  { id: 'opencode', name: 'OpenCode Zen', category: 'Aggregators & Gateways', defaultModel: 'deepseek-v4-flash-free' },
+  { id: 'openrouter', name: 'OpenRouter', category: 'Aggregators & Gateways', defaultModel: 'minimax/minimax-m3:free' },
+  { id: 'sarvam', name: 'Sarvam AI (Indic)', category: 'Aggregators & Gateways', defaultModel: 'sarvam-105b-conversations' },
+  { id: 'opencode', name: 'OpenCode Zen', category: 'Aggregators & Gateways', defaultModel: 'nemotron-3.5-lightning-free' },
   { id: 'huggingface', name: 'Hugging Face Router', category: 'Aggregators & Gateways', defaultModel: 'meta-llama/Llama-3.3-70B-Instruct' },
   { id: 'foundry', name: 'Foundry (Local/VLLM)', category: 'Aggregators & Gateways', defaultModel: 'qwen3-14b' },
 ];

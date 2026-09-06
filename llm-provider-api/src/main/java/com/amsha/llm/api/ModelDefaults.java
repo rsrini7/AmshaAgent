@@ -48,8 +48,8 @@ public final class ModelDefaults {
     public static final String DEFAULT_CLAUDE_CODE_MODEL = "claude-sonnet-4-5";
     public static final String DEFAULT_OPENROUTER_MODEL = "minimax/minimax-m3:free";
     public static final String DEFAULT_NVIDIA_MODEL = "meta/llama-3.2-11b-vision-instruct";
-    public static final String DEFAULT_CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
-    public static final String DEFAULT_SARVAM_MODEL = "sarvam-105b";
+    public static final String DEFAULT_CEREBRAS_MODEL = "qwen-3.8-27b";
+    public static final String DEFAULT_SARVAM_MODEL = "sarvam-105b-conversations";
     public static final String DEFAULT_OPENCODE_MODEL = "deepseek-v4-flash-free";
     public static final String DEFAULT_HUGGINGFACE_MODEL = "meta-llama/Llama-3.3-70B-Instruct";
     public static final String DEFAULT_MISTRAL_MODEL = "codestral-latest";

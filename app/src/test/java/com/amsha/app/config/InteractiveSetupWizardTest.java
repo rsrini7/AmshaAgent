@@ -103,9 +103,9 @@ class InteractiveSetupWizardTest {
         ensure.invoke(null, envFile);
 
         String content = Files.readString(envFile);
-        assertTrue(content.contains("AMSHA_COMPACTION_SARVAM_MODEL=sarvam-105b"));
+        assertTrue(content.contains("AMSHA_COMPACTION_SARVAM_MODEL=sarvam-105b-conversations"));
         assertTrue(content.contains("AMSHA_COMPACTION_SARVAM_BASE_URL=https://api.sarvam.ai/v1"));
-        assertTrue(content.contains("AMSHA_CLASSIFIER_SARVAM_MODEL=sarvam-105b"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_SARVAM_MODEL=sarvam-105b-conversations"));
         assertTrue(content.contains("AMSHA_CLASSIFIER_SARVAM_BASE_URL=https://api.sarvam.ai/v1"));
     }
 

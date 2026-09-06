@@ -379,7 +379,7 @@ amsha:
     sarvam:
       api-key: "${AMSHA_CLASSIFIER_SARVAM_API_KEY:${AMSHA_SARVAM_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
-      model: "${AMSHA_CLASSIFIER_SARVAM_MODEL:sarvam-105b}"
+      model: "${AMSHA_CLASSIFIER_SARVAM_MODEL:sarvam-105b-conversations}"
     opencode:
       api-key: "${AMSHA_CLASSIFIER_OPENCODE_API_KEY:${AMSHA_OPENCODE_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
@@ -552,7 +552,7 @@ amsha:
     sarvam:
       api-key: "${AMSHA_SARVAM_API_KEY:}"
       base-url: "${AMSHA_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
-      model: "${AMSHA_SARVAM_MODEL:sarvam-105b}"
+      model: "${AMSHA_SARVAM_MODEL:sarvam-105b-conversations}"
     opencode:
       api-key: "${AMSHA_OPENCODE_API_KEY:}"
       base-url: "${AMSHA_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"
@@ -705,7 +705,7 @@ amsha:
     sarvam:
       api-key: "${AMSHA_COMPACTION_SARVAM_API_KEY:${AMSHA_SARVAM_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_SARVAM_BASE_URL:https://api.sarvam.ai/v1}"
-      model: "${AMSHA_COMPACTION_SARVAM_MODEL:sarvam-105b}"
+      model: "${AMSHA_COMPACTION_SARVAM_MODEL:sarvam-105b-conversations}"
     opencode:
       api-key: "${AMSHA_COMPACTION_OPENCODE_API_KEY:${AMSHA_OPENCODE_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_OPENCODE_BASE_URL:https://opencode.ai/zen/v1}"

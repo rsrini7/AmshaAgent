@@ -692,12 +692,12 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 | Groq | `meta-llama/llama-4-scout-17b-16e-instruct` | Default; OpenAI-compatible API |
 | OpenAI | `gpt-4o-mini` | Official OpenAI API |
 | Ollama | `mistral-small:latest` | Local inference |
-| OpenRouter | `openai/gpt-oss-20b:free` | Unified multi-model API |
+| OpenRouter | `minimax/minimax-m3:free` | Unified multi-model API |
 | Claude Code | Claude's models | Reads OAuth token from local Claude Code CLI |
 | Gemini | `gemini-3.1-flash-lite` | Google Gemini API |
-| Cerebras | `qwen-3-235b-a22b-instruct-2507` | Daily quota detection disables slot permanently |
-| Nvidia | `bytedance/seed-oss-36b-instruct` | NVIDIA inference API |
-| Sarvam | `sarvam-105b` | Indic-language models |
+| Cerebras | `qwen-3.8-27b` | Daily quota detection disables slot permanently |
+| Nvidia | `meta/llama-3.2-11b-vision-instruct` | NVIDIA inference API |
+| Sarvam | `sarvam-105b-conversations` | Indic-language models |
 | OpenCode | `deepseek-v4-flash-free` | OpenAI-compatible endpoint (Zen / Go) |
 | Hugging Face | `meta-llama/Llama-3.3-70B-Instruct` | Inference API / Router |
 | Mistral | `codestral-latest` | Codestral & Mistral frontier models |

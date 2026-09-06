@@ -258,13 +258,30 @@ public final class ModelInstaller {
             rootEnv = System.getProperty("amsha.onnx.model-root");
         }
         if (rootEnv != null && !rootEnv.isBlank()) {
-            return Path.of(rootEnv).toAbsolutePath().normalize();
+            Path p = Path.of(rootEnv).toAbsolutePath().normalize();
+            if (Files.isDirectory(p)) {
+                return p;
+            }
+            Path parentCandidate =
+                    Path.of("..").resolve(rootEnv).toAbsolutePath().normalize();
+            if (Files.isDirectory(parentCandidate)) {
+                return parentCandidate;
+            }
+            return p;
         }
         String dataDir = System.getProperty("AMSHA_DATA_DIR", System.getenv("AMSHA_DATA_DIR"));
         if (dataDir != null && !dataDir.isBlank()) {
             Path p = Path.of(dataDir).resolve("models").toAbsolutePath().normalize();
             if (Files.isDirectory(p)) {
                 return p;
+            }
+            Path parentCandidate = Path.of("..")
+                    .resolve(dataDir)
+                    .resolve("models")
+                    .toAbsolutePath()
+                    .normalize();
+            if (Files.isDirectory(parentCandidate)) {
+                return parentCandidate;
             }
         }
         Path local = Path.of("data", "models");

@@ -22,7 +22,7 @@ final class ModelArenaHelper {
     static final long TIMEOUT_SECONDS = 30L;
     static final int MAX_SLOT_LENGTH = 128;
 
-    static final Pattern SLOT_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+(:[a-zA-Z0-9_.-]+)?$");
+    static final Pattern SLOT_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+(:[a-zA-Z0-9_./:-]+)?$");
 
     static final Set<String> ALLOWED_PROVIDERS = Set.of(
             ModelDefaults.PROVIDER_GROQ,

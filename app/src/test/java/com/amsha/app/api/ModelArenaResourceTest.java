@@ -428,4 +428,34 @@ class ModelArenaResourceTest {
         ChatRequest captured = reqCaptor.getValue();
         assertEquals(untrimmed, ((UserMessage) captured.messages().get(0)).singleText());
     }
+
+    @Test
+    void customModelSlotWithSlashAndColonAllowed() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        AgentChatModelProvider mockProvider = mock(AgentChatModelProvider.class);
+        ChatModel mockModel = mock(ChatModel.class);
+        when(mockProvider.providerName()).thenReturn("openrouter");
+        when(mockProvider.create("minimax/minimax-m3:free")).thenReturn(mockModel);
+        when(mockModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Custom slot ok"))
+                        .tokenUsage(new TokenUsage(5, 3))
+                        .build());
+
+        when(providersInstance.iterator()).thenReturn(List.of(mockProvider).iterator());
+
+        Response resp = resource.compareModels(
+                new ArenaCompareRequest("Test custom slot", List.of("openrouter:minimax/minimax-m3:free"), 100));
+        assertEquals(Response.Status.OK.getStatusCode(), resp.getStatus());
+        ArenaCompareResponse compareResp = (ArenaCompareResponse) resp.getEntity();
+        assertEquals(1, compareResp.results().size());
+        assertEquals(
+                "openrouter:minimax/minimax-m3:free",
+                compareResp.results().get(0).modelSlot());
+        assertEquals("Custom slot ok", compareResp.results().get(0).output());
+    }
 }
