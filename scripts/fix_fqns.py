@@ -10,7 +10,7 @@ import os
 import re
 
 fqn_pattern = re.compile(
-    r'\b((?:java|jakarta|com|org|dev|io|ai)\.(?:[a-z_][\w_]*\.)+([A-Z][\w$]*))\b'
+    r'\b((?:java|jakarta|com|org|dev|io|ai|net)\.(?:[a-z_][\w_]*\.)+([A-Z][\w$]*))\b'
 )
 
 # Pre-index all package -> class names in the repository

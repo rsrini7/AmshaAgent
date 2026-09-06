@@ -1,6 +1,7 @@
 package com.amsha.security.http;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.net.URI;
@@ -11,6 +12,7 @@ import java.time.Duration;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.security.CredentialDetector;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.security.api.OutboundPurpose;
@@ -54,6 +56,9 @@ public class GovernedTransportService {
     @Inject
     ApprovalReceiptIssuer approvalReceiptIssuer;
 
+    @Inject
+    Instance<CredentialDetector> credentialDetectorInstance;
+
     /**
      * Executes a governed HTTP request with full policy enforcement.
      *
@@ -77,6 +82,45 @@ public class GovernedTransportService {
             HttpRequest request,
             HttpResponse.BodyHandler<T> bodyHandler) {
         return send(url, purpose, connection, actorUserId, preApproved, null, request, bodyHandler);
+    }
+
+    /**
+     * Validates an outbound destination against security policies (SSRF, TLS, proxy, IP allowlist)
+     * without sending data, recording an audit event.
+     *
+     * @param url target destination URL
+     * @param purpose outbound purpose
+     * @param actorUserId actor requesting outbound egress
+     * @throws OutboundHttpException if egress is denied by policy or destination is invalid
+     */
+    public void validateEgress(String url, OutboundPurpose purpose, String actorUserId) {
+        if (url == null || url.isBlank()) {
+            throw OutboundHttpException.policy("Egress URL must not be null or blank");
+        }
+        URI uri;
+        try {
+            uri = URI.create(url);
+            if (uri.getHost() == null || uri.getHost().isBlank()) {
+                throw new IllegalArgumentException("Missing host in URL: " + url);
+            }
+        } catch (Exception _) {
+            throw OutboundHttpException.policy("Invalid egress URL: " + url);
+        }
+        var decision = policyService.evaluate(url, purpose, null, actorUserId, false);
+        if (decision.isDenied()) {
+            throw OutboundHttpException.policy(
+                    "Egress denied to " + url + ": " + decision.reason().orElse("policy denial"));
+        }
+        if (decision.requiresHitl()) {
+            throw OutboundHttpException.hitl("HITL approval required for egress to " + url + ": "
+                    + decision.reason().orElse("approval required"));
+        }
+        auditService.record(
+                "governed-transport",
+                actorUserId != null ? actorUserId : "system",
+                "operator",
+                SecurityEventType.TOOL_EXECUTED,
+                "governed_egress_validated purpose=" + purpose + " host=" + uri.getHost());
     }
 
     /**
@@ -107,6 +151,20 @@ public class GovernedTransportService {
             }
             effectivePreApproved = true;
             effectiveActor = receipt.approvedByUserId();
+        }
+        if (credentialDetectorInstance != null && credentialDetectorInstance.isResolvable()) {
+            var detector = credentialDetectorInstance.get();
+            var uriDet = detector.detect(url);
+            if (uriDet.detected()) {
+                auditService.record(
+                        "governed-transport",
+                        effectiveActor != null ? effectiveActor : "system",
+                        "system",
+                        SecurityEventType.UNAUTHORIZED_ACCESS,
+                        "credential_egress_blocked type=" + uriDet.credentialType() + " purpose=" + purpose);
+                throw OutboundHttpException.policy("Outbound egress blocked: destination URI contains credentials ("
+                        + uriDet.credentialType() + ")");
+            }
         }
         log.debugf(
                 "Sending governed request to %s (purpose: %s, actor: %s, preApproved: %b)",
@@ -189,6 +247,19 @@ public class GovernedTransportService {
             String actorUserId,
             boolean preApproved,
             String approvalToken) {
+        if (body != null && credentialDetectorInstance != null && credentialDetectorInstance.isResolvable()) {
+            var det = credentialDetectorInstance.get().detect(body);
+            if (det.detected()) {
+                auditService.record(
+                        "governed-transport",
+                        actorUserId != null ? actorUserId : "system",
+                        "system",
+                        SecurityEventType.UNAUTHORIZED_ACCESS,
+                        "credential_egress_blocked type=" + det.credentialType() + " purpose=" + purpose);
+                throw OutboundHttpException.policy("Outbound egress blocked: payload contains detected credentials ("
+                        + det.credentialType() + ")");
+            }
+        }
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofMillis(GovernedHttpClient.DEFAULT_READ_TIMEOUT_MS))
                 .header("Content-Type", contentType)

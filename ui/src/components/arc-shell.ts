@@ -5,6 +5,7 @@ import { PendingApprovalDto } from '../api/types';
 import {
   ArcClient,
   clearPersistedOwnerApiKey,
+  readPersistedOwnerApiKey,
 } from '../api/client';
 import { SseManager, SsePayload } from '../api/sse';
 import { provide } from '@lit/context';
@@ -21,6 +22,8 @@ import './arc-hitl-panel';
 import './arc-skills-panel';
 import './arc-scheduler-panel';
 import './arc-audit-panel';
+import './arc-db-console';
+import './arc-model-arena';
 import './arc-settings';
 import './arc-theme-toggle';
 import './arc-flow-canvas';
@@ -42,12 +45,14 @@ export class ArcShell extends LitElement {
     apiKey: '',
     sessionId: '',
     platformId: '',
+    workspaceId: typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-workspace-id') || undefined : undefined,
     sseStatus: 'disconnected'
   };
 
   @state() private _apiKey = '';
-  @state() private _sessionId = sessionStorage.getItem('amsha-chat-session') || '';
+  @state() private _sessionId = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-chat-session') || '' : '';
   @state() private _platformId = ''; // Stable ID for WebSocket
+  @state() private _workspaceId = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-workspace-id') || '' : '';
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
@@ -232,10 +237,16 @@ export class ArcShell extends LitElement {
   `;
 
   private _updateContext() {
+    if (!this._workspaceId && typeof sessionStorage !== 'undefined') {
+      try {
+        this._workspaceId = sessionStorage.getItem('amsha-workspace-id') || '';
+      } catch (_) {}
+    }
     this._appContext = {
       apiKey: this._apiKey,
       sessionId: this._sessionId,
       platformId: this._platformId,
+      workspaceId: this._workspaceId || undefined,
       sseStatus: this._sseStatus
     };
   }
@@ -243,13 +254,18 @@ export class ArcShell extends LitElement {
   constructor() {
     super();
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
+    this.addEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
     window.addEventListener('ws-status-change', this._boundWsStatusChange as EventListener);
     window.addEventListener('session-ready', this._boundSessionReady);
+    window.addEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
 
     this._platformId = this._resolvePlatformId();
     this._client = new ArcClient('/api/v1', '');
     this._updateContext();
+    if (this._apiKey) {
+      this._fetchActiveWorkspace();
+    }
   }
 
   private _boundHashChange = () => {
@@ -322,6 +338,8 @@ export class ArcShell extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener('hashchange', this._boundHashChange);
     window.removeEventListener('session-ready', this._boundSessionReady);
+    window.removeEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
+    this.removeEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
     window.removeEventListener('ws-status-change', this._boundWsStatusChange as EventListener);
     this._sseManager?.disconnect();
   }
@@ -331,6 +349,76 @@ export class ArcShell extends LitElement {
 
 
   // ─── Lifecycle / Auth ────────────────────────────────────────────────────
+
+  private _boundWorkspaceSet = (e: Event) => {
+    const customEvent = e as CustomEvent<{ workspaceId: string }>;
+    const wsId = customEvent.detail?.workspaceId?.trim();
+    if (wsId) {
+      this._setWorkspaceId(wsId);
+    }
+  };
+
+  private _setWorkspaceId(wsId: string) {
+    const trimmed = wsId ? wsId.trim() : '';
+    if (!trimmed || this._workspaceId === trimmed) return;
+    this._workspaceId = trimmed;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('amsha-workspace-id', trimmed);
+      }
+    } catch (_) {}
+    this._updateContext();
+  }
+
+  private _clearWorkspaceId() {
+    this._workspaceId = '';
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('amsha-workspace-id');
+      }
+    } catch (_) {}
+    this._updateContext();
+  }
+
+  private async _fetchActiveWorkspace() {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const apiKey =
+        this._apiKey && this._apiKey !== 'authenticated' ? this._apiKey : readPersistedOwnerApiKey();
+      if (apiKey) {
+        headers['X-AMSHA-API-KEY'] = apiKey;
+      }
+      const res = await fetch('/api/v1/identity/me', {
+        headers,
+        credentials: 'include'
+      });
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          this._clearWorkspaceId();
+        }
+        return;
+      }
+      const data = await res.json();
+      const activeMemberships = Array.isArray(data.memberships)
+        ? data.memberships.filter(
+            (membership: any) =>
+              membership.status?.toUpperCase() === 'ACTIVE' &&
+              typeof membership.workspaceId === 'string' &&
+              membership.workspaceId.trim(),
+          )
+        : [];
+      const currentWorkspace = this._workspaceId?.trim();
+      const active =
+        activeMemberships.find((membership: any) => membership.workspaceId.trim() === currentWorkspace) ||
+        activeMemberships[0];
+      const wsId = active?.workspaceId?.trim();
+      if (wsId) {
+        this._setWorkspaceId(wsId);
+      } else {
+        this._clearWorkspaceId();
+      }
+    } catch (_) {}
+  }
 
   private _onApiKeySet(e: CustomEvent<{ key: string }>) {
     this._apiKey = e.detail.key ? 'authenticated' : '';
@@ -349,6 +437,7 @@ export class ArcShell extends LitElement {
       } else {
         window.location.hash = '#/chat';
       }
+      this._fetchActiveWorkspace();
       this._fetchAgents();
       this._fetchApprovals();
       this._startSse();
@@ -361,22 +450,35 @@ export class ArcShell extends LitElement {
     console.warn('[Amsha Agent] Stale API key detected (401). Redirecting to onboarding...');
     clearPersistedOwnerApiKey();
     this._apiKey = '';
+    this._clearWorkspaceId();
     this._updateContext();
     window.location.hash = '#/onboarding';
   }
 
-  private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string }>) {
+  private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string; workspaceId?: string }>) {
     const sessionId = e.detail?.sessionId?.trim();
     if (!sessionId) {
       return;
     }
     const sessionChanged = this._sessionId !== sessionId;
     this._sessionId = sessionId;
-    sessionStorage.setItem('amsha-chat-session', sessionId);
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('amsha-chat-session', sessionId);
+      }
+    } catch (_) {}
     const platformId = e.detail?.platformId?.trim();
     if (platformId && platformId !== this._platformId) {
       this._platformId = platformId;
-      sessionStorage.setItem('amsha-platform-id', platformId);
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('amsha-platform-id', platformId);
+        }
+      } catch (_) {}
+    }
+    const workspaceId = e.detail?.workspaceId?.trim();
+    if (workspaceId) {
+      this._setWorkspaceId(workspaceId);
     }
     this._updateContext();
     if (sessionChanged) {
@@ -687,6 +789,12 @@ export class ArcShell extends LitElement {
       ` : nothing}
       ${this._route === '#/audit' ? html`
         <arc-audit-panel class="content-area"></arc-audit-panel>
+      ` : nothing}
+      ${this._route === '#/db' ? html`
+        <arc-db-console class="content-area"></arc-db-console>
+      ` : nothing}
+      ${this._route === '#/arena' ? html`
+        <arc-model-arena class="content-area"></arc-model-arena>
       ` : nothing}
       ${this._route === '#/settings' ? html`
         <arc-settings class="content-area"></arc-settings>

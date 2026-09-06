@@ -75,6 +75,7 @@ import com.amsha.core.routing.SystemProfileMigration;
 import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
 import com.amsha.core.sandbox.SandboxResult;
+import com.amsha.core.security.CredentialDetectionResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.skill.CompiledSkillEntry;
@@ -166,6 +167,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,
             TaskClassifierService.TaskDomain.class,
+            CredentialDetectionResult.class,
             SessionCatalogEntry.class,
             ChatMessage.class,
             UserMessage.class,

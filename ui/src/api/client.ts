@@ -44,6 +44,23 @@ export function clearPersistedOwnerApiKey(expectedApiKey?: string): void {
   }
 }
 
+export function readCsrfTokenFromCookie(): string {
+  if (typeof document === 'undefined' || !document.cookie) return '';
+  try {
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [rawKey, ...rawValue] = cookie.trim().split('=');
+      const key = rawKey?.trim();
+      if (key === 'X-CSRF-Token' || key === 'AMSHA_CSRF_TOKEN' || key === 'csrf-token') {
+        return decodeURIComponent(rawValue.join('=')).trim();
+      }
+    }
+  } catch {
+    // Ignore cookie parsing errors in restricted environments
+  }
+  return '';
+}
+
 export interface McpToolPolicy {
   id: string;
   toolName: string;
@@ -122,15 +139,29 @@ export class ArcClient {
     const h: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    const platformId = sessionStorage.getItem('amsha-platform-id');
-    if (platformId) {
-      h['X-AMSHA-PLATFORM-ID'] = platformId;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const platformId = sessionStorage.getItem('amsha-platform-id');
+        if (platformId) {
+          h['X-AMSHA-PLATFORM-ID'] = platformId;
+        }
+        const workspaceId = sessionStorage.getItem('amsha-workspace-id');
+        if (workspaceId) {
+          h['X-Amsha-Workspace-Id'] = workspaceId;
+        }
+      }
+    } catch {
+      // Ignore storage access errors in non-browser or restricted contexts
     }
     const persistedOwnerApiKey = this.includePersistedOwnerApiKey ? readPersistedOwnerApiKey() : '';
     const effectiveApiKey =
       this.apiKey && this.apiKey !== 'authenticated' ? this.apiKey : persistedOwnerApiKey;
     if (effectiveApiKey && effectiveApiKey !== 'authenticated') {
       h['X-AMSHA-API-KEY'] = effectiveApiKey;
+    }
+    const csrfToken = readCsrfTokenFromCookie();
+    if (csrfToken) {
+      h['X-CSRF-Token'] = csrfToken;
     }
     return h;
   }
@@ -158,10 +189,9 @@ export class ArcClient {
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new ArcApiError(
-          res.status,
-          errorData.error || `Request to ${endpoint} failed with status ${res.status}`,
-        );
+        const errorMessage =
+          errorData.message || errorData.error || `Request to ${endpoint} failed with status ${res.status}`;
+        throw new ArcApiError(res.status, errorMessage);
       }
       if (res.status === 204) {
         return {} as T;
@@ -560,6 +590,54 @@ export class ArcClient {
       `/cockpit/runs/${encodeURIComponent(runId)}/trace?limit=${limit}&offset=${offset}`,
     );
   }
+
+  async queryDb(request: DbQueryRequest): Promise<DbQueryResponse> {
+    return this.request<DbQueryResponse>('/admin/db/query', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async compareArena(request: ArenaCompareRequest): Promise<ArenaCompareResponse> {
+    return this.request<ArenaCompareResponse>('/admin/arena/compare', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+}
+
+export interface DbQueryRequest {
+  sql: string;
+  limit?: number;
+  workspaceId?: string;
+  sessionId?: string;
+}
+
+export interface DbQueryResponse {
+  columns: string[];
+  rows: any[][];
+  executionMs: number;
+  truncated: boolean;
+}
+
+export interface ArenaCompareRequest {
+  prompt: string;
+  models: string[];
+  maxTokens?: number;
+}
+
+export interface ArenaModelResult {
+  modelSlot: string;
+  output: string;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  costUsd: number;
+}
+
+export interface ArenaCompareResponse {
+  results: ArenaModelResult[];
+  totalDurationMs: number;
 }
 
 export interface SafeMetadata {

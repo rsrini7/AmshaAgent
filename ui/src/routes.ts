@@ -13,5 +13,7 @@ export const ROUTES: RouteConfig[] = [
   { hash: '#/skills', label: 'Skills', icon: '🔧', component: 'arc-skills-panel' },
   { hash: '#/scheduler', label: 'Scheduler', icon: '⏰', component: 'arc-scheduler-panel' },
   { hash: '#/audit', label: 'Audit', icon: '📋', component: 'arc-audit-panel' },
+  { hash: '#/db', label: 'DB Console', icon: '🗄', component: 'arc-db-console' },
+  { hash: '#/arena', label: 'Model Arena', icon: '⚔', component: 'arc-model-arena' },
   { hash: '#/settings', label: 'Settings', icon: '⚙', component: 'arc-settings' }
 ];
