@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
-import { ArcClient, ArcApiError, ArenaCompareResponse } from '../api/client';
+import { ArcClient, ArcApiError, ArenaCompareResponse, ArenaModelResult } from '../api/client';
 
 @customElement('arc-model-arena')
 export class ArcModelArena extends LitElement {
@@ -243,6 +243,18 @@ export class ArcModelArena extends LitElement {
       font-family: monospace;
     }
 
+    .telemetry-pill.warn {
+      background: color-mix(in srgb, #f59e0b 20%, transparent);
+      color: #f59e0b;
+      border: 1px solid color-mix(in srgb, #f59e0b 40%, transparent);
+    }
+
+    .telemetry-pill.error {
+      background: color-mix(in srgb, #ef4444 20%, transparent);
+      color: #ef4444;
+      border: 1px solid color-mix(in srgb, #ef4444 40%, transparent);
+    }
+
     .card-body {
       flex: 1;
       min-height: 120px;
@@ -265,6 +277,35 @@ export class ArcModelArena extends LitElement {
         this.selectedModels = [...this.selectedModels, slot];
       }
     }
+  }
+
+  private _formatModelOutput(output: string): string {
+    if (!output) return 'No response output returned.';
+    if (output === 'Evaluating...') {
+      return '⏱ Benchmarking model... (up to 30s deadline)';
+    }
+    if (output === 'PROVIDER_TIMEOUT') {
+      return '⚠️ TIMEOUT: The model provider did not respond within the 30-second deadline. The endpoint may be hanging, rate-limited, or unreachable. (PROVIDER_TIMEOUT)';
+    }
+    if (output === 'PROVIDER_AUTHENTICATION_ERROR') {
+      return '⚠️ AUTHENTICATION ERROR: Missing or invalid API key for this provider. Check your environment configuration. (PROVIDER_AUTHENTICATION_ERROR)';
+    }
+    if (output === 'PROVIDER_RATE_LIMIT') {
+      return '⚠️ RATE LIMITED: Provider quota or rate limit reached (HTTP 429). Please retry later. (PROVIDER_RATE_LIMIT)';
+    }
+    if (output === 'PROVIDER_UNKNOWN_MODEL') {
+      return '⚠️ UNKNOWN MODEL: The specified model name is not recognized or available on this provider. (PROVIDER_UNKNOWN_MODEL)';
+    }
+    if (output === 'PROVIDER_EXECUTION_ERROR') {
+      return '⚠️ EXECUTION ERROR: An error occurred while communicating with the provider endpoint. (PROVIDER_EXECUTION_ERROR)';
+    }
+    if (output === 'PROVIDER_UNSUPPORTED_CAPABILITY') {
+      return '⚠️ UNSUPPORTED CAPABILITY: This model does not support text generation capability. (PROVIDER_UNSUPPORTED_CAPABILITY)';
+    }
+    if (output === 'PROVIDER_INTERRUPTED') {
+      return '⚠️ INTERRUPTED: Model evaluation was interrupted before completion. (PROVIDER_INTERRUPTED)';
+    }
+    return output;
   }
 
   async runCompare() {
@@ -400,22 +441,51 @@ export class ArcModelArena extends LitElement {
               Models: <strong style="color: #fff;">${this._response.results.length}</strong>
             </div>
             <div class="results-grid">
-              ${this._response.results.map(
-                (res) => html`
+              ${this._response.results.map((res) => {
+                const isEvaluating = res.output === 'Evaluating...';
+                const isTimeout = res.output.includes('TIMEOUT');
+                const isError = !isTimeout && (res.output.includes('ERROR') || res.output.startsWith('PROVIDER_'));
+
+                return html`
                   <div class="model-card">
                     <div class="card-header">
                       <span class="model-title">${res.modelSlot}</span>
                     </div>
                     <div class="telemetry-pills">
-                      <span class="telemetry-pill">⏱ ${res.durationMs}ms</span>
-                      <span class="telemetry-pill">📥 ${res.inputTokens} tok</span>
-                      <span class="telemetry-pill">📤 ${res.outputTokens} tok</span>
-                      <span class="telemetry-pill" title="Estimated USD (placeholder rates)">💰 $${(res.costUsd ?? 0).toFixed(5)}</span>
+                      ${isEvaluating
+                        ? html`<span class="telemetry-pill">⏱ Evaluating...</span>`
+                        : isTimeout
+                        ? html`
+                            <span class="telemetry-pill warn">⏱ ${res.durationMs}ms</span>
+                            <span class="telemetry-pill warn">⚠️ Timed Out</span>
+                          `
+                        : isError
+                        ? html`
+                            <span class="telemetry-pill error">⏱ ${res.durationMs}ms</span>
+                            <span class="telemetry-pill error">⚠️ Error</span>
+                          `
+                        : html`
+                            <span class="telemetry-pill">⏱ ${res.durationMs}ms</span>
+                            <span class="telemetry-pill">📥 ${res.inputTokens} tok</span>
+                            <span class="telemetry-pill">📤 ${res.outputTokens} tok</span>
+                            <span class="telemetry-pill" title="Estimated USD (placeholder rates)">💰 $${(res.costUsd ?? 0).toFixed(5)}</span>
+                          `}
                     </div>
-                    <div class="card-body">${res.output}</div>
+                    <div
+                      class="card-body"
+                      style="${isEvaluating
+                        ? 'color: var(--text-muted, #8b949e); font-style: italic;'
+                        : isTimeout
+                        ? 'color: #f59e0b;'
+                        : isError
+                        ? 'color: #ef4444;'
+                        : ''}"
+                    >
+                      ${this._formatModelOutput(res.output)}
+                    </div>
                   </div>
-                `
-              )}
+                `;
+              })}
             </div>
           `
         : nothing}

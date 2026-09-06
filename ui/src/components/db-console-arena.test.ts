@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ArcDbConsole } from './arc-db-console';
 import { ArcModelArena } from './arc-model-arena';
+import { ArcClient } from '../api/client';
 
 describe('ArcDbConsole Component & Fallback Behavior (Issue 13)', () => {
   it('renders initial query interface with quick view templates', () => {
@@ -375,6 +376,107 @@ describe('ArcModelArena Component & Fallback Behavior (Issue 13)', () => {
 
       expect(str).toContain('Submitted prompt contains prohibited credential or secret tokens');
       expect(str).not.toContain('results-grid');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('renders PROVIDER_TIMEOUT gracefully in results grid without masking as request timeout', async () => {
+    const arena = new ArcModelArena();
+    arena.prompt = 'Long running comparison prompt';
+
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async () =>
+        ({
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              results: [
+                {
+                  modelSlot: 'omlx',
+                  output: 'PROVIDER_TIMEOUT',
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  durationMs: 30000,
+                  costUsd: 0.0,
+                },
+                {
+                  modelSlot: 'generic-openai',
+                  output: 'Fast response completed',
+                  inputTokens: 20,
+                  outputTokens: 15,
+                  durationMs: 2400,
+                  costUsd: 0.00006,
+                },
+              ],
+              totalDurationMs: 30050,
+            }),
+        } as any);
+
+      await arena.runCompare();
+      const rendered = arena.render();
+      const str = JSON.stringify(rendered);
+
+      expect(str).toContain('PROVIDER_TIMEOUT');
+      expect(str).toContain('Fast response completed');
+      expect(str).toContain('30000');
+      expect(str).toContain('results-grid');
+      expect((arena as any)._error).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('ArcClient has ARENA_REQUEST_TIMEOUT_MS configured to 60s', () => {
+    expect(ArcClient.ARENA_REQUEST_TIMEOUT_MS).toBe(60_000);
+  });
+
+  it('renders independent model cards and diagnostic message when one model succeeds and another faces timeout or error', async () => {
+    const arena = new ArcModelArena();
+    arena.prompt = 'Benchmark omlx and cerebras';
+    arena.selectedModels = ['omlx', 'cerebras'];
+
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async () =>
+        ({
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              results: [
+                {
+                  modelSlot: 'omlx',
+                  output: 'OMLX completed successfully with high reasoning fidelity.',
+                  inputTokens: 25,
+                  outputTokens: 40,
+                  durationMs: 3100,
+                  costUsd: 0.0,
+                },
+                {
+                  modelSlot: 'cerebras',
+                  output: 'PROVIDER_TIMEOUT',
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  durationMs: 30000,
+                  costUsd: 0.0,
+                },
+              ],
+              totalDurationMs: 30050,
+            }),
+        } as any);
+
+      await arena.runCompare();
+      const rendered = arena.render();
+      const str = JSON.stringify(rendered);
+
+      expect(str).toContain('OMLX completed successfully');
+      expect(str).toContain('PROVIDER_TIMEOUT');
+      expect(str).toContain('The model provider did not respond within the 30-second deadline');
+      expect(str).toContain('Timed Out');
+      expect((arena as any)._error).toBeNull();
     } finally {
       globalThis.fetch = originalFetch;
     }

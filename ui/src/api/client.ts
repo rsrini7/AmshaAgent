@@ -129,6 +129,7 @@ export interface HitlRequestOptions {
 export class ArcClient {
   private static readonly DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
   private static readonly HITL_REQUEST_TIMEOUT_MS = 10_000;
+  public static readonly ARENA_REQUEST_TIMEOUT_MS = 60_000;
   constructor(
     public readonly baseUrl: string,
     private readonly apiKey?: string,
@@ -599,10 +600,14 @@ export class ArcClient {
   }
 
   async compareArena(request: ArenaCompareRequest): Promise<ArenaCompareResponse> {
-    return this.request<ArenaCompareResponse>('/admin/arena/compare', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
+    return this.request<ArenaCompareResponse>(
+      '/admin/arena/compare',
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+      ArcClient.ARENA_REQUEST_TIMEOUT_MS,
+    );
   }
 }
 

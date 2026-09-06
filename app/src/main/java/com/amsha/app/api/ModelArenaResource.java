@@ -200,7 +200,9 @@ public class ModelArenaResource {
                 String slot = modelSlots.get(i);
                 long remainingNs = deadlineNs - System.nanoTime();
                 try {
-                    if (remainingNs <= 0) {
+                    if (f.isDone()) {
+                        results.add(f.get());
+                    } else if (remainingNs <= 0) {
                         f.cancel(true);
                         results.add(new ArenaModelResult(slot, "PROVIDER_TIMEOUT", 0, 0, TIMEOUT_SECONDS * 1000L, 0.0));
                     } else {

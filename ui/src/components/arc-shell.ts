@@ -261,7 +261,11 @@ export class ArcShell extends LitElement {
     window.addEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
 
     this._platformId = this._resolvePlatformId();
-    this._client = new ArcClient('/api/v1', '');
+    const persistedKey = readPersistedOwnerApiKey();
+    if (persistedKey) {
+      this._apiKey = persistedKey;
+    }
+    this._client = new ArcClient('/api/v1', this._apiKey);
     this._updateContext();
     if (this._apiKey) {
       this._fetchActiveWorkspace();
@@ -421,7 +425,8 @@ export class ArcShell extends LitElement {
   }
 
   private _onApiKeySet(e: CustomEvent<{ key: string }>) {
-    this._apiKey = e.detail.key ? 'authenticated' : '';
+    const rawKey = e.detail?.key?.trim();
+    this._apiKey = rawKey || readPersistedOwnerApiKey() || '';
     this._client = new ArcClient('/api/v1', this._apiKey);
     this._updateContext();
 

@@ -1,6 +1,7 @@
 import { AgentEvent } from './generated/models';
 import { EventDeduplicator } from './event-dedup';
 import { AgentTraceEvent, traceEventId } from '../types/trace';
+import { readPersistedOwnerApiKey } from './client';
 
 /**
  * Anything the SSE channel can deliver: the pre-existing agent events plus the versioned
@@ -32,8 +33,10 @@ export class SseManager {
       const headers: Record<string, string> = {
         'Accept': 'text/event-stream',
       };
-      if (this.apiKey && this.apiKey !== 'authenticated') {
-        headers['X-AMSHA-API-KEY'] = this.apiKey;
+      const effectiveKey =
+        this.apiKey && this.apiKey !== 'authenticated' ? this.apiKey : readPersistedOwnerApiKey();
+      if (effectiveKey && effectiveKey !== 'authenticated') {
+        headers['X-AMSHA-API-KEY'] = effectiveKey;
       }
       const response = await fetch(this.url, {
         credentials: 'include',

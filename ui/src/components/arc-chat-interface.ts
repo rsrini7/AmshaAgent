@@ -8,7 +8,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import DOMPurify from 'dompurify';
 import { AgentTraceEvent } from '../types/trace';
 import { PendingApprovalDto } from '../api/types';
-import { ArcClient } from '../api/client';
+import { ArcClient, readPersistedOwnerApiKey, readCsrfTokenFromCookie } from '../api/client';
 import './arc-run-flow-card';
 import './arc-hitl-panel';
 
@@ -750,8 +750,12 @@ export class ArcChatInterface extends LitElement {
     const requestGeneration = ++this._historyRequestGeneration;
     try {
       const headers: Record<string, string> = {};
-      if (this._appContext?.apiKey && this._appContext.apiKey !== 'authenticated') {
-        headers['X-Amsha-API-Key'] = this._appContext.apiKey;
+      const effectiveApiKey =
+        this._appContext?.apiKey && this._appContext.apiKey !== 'authenticated'
+          ? this._appContext.apiKey
+          : readPersistedOwnerApiKey();
+      if (effectiveApiKey && effectiveApiKey !== 'authenticated') {
+        headers['X-Amsha-API-Key'] = effectiveApiKey;
       }
       const res = await fetch(`/api/v1/chat/stream/history/${sid}`, {
         credentials: 'include',
@@ -1015,8 +1019,16 @@ export class ArcChatInterface extends LitElement {
         const wsHeaders: Record<string, string> = {
           'Content-Type': 'application/json'
         };
-        if (this._appContext.apiKey !== 'authenticated') {
-          wsHeaders['X-Amsha-API-Key'] = this._appContext.apiKey;
+        const effectiveApiKey =
+          this._appContext?.apiKey && this._appContext.apiKey !== 'authenticated'
+            ? this._appContext.apiKey
+            : readPersistedOwnerApiKey();
+        if (effectiveApiKey && effectiveApiKey !== 'authenticated') {
+          wsHeaders['X-Amsha-API-Key'] = effectiveApiKey;
+        }
+        const csrfToken = readCsrfTokenFromCookie();
+        if (csrfToken) {
+          wsHeaders['X-CSRF-Token'] = csrfToken;
         }
         const res = await fetch('/api/v1/chat/ws-token', {
           method: 'POST',
