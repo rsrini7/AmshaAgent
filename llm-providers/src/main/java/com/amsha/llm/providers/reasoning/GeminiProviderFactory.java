@@ -18,10 +18,11 @@ import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
+import com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilder;
+import com.amsha.security.http.GovernedTransportService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
 import io.quarkus.arc.Unremovable;
 
 @ApplicationScoped
@@ -30,6 +31,9 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
 
     @Inject
     AgentLlmConfig agentConfig;
+
+    @Inject
+    GovernedTransportService governedTransport;
 
     @ConfigProperty(name = "AMSHA_GEMINI_API_KEY")
     Optional<String> apiKey;
@@ -79,7 +83,7 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
                 cleanKey, effectiveModel, ModelDefaults.PROVIDER_GEMINI, (entryKey, entryModel) -> {
                     var builder = GoogleAiGeminiChatModel.builder()
-                            .httpClientBuilder(new JaxRsHttpClientBuilder())
+                            .httpClientBuilder(new GovernedLangChainHttpClientBuilder(governedTransport))
                             .apiKey(entryKey)
                             .modelName(entryModel)
                             .temperature(agentConfig.temperature())

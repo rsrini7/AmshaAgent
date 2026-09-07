@@ -4,6 +4,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.time.Duration;
 
@@ -13,8 +14,9 @@ import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.RoutingChatModelProvider;
+import com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilder;
+import com.amsha.security.http.GovernedTransportService;
 
-import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -23,6 +25,9 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
+
+    @Inject
+    GovernedTransportService governedTransport;
 
     @Override
     public String providerId() {
@@ -39,7 +44,7 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
         key = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
 
         var builder = GoogleAiGeminiChatModel.builder()
-                .httpClientBuilder(new JaxRsHttpClientBuilder())
+                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(governedTransport))
                 .apiKey(key)
                 .modelName(config.modelName())
                 .temperature(0.0)

@@ -1,1 +1,1 @@
-io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilderFactory
+com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilderFactory

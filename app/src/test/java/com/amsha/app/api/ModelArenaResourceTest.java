@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -24,9 +26,13 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
+import java.net.http.HttpHeaders;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.security.Principal;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.app.ui.dto.ArenaCompareRequest;
@@ -42,14 +48,20 @@ import com.amsha.core.routing.ModelRoute;
 import com.amsha.core.routing.ModelRouteSelector;
 import com.amsha.core.security.DefaultCredentialDetector;
 import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
+import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.providers.reasoning.OllamaProviderFactory;
+import com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilderFactory;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.GovernedTransportService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.ArgumentCaptor;
 
+@Isolated
 class ModelArenaResourceTest {
 
     private ModelArenaResource resource;
@@ -566,5 +578,202 @@ class ModelArenaResourceTest {
         assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
         AmshaErrorResponse error = (AmshaErrorResponse) resp.getEntity();
         assertEquals("Provider configuration failure", error.error());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void outboundProviderBytesPassThroughGovernedTransportSend() throws Exception {
+        GovernedLangChainHttpClientBuilderFactory.setDefaultTransport(transportService);
+        try {
+            when(securityContext.isUserInRole("internal")).thenReturn(true);
+            Principal principal = () -> "test-operator";
+            when(securityContext.getUserPrincipal()).thenReturn(principal);
+            when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+            AgentLlmConfig agentConfig = mock(AgentLlmConfig.class);
+            when(agentConfig.structuredOutputMode()).thenReturn(StructuredOutputMode.NATIVE);
+            when(agentConfig.logHttp()).thenReturn(false);
+
+            // Exercise actual production AgentChatModelProvider (OllamaProviderFactory)
+            // and the LangChain4j ServiceLoader discovery path (GovernedLangChainHttpClientBuilderFactory)
+            OllamaProviderFactory ollamaProvider =
+                    new OllamaProviderFactory(agentConfig, "http://localhost:11434", "llama3");
+            when(providersInstance.iterator())
+                    .thenAnswer(inv -> List.of(ollamaProvider).iterator());
+
+            String ollamaResponseJson = """
+                    {
+                      "model": "llama3",
+                      "created_at": "2026-09-07T12:00:00Z",
+                      "message": {
+                        "role": "assistant",
+                        "content": "Governed transport response verified"
+                      },
+                      "done": true,
+                      "prompt_eval_count": 12,
+                      "eval_count": 5
+                    }
+                    """;
+
+            HttpResponse<String> mockHttpResponse = mock(HttpResponse.class);
+            when(mockHttpResponse.statusCode()).thenReturn(200);
+            when(mockHttpResponse.body()).thenReturn(ollamaResponseJson);
+            HttpHeaders mockHeaders =
+                    HttpHeaders.of(Map.of("Content-Type", List.of("application/json")), (k, v) -> true);
+            when(mockHttpResponse.headers()).thenReturn(mockHeaders);
+
+            doReturn(mockHttpResponse)
+                    .when(transportService)
+                    .send(
+                            anyString(),
+                            any(OutboundPurpose.class),
+                            any(),
+                            anyString(),
+                            anyBoolean(),
+                            any(HttpRequest.class),
+                            any(HttpResponse.BodyHandler.class));
+
+            Response resp =
+                    resource.compareModels(new ArenaCompareRequest("Verify governed transport", List.of("ollama"), 50));
+            assertEquals(Response.Status.OK.getStatusCode(), resp.getStatus());
+            ArenaCompareResponse compareResp = (ArenaCompareResponse) resp.getEntity();
+            assertEquals(1, compareResp.results().size());
+            assertEquals(
+                    "Governed transport response verified",
+                    compareResp.results().get(0).output());
+            assertEquals(12, compareResp.results().get(0).inputTokens());
+            assertEquals(5, compareResp.results().get(0).outputTokens());
+
+            ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<OutboundPurpose> purposeCaptor = ArgumentCaptor.forClass(OutboundPurpose.class);
+            ArgumentCaptor<String> actorCaptor = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<Boolean> preApprovedCaptor = ArgumentCaptor.forClass(Boolean.class);
+            ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+
+            verify(transportService)
+                    .send(
+                            urlCaptor.capture(),
+                            purposeCaptor.capture(),
+                            any(),
+                            actorCaptor.capture(),
+                            preApprovedCaptor.capture(),
+                            requestCaptor.capture(),
+                            any(HttpResponse.BodyHandler.class));
+
+            assertTrue(urlCaptor.getValue().startsWith("http://localhost:11434"));
+            assertEquals(OutboundPurpose.PROVIDER_API_CALL, purposeCaptor.getValue());
+            assertEquals("test-operator", actorCaptor.getValue());
+            assertTrue(preApprovedCaptor.getValue());
+
+            HttpRequest sentReq = requestCaptor.getValue();
+            assertNotNull(sentReq);
+            assertEquals("POST", sentReq.method());
+            assertTrue(sentReq.uri().toString().startsWith("http://localhost:11434"));
+        } finally {
+            GovernedLangChainHttpClientBuilderFactory.setDefaultTransport(null);
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void outboundProviderBytesOverwritesConflictingClientBuilderFactory() throws Exception {
+        String originalProp = System.getProperty(GovernedLangChainHttpClientBuilderFactory.FACTORY_PROPERTY);
+        try {
+            // Pre-populate system property with conflicting factory to simulate classpath collision
+            System.setProperty(
+                    GovernedLangChainHttpClientBuilderFactory.FACTORY_PROPERTY,
+                    "io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilderFactory");
+            assertEquals(
+                    "io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilderFactory",
+                    System.getProperty(GovernedLangChainHttpClientBuilderFactory.FACTORY_PROPERTY));
+
+            GovernedLangChainHttpClientBuilderFactory.setDefaultTransport(transportService);
+
+            when(securityContext.isUserInRole("internal")).thenReturn(true);
+            Principal principal = () -> "test-operator";
+            when(securityContext.getUserPrincipal()).thenReturn(principal);
+            when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+            AgentLlmConfig agentConfig = mock(AgentLlmConfig.class);
+            when(agentConfig.structuredOutputMode()).thenReturn(StructuredOutputMode.NATIVE);
+            when(agentConfig.logHttp()).thenReturn(false);
+
+            OllamaProviderFactory ollamaProvider =
+                    new OllamaProviderFactory(agentConfig, "http://localhost:11434", "llama3");
+            when(providersInstance.iterator())
+                    .thenAnswer(inv -> List.of(ollamaProvider).iterator());
+
+            String ollamaResponseJson = """
+                    {
+                      "model": "llama3",
+                      "created_at": "2026-09-07T12:00:00Z",
+                      "message": {
+                        "role": "assistant",
+                        "content": "Collision resolved and routed"
+                      },
+                      "done": true,
+                      "prompt_eval_count": 8,
+                      "eval_count": 3
+                    }
+                    """;
+
+            HttpResponse<String> mockHttpResponse = mock(HttpResponse.class);
+            when(mockHttpResponse.statusCode()).thenReturn(200);
+            when(mockHttpResponse.body()).thenReturn(ollamaResponseJson);
+            HttpHeaders mockHeaders =
+                    HttpHeaders.of(Map.of("Content-Type", List.of("application/json")), (k, v) -> true);
+            when(mockHttpResponse.headers()).thenReturn(mockHeaders);
+
+            doReturn(mockHttpResponse)
+                    .when(transportService)
+                    .send(
+                            anyString(),
+                            any(OutboundPurpose.class),
+                            any(),
+                            anyString(),
+                            anyBoolean(),
+                            any(HttpRequest.class),
+                            any(HttpResponse.BodyHandler.class));
+
+            Response resp = resource.compareModels(
+                    new ArenaCompareRequest("Verify collision resolution", List.of("ollama"), 50));
+            assertEquals(Response.Status.OK.getStatusCode(), resp.getStatus());
+            ArenaCompareResponse compareResp = (ArenaCompareResponse) resp.getEntity();
+            assertEquals(1, compareResp.results().size());
+            assertEquals(
+                    "Collision resolved and routed",
+                    compareResp.results().get(0).output());
+
+            // Verify the conflicting property was overwritten with the governed factory
+            assertEquals(
+                    GovernedLangChainHttpClientBuilderFactory.class.getName(),
+                    System.getProperty(GovernedLangChainHttpClientBuilderFactory.FACTORY_PROPERTY));
+
+            // Verify the actual HTTP request was sent through governed transport
+            ArgumentCaptor<HttpRequest> requestCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+            ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+            verify(transportService)
+                    .send(
+                            urlCaptor.capture(),
+                            eq(OutboundPurpose.PROVIDER_API_CALL),
+                            any(),
+                            eq("test-operator"),
+                            eq(true),
+                            requestCaptor.capture(),
+                            any(HttpResponse.BodyHandler.class));
+
+            assertTrue(urlCaptor.getValue().startsWith("http://localhost:11434"));
+            HttpRequest sentReq = requestCaptor.getValue();
+            assertNotNull(sentReq);
+            assertEquals("POST", sentReq.method());
+            assertTrue(sentReq.uri().toString().startsWith("http://localhost:11434"));
+        } finally {
+            GovernedLangChainHttpClientBuilderFactory.setDefaultTransport(null);
+            if (originalProp != null) {
+                System.setProperty(GovernedLangChainHttpClientBuilderFactory.FACTORY_PROPERTY, originalProp);
+            } else {
+                System.clearProperty(GovernedLangChainHttpClientBuilderFactory.FACTORY_PROPERTY);
+            }
+        }
     }
 }

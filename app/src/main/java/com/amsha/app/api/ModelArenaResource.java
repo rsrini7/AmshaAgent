@@ -113,7 +113,7 @@ public class ModelArenaResource {
             return error(Response.Status.FORBIDDEN, "Internal operator role required for Model Arena");
         }
 
-        Response validationError = validateCompareRequest(request);
+        Response validationError = ModelArenaHelper.validateCompareRequest(request);
         if (validationError != null) {
             return validationError;
         }
@@ -164,6 +164,7 @@ public class ModelArenaResource {
         long overallStartNs = System.nanoTime();
         List<ArenaModelResult> results = new ArrayList<>();
         var executor = new ContextAwareExecutorService(Executors.newVirtualThreadPerTaskExecutor());
+        boolean wasInterrupted = false;
         try {
             List<Future<ArenaModelResult>> futures = new ArrayList<>();
             for (String slot : modelSlots) {
@@ -192,7 +193,7 @@ public class ModelArenaResource {
                             slot, "PROVIDER_TIMEOUT", 0, 0, ModelArenaHelper.TIMEOUT_SECONDS * 1000L, 0.0));
                 } catch (InterruptedException _) {
                     f.cancel(true);
-                    Thread.currentThread().interrupt();
+                    wasInterrupted = true;
                     results.add(new ArenaModelResult(slot, "PROVIDER_INTERRUPTED", 0, 0, 0L, 0.0));
                 } catch (ExecutionException e) {
                     f.cancel(true);
@@ -240,6 +241,9 @@ public class ModelArenaResource {
                     .build();
         } finally {
             executor.shutdownNow();
+            if (wasInterrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -267,72 +271,74 @@ public class ModelArenaResource {
         long startNs = System.nanoTime();
         int tokenCap = Math.min(maxOutputTokens, ModelArenaHelper.MAX_OUTPUT_TOKENS);
         try {
-            String cleanProv = ModelArenaHelper.validateAndExtractProvider(slot);
-            ResolvedProvider resolved = resolveProviderAndModel(slot);
-            if (resolved == null || resolved.model() == null) {
-                return new ArenaModelResult(slot, "PROVIDER_UNKNOWN_MODEL", 0, 0, 0L, 0.0);
-            }
-
-            validateProviderDispatch(cleanProv, resolved.targetUrl(), callerUserId);
-
-            ChatModel model = resolved.model();
-            if (modelRouteSelector != null && modelRouteSelector.isResolvable()) {
-                MultimodalCapability cap = MultimodalCapabilities.resolveCapability(model);
-                ModelRoute candidate = new ModelRoute(slot, slot, null, null, model, cap, List.of(), 0L);
-                Optional<ModelRoute> selected =
-                        modelRouteSelector.get().select("arena", TurnRequirements.textOnly(), List.of(candidate));
-                if (selected.isEmpty()) {
-                    return new ArenaModelResult(slot, "PROVIDER_UNSUPPORTED_MODALITY", 0, 0, 0L, 0.0);
+            return ScopedValue.where(WorkspaceContext.USER_ID, callerUserId).call(() -> {
+                String cleanProv = ModelArenaHelper.validateAndExtractProvider(slot);
+                ResolvedProvider resolved = resolveProviderAndModel(slot);
+                if (resolved == null || resolved.model() == null) {
+                    return new ArenaModelResult(slot, "PROVIDER_UNKNOWN_MODEL", 0, 0, 0L, 0.0);
                 }
-                model = selected.get().model();
-            } else {
-                return new ArenaModelResult(slot, "PROVIDER_ROUTE_UNAVAILABLE", 0, 0, 0L, 0.0);
-            }
 
-            ChatRequest chatReq = ChatRequest.builder()
-                    .messages(UserMessage.from(prompt))
-                    .parameters(ChatRequestParameters.builder()
-                            .maxOutputTokens(tokenCap)
-                            .build())
-                    .build();
+                validateProviderDispatch(cleanProv, resolved.targetUrl(), callerUserId);
 
-            ChatResponse response = model.chat(chatReq);
-            String output;
-            int outTokens;
-            int inTokens = ModelArenaHelper.estimateTokens(prompt);
-            if (response != null && response.aiMessage() != null) {
-                output = response.aiMessage().text() != null
-                        ? response.aiMessage().text()
-                        : "";
-                outTokens =
-                        (response.tokenUsage() != null && response.tokenUsage().outputTokenCount() != null)
-                                ? response.tokenUsage().outputTokenCount()
-                                : ModelArenaHelper.estimateTokens(output);
-                if (response.tokenUsage() != null && response.tokenUsage().inputTokenCount() != null) {
-                    inTokens = response.tokenUsage().inputTokenCount();
+                ChatModel model = resolved.model();
+                if (modelRouteSelector != null && modelRouteSelector.isResolvable()) {
+                    MultimodalCapability cap = MultimodalCapabilities.resolveCapability(model);
+                    ModelRoute candidate = new ModelRoute(slot, slot, null, null, model, cap, List.of(), 0L);
+                    Optional<ModelRoute> selected =
+                            modelRouteSelector.get().select("arena", TurnRequirements.textOnly(), List.of(candidate));
+                    if (selected.isEmpty()) {
+                        return new ArenaModelResult(slot, "PROVIDER_UNSUPPORTED_MODALITY", 0, 0, 0L, 0.0);
+                    }
+                    model = selected.get().model();
+                } else {
+                    return new ArenaModelResult(slot, "PROVIDER_ROUTE_UNAVAILABLE", 0, 0, 0L, 0.0);
                 }
-            } else {
-                output = "";
-                outTokens = 0;
-            }
 
-            if (outTokens > tokenCap || ModelArenaHelper.estimateTokens(output) > tokenCap) {
-                output = ModelArenaHelper.truncateToTokenBudget(output, tokenCap);
-                outTokens = Math.min(ModelArenaHelper.estimateTokens(output), tokenCap);
-            }
+                ChatRequest chatReq = ChatRequest.builder()
+                        .messages(UserMessage.from(prompt))
+                        .parameters(ChatRequestParameters.builder()
+                                .maxOutputTokens(tokenCap)
+                                .build())
+                        .build();
 
-            long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
-            if (traceRedactor == null) {
-                return new ArenaModelResult(slot, "ARENA_REDACTION_UNAVAILABLE", 0, 0, durationMs, 0.0);
-            }
-            int maxRedactionBytes = tokenCap * 4;
-            String safeOutput = traceRedactor.redactText(output, maxRedactionBytes);
-            if (safeOutput == null) {
-                safeOutput = "";
-            }
+                ChatResponse response = model.chat(chatReq);
+                String output;
+                int outTokens;
+                int inTokens = ModelArenaHelper.estimateTokens(prompt);
+                if (response != null && response.aiMessage() != null) {
+                    output = response.aiMessage().text() != null
+                            ? response.aiMessage().text()
+                            : "";
+                    outTokens = (response.tokenUsage() != null
+                                    && response.tokenUsage().outputTokenCount() != null)
+                            ? response.tokenUsage().outputTokenCount()
+                            : ModelArenaHelper.estimateTokens(output);
+                    if (response.tokenUsage() != null && response.tokenUsage().inputTokenCount() != null) {
+                        inTokens = response.tokenUsage().inputTokenCount();
+                    }
+                } else {
+                    output = "";
+                    outTokens = 0;
+                }
 
-            double cost = ModelArenaHelper.estimateCostUsd(inTokens, outTokens);
-            return new ArenaModelResult(slot, safeOutput, inTokens, outTokens, durationMs, cost);
+                if (outTokens > tokenCap || ModelArenaHelper.estimateTokens(output) > tokenCap) {
+                    output = ModelArenaHelper.truncateToTokenBudget(output, tokenCap);
+                    outTokens = Math.min(ModelArenaHelper.estimateTokens(output), tokenCap);
+                }
+
+                long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
+                if (traceRedactor == null) {
+                    return new ArenaModelResult(slot, "ARENA_REDACTION_UNAVAILABLE", 0, 0, durationMs, 0.0);
+                }
+                int maxRedactionBytes = tokenCap * 4;
+                String safeOutput = traceRedactor.redactText(output, maxRedactionBytes);
+                if (safeOutput == null) {
+                    safeOutput = "";
+                }
+
+                double cost = ModelArenaHelper.estimateCostUsd(inTokens, outTokens);
+                return new ArenaModelResult(slot, safeOutput, inTokens, outTokens, durationMs, cost);
+            });
         } catch (Exception e) {
             if (e instanceof ModelArenaHelper.ArenaAuditException
                     || e instanceof ModelArenaHelper.ArenaConfigurationException) {
@@ -362,7 +368,7 @@ public class ModelArenaResource {
             String cleanDefault = (defaultProviderName != null && !defaultProviderName.isBlank())
                     ? defaultProviderName.trim().toLowerCase(Locale.ROOT)
                     : "groq";
-            return new ResolvedProvider(model, resolveBaseUrl(cleanDefault));
+            return new ResolvedProvider(model, ModelArenaHelper.resolveBaseUrl(cleanDefault, providers));
         }
 
         String providerName = slot;
@@ -388,58 +394,7 @@ public class ModelArenaResource {
                 }
             }
         }
-        return new ResolvedProvider(model, resolveBaseUrl(cleanProvider));
-    }
-
-    private Response validateCompareRequest(ArenaCompareRequest request) {
-        if (request == null || request.prompt() == null || request.prompt().isBlank()) {
-            return error(Response.Status.BAD_REQUEST, "Prompt is required");
-        }
-        String prompt = request.prompt();
-        int estimatedInTokens = ModelArenaHelper.estimateTokens(prompt);
-        if (estimatedInTokens > ModelArenaHelper.MAX_INPUT_TOKENS) {
-            return error(
-                    Response.Status.BAD_REQUEST,
-                    "Prompt exceeds maximum input budget of " + ModelArenaHelper.MAX_INPUT_TOKENS
-                            + " tokens (estimated: " + estimatedInTokens + ")");
-        }
-        List<String> modelSlots = request.models();
-        if (modelSlots == null || modelSlots.isEmpty()) {
-            return error(Response.Status.BAD_REQUEST, "At least one model slot must be specified");
-        }
-        if (modelSlots.size() > ModelArenaHelper.MAX_MODELS) {
-            return error(
-                    Response.Status.BAD_REQUEST,
-                    "Maximum of " + ModelArenaHelper.MAX_MODELS + " models can be compared concurrently");
-        }
-        for (String slot : modelSlots) {
-            try {
-                ModelArenaHelper.validateAndExtractProvider(slot);
-            } catch (IllegalArgumentException _) {
-                return error(Response.Status.BAD_REQUEST, "Model slot is not allowlisted");
-            }
-        }
-        return null;
-    }
-
-    private String resolveBaseUrl(String providerName) {
-        if (providers != null) {
-            for (AgentChatModelProvider p : providers) {
-                if (p != null && p.providerName().equalsIgnoreCase(providerName)) {
-                    String base = extractBaseUrl(p);
-                    if (base != null) {
-                        return base;
-                    }
-                    break;
-                }
-            }
-        }
-        return ModelArenaHelper.PROVIDER_BASE_URLS.get(providerName);
-    }
-
-    private static String extractBaseUrl(AgentChatModelProvider p) {
-        String base = p != null ? p.baseUrl() : null;
-        return (base != null && !base.isBlank() && !"unknown".equalsIgnoreCase(base.trim())) ? base.trim() : null;
+        return new ResolvedProvider(model, ModelArenaHelper.resolveBaseUrl(cleanProvider, providers));
     }
 
     private void validateProviderDispatch(String cleanProv, String targetUrl, String callerUserId) {

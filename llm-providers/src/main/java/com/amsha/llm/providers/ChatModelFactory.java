@@ -35,6 +35,7 @@ import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredOutputMode;
+import com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilder;
 import com.amsha.llm.providers.wrapper.AgyResponsesChatModel;
 import com.amsha.llm.providers.wrapper.ClaudeCodeResponsesChatModel;
 import com.amsha.llm.providers.wrapper.CodexResponsesChatModel;
@@ -46,7 +47,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
-import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.InstanceHandle;
@@ -77,6 +77,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
             boolean logRequests,
             boolean logResponses) {
         var builder = OpenAiChatModel.builder()
+                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(resolveGovernedTransport()))
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
                 .modelName(modelName)
@@ -309,15 +310,17 @@ public class ChatModelFactory implements ChatModelCreationPort {
                     case "ollama" -> createOllama(baseUrl, model, config);
                     case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
                     default ->
-                        createOpenAi(
-                                baseUrl,
-                                apiKey,
-                                model,
-                                config.maxTokens(),
-                                config.timeout(),
-                                config.maxRetries(),
-                                config.temperature(),
-                                config.logHttp());
+                        openAiBuilder(
+                                        baseUrl,
+                                        apiKey,
+                                        model,
+                                        config.maxTokens() > 0 ? config.maxTokens() : null,
+                                        config.timeout() != null ? config.timeout() : Duration.ofSeconds(60),
+                                        config.maxRetries(),
+                                        config.temperature(),
+                                        config.logHttp(),
+                                        config.logHttp())
+                                .build();
                 };
         boolean eligible = "openai".equals(adapter)
                 && StructuredOutputCapabilities.resolvesToStrictSchema(
@@ -333,8 +336,11 @@ public class ChatModelFactory implements ChatModelCreationPort {
                 InstanceHandle<GovernedTransportService> handle = container.instance(GovernedTransportService.class);
                 if (handle.isAvailable()) return handle.get();
             }
-        } catch (Exception _) {
-            // CDI not active
+        } catch (NoClassDefFoundError _) {
+            // Standalone unit tests without CDI
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to resolve GovernedTransportService from CDI container: " + LogUtil.rootMessage(e), e);
         }
         return null;
     }
@@ -457,7 +463,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
     public static ChatModel createGemini(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
         String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_GEMINI_MODEL : model;
         GoogleAiGeminiChatModel.GoogleAiGeminiChatModelBuilder builder = GoogleAiGeminiChatModel.builder()
-                .httpClientBuilder(new JaxRsHttpClientBuilder())
+                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(resolveGovernedTransport()))
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .temperature(config.temperature())
@@ -475,6 +481,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
     public static ChatModel createAnthropic(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
         String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL : model;
         AnthropicChatModel.AnthropicChatModelBuilder builder = AnthropicChatModel.builder()
+                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(resolveGovernedTransport()))
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .timeout(config.timeout())
@@ -491,6 +498,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
         String url = (baseUrl == null || baseUrl.isBlank()) ? ModelDefaults.DEFAULT_OLLAMA_BASE_URL : baseUrl;
         String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_OLLAMA_MODEL : model;
         return OllamaChatModel.builder()
+                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(resolveGovernedTransport()))
                 .baseUrl(url)
                 .modelName(modelName)
                 .logRequests(config.logHttp())
