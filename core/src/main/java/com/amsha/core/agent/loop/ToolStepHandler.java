@@ -13,6 +13,9 @@ import java.util.Objects;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.scope.WorkspaceContext;
@@ -57,6 +60,7 @@ public class ToolStepHandler {
     private final ExecutionFailureRecoveryService recoveryService;
     private final ToolStepValidator validator;
     private final ToolStepEscalationHandler escalationHandler;
+    private final TracePublisher tracePublisher;
 
     @Inject
     public ToolStepHandler(
@@ -69,7 +73,8 @@ public class ToolStepHandler {
             MeterRegistry meterRegistry,
             ExecutionFailureRecoveryService recoveryService,
             ToolStepValidator validator,
-            ToolStepEscalationHandler escalationHandler) {
+            ToolStepEscalationHandler escalationHandler,
+            TracePublisher tracePublisher) {
         this.observers = observers;
         this.guard = guard;
         this.invoker = invoker;
@@ -80,6 +85,33 @@ public class ToolStepHandler {
         this.recoveryService = recoveryService;
         this.validator = validator;
         this.escalationHandler = escalationHandler;
+        this.tracePublisher = tracePublisher;
+    }
+
+    /** Visible for tests that do not require trace publishing. */
+    public ToolStepHandler(
+            Instance<AgentObserver> observers,
+            ToolInvocationGuard guard,
+            ToolInvoker invoker,
+            ChatMemoryWriter writer,
+            ApprovalCheckpointManager checkpointManager,
+            ParallelToolStepExecutor parallelExecutor,
+            MeterRegistry meterRegistry,
+            ExecutionFailureRecoveryService recoveryService,
+            ToolStepValidator validator,
+            ToolStepEscalationHandler escalationHandler) {
+        this(
+                observers,
+                guard,
+                invoker,
+                writer,
+                checkpointManager,
+                parallelExecutor,
+                meterRegistry,
+                recoveryService,
+                validator,
+                escalationHandler,
+                null);
     }
 
     // ── Validation
@@ -127,6 +159,7 @@ public class ToolStepHandler {
         // Phase 2 - Invoke
         String toolName = step.action();
         Map<String, Object> params = step.actionInput() != null ? step.actionInput() : Map.of();
+        publishToolTrace(TraceStage.TOOL_START, context.sessionId(), toolName, "START");
         ToolResponse response;
         InvokeResult invokeResult = invokeTool(context, history, step, toolName, params);
         if (invokeResult instanceof InvokeResult.ShortCircuit sc) {
@@ -138,6 +171,7 @@ public class ToolStepHandler {
             log.errorf(
                     "[TOOL-STEP] Infrastructure failure for tool '%s' session=%s: %s",
                     toolName, context.sessionId(), failure.output());
+            publishToolTrace(TraceStage.TOOL_ERROR, context.sessionId(), toolName, "ERROR");
             history.add(step.withObservation("INFRA_FAILURE: " + failure.output()));
             return StepDecision.terminal(AgentResult.failed(
                     "⚠️ " + failure.output(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
@@ -185,6 +219,7 @@ public class ToolStepHandler {
                                 recovery.attemptsUsed());
                         Map<String, Object> fixedParams = new HashMap<>(params);
                         fixedParams.put("code", recovery.fixedCode());
+                        publishToolTrace(TraceStage.RETRY, context.sessionId(), toolName, "RETRY");
                         ToolResponse retriedResponse =
                                 invokeToolWithParams(context, history, step, toolName, fixedParams);
 
@@ -211,6 +246,7 @@ public class ToolStepHandler {
         if (!autoHealAttemptedEscalation && response instanceof ToolResponse.ToolFailure failure) {
             ToolResponse escalated = escalationHandler.attemptGenericEscalation(context, toolName, params, failure);
             if (escalated != null) {
+                publishToolTrace(TraceStage.RETRY, context.sessionId(), toolName, "RETRY");
                 response = escalated;
             }
         }
@@ -224,6 +260,9 @@ public class ToolStepHandler {
         // Record for future O(1) deduplication in this turn
         if (response instanceof ToolResponse.ToolSuccess) {
             guard.recordToolCall(context.sessionId(), toolName, params, observation);
+            publishToolTrace(TraceStage.TOOL_END, context.sessionId(), toolName, "END");
+        } else if (response instanceof ToolResponse.ToolFailure) {
+            publishToolTrace(TraceStage.TOOL_ERROR, context.sessionId(), toolName, "ERROR");
         }
 
         observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), completedStep));
@@ -337,15 +376,9 @@ public class ToolStepHandler {
         String exceptionClass = "none";
 
         try {
-            final String suggestedCron = (context != null && context.data() != null)
-                    ? String.valueOf(context.data().get("SUGGESTED_CRON"))
-                    : null;
-            final String suggestedNextFireTime = (context != null && context.data() != null)
-                    ? String.valueOf(context.data().get("SUGGESTED_NEXT_FIRE_TIME"))
-                    : null;
-            final String suggestedCronSource = (context != null && context.data() != null)
-                    ? String.valueOf(context.data().get("SUGGESTED_CRON_SOURCE"))
-                    : null;
+            final String suggestedCron = suggestedContextValue(context, "SUGGESTED_CRON");
+            final String suggestedNextFireTime = suggestedContextValue(context, "SUGGESTED_NEXT_FIRE_TIME");
+            final String suggestedCronSource = suggestedContextValue(context, "SUGGESTED_CRON_SOURCE");
 
             return WorkspaceContext.run(
                     context.sessionId(),
@@ -383,6 +416,20 @@ public class ToolStepHandler {
         return val instanceof String s ? s : (val != null ? val.toString() : "");
     }
 
+    /**
+     * Reads a scheduling hint from the execution context.
+     *
+     * <p>Returns "" — never {@code String.valueOf(null)}'s "null" — when the key is absent.
+     * A literal "null" is non-blank, so consumers treat a missing hint as a real value and
+     * silently skip their cron fallback; {@code ScopedValue} also rejects null bindings, so
+     * an empty string is the only safe representation of "not provided".
+     */
+    private static String suggestedContextValue(AgentExecutionContext context, String key) {
+        if (context == null || context.data() == null) return "";
+        Object value = context.data().get(key);
+        return value == null ? "" : String.valueOf(value);
+    }
+
     private ToolResponse invokeToolWithParams(
             AgentExecutionContext context,
             List<ReasoningStep> history,
@@ -400,6 +447,20 @@ public class ToolStepHandler {
         List<ReasoningStep> snapshot = new ArrayList<>(history);
         snapshot.add(step);
         return List.copyOf(snapshot);
+    }
+
+    /**
+     * Emits a tool-lifecycle trace (start / end / error / retry). Best-effort: a missing publisher
+     * (e.g. lightweight unit test) is skipped rather than changing the outcome of the step.
+     */
+    private void publishToolTrace(TraceStage stage, String sessionId, String toolName, String status) {
+        if (tracePublisher == null) {
+            return;
+        }
+        tracePublisher.publish(TracePublisher.newEvent(sessionId, stage)
+                .withStation(StationCode.STATION_07_TOOL_EXECUTION)
+                .withStatus(status)
+                .withDetail(toolName));
     }
 
     /** Sealed result of the invokeTool phase. */

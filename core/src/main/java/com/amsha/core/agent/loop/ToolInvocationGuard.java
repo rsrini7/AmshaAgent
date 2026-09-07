@@ -22,6 +22,9 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.hitl.ApprovalLeaseStore;
 import com.amsha.core.security.AutonomyPolicy;
@@ -78,6 +81,9 @@ public class ToolInvocationGuard {
 
     @Inject
     PostPolicyToolRiskDispatcher postPolicyToolRiskDispatcher;
+
+    @Inject
+    TracePublisher tracePublisher;
 
     private static final int MAX_DEDUP_SESSIONS = 1000;
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
@@ -138,6 +144,7 @@ public class ToolInvocationGuard {
                 if (decision.isPresent()) {
                     GuardDecision interceptorDecision = decision.get();
                     if (interceptorDecision instanceof GuardDecision.Allow) continue;
+                    publishGuardCheck(sessionId, toolName, interceptorDecision, null);
                     return interceptorDecision;
                 }
             }
@@ -147,14 +154,19 @@ public class ToolInvocationGuard {
         if (toolOpt.isPresent()) {
             String validationError = toolOpt.get().validateParameters(params);
             if (validationError != null && !validationError.isBlank()) {
-                return new GuardDecision.Blocked(validationError);
+                GuardDecision.Blocked blocked = new GuardDecision.Blocked(validationError);
+                publishGuardCheck(sessionId, toolName, blocked, null);
+                return blocked;
             }
         }
         IdempotencyMode mode = toolOpt.map(AgentTool::idempotencyMode).orElse(IdempotencyMode.NON_IDEMPOTENT);
 
         if (mode != IdempotencyMode.NON_IDEMPOTENT) {
             GuardDecision dedupResult = checkDeduplication(sessionId, toolName, params, history);
-            if (dedupResult != null) return dedupResult;
+            if (dedupResult != null) {
+                publishGuardCheck(sessionId, toolName, dedupResult, null);
+                return dedupResult;
+            }
         }
 
         boolean isInternalTool = toolOpt.isPresent();
@@ -163,7 +175,10 @@ public class ToolInvocationGuard {
             Optional<DynamicToolAdmission> admissionOpt = resolveDynamicAdmission(toolName);
             if (admissionOpt.isEmpty()) {
                 log.warnf("GUARD Unknown or unadmitted dynamic tool '%s' in session '%s'.", toolName, sessionId);
-                return new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
+                GuardDecision.Blocked blocked =
+                        new GuardDecision.Blocked("Tool '" + toolName + "' is not recognized or permitted.");
+                publishGuardCheck(sessionId, toolName, blocked, null);
+                return blocked;
             }
             dynamicAdmission = admissionOpt.get();
         } else {
@@ -178,8 +193,12 @@ public class ToolInvocationGuard {
             log.warnf(
                     "GUARD Role '%s' (session=%s) blocked from '%s' — no capability grant",
                     agentRole, sessionId, toolName);
-            return new GuardDecision.Blocked("Tool '" + toolName + "' is not permitted for role '" + agentRole
-                    + "'. Use one of your available tools, or delegate this task to a suitable agent.");
+            GuardDecision.Blocked blocked =
+                    new GuardDecision.Blocked("Tool '" + toolName + "' is not permitted for role '"
+                            + agentRole
+                            + "'. Use one of your available tools, or delegate this task to a suitable agent.");
+            publishGuardCheck(sessionId, toolName, blocked, null);
+            return blocked;
         }
 
         boolean isManagementScheduleTool =
@@ -230,6 +249,11 @@ public class ToolInvocationGuard {
                 // post-policy classifier is not re-run after this pause/resume boundary.
                 observeToolRiskForCollection(sessionId, agentRole, level, toolName, params, goal);
                 ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
+                publishGuardCheck(
+                        sessionId,
+                        toolName,
+                        new GuardDecision.PauseForApproval(frame),
+                        op.riskLevel().name());
                 return new GuardDecision.PauseForApproval(frame);
             }
         }
@@ -238,7 +262,31 @@ public class ToolInvocationGuard {
         if (postPolicyDecision instanceof GuardDecision.Allow) {
             observeProvisionalAllow(sessionId, agentRole, level, toolName, params, goal);
         }
+        publishGuardCheck(
+                sessionId, toolName, postPolicyDecision, op.riskLevel().name());
         return postPolicyDecision;
+    }
+
+    /**
+     * Emits a {@code guard_check} trace at a terminal guard decision site. Best-effort: a missing
+     * publisher (e.g. lightweight unit test) is skipped rather than failing the decision.
+     */
+    private void publishGuardCheck(String sessionId, String toolName, GuardDecision decision, String riskLevel) {
+        if (tracePublisher == null) {
+            return;
+        }
+        String status =
+                switch (decision) {
+                    case GuardDecision.Allow() -> "ALLOW";
+                    case GuardDecision.Deduplicate(var cached) -> "ALLOW";
+                    case GuardDecision.PauseForApproval(var frame) -> "HITL_REQUIRED";
+                    case GuardDecision.Blocked(var observation) -> "DENIED";
+                };
+        tracePublisher.publish(TracePublisher.newEvent(sessionId, TraceStage.GUARD_CHECK)
+                .withStation(StationCode.STATION_05_TOOL_GUARD)
+                .withStatus(status)
+                .withRiskLevel(riskLevel)
+                .withDetail(toolName));
     }
 
     /**

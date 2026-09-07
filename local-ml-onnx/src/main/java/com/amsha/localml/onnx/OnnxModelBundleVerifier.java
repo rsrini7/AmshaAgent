@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class OnnxModelBundleVerifier {
 
     private static final long MAX_MANIFEST_BYTES = 1024 * 1024;
+    private static final long MAX_CONFIG_FILE_BYTES = 1024 * 1024;
 
     private final ObjectMapper objectMapper;
     private final long maxModelBytes;
@@ -43,33 +44,68 @@ public class OnnxModelBundleVerifier {
                 resolveAndVerify(canonicalBundle, manifest.modelFile(), manifest.modelSha256(), manifest.modelBytes());
         Path tokenizer = resolveAndVerify(
                 canonicalBundle, manifest.tokenizerFile(), manifest.tokenizerSha256(), manifest.tokenizerBytes());
-        return new VerifiedOnnxModelBundle(manifest, model, tokenizer);
+        Path decoder = null;
+        Path preprocessorConfig = null;
+        Path config = null;
+        if (manifest.audioTranscription() != null) {
+            OnnxAudioTranscriptionBundleSpec audioSpec = manifest.audioTranscription();
+            decoder = resolveAndVerify(
+                    canonicalBundle, audioSpec.decoderFile(), audioSpec.decoderSha256(), audioSpec.decoderBytes());
+            if (audioSpec.preprocessorConfigFile() != null) {
+                preprocessorConfig = resolveConfigFile(
+                        canonicalBundle, audioSpec.preprocessorConfigFile(), audioSpec.preprocessorConfigSha256());
+            }
+            if (audioSpec.configFile() != null) {
+                config = resolveConfigFile(canonicalBundle, audioSpec.configFile(), audioSpec.configSha256());
+            }
+        }
+        return new VerifiedOnnxModelBundle(manifest, model, tokenizer, decoder, preprocessorConfig, config);
+    }
+
+    private Path resolveConfigFile(Path bundle, String relativeFile, String expectedSha256) throws IOException {
+        Path file = bundle.resolve(relativeFile).normalize().toRealPath();
+        if (!file.startsWith(bundle)
+                || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(file) > MAX_CONFIG_FILE_BYTES) {
+            throw new IOException(
+                    "Bundle config file is not a valid regular file under bundle directory: " + relativeFile);
+        }
+        if (expectedSha256 != null) {
+            byte[] actual = sha256Bytes(file);
+            byte[] expected = HexFormat.of().parseHex(expectedSha256);
+            if (!MessageDigest.isEqual(actual, expected)) {
+                throw new IOException("Bundle config file checksum verification failed: " + relativeFile);
+            }
+        }
+        return file;
     }
 
     private Path resolveAndVerify(Path bundle, String relativeFile, String expectedSha256, long expectedBytes)
             throws IOException {
         Path file = bundle.resolve(relativeFile).normalize().toRealPath();
-        if (!file.startsWith(bundle) || !Files.isRegularFile(file)) {
+        if (!file.startsWith(bundle) || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("Bundle file is not a regular file under the bundle directory: " + relativeFile);
         }
         long actualBytes = Files.size(file);
         if (actualBytes != expectedBytes || actualBytes > maxModelBytes) {
             throw new IOException("Bundle file size verification failed: " + relativeFile);
         }
-        if (!sha256(file).equals(expectedSha256)) {
+        byte[] actual = sha256Bytes(file);
+        byte[] expected = HexFormat.of().parseHex(expectedSha256);
+        if (!MessageDigest.isEqual(actual, expected)) {
             throw new IOException("Bundle file checksum verification failed: " + relativeFile);
         }
         return file;
     }
 
-    private static String sha256(Path file) throws IOException {
+    private static byte[] sha256Bytes(Path file) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (var input = Files.newInputStream(file)) {
                 byte[] buffer = new byte[8192];
                 for (int count; (count = input.read(buffer)) != -1; ) digest.update(buffer, 0, count);
             }
-            return HexFormat.of().formatHex(digest.digest());
+            return digest.digest();
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }

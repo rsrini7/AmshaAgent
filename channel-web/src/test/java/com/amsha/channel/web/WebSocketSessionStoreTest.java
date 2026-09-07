@@ -20,12 +20,16 @@ class WebSocketSessionStoreTest {
     @Mock
     WebSocketConnection connection;
 
+    @Mock
+    WebSocketConnection replacementConnection;
+
     private WebSocketSessionStore store;
 
     @BeforeEach
     void setUp() {
         store = new WebSocketSessionStore();
         lenient().when(connection.id()).thenReturn("conn-1");
+        lenient().when(replacementConnection.id()).thenReturn("conn-2");
     }
 
     @Test
@@ -53,6 +57,18 @@ class WebSocketSessionStoreTest {
         assertEquals("amsha-sess-2", store.getAmshaSessionId("plat-1").orElse(null));
         List<WebSocketConnection> connections = store.getConnectionsByAmshaSession("amsha-sess-2");
         assertEquals(1, connections.size());
+    }
+
+    @Test
+    void staleConnectionCleanupDoesNotRemoveReplacement() {
+        store.register("plat-1", "amsha-sess-old", "owner-1", connection);
+        store.register("plat-1", "amsha-sess-new", "owner-1", replacementConnection);
+
+        store.unregister("plat-1", connection);
+
+        assertEquals(Optional.of(replacementConnection), store.get("plat-1"));
+        assertEquals("amsha-sess-new", store.getAmshaSessionId("plat-1").orElseThrow());
+        assertEquals(List.of(replacementConnection), store.getConnectionsByAmshaSession("amsha-sess-new"));
     }
 
     @Test

@@ -60,58 +60,98 @@ public class ApprovalStateMachine implements ApprovalGateway {
     public ApprovalResult decide(String sessionId, String toolName, ApprovalDecision decision, String reason) {
         log.infof("[ASM] decide(session=%s, tool=%s, decision=%s, reason=%s)", sessionId, toolName, decision, reason);
 
-        // 1. Load checkpoint - return NOT_FOUND if absent
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
-        if (cpOpt.isEmpty()) {
+        // 1. Load checkpoint - check exact session match first, then child delegated session if tool is not in parent
+        Optional<AgentCheckpoint> exactCpOpt = agentStore.findLatestAwaitingApproval(sessionId);
+        AgentCheckpoint cp = null;
+        List<String> allTools = null;
+        String effectiveTool = null;
+
+        if (exactCpOpt.isPresent()) {
+            AgentCheckpoint exactCp = exactCpOpt.get();
+            List<String> exactTools = BatchDecisionUtil.allToolNames(exactCp, objectMapper);
+            String matched = resolveByPrefix(toolName, exactTools, exactCp.getSessionId());
+            if (matched != null) {
+                cp = exactCp;
+                allTools = exactTools;
+                effectiveTool = matched;
+            }
+        }
+
+        if (cp == null) {
+            Optional<AgentCheckpoint> childCpOpt = agentStore.findLatestAwaitingApprovalBySessionContaining(sessionId);
+            if (childCpOpt.isPresent()) {
+                AgentCheckpoint childCp = childCpOpt.get();
+                List<String> childTools = BatchDecisionUtil.allToolNames(childCp, objectMapper);
+                String matched = resolveByPrefix(toolName, childTools, childCp.getSessionId());
+                if (matched != null) {
+                    cp = childCp;
+                    allTools = childTools;
+                    effectiveTool = matched;
+                } else if (exactCpOpt.isEmpty()) {
+                    cp = childCp;
+                    allTools = childTools;
+                }
+            }
+        }
+
+        if (cp == null && exactCpOpt.isPresent()) {
+            cp = exactCpOpt.get();
+            allTools = BatchDecisionUtil.allToolNames(cp, objectMapper);
+        }
+
+        if (cp == null) {
             log.warnf("[ASM] Checkpoint not found for session=%s, returning NOT_FOUND", sessionId);
             return new ApprovalResult(ApprovalOutcome.NOT_FOUND, sessionId, toolName, 0, List.of());
         }
-        AgentCheckpoint cp = cpOpt.get();
-        log.debugf("[ASM] Loaded checkpoint id=%d status=%s for session=%s", cp.getId(), cp.getStatus(), sessionId);
+        String targetSessionId = cp.getSessionId();
+        log.debugf(
+                "[ASM] Loaded checkpoint id=%d status=%s for session=%s (targetSession=%s)",
+                cp.getId(), cp.getStatus(), sessionId, targetSessionId);
 
         // 2. Verify AWAITING_APPROVAL state (findLatestAwaitingApproval guarantees this)
         if (cp.getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
             log.warnf(
                     "[ASM] Checkpoint session=%s has status=%s instead of AWAITING_APPROVAL, returning NOT_FOUND",
-                    sessionId, cp.getStatus());
-            return new ApprovalResult(ApprovalOutcome.NOT_FOUND, sessionId, toolName, 0, List.of());
+                    targetSessionId, cp.getStatus());
+            return new ApprovalResult(ApprovalOutcome.NOT_FOUND, targetSessionId, toolName, 0, List.of());
         }
 
         // 3. Check expiry via agentStore.isCheckpointExpired() -> EXPIRED if true
-        if (agentStore.isCheckpointExpired(sessionId, hitlTimeoutHours)) {
+        if (agentStore.isCheckpointExpired(targetSessionId, hitlTimeoutHours)) {
             log.infof(
                     "[ASM] Checkpoint expired for session=%s (timeout=%dh), returning EXPIRED",
-                    sessionId, hitlTimeoutHours);
-            return new ApprovalResult(ApprovalOutcome.EXPIRED, sessionId, toolName, 0, List.of());
+                    targetSessionId, hitlTimeoutHours);
+            return new ApprovalResult(ApprovalOutcome.EXPIRED, targetSessionId, toolName, 0, List.of());
         }
 
-        List<String> allTools = BatchDecisionUtil.allToolNames(cp, objectMapper);
         List<String> pendingTools = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-        log.debugf("[ASM] session=%s allTools=%s pendingTools=%s", sessionId, allTools, pendingTools);
+        log.debugf("[ASM] session=%s allTools=%s pendingTools=%s", targetSessionId, allTools, pendingTools);
 
         // 5. Record decision per tool
         ToolDecision decisionEnum = decision == ApprovalDecision.APPROVE ? ToolDecision.APPROVED : ToolDecision.DENIED;
-        String effectiveTool = resolveByPrefix(toolName, allTools, sessionId);
         if (effectiveTool == null) {
-            log.warnf("[ASM] Tool '%s' not found in allTools=%s for session=%s", toolName, allTools, sessionId);
-            return new ApprovalResult(ApprovalOutcome.NOT_FOUND, sessionId, toolName, 0, List.of());
+            effectiveTool = resolveByPrefix(toolName, allTools, targetSessionId);
+        }
+        if (effectiveTool == null) {
+            log.warnf("[ASM] Tool '%s' not found in allTools=%s for session=%s", toolName, allTools, targetSessionId);
+            return new ApprovalResult(ApprovalOutcome.NOT_FOUND, targetSessionId, toolName, 0, List.of());
         }
         if (!effectiveTool.equals(toolName)) {
             log.debugf(
                     "[ASM] Prefix-matched truncated tool '%s' -> '%s' for session=%s",
-                    toolName, effectiveTool, sessionId);
+                    toolName, effectiveTool, targetSessionId);
         }
 
         boolean updatedAny = false;
         if ("all".equalsIgnoreCase(effectiveTool)) {
-            log.infof("[ASM] Approving all pending tools for session=%s: %s", sessionId, pendingTools);
+            log.infof("[ASM] Approving all pending tools for session=%s: %s", targetSessionId, pendingTools);
             for (String pending : pendingTools) {
-                boolean updated =
-                        agentStore.updateBatchToolDecision(sessionId, cp.getAgentRole(), pending, decisionEnum.name());
+                boolean updated = agentStore.updateBatchToolDecision(
+                        targetSessionId, cp.getAgentRole(), pending, decisionEnum.name());
                 if (updated) {
                     updatedAny = true;
                     if (decisionEnum == ToolDecision.APPROVED) {
-                        grantLease(sessionId, cp, pending);
+                        grantLease(targetSessionId, cp, pending);
                     }
                 }
             }
@@ -119,34 +159,35 @@ public class ApprovalStateMachine implements ApprovalGateway {
             if (!pendingTools.contains(effectiveTool)) {
                 log.infof(
                         "Tool '%s' already decided for session=%s, pendingTools=%s",
-                        effectiveTool, sessionId, pendingTools);
-                return ApprovalResult.alreadyDecided(sessionId, effectiveTool);
+                        effectiveTool, targetSessionId, pendingTools);
+                return ApprovalResult.alreadyDecided(targetSessionId, effectiveTool);
             }
             updatedAny = agentStore.updateBatchToolDecision(
-                    sessionId, cp.getAgentRole(), effectiveTool, decisionEnum.name());
-            if (!updatedAny) return ApprovalResult.alreadyDecided(sessionId, effectiveTool);
-            if (decisionEnum == ToolDecision.APPROVED) grantLease(sessionId, cp, effectiveTool);
+                    targetSessionId, cp.getAgentRole(), effectiveTool, decisionEnum.name());
+            if (!updatedAny) return ApprovalResult.alreadyDecided(targetSessionId, effectiveTool);
+            if (decisionEnum == ToolDecision.APPROVED) grantLease(targetSessionId, cp, effectiveTool);
         }
 
-        if (!updatedAny) return ApprovalResult.alreadyDecided(sessionId, effectiveTool);
+        if (!updatedAny) return ApprovalResult.alreadyDecided(targetSessionId, effectiveTool);
 
         // 6. Resolve final outcome — all decided or still pending
-        var result = resolveOutcome(sessionId, cp, effectiveTool, decisionEnum, allTools, pendingTools);
+        var result = resolveOutcome(targetSessionId, cp, effectiveTool, decisionEnum, allTools, pendingTools);
 
         // 7. Fire CDI ApprovalDecisionEvent for channel observers
         eventBus.publish(
                 EventTypeCatalog.APPROVAL_DECISION,
                 new ApprovalDecisionEvent(
-                        sessionId,
+                        targetSessionId,
                         result.channelType(),
                         cp.getChannelPlatformId(),
                         effectiveTool,
                         decision,
                         result.outcome()));
-        log.debugf("[ASM] Fired ApprovalDecisionEvent for session=%s outcome=%s", sessionId, result.outcome());
+        log.debugf("[ASM] Fired ApprovalDecisionEvent for session=%s outcome=%s", targetSessionId, result.outcome());
 
         // 8. Return ApprovalResult with outcome + remainingPendingTools
-        return new ApprovalResult(result.outcome(), sessionId, effectiveTool, result.remaining(), result.nextPending());
+        return new ApprovalResult(
+                result.outcome(), targetSessionId, effectiveTool, result.remaining(), result.nextPending());
     }
 
     private record OutcomeResult(

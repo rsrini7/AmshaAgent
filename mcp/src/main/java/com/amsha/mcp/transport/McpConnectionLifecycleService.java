@@ -1,5 +1,6 @@
 package com.amsha.mcp.transport;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
@@ -42,6 +43,8 @@ import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
 @Unremovable
+@SuppressWarnings(
+        "PMD.ExcessiveClassLength") // Durable MCP lifecycle and credential cleanup remain one transaction boundary.
 public class McpConnectionLifecycleService {
 
     private static final Logger LOG = Logger.getLogger(McpConnectionLifecycleService.class);
@@ -65,6 +68,10 @@ public class McpConnectionLifecycleService {
     @Inject
     OutboundHttpPolicyService outboundHttpPolicyService;
 
+    private final Object startupReconnectLock = new Object();
+    private volatile Timer startupReconnectTimer;
+    private volatile boolean shuttingDown;
+
     /**
      * Delay before reconciling durable connections at boot. The MCP/HTTP server may
      * not be listening yet when {@link StartupEvent} fires, so reconnecting a
@@ -75,17 +82,53 @@ public class McpConnectionLifecycleService {
     private static final long STARTUP_RECONNECT_DELAY_MS = 2_000;
 
     void onStartup(@Observes StartupEvent event) {
-        new Timer("mcp-startup-reconnect", true)
-                .schedule(
-                        new TimerTask() {
-                            @Override
-                            public void run() {
-                                retryCleanupFailures();
-                                reconcilePendingApprovals();
-                                reconnectEnabledConnections();
-                            }
-                        },
-                        STARTUP_RECONNECT_DELAY_MS);
+        synchronized (startupReconnectLock) {
+            if (shuttingDown || startupReconnectTimer != null) {
+                return;
+            }
+            startupReconnectTimer = new Timer("mcp-startup-reconnect", true);
+            startupReconnectTimer.schedule(
+                    new TimerTask() {
+                        @Override
+                        public void run() {
+                            runStartupReconciliation();
+                        }
+                    },
+                    STARTUP_RECONNECT_DELAY_MS);
+        }
+    }
+
+    @PreDestroy
+    void onShutdown() {
+        synchronized (startupReconnectLock) {
+            shuttingDown = true;
+            if (startupReconnectTimer != null) {
+                startupReconnectTimer.cancel();
+                startupReconnectTimer = null;
+            }
+        }
+    }
+
+    void runStartupReconciliation() {
+        if (shuttingDown) {
+            return;
+        }
+        try {
+            retryCleanupFailures();
+            if (shuttingDown) {
+                return;
+            }
+            reconcilePendingApprovals();
+            if (shuttingDown) {
+                return;
+            }
+            reconnectEnabledConnections();
+        } catch (RuntimeException e) {
+            if (!shuttingDown) {
+                LOG.warnf("MCP startup reconciliation failed: %s", LogUtil.rootMessage(e));
+                LOG.debug("Full MCP startup reconciliation failure", e);
+            }
+        }
     }
 
     public int retryCleanupFailures() {

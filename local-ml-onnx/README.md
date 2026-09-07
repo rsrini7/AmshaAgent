@@ -43,6 +43,14 @@ Optional in-process ONNX Runtime integration for Amsha Agent.
 | amsha.rag.reranker.timeout | AMSHA_RAG_RERANKER_TIMEOUT | PT5S | Total deadline for one cross-encoder scoring request. |
 | amsha.rag.reranker.max-candidates | AMSHA_RAG_RERANKER_MAX_CANDIDATES | 50 | Maximum number of retrieved candidate chunks scored. |
 | amsha.rag.reranker.max-input-bytes | AMSHA_RAG_RERANKER_MAX_INPUT_BYTES | 262144 | UTF-8 byte limit for query or candidate text before scoring. |
+| amsha.stt.local.enabled | AMSHA_STT_LOCAL_ENABLED | false | Enables local in-process ONNX Whisper audio transcription under AudioTranscriptionPort (requires `amsha.onnx.enabled=true`). |
+| amsha.stt.local.bundle-id | AMSHA_STT_LOCAL_BUNDLE_ID | whisper-tiny-en-v1 | Explicit verified local Whisper model bundle ID. |
+| amsha.stt.local.timeout | AMSHA_STT_LOCAL_TIMEOUT | PT30S | Total deadline for one local audio transcription request. |
+| amsha.stt.local.max-audio-bytes | AMSHA_STT_LOCAL_MAX_AUDIO_BYTES | 26214400 | Maximum raw audio payload bytes accepted for admission (<= 25 MiB; max duration 30s). |
+| amsha.stt.local.max-transcript-chars | AMSHA_STT_LOCAL_MAX_TRANSCRIPT_CHARS | 12000 | Maximum character length of output transcript text (longer transcripts are truncated). |
+| amsha.stt.ffmpeg-path | AMSHA_STT_FFMPEG_PATH | ffmpeg | Path to the ffmpeg executable used to transcode compressed audio (OGG/Opus, WebM, MP3) to WAV. |
+| amsha.stt.allow-fallback-on-failure | AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE | false | If true, cascades to secondary STT providers on failure/timeout. False prevents audio egress. |
+
 
 `OnnxModelBundleRegistry` loads only an explicitly selected bundle ID below the
 configured root. It never downloads assets; each bundle must contain a regular
@@ -120,10 +128,31 @@ record matches the evidence digest.
 For reproducible development bundles:
 - `mise run models:install-mpnet`: Installs the Apache-2.0 `sentence-transformers/all-mpnet-base-v2` embedding bundle.
 - `mise run models:install-bge-reranker`: Installs the Apache-2.0 `Xenova/bge-reranker-base` cross-encoder reranking bundle.
+- `mise run models:provision-local-whisper`: Downloads and verifies the Apache-2.0 `Xenova/whisper-tiny.en` local Whisper model bundle.
+- `mise run models:check-local-whisper`: Verifies the SHA-256 integrity and manifest of the local Whisper bundle without network access.
 - `mise run models:install-all`: Installs all pinned local ONNX development bundles in one step.
 - `mise run models:list`: Scans and validates manifests of all installed local ONNX models.
 
 All bundles verify fixed SHA-256 digests and byte counts, writing deterministic local manifests under gitignored `data/models/`.
+
+### Standalone binary model management
+
+For distribution environments where Python, `mise`, or repo scripts are not present on the end-user machine, the native binary provides built-in model management:
+
+```bash
+# List local model bundles and their installation status
+./amsha models list
+
+# Install pinned and SHA-256 verified model bundles
+./amsha models install whisper          # Local speech-to-text (~43 MB)
+./amsha models install mpnet            # Local dense embeddings (~436 MB)
+./amsha models install bge-reranker     # Local cross-encoder reranking (~1.1 GB)
+./amsha models install all              # Install all supported local models
+
+# Verify integrity of installed model files
+./amsha models verify whisper
+```
+
 Run `./mvnw -pl local-ml-onnx -Dtest=OnnxEmbeddingModelSmokeTest test` after
 installation to execute the JVM smoke test against the real bundle.
 

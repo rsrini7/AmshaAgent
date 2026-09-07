@@ -5,24 +5,32 @@ import com.amsha.app.api.ArchivalMemoryAdminResource;
 import com.amsha.app.api.AuditResource;
 import com.amsha.app.api.AuthResource;
 import com.amsha.app.api.CoreMemoryAdminResource;
+import com.amsha.app.api.DbConsoleResource;
 import com.amsha.app.api.IdentityResource;
+import com.amsha.app.api.ModelArenaResource;
 import com.amsha.app.api.OnnxAdminResource;
 import com.amsha.app.api.OnnxModelAdminResource;
 import com.amsha.app.api.PromptAdminResource;
 import com.amsha.app.api.RecallMemoryAdminResource;
 import com.amsha.app.api.SessionResource;
+import com.amsha.app.cli.ModelInstaller;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
 import com.amsha.app.skill.SkillResource;
+import com.amsha.app.ui.CockpitResource;
 import com.amsha.app.ui.dto.AgentEvent;
 import com.amsha.app.ui.dto.AgentStatusDto;
+import com.amsha.app.ui.dto.ArenaCompareRequest;
+import com.amsha.app.ui.dto.ArenaCompareResponse;
+import com.amsha.app.ui.dto.ArenaModelResult;
 import com.amsha.app.ui.dto.ChatMessageDto;
 import com.amsha.app.ui.dto.ChatRequest;
 import com.amsha.app.ui.dto.CheckpointApprovalRequest;
 import com.amsha.app.ui.dto.CheckpointApprovalResponse;
+import com.amsha.app.ui.dto.DbQueryRequest;
+import com.amsha.app.ui.dto.DbQueryResponse;
 import com.amsha.app.ui.dto.PageDto;
 import com.amsha.app.ui.dto.PendingApprovalDto;
-import com.amsha.core.api.dto.ActiveAgentResponse;
 import com.amsha.onboarding.BootstrapResource;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
@@ -66,7 +74,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RecallMemoryAdminResource.PurgeResponse.class,
             CoreMemoryAdminResource.CoreMemoryUpdateRequest.class,
             PromptAdminResource.PromptUpdateRequest.class,
-            ActiveAgentResponse.class,
             // Identity / Access / Workspace Sharing / Bootstrap ──
             // Onboarding bootstrap records
             BootstrapResource.BootstrapStatusResponse.class,
@@ -97,5 +104,16 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             WorkspaceMembershipDto.class,
             ExternalIdentityDto.class,
             IdentityInvitationDto.class,
+            CockpitResource.class,
+            DbConsoleResource.class,
+            ModelArenaResource.class,
+            DbQueryRequest.class,
+            DbQueryResponse.class,
+            ArenaCompareRequest.class,
+            ArenaCompareResponse.class,
+            ArenaModelResult.class,
+            ModelInstaller.ModelCatalogEntry.class,
+            ModelInstaller.ModelFileSpec.class,
+            ModelInstaller.ModelStatus.class
         })
 public class AppReflectionConfig {}

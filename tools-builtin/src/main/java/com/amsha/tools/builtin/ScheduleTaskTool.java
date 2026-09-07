@@ -10,6 +10,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 
 import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -26,6 +27,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.domain.model.AgentCronRecord;
+import com.amsha.core.util.CronTimeResolver;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
@@ -92,7 +94,15 @@ public class ScheduleTaskTool implements AgentTool {
     private static final Pattern NAKED_PRONOUN =
             Pattern.compile("\\b(this|the code|the file|the thing)\\b", Pattern.CASE_INSENSITIVE);
 
+    private static final String DEFAULT_EXECUTION_ROLE = AgentRoleEnum.RESEARCHER.toScopedName();
+
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+
+    /**
+     * Minimum lead time a resolved fire time must retain. A target at or before "now" is
+     * stale and must never be persisted silently.
+     */
+    private static final Duration MIN_FIRE_LEAD_TIME = Duration.ofSeconds(5);
 
     @Inject
     CronStorePort cronStore;
@@ -193,7 +203,8 @@ public class ScheduleTaskTool implements AgentTool {
         if (validationError != null) return validationError;
 
         String goal = (String) params.get(PARAM_GOAL);
-        ZoneId zone = parseTimezone(params);
+        ZoneId requestedZone = parseTimezone(params);
+        ZoneId zone = requestedZone;
         boolean runOnce = parseRunOnce(params);
         if (!runOnce) {
             runOnce = shouldTreatAsRunOnce(goal, ctx, runOnce);
@@ -237,13 +248,48 @@ public class ScheduleTaskTool implements AgentTool {
             }
         }
 
-        Instant nextFireTime = resolveNextFireTime(runOnce, suggestedNextFireTime, cronExpression, zone);
+        // A one-shot target is re-resolved from the user's own wording against CURRENT time.
+        // The LLM only ever saw a time snapshot captured before its inference, so an absolute
+        // target it produced can already be in the past once this tool runs; preferring the
+        // fresh resolution keeps date/time arithmetic in Java (antigravity principle).
+        Instant nextFireTime = null;
+        if (runOnce) {
+            ZonedDateTime fresh =
+                    CronTimeResolver.resolveTargetTimeFromNow(ctx.rawUserGoal(), requestedZone, MIN_FIRE_LEAD_TIME);
+            nextFireTime = fresh == null ? null : fresh.toInstant();
+        }
+        if (nextFireTime == null) {
+            nextFireTime = resolveNextFireTime(runOnce, suggestedNextFireTime, cronExpression, zone);
+        }
         if (nextFireTime == null) {
             log.warnf(
                     "[ScheduleTaskTool] Rejecting: could not determine next fire time (cron='%s', suggested='%s')",
                     cronExpression, suggestedNextFireTime);
             return ToolResponse.failure(
                     400, "Could not determine next fire time. Supply a valid cronExpression or use runOnce=true.");
+        }
+        // Backstop: never persist a fire time that has already elapsed. Without this a
+        // run-once cron silently rolls over to its next occurrence instead of failing.
+        if (!nextFireTime.isAfter(Instant.now())) {
+            log.warnf(
+                    "[ScheduleTaskTool] Rejecting: resolved fire time %s is already in the past "
+                            + "(cron='%s', suggested='%s')",
+                    nextFireTime, cronExpression, suggestedNextFireTime);
+            return ToolResponse.failure(
+                    400,
+                    "The requested fire time has already elapsed, so the task cannot be scheduled. "
+                            + "Re-issue the request with a delay measured from the current time.");
+        }
+
+        if ((cronExpression == null || cronExpression.isBlank()) && nextFireTime != null) {
+            ZonedDateTime targetZdt = nextFireTime.atZone(zone);
+            cronExpression = String.format(
+                    Locale.ROOT,
+                    "%d %d %d %d *",
+                    targetZdt.getMinute(),
+                    targetZdt.getHour(),
+                    targetZdt.getDayOfMonth(),
+                    targetZdt.getMonthValue());
         }
 
         String userId = ctx.userId();
@@ -308,12 +354,10 @@ public class ScheduleTaskTool implements AgentTool {
     }
 
     private boolean parseRunOnce(Map<String, Object> params) {
-        Object runOnceRaw = params.get(PARAM_RUN_ONCE);
-        return switch (runOnceRaw) {
+        return switch (params.get(PARAM_RUN_ONCE)) {
             case Boolean b -> b;
             case String s -> Boolean.parseBoolean(s);
-            case null -> false;
-            default -> false;
+            case null, default -> false;
         };
     }
 
@@ -322,7 +366,7 @@ public class ScheduleTaskTool implements AgentTool {
         if (executionRole != null && executionRole.isBlank()) {
             executionRole = null;
         }
-        return executionRole;
+        return executionRole != null ? executionRole : DEFAULT_EXECUTION_ROLE;
     }
 
     private String resolveCron(Map<String, Object> params) {
@@ -363,26 +407,36 @@ public class ScheduleTaskTool implements AgentTool {
             String executionRole,
             String goal,
             Instant nextFireTime) {
+        String safeCron = (cronExpression != null && !cronExpression.isBlank())
+                ? cronExpression
+                : (nextFireTime != null
+                        ? String.format(
+                                Locale.ROOT,
+                                "%d %d %d %d *",
+                                nextFireTime.atZone(zone).getMinute(),
+                                nextFireTime.atZone(zone).getHour(),
+                                nextFireTime.atZone(zone).getDayOfMonth(),
+                                nextFireTime.atZone(zone).getMonthValue())
+                        : "* * * * *");
         var dto = new AgentCronDto(
-                UUID.randomUUID().toString(), // id
+                UUID.randomUUID().toString(),
                 sessionId,
                 userId,
                 chatId,
                 ctx.channelType(),
-                null, // channelPlatformId
-                cronExpression,
+                ctx.channelPlatformId(),
+                safeCron,
                 zone.getId(),
                 runOnce,
                 AgentSentinels.CRON_PREFIX + goal,
                 nextFireTime,
-                null, // lastFireTime
+                null,
                 CronStatus.ACTIVE.name(),
                 executionRole,
-                null, // errorReason
-                null, // lastDeliveryId
-                Instant.now(), // createdAt
-                null // updatedAt
-                );
+                null,
+                null,
+                Instant.now(),
+                null);
         cronStore.save(dto);
         return AgentCronRecord.fromDto(dto);
     }

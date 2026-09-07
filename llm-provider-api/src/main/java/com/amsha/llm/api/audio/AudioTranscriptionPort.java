@@ -24,4 +24,16 @@ public interface AudioTranscriptionPort {
      * @return a payload-safe categorical result
      */
     AudioTranscriptionResult transcribe(AudioTranscriptionRequest request);
+
+    /**
+     * Precedence order when multiple transcription adapters are available.
+     * Higher numbers take precedence. Default is 0.
+     * <p>
+     * Implementations must return a stable, side-effect free value. When multiple adapters
+     * report the same priority, composite dispatch resolves ties deterministically using
+     * the implementation class name.
+     */
+    default int priority() {
+        return 0;
+    }
 }

@@ -63,6 +63,7 @@ public enum SecurityEventType {
 
     // Session isolation (Per-key isolation)
     UNAUTHORIZED_ACCESS, // Cross-key session access attempt blocked
+    SESSION_INSPECTED, // Privileged replay inspection of another user's session
 
     // Session lifecycle
     SESSION_CREATED, // new agent session created via REST
@@ -117,7 +118,11 @@ public enum SecurityEventType {
 
     // Media ingestion
     MEDIA_DOWNLOADED, // Governed external media attachment download
-    MEDIA_DOWNLOAD_DENIED; // Governed media download rejected before transport
+    MEDIA_DOWNLOAD_DENIED, // Governed media download rejected before transport
+
+    // DB Console & Model Arena
+    DATABASE_QUERY_FAILED, // DB console query execution error or database unavailable
+    PROVIDER_EGRESS_VALIDATED; // Model Arena governed provider egress validation succeeded
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -138,6 +143,7 @@ public enum SecurityEventType {
                     MCP_TOOL_INVOKED,
                     DELEGATE_APPROVAL,
                     UNAUTHORIZED_ACCESS,
+                    SESSION_INSPECTED,
                     MEMORY_INGESTED,
                     MEDIA_DOWNLOADED,
                     AUTH_REJECTED,
@@ -164,6 +170,8 @@ public enum SecurityEventType {
                     MCP_CREDENTIAL_ROTATED,
                     MCP_CREDENTIAL_REMOVED,
                     MCP_CREDENTIAL_CLEANUP_FAILED,
+                    DATABASE_QUERY_FAILED,
+                    PROVIDER_EGRESS_VALIDATED,
                     DELEGATION_DISPATCHED -> true;
             default -> false;
         };

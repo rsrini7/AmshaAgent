@@ -50,7 +50,7 @@
     "tag": "Unified API",
     "icon": "R",
     "color": "#6561f5",
-    "defaultModel": "openai/gpt-oss-20b:free",
+    "defaultModel": "minimax/minimax-m3:free",
     "embeddingCapable": false,
     "requiresApiKey": true,
     "hasBaseUrl": true
@@ -61,7 +61,7 @@
     "tag": "NIM models",
     "icon": "N",
     "color": "#76b900",
-    "defaultModel": "bytedance/seed-oss-36b-instruct",
+    "defaultModel": "meta/llama-3.2-11b-vision-instruct",
     "embeddingCapable": false,
     "requiresApiKey": true,
     "hasBaseUrl": true
@@ -72,7 +72,7 @@
     "tag": "Ultra-fast LPU",
     "icon": "Cb",
     "color": "#11e400",
-    "defaultModel": "qwen-3-235b-a22b-instruct-2507",
+    "defaultModel": "qwen-3.8-27b",
     "embeddingCapable": false,
     "requiresApiKey": true,
     "hasBaseUrl": true
@@ -83,7 +83,7 @@
     "tag": "Indic-language models",
     "icon": "Sa",
     "color": "#f26a2e",
-    "defaultModel": "sarvam-105b",
+    "defaultModel": "sarvam-105b-conversations",
     "embeddingCapable": false,
     "requiresApiKey": true,
     "authScheme": "BEARER",

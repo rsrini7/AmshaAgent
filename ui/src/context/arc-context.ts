@@ -4,6 +4,7 @@ export interface ArcAppContext {
   apiKey: string;
   sessionId: string;
   platformId: string;
+  workspaceId?: string;
   sseStatus: 'connected' | 'disconnected' | 'error';
 }
 

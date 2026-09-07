@@ -256,6 +256,23 @@ class AgentSessionServiceDeepTest {
     }
 
     @Test
+    void testGetStatus_cronSessionUsesLatestCheckpointRole() {
+        when(heartbeatTracker.exists("cron-cron-123")).thenReturn(true);
+        when(heartbeatTracker.getOwner("cron-cron-123")).thenReturn(Optional.of("user-1"));
+        AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
+        when(checkpoint.getId()).thenReturn(1L);
+        when(checkpoint.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
+        when(agentStore.findLatestNonArchivedCheckpoint("cron-cron-123")).thenReturn(Optional.of(checkpoint));
+        when(agentStore.loadSteps(1L)).thenReturn(List.of());
+
+        ServiceResult<Object> result = service.getStatus("cron-cron-123", "user-1", "coordinator");
+
+        assertTrue(result.isSuccess());
+        verify(agentStore).findLatestNonArchivedCheckpoint("cron-cron-123");
+        verify(agentStore, never()).load("cron-cron-123", "coordinator");
+    }
+
+    @Test
     void testGetStatus_exceptionReturnsError() {
         when(heartbeatTracker.exists("s1")).thenReturn(true);
         when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));

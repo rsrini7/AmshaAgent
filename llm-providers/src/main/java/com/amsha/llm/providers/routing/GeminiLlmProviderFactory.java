@@ -4,6 +4,7 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.time.Duration;
 
@@ -13,6 +14,8 @@ import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.RoutingChatModelProvider;
+import com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilder;
+import com.amsha.security.http.GovernedTransportService;
 
 import io.quarkus.arc.Unremovable;
 
@@ -22,6 +25,9 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
+
+    @Inject
+    GovernedTransportService governedTransport;
 
     @Override
     public String providerId() {
@@ -37,7 +43,8 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
         // Hardening: Strip quotes and whitespace
         key = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
 
-        ChatModel model = GoogleAiGeminiChatModel.builder()
+        var builder = GoogleAiGeminiChatModel.builder()
+                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(governedTransport))
                 .apiKey(key)
                 .modelName(config.modelName())
                 .temperature(0.0)
@@ -45,8 +52,11 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
                 // .thinkingBudget(0L)
                 .timeout(config.timeout().orElse(Duration.ofSeconds(30)))
                 .logRequests(false)
-                .logResponses(false)
-                .build();
+                .logResponses(false);
+        if (config.baseUrl() != null && !config.baseUrl().isBlank()) {
+            builder.baseUrl(config.baseUrl());
+        }
+        ChatModel model = builder.build();
         MultimodalCapability multimodalCap =
                 MultimodalCapabilities.defaultCapabilityForModel("gemini", config.modelName());
         return CapabilityAwareChatModel.withCapabilities(model, false, multimodalCap);

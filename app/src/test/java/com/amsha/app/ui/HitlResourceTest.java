@@ -108,11 +108,13 @@ class HitlResourceTest {
         Response resp = resource.approve(TASK_ID, request, null);
 
         assertEquals(200, resp.getStatus());
-        verify(hitlService).resolve(TASK_ID, "sandbox_exec", true, "looks safe");
+        verify(hitlService).resolve(TASK_ID, "sandbox_exec", true, "looks safe", USER_ID);
     }
 
     @Test
     void approveReturns501WhenHitlUnavailable() {
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(principal.getName()).thenReturn(USER_ID);
         when(hitlServiceInstance.isUnsatisfied()).thenReturn(true);
 
         Response resp = resource.approve(TASK_ID, new CheckpointApprovalRequest("tool", "reason"), null);
@@ -122,11 +124,13 @@ class HitlResourceTest {
 
     @Test
     void approveReturns404WhenNoPendingApproval() {
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(principal.getName()).thenReturn(USER_ID);
         when(hitlServiceInstance.isUnsatisfied()).thenReturn(false);
         when(hitlServiceInstance.get()).thenReturn(hitlService);
         doThrow(new IllegalArgumentException("No pending approval found"))
                 .when(hitlService)
-                .resolve(anyString(), anyString(), anyBoolean(), anyString());
+                .resolve(anyString(), anyString(), anyBoolean(), anyString(), anyString());
 
         Response resp = resource.approve(TASK_ID, new CheckpointApprovalRequest("tool", "reason"), null);
 
@@ -135,11 +139,13 @@ class HitlResourceTest {
 
     @Test
     void approveReturns409WhenAlreadyResolved() {
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(principal.getName()).thenReturn(USER_ID);
         when(hitlServiceInstance.isUnsatisfied()).thenReturn(false);
         when(hitlServiceInstance.get()).thenReturn(hitlService);
         doThrow(new IllegalStateException("already resolved"))
                 .when(hitlService)
-                .resolve(anyString(), anyString(), anyBoolean(), anyString());
+                .resolve(anyString(), anyString(), anyBoolean(), anyString(), anyString());
 
         Response resp = resource.approve(TASK_ID, new CheckpointApprovalRequest("tool", "reason"), null);
 
@@ -156,11 +162,13 @@ class HitlResourceTest {
         Response resp = resource.reject(TASK_ID, new CheckpointApprovalRequest("sandbox_exec", "too risky"), null);
 
         assertEquals(200, resp.getStatus());
-        verify(hitlService).resolve(TASK_ID, "sandbox_exec", false, "too risky");
+        verify(hitlService).resolve(TASK_ID, "sandbox_exec", false, "too risky", USER_ID);
     }
 
     @Test
     void rejectReturns501WhenHitlUnavailable() {
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(principal.getName()).thenReturn(USER_ID);
         when(hitlServiceInstance.isUnsatisfied()).thenReturn(true);
 
         Response resp = resource.reject(TASK_ID, new CheckpointApprovalRequest("tool", "reason"), null);
@@ -181,7 +189,7 @@ class HitlResourceTest {
 
         assertEquals(first.getStatus(), second.getStatus());
         // resolve should only be called once due to idempotency cache
-        verify(hitlService, times(1)).resolve(anyString(), anyString(), anyBoolean(), anyString());
+        verify(hitlService, times(1)).resolve(anyString(), anyString(), anyBoolean(), anyString(), anyString());
     }
 
     private static void setField(Object target, String fieldName, Object value) {

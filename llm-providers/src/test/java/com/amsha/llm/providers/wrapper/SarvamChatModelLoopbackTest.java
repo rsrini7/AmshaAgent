@@ -3,7 +3,6 @@ package com.amsha.llm.providers.wrapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -186,7 +185,8 @@ class SarvamChatModelLoopbackTest {
         for (RecordedRequest req : recordedRequests) {
             assertEquals("/v1/chat/completions", req.path());
             assertEquals("Bearer synthetic-sarvam-key", req.authorizationHeader());
-            assertNull(req.subscriptionKeyHeader(), "Sarvam v1 must not send api-subscription-key");
+            assertEquals(
+                    "synthetic-sarvam-key", req.subscriptionKeyHeader(), "Sarvam v1 must send api-subscription-key");
             assertEquals(
                     ModelDefaults.DEFAULT_SARVAM_MODEL,
                     req.rootNode().get("model").asText());

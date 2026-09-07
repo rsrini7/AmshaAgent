@@ -41,6 +41,7 @@ class HitlServiceAbstractionTest {
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
+        when(heartbeatTracker.getOwner(anyString())).thenReturn(Optional.of("test-user"));
     }
 
     @Test
@@ -77,7 +78,7 @@ class HitlServiceAbstractionTest {
 
         when(checkpointStorePort.findById(1L)).thenReturn(Optional.of(cp));
 
-        hitlService.resolve("1", null, true, "reason");
+        hitlService.resolve("1", null, true, "reason", "test-user");
 
         verify(checkpointApprovalService).approveAll("s1", "reason");
     }
@@ -116,7 +117,7 @@ class HitlServiceAbstractionTest {
 
         when(checkpointStorePort.findById(1L)).thenReturn(Optional.of(cp));
 
-        hitlService.resolve("1", null, false, "reason");
+        hitlService.resolve("1", null, false, "reason", "test-user");
 
         verify(checkpointApprovalService).denyAll("s1", "reason");
     }

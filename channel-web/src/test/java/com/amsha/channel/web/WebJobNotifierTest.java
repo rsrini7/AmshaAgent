@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.amsha.channel.api.ChannelType;
@@ -44,6 +45,17 @@ class WebJobNotifierTest {
     void testNotifyApprovalRequiredNoSession() {
         when(sessionStore.get("sess-1")).thenReturn(Optional.empty());
         assertDoesNotThrow(() -> notifier.notifyApprovalRequired("sess-1", "cron-1", "bash", "Approval needed"));
+    }
+
+    @Test
+    void testNotifyApprovalRequiredFallsBackToAuthenticatedOwnerConnections() {
+        when(sessionStore.get("internal")).thenReturn(Optional.empty());
+        when(sessionStore.getConnectionsByOwner("internal")).thenReturn(List.of(conn));
+        when(conn.sendText(anyString())).thenReturn(Uni.createFrom().voidItem());
+
+        notifier.notifyApprovalRequired("internal", "cron-1", "sandbox_exec", "Approval needed");
+
+        verify(conn).sendText(contains("approval_required"));
     }
 
     @Test

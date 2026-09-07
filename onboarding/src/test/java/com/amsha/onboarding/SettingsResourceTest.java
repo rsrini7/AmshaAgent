@@ -173,7 +173,7 @@ public class SettingsResourceTest {
                 .patch("/settings/voice")
                 .then()
                 .statusCode(200)
-                .body("speechOutputMode", is("TEXT_ONLY"));
+                .body("speechOutputMode", is("AUDIO_ONLY"));
     }
 
     @Test

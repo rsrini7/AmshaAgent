@@ -4,14 +4,12 @@ import static com.amsha.core.message.UserMessages.*;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.time.Instant;
-
 import com.amsha.channel.api.ChannelCommand;
+import com.amsha.core.agent.loop.CronSessionStatusSync;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCron;
-import com.amsha.core.util.CronScheduleUtil;
 
 @ApplicationScoped
 @ReflexPriority(100)
@@ -62,6 +60,15 @@ public class ApproveReflex extends AbstractDecisionReflex {
         return cronMultipleAwaiting(list);
     }
 
+    /**
+     * Returns an empty string because {@link CronDecisionRouter} already dispatches the execution result
+     * to the user's channel via {@code ctx.jobNotifier().accept(cron, result)} (publishing an
+     * {@code AgentJobCompleted} event consumed by {@code TelegramJobNotifier}).
+     *
+     * <p>Returning a non-empty formatted message here causes {@code CommandDispatchHandler} to send a
+     * duplicate message to the user for the same approval. Blank responses are safely dropped by channel
+     * senders (e.g. {@code TelegramChannelSender}). <b>DO NOT change this to return {@code AgentResultFormatter.format(result)}.</b>
+     */
     @Override
     public String getCronSuccessResponse(AgentResult result) {
         return "";
@@ -114,28 +121,6 @@ public class ApproveReflex extends AbstractDecisionReflex {
         // CheckpointResumeHandler.dispatchResumeResult(). This is the only place
         // terminal state is set for direct /approve <cronId> commands.
         // syncCronTerminalStatus in CheckpointResumeHandler covers the async delegation path.
-        switch (result) {
-            case AgentResult.Finished _ -> {
-                if (cron.isRunOnce()) cronStore.markCompleted(cron.getId(), Instant.now());
-                else
-                    cronStore.markFired(
-                            cron.getId(),
-                            Instant.now(),
-                            CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
-            }
-            case AgentResult.StructuredFinished _ -> {
-                if (cron.isRunOnce()) cronStore.markCompleted(cron.getId(), Instant.now());
-                else
-                    cronStore.markFired(
-                            cron.getId(),
-                            Instant.now(),
-                            CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone()));
-            }
-            case AgentResult.Failed f -> cronStore.markFailed(cron.getId(), f.reason());
-            case AgentResult.AwaitingApproval _ -> cronStore.markAwaitingApproval(cron.getId());
-            case AgentResult.AwaitingRetry _ -> {} // No-op - retry handled by RateLimitRetryScheduler
-            case AgentResult.LoopExceeded _ -> cronStore.markFailed(cron.getId(), "Loop exceeded");
-            default -> {}
-        }
+        CronSessionStatusSync.applyTerminal(cron, cron.getLastDeliveryId(), result, cronStore);
     }
 }

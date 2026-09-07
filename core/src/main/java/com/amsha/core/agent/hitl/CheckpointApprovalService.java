@@ -15,6 +15,9 @@ import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.agent.sse.HitlEventType;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.BatchDecisionUtil;
@@ -44,17 +47,29 @@ public class CheckpointApprovalService {
     private final AgentSseService agentSseService;
     private final ObjectMapper objectMapper;
     private final Instance<CheckpointResumeHandler> resumeHandlerInstance;
+    private final TracePublisher tracePublisher;
 
     @Inject
     public CheckpointApprovalService(
             StatefulAgentStore agentStore,
             AgentSseService agentSseService,
             ObjectMapper objectMapper,
-            Instance<CheckpointResumeHandler> resumeHandlerInstance) {
+            Instance<CheckpointResumeHandler> resumeHandlerInstance,
+            TracePublisher tracePublisher) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.objectMapper = objectMapper;
         this.resumeHandlerInstance = resumeHandlerInstance;
+        this.tracePublisher = tracePublisher;
+    }
+
+    /** Visible for tests that do not require trace publishing. */
+    public CheckpointApprovalService(
+            StatefulAgentStore agentStore,
+            AgentSseService agentSseService,
+            ObjectMapper objectMapper,
+            Instance<CheckpointResumeHandler> resumeHandlerInstance) {
+        this(agentStore, agentSseService, objectMapper, resumeHandlerInstance, null);
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
@@ -215,6 +230,14 @@ public class CheckpointApprovalService {
                         null,
                         reason,
                         Instant.now()));
+
+        if (tracePublisher != null) {
+            String resolvedToolName = toolName != null ? toolName : cp.getPendingToolName();
+            tracePublisher.publish(TracePublisher.newEvent(cp.getSessionId(), TraceStage.HITL_RESOLVED)
+                    .withStation(StationCode.STATION_05_TOOL_GUARD)
+                    .withStatus(type.wireValue())
+                    .withDetail(resolvedToolName));
+        }
     }
 
     private static boolean isFinalDecision(ToolDecision decision) {
@@ -233,8 +256,8 @@ public class CheckpointApprovalService {
      * <p>§Issue-2 Fix: Previously this published RESUMED before calling the handler,
      * and a duplicate RESUMED would be published. Now we publish exactly once.
      */
-    public void triggerResume(AgentCheckpoint cp) {
-        if (cp == null) return;
+    public boolean triggerResume(AgentCheckpoint cp) {
+        if (cp == null) return false;
 
         AgentCheckpoint latest =
                 agentStore.findLatestAwaitingApproval(cp.getSessionId()).orElse(cp);
@@ -242,26 +265,32 @@ public class CheckpointApprovalService {
             log.debugf(
                     "HITL-RESUME: skipping trigger for session %s as batch tools are still pending",
                     latest.getSessionId());
-            return;
+            return false;
         }
 
         log.infof(
                 "HITL-RESUME: triggering resume for session %s role %s", latest.getSessionId(), latest.getAgentRole());
 
+        boolean accepted = false;
         try {
             if (resumeHandlerInstance.isResolvable()) {
                 CheckpointResumeHandler handler = resumeHandlerInstance.get();
-                handler.resumeAfterBatchDecision(
+                accepted = handler.resumeAfterBatchDecision(
                         latest.getSessionId(),
                         latest.getAgentRole(),
                         latest.getChannelPlatformId() != null ? latest.getChannelPlatformId() : "unknown",
                         latest.getChannelPlatformId() != null ? latest.getChannelPlatformId() : latest.getSessionId(),
                         latest.getChannelType() != null ? latest.getChannelType() : "websocket");
+            } else {
+                log.warnf(
+                        "HITL-RESUME: no CheckpointResumeHandler is resolvable for session %s", latest.getSessionId());
             }
         } catch (Exception e) {
             log.warnf(
                     "HITL-RESUME: failed to trigger CheckpointResumeHandler automatically: %s", LogUtil.rootMessage(e));
         }
+
+        if (!accepted) return false;
 
         agentSseService.publish(
                 latest.getSessionId(),
@@ -273,5 +302,6 @@ public class CheckpointApprovalService {
                         null,
                         null,
                         Instant.now()));
+        return true;
     }
 }

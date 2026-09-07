@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 
 import com.amsha.app.cli.AttachCommand;
 import com.amsha.app.cli.ChatCommand;
+import com.amsha.app.cli.ModelsCommand;
 import com.amsha.app.config.AppBootstrap;
 import com.amsha.app.util.CliUtils;
 
@@ -41,7 +42,8 @@ import io.quarkus.runtime.annotations.QuarkusMain;
 @Command(
         name = "amsha",
         mixinStandardHelpOptions = true,
-        subcommands = {AskCommand.class, ServeCommand.class, ChatCommand.class, AttachCommand.class})
+        subcommands = {AskCommand.class, ServeCommand.class, ChatCommand.class, AttachCommand.class, ModelsCommand.class
+        })
 @SuppressWarnings("java:S106")
 public class AmshaCli implements Runnable, QuarkusApplication {
 
@@ -67,6 +69,14 @@ public class AmshaCli implements Runnable, QuarkusApplication {
         if (args.length == 0) {
             printUsageGuide();
             return;
+        }
+
+        // 3.1 Fast-path for models management - run immediately without booting Quarkus engine
+        if ("models".equalsIgnoreCase(args[0])) {
+            String[] subArgs = new String[args.length - 1];
+            System.arraycopy(args, 1, subArgs, 0, subArgs.length);
+            int code = new CommandLine(new ModelsCommand()).execute(subArgs);
+            System.exit(code);
         }
 
         // 3.5. Preload ONNX Runtime JNI library to avoid class initialization deadlocks
@@ -107,6 +117,7 @@ public class AmshaCli implements Runnable, QuarkusApplication {
         System.out.println("    ./amsha chat                    Start interactive REPL");
         System.out.println("    ./amsha ask 'your goal here'    Run one-shot task and exit");
         System.out.println("    ./amsha attach                  Start Telegram daemon");
+        System.out.println("    ./amsha models [list|install]   Manage local ONNX model bundles");
         System.out.println();
         System.out.println("  OPTIONS (append to any command)");
         System.out.println("    --role coordinator|researcher|architect|synthesizer|debugger");

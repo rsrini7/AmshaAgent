@@ -29,7 +29,30 @@ def main() -> None:
                 with manifest_file.open("r", encoding="utf-8") as f:
                     manifest = json.load(f)
                 bundle_id = manifest.get("bundleId", bundle_dir.name)
+                is_whisper = (
+                    "audioTranscription" in manifest
+                    or "whisper" in bundle_id.lower()
+                    or (bundle_dir / "encoder_model.onnx").is_file()
+                )
+
+                if is_whisper:
+                    kind = "speech-to-text (whisper)"
+                    enc_file = bundle_dir / "encoder_model.onnx"
+                    dec_file = bundle_dir / "decoder_model.onnx"
+                    valid = enc_file.is_file() and dec_file.is_file() and tokenizer_file.is_file()
+                    status = "✅ Valid" if valid else "⚠️ Incomplete"
+                    enc_sz = f"{enc_file.stat().st_size / (1024*1024):.1f} MB" if enc_file.is_file() else "missing"
+                    dec_sz = f"{dec_file.stat().st_size / (1024*1024):.1f} MB" if dec_file.is_file() else "missing"
+                    tok_sz = f"{tokenizer_file.stat().st_size / 1024:.1f} KB" if tokenizer_file.is_file() else "missing"
+                    print(f"  • {bundle_id} [{kind}]")
+                    print(f"      Status: {status} (encoder: {enc_sz}, decoder: {dec_sz}, tokenizer: {tok_sz})")
+                    print(f"      Path:   {bundle_dir}")
+                    found += 1
+                    continue
+
                 kind = "embedding" if "embedding" in manifest else ("scoring/reranker" if "scoring" in manifest else "classifier/other")
+                model_name = manifest.get("modelFile", "model.onnx")
+                model_file = bundle_dir / model_name
                 model_sz = f"{model_file.stat().st_size / (1024*1024):.1f} MB" if model_file.is_file() else "missing"
                 tok_sz = f"{tokenizer_file.stat().st_size / 1024:.1f} KB" if tokenizer_file.is_file() else "missing"
                 status = "✅ Valid" if model_file.is_file() and tokenizer_file.is_file() else "⚠️ Incomplete"

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -20,6 +21,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.agent.trace.AgentTraceEvent;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.memory.config.TieredMemoryConfig;
 import com.amsha.memory.tiered.CoreMemoryPromptRenderer;
 import com.amsha.memory.tiered.CoreMemoryService;
@@ -32,6 +37,7 @@ import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -63,6 +69,9 @@ class ChatHistoryAssemblerTest {
     @Mock
     PromptBudgetManager budgetManager;
 
+    @Mock
+    TracePublisher tracePublisher;
+
     @InjectMocks
     ChatHistoryAssembler assembler;
 
@@ -71,6 +80,7 @@ class ChatHistoryAssemblerTest {
         MockitoAnnotations.openMocks(this);
         assembler.log = log;
         assembler.summaryCache = summaryCache;
+        assembler.tracePublisher = tracePublisher;
         assembler.defaultObservationMaxLength = 4000;
         assembler.toolSpecificLimits = Optional.empty();
 
@@ -405,5 +415,36 @@ class ChatHistoryAssemblerTest {
                         .map(m -> ((SystemMessage) m).text())
                         .anyMatch(t -> t.contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL)),
                 "Sentinel should be preserved when budget does not truncate");
+    }
+
+    @Test
+    void testAssemble_emitsMemoryDecisionSkipWhenNoContextInjected() {
+        String sessionId = "mem-skip-1";
+        when(tieredMemoryConfig.enabled()).thenReturn(false);
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(List.of());
+
+        assembler.assemble(sessionId, "Do work", List.of());
+
+        ArgumentCaptor<AgentTraceEvent> captor = ArgumentCaptor.forClass(AgentTraceEvent.class);
+        verify(tracePublisher).publish(captor.capture());
+        assertEquals(TraceStage.MEMORY_DECISION, captor.getValue().stage());
+        assertEquals(StationCode.STATION_04_MEMORY_DECISION, captor.getValue().station());
+        assertEquals("SKIP", captor.getValue().status());
+    }
+
+    @Test
+    void testAssemble_emitsMemoryDecisionRetrieveWhenContextInjected() {
+        String sessionId = "mem-ret-1";
+        when(tieredMemoryConfig.enabled()).thenReturn(false);
+        when(summaryCache.getSummary(sessionId)).thenReturn(Optional.of("Summary context"));
+        when(chatMemoryStore.getMessages(sessionId)).thenReturn(List.of());
+
+        assembler.assemble(sessionId, "Do work", List.of());
+
+        ArgumentCaptor<AgentTraceEvent> captor = ArgumentCaptor.forClass(AgentTraceEvent.class);
+        verify(tracePublisher).publish(captor.capture());
+        assertEquals(TraceStage.MEMORY_DECISION, captor.getValue().stage());
+        assertEquals(StationCode.STATION_04_MEMORY_DECISION, captor.getValue().station());
+        assertEquals("RETRIEVE", captor.getValue().status());
     }
 }

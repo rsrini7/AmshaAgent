@@ -5,12 +5,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import com.amsha.core.audit.AuditService;
+import com.amsha.core.security.CredentialDetector;
+import com.amsha.core.security.DefaultCredentialDetector;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.security.api.OutboundPolicyDecision;
@@ -35,6 +39,7 @@ class GovernedTransportServiceTest {
     private String baseUrl;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() throws Exception {
         service = new GovernedTransportService();
         inject("policyService", fixedPolicy(OutboundPolicyDecision.allow(OutboundPurpose.PROVIDER_API_CALL, "ok")));
@@ -42,6 +47,11 @@ class GovernedTransportServiceTest {
         inject("auditService", Mockito.mock(AuditService.class));
         receiptIssuer = new ApprovalReceiptIssuer();
         inject("approvalReceiptIssuer", receiptIssuer);
+
+        Instance<CredentialDetector> detInstance = Mockito.mock(Instance.class);
+        when(detInstance.isResolvable()).thenReturn(true);
+        when(detInstance.get()).thenReturn(new DefaultCredentialDetector());
+        inject("credentialDetectorInstance", detInstance);
 
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/ok", exchange -> {
@@ -185,5 +195,34 @@ class GovernedTransportServiceTest {
         assertThrows(
                 OutboundHttpException.class,
                 () -> service.get(baseUrl + "/ok", OutboundPurpose.PROVIDER_API_CALL, null, "user-2", false));
+    }
+
+    @Test
+    void validateEgressFailsClosedOnBlankOrInvalidUrl() {
+        assertThrows(
+                OutboundHttpException.class,
+                () -> service.validateEgress(null, OutboundPurpose.PROVIDER_API_CALL, "user-1"));
+        assertThrows(
+                OutboundHttpException.class,
+                () -> service.validateEgress("   ", OutboundPurpose.PROVIDER_API_CALL, "user-1"));
+        assertThrows(
+                OutboundHttpException.class,
+                () -> service.validateEgress("not-a-valid-uri:::", OutboundPurpose.PROVIDER_API_CALL, "user-1"));
+    }
+
+    @Test
+    void postBlocksEgressWhenPayloadContainsCredentials() {
+        String secretPayload = "{\"api_key\": \"sk-proj-1234567890abcdef12345678\"}";
+        var ex = assertThrows(
+                OutboundHttpException.class,
+                () -> service.post(
+                        baseUrl + "/ok",
+                        secretPayload,
+                        "application/json",
+                        OutboundPurpose.PROVIDER_API_CALL,
+                        null,
+                        "user-1",
+                        true));
+        assertTrue(ex.getMessage().contains("detected credentials"));
     }
 }

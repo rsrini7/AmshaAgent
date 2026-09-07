@@ -51,6 +51,11 @@ public class OnnxModelBundleRegistry {
         if (!Files.isDirectory(canonicalRoot)) throw new IOException("ONNX model root must be a directory");
         Path bundle = canonicalRoot.resolve(bundleId).normalize();
         if (!bundle.startsWith(canonicalRoot)) throw new IOException("Model bundle path escapes configured root");
+        if (!Files.exists(bundle)) {
+            String hint = bundleId.contains("whisper") ? "whisper" : (bundleId.contains("mpnet") ? "mpnet" : bundleId);
+            throw new IOException("Model bundle '" + bundleId + "' is not installed in " + bundle
+                    + ". Install it using: ./amsha models install " + hint);
+        }
         Path canonicalBundle = bundle.toRealPath();
         if (!canonicalBundle.startsWith(canonicalRoot)) {
             throw new IOException("Model bundle path escapes configured root");

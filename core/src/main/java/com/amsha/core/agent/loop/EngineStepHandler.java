@@ -20,6 +20,10 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.trace.AgentTraceEvent;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.governance.GovernanceStrategy;
@@ -60,6 +64,7 @@ public class EngineStepHandler {
     private final int schemaMaxRetriesLenient;
     private final int rateLimitMaxAutoRetrySeconds;
     private final int rateLimitDefaultRetrySeconds;
+    private final TracePublisher tracePublisher;
 
     private static final Set<String> AGENT_IDENTIFIERS = AgentRoleEnum.values().stream()
             .flatMap(r -> Stream.concat(Stream.of(r.id()), r.definition().aliases().stream()))
@@ -75,6 +80,7 @@ public class EngineStepHandler {
         this.schemaMaxRetriesLenient = 0;
         this.rateLimitMaxAutoRetrySeconds = 0;
         this.rateLimitDefaultRetrySeconds = 0;
+        this.tracePublisher = null;
     }
 
     @Inject
@@ -91,7 +97,8 @@ public class EngineStepHandler {
             @ConfigProperty(name = "amsha.agent.rate-limit.max-auto-retry-seconds", defaultValue = "15")
                     int rateLimitMaxAutoRetrySeconds,
             @ConfigProperty(name = "amsha.agent.rate-limit.default-retry-seconds", defaultValue = "10")
-                    int rateLimitDefaultRetrySeconds) {
+                    int rateLimitDefaultRetrySeconds,
+            TracePublisher tracePublisher) {
         this.governanceLayer = governanceLayer;
         this.observers = observers;
         this.agentStore = agentStore;
@@ -101,6 +108,31 @@ public class EngineStepHandler {
         this.schemaMaxRetriesLenient = schemaMaxRetriesLenient;
         this.rateLimitMaxAutoRetrySeconds = rateLimitMaxAutoRetrySeconds;
         this.rateLimitDefaultRetrySeconds = rateLimitDefaultRetrySeconds;
+        this.tracePublisher = tracePublisher;
+    }
+
+    /** Visible for tests that do not require trace publishing. */
+    public EngineStepHandler(
+            GovernanceStrategy governanceLayer,
+            Instance<AgentObserver> observers,
+            StatefulAgentStore agentStore,
+            ResponseRecoveryHintBuilder hintBuilder,
+            LlmExceptionRouter exceptionRouter,
+            int schemaMaxRetriesStrict,
+            int schemaMaxRetriesLenient,
+            int rateLimitMaxAutoRetrySeconds,
+            int rateLimitDefaultRetrySeconds) {
+        this(
+                governanceLayer,
+                observers,
+                agentStore,
+                hintBuilder,
+                exceptionRouter,
+                schemaMaxRetriesStrict,
+                schemaMaxRetriesLenient,
+                rateLimitMaxAutoRetrySeconds,
+                rateLimitDefaultRetrySeconds,
+                null);
     }
 
     StepDecision processEngineStep(
@@ -110,6 +142,12 @@ public class EngineStepHandler {
             String transientError,
             int llmSchemaErrorCount,
             int iteration) {
+        if (tracePublisher != null && context != null && context.sessionId() != null) {
+            tracePublisher.publish(TracePublisher.newEvent(context.sessionId(), TraceStage.LLM_REASONING)
+                    .withStation(StationCode.STATION_06_REASONING)
+                    .withStatus("REASONING")
+                    .withMetrics(new AgentTraceEvent.TraceMetrics(null, null, null, iteration, null)));
+        }
         ReasoningStep step;
         try {
             String currentGoal = AgentSentinels.stripCronPrefix(context.goal());

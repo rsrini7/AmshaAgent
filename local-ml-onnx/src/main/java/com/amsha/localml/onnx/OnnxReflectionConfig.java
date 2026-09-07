@@ -19,7 +19,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnnxScoringBundleSpec.ScoreDirection.class,
             OnnxScoringBundleSpec.OutputShape.class,
             LocalOnnxScoringAdapter.class,
-            OnnxScoringRunner.class
+            OnnxScoringRunner.class,
+            OnnxAudioTranscriptionBundleSpec.class,
+            LocalOnnxAudioTranscriptionAdapter.class,
+            LeaseBackedWhisperRunner.class,
+            LocalAudioTranscoder.class,
+            AudioTranscodingException.class
         },
         classNames = {
             "com.amsha.localml.onnx.OnnxTextInputSpec",

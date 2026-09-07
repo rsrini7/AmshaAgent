@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import jakarta.enterprise.event.Event;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -18,10 +19,12 @@ import com.amsha.core.audit.SessionAuditSequencer;
 import com.amsha.core.compaction.CompactionInFlightFlag;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CronRunStorePort;
+import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.persistence.api.SessionCatalogEntry;
 import com.amsha.persistence.api.SessionCatalogStore;
@@ -85,6 +88,9 @@ class SessionReaperTest {
 
     @Mock
     SessionCatalogStore sessionCatalogStore;
+
+    @Mock
+    CronFailureCleanup cronFailureCleanup;
 
     @InjectMocks
     SessionReaper reaper;
@@ -293,5 +299,81 @@ class SessionReaperTest {
 
         assertDoesNotThrow(() -> reaper.archiveInactiveCatalogSessions());
         verify(sessionCatalogStore).archive("sess-2");
+    }
+
+    @Test
+    void testSweepTimedOutApprovalsFailsOrphanedCrons() {
+        AgentCronDto staleCron = new AgentCronDto(
+                "cron-orphaned",
+                "sess-orphaned",
+                "user-1",
+                "chat-1",
+                "TELEGRAM",
+                "plat-1",
+                "0 0 * * *",
+                "UTC",
+                true,
+                "Goal Awaiting",
+                Instant.now().minus(25, ChronoUnit.HOURS),
+                null,
+                CronStatus.AWAITING_APPROVAL.name(),
+                "coordinator",
+                null,
+                null,
+                Instant.now().minus(25, ChronoUnit.HOURS),
+                Instant.now().minus(25, ChronoUnit.HOURS));
+
+        AgentCronDto freshCron = new AgentCronDto(
+                "cron-fresh",
+                "sess-fresh",
+                "user-1",
+                "chat-1",
+                "TELEGRAM",
+                "plat-1",
+                "0 0 * * *",
+                "UTC",
+                true,
+                "Goal Fresh",
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                null,
+                CronStatus.AWAITING_APPROVAL.name(),
+                "coordinator",
+                null,
+                null,
+                Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().minus(1, ChronoUnit.HOURS));
+
+        when(agentStore.findStaleAwaitingApproval(any(Instant.class))).thenReturn(List.of());
+        reaper.sweepTimedOutApprovals();
+
+        verify(cronFailureCleanup).sweepOrphanedApprovals(any(Instant.class), eq(24L));
+    }
+
+    @Test
+    void testSweepTimedOutApprovalsKeepsLiveCronCheckpoint() {
+        AgentCronDto staleCron = new AgentCronDto(
+                "cron-live",
+                "origin-session",
+                "user-1",
+                "chat-1",
+                "TELEGRAM",
+                "plat-1",
+                "0 0 * * *",
+                "UTC",
+                true,
+                "Goal Awaiting",
+                Instant.now().minus(25, ChronoUnit.HOURS),
+                null,
+                CronStatus.AWAITING_APPROVAL.name(),
+                "researcher",
+                null,
+                "delivery-1",
+                Instant.now().minus(25, ChronoUnit.HOURS),
+                Instant.now().minus(25, ChronoUnit.HOURS));
+        when(agentStore.findStaleAwaitingApproval(any(Instant.class))).thenReturn(List.of());
+
+        reaper.sweepTimedOutApprovals();
+
+        verify(cronFailureCleanup).sweepOrphanedApprovals(any(Instant.class), eq(24L));
     }
 }

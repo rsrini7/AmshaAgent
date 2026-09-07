@@ -9,6 +9,7 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.events.ToolExecutionEvent;
 import com.amsha.core.governance.RequiresApprovalException;
+import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.tools.ToolRegistry;
@@ -57,6 +58,12 @@ public class ToolInvoker {
      * @throws RequiresApprovalException If the tool requires human approval.
      */
     public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
+        if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(sessionId)) {
+            log.warnf(
+                    "[TOOL] invoke aborted - session %s is halted or thread interrupted: tool=%s", sessionId, toolName);
+            return ToolResponse.failure(499, "Execution aborted: session is halted or thread was interrupted.");
+        }
+
         Span toolSpan = agentOtelContext.startToolSpan(sessionId, toolName, "invoke");
         Timer.Sample sample = (registry != null) ? Timer.start(registry) : null;
         log.debugf("[TOOL] invoke start: tool=%s session=%s", toolName, sessionId);
@@ -66,6 +73,12 @@ public class ToolInvoker {
         toolEvent.fireAsync(ToolExecutionEvent.call(toolName, sessionId, userId, role, params, null));
         try (Scope _ = toolSpan.makeCurrent()) {
             ToolResponse response = toolRegistry.invokeTool(toolName, params);
+            if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(sessionId)) {
+                log.warnf(
+                        "[TOOL] invoke completed but session %s was halted or thread interrupted: tool=%s",
+                        sessionId, toolName);
+                return ToolResponse.failure(499, "Execution aborted: session is halted or thread was interrupted.");
+            }
             String rawObservation = response.output();
             String sanitizedObservation = observationSanitizer.sanitize(toolName, rawObservation);
 
@@ -107,6 +120,14 @@ public class ToolInvoker {
         } catch (Exception e) {
             toolSpan.recordException(e);
             toolSpan.setStatus(StatusCode.ERROR, LogUtil.rootMessage(e));
+
+            if (e instanceof InterruptedException || e.getCause() instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+                log.warnf(
+                        "[TOOL] Tool '%s' execution interrupted in session %s: %s",
+                        toolName, sessionId, LogUtil.rootMessage(e));
+                return ToolResponse.failure(499, "Execution aborted: thread was interrupted.");
+            }
 
             if (e instanceof SecurityException) {
                 log.warnf(

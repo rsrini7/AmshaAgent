@@ -42,6 +42,7 @@ class CronDecisionRouterRunStatusTest {
         router.agentLoop = mock(AgentLoop.class);
         router.reasoningEngine = mock(ReasoningEngine.class);
         router.workspaceManager = mock(WorkspaceManager.class);
+        when(router.cronStore.claimForResume(anyString(), anyString())).thenReturn(true);
 
         String cronId = "e6d3f895-05a3-43b5-b070-eed56a93389b";
         String runId = "0982b5cc-9d81-4d41-a7b5-34296bbb5796";

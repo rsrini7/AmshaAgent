@@ -302,6 +302,16 @@ class McpConnectionLifecycleServiceTest {
         assertEquals("MCP_RECONNECT_FAILED", classify.invoke(null, new RuntimeException("generic fail")));
     }
 
+    @Test
+    void shutdownPreventsTheStartupReconnectTaskFromTouchingPersistence() {
+        service.onStartup(null);
+
+        service.onShutdown();
+
+        assertDoesNotThrow(service::runStartupReconciliation);
+        verifyNoInteractions(stores, store, secretVault, auditService, mcpClientService);
+    }
+
     private static McpConnectionDto connection(
             String id, String userId, String name, String transport, boolean enabled) {
         Instant now = Instant.now();

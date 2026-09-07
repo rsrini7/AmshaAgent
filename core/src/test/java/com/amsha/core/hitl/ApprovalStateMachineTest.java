@@ -280,4 +280,91 @@ class ApprovalStateMachineTest {
                 "session-123", "coder", null, "host_exec", Map.of("command", "ls")));
         assertEquals(0, stateMachine.approvalLeaseStore.size());
     }
+
+    @Test
+    void decide_whenSessionContainsDelegatedChild_resolvesAndAppliesToChildCheckpoint() {
+        String parentSessionId = "cron-123";
+        String childSessionId = "cron-123:delegate:brahma:456";
+        cp.setSessionId(childSessionId);
+        mockTools(List.of("sandbox_exec"), List.of("sandbox_exec"));
+        when(agentStore.findLatestAwaitingApproval(parentSessionId)).thenReturn(Optional.empty());
+        when(agentStore.findLatestAwaitingApprovalBySessionContaining(parentSessionId))
+                .thenReturn(Optional.of(cp));
+        when(agentStore.findLatestAwaitingApproval(childSessionId)).thenReturn(Optional.of(cp));
+        when(agentStore.isCheckpointExpired(childSessionId, 24)).thenReturn(false);
+        when(agentStore.isAllBatchToolsDecided(childSessionId, "coder")).thenReturn(true);
+
+        ApprovalResult result = stateMachine.decide(parentSessionId, "sandbox_exec", ApprovalDecision.APPROVE, "ok");
+
+        assertEquals(ApprovalOutcome.APPROVED, result.outcome());
+        assertEquals(childSessionId, result.sessionId());
+        assertEquals("sandbox_exec", result.toolName());
+        verify(resumeHandler).resumeAfterBatchDecision(eq(childSessionId), eq("coder"), any(), any(), eq("websocket"));
+    }
+
+    @Test
+    void decide_whenParentCheckpointAwaitingGaruda_resolvesChildCheckpointForSandboxExec() {
+        String parentSessionId = "cron-123";
+        String childSessionId = "cron-123:delegate:brahma:456";
+
+        AgentCheckpoint parentCp = new AgentCheckpointRecord();
+        parentCp.setId(10L);
+        parentCp.setSessionId(parentSessionId);
+        parentCp.setAgentRole("coordinator");
+        parentCp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        parentCp.setPendingToolName("garuda");
+        parentCp.setBatchToolDecisions("{\"garuda\":\"PENDING\"}");
+
+        cp.setSessionId(childSessionId);
+        cp.setAgentRole("coder");
+        mockTools(List.of("sandbox_exec"), List.of("sandbox_exec"));
+
+        when(agentStore.findLatestAwaitingApproval(parentSessionId)).thenReturn(Optional.of(parentCp));
+        when(agentStore.findLatestAwaitingApprovalBySessionContaining(parentSessionId))
+                .thenReturn(Optional.of(cp));
+        when(agentStore.findLatestAwaitingApproval(childSessionId)).thenReturn(Optional.of(cp));
+        when(agentStore.isCheckpointExpired(childSessionId, 24)).thenReturn(false);
+        when(agentStore.isAllBatchToolsDecided(childSessionId, "coder")).thenReturn(true);
+
+        ApprovalResult result = stateMachine.decide(parentSessionId, "sandbox_exec", ApprovalDecision.APPROVE, "ok");
+
+        assertEquals(ApprovalOutcome.APPROVED, result.outcome());
+        assertEquals(childSessionId, result.sessionId());
+        assertEquals("sandbox_exec", result.toolName());
+        verify(resumeHandler).resumeAfterBatchDecision(eq(childSessionId), eq("coder"), any(), any(), eq("websocket"));
+    }
+
+    @Test
+    void decide_whenParentCheckpointAwaitingGaruda_rejectsChildCheckpointForSandboxExec() {
+        String parentSessionId = "cron-123";
+        String childSessionId = "cron-123:delegate:brahma:456";
+
+        AgentCheckpoint parentCp = new AgentCheckpointRecord();
+        parentCp.setId(10L);
+        parentCp.setSessionId(parentSessionId);
+        parentCp.setAgentRole("coordinator");
+        parentCp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        parentCp.setPendingToolName("garuda");
+        parentCp.setBatchToolDecisions("{\"garuda\":\"PENDING\"}");
+
+        cp.setSessionId(childSessionId);
+        cp.setAgentRole("coder");
+        cp.setBatchToolDecisions("{\"sandbox_exec\":\"DENIED\"}");
+        mockTools(List.of("sandbox_exec"), List.of("sandbox_exec"));
+
+        when(agentStore.findLatestAwaitingApproval(parentSessionId)).thenReturn(Optional.of(parentCp));
+        when(agentStore.findLatestAwaitingApprovalBySessionContaining(parentSessionId))
+                .thenReturn(Optional.of(cp));
+        when(agentStore.findLatestAwaitingApproval(childSessionId)).thenReturn(Optional.of(cp));
+        when(agentStore.isCheckpointExpired(childSessionId, 24)).thenReturn(false);
+        when(agentStore.isAllBatchToolsDecided(childSessionId, "coder")).thenReturn(true);
+
+        ApprovalResult result =
+                stateMachine.decide(parentSessionId, "sandbox_exec", ApprovalDecision.REJECT, "user rejected");
+
+        assertEquals(ApprovalOutcome.REJECTED, result.outcome());
+        assertEquals(childSessionId, result.sessionId());
+        assertEquals("sandbox_exec", result.toolName());
+        verify(resumeHandler).resumeAfterBatchDecision(eq(childSessionId), eq("coder"), any(), any(), eq("websocket"));
+    }
 }

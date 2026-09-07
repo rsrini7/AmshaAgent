@@ -39,6 +39,7 @@ import io.quarkus.arc.Unremovable;
 public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
 
     private static final Logger log = Logger.getLogger(OmlxAudioTranscriptionProvider.class);
+    public static final int DEFAULT_PRIORITY = 50;
     private static final String DEFAULT_MODEL = "whisper-large-v3-turbo";
     private static final long DEFAULT_MAX_BYTES = MediaBudgetLimits.DEFAULT_MAX_DOCUMENT_SIZE_BYTES;
     private static final int DEFAULT_MAX_TRANSCRIPT_CHARS = 12_000;
@@ -89,6 +90,11 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
     @Override
     public boolean supports(String mimeType, long declaredBytes) {
         return enabled && isAudioMime(mimeType) && declaredBytes >= 0 && declaredBytes <= effectiveMaxBytes();
+    }
+
+    @Override
+    public int priority() {
+        return DEFAULT_PRIORITY;
     }
 
     @Override

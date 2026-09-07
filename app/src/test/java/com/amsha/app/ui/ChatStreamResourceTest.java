@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.app.ui.dto.ChatMessageDto;
+import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.PersistentChatMemoryStore;
 import com.amsha.core.state.StatefulAgentStore;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.smallrye.mutiny.Multi;
 
 @ExtendWith(MockitoExtension.class)
 class ChatStreamResourceTest {
@@ -32,6 +35,9 @@ class ChatStreamResourceTest {
     @Mock
     AgentCheckpoint checkpoint;
 
+    @Mock
+    AgentSseService agentSseService;
+
     ChatStreamResource resource;
 
     private static final String SESSION_ID = "sess-123";
@@ -41,6 +47,24 @@ class ChatStreamResourceTest {
         resource = new ChatStreamResource();
         setField(resource, "chatMemoryStore", chatMemoryStore);
         setField(resource, "statefulAgentStore", statefulAgentStore);
+        setField(resource, "agentSseService", agentSseService);
+    }
+
+    @Test
+    void streamSubscribesToAgentSseWhenSessionIdPresent() {
+        when(agentSseService.subscribe(SESSION_ID))
+                .thenReturn(Multi.createFrom().empty());
+
+        var stream = resource.stream(SESSION_ID);
+        assertNotNull(stream);
+        verify(agentSseService).subscribe(SESSION_ID);
+    }
+
+    @Test
+    void streamDoesNotSubscribeToAgentSseWhenSessionIdBlank() {
+        var stream = resource.stream(" ");
+        assertNotNull(stream);
+        verifyNoInteractions(agentSseService);
     }
 
     @Test

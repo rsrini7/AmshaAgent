@@ -12,6 +12,8 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import com.amsha.channel.api.ChannelMessage;
@@ -24,8 +26,10 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
+import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.persistence.api.CronRunDto;
 import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
@@ -36,6 +40,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 /**
@@ -73,14 +78,17 @@ public class CronJobRunner {
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
 
+    @Inject
+    ManagedExecutor vThreads;
+
     @ConfigProperty(name = "amsha.cron.max-iterations", defaultValue = "5")
     int cronMaxIterations;
 
     public void execute(AgentCron job) {
-        String executionId = UUID.randomUUID().toString();
+        execute(job, UUID.randomUUID().toString());
+    }
 
-        cronStore.setDeliveryId(job.getId(), executionId);
-
+    public void execute(AgentCron job, String executionId) {
         String cronSessionId = AgentSentinels.CRON_SESSION_PREFIX + job.getId() + "-" + executionId;
 
         // Record cron run start
@@ -101,7 +109,43 @@ public class CronJobRunner {
 
         heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
 
+        Thread executionThread = Thread.currentThread();
+        AtomicBoolean running = new AtomicBoolean(true);
+        Future<?> leaseFuture = null;
+
         try {
+            leaseFuture = vThreads.submit(WorkspaceScopeHolder.wrap(() -> {
+                while (running.get() && !Thread.currentThread().isInterrupted()) {
+                    try {
+                        Thread.sleep(60_000);
+                        if (!running.get()) break;
+                        boolean renewed = cronStore.renewLease(job.getId(), executionId);
+                        if (!renewed) {
+                            log.warnf(
+                                    "Cron lease lost or stolen for cronId=%s executionId=%s - halting session",
+                                    job.getId(), executionId);
+                            WorkspaceManager.haltSession(cronSessionId);
+                            executionThread.interrupt();
+                            break;
+                        }
+                        heartbeatTracker.recordHeartbeat(cronSessionId, AutonomyLevel.SUPERVISED);
+                    } catch (InterruptedException _) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    } catch (Exception e) {
+                        log.warnf(
+                                "Cron lease renewal failed for cronId=%s executionId=%s; halting session: %s",
+                                job.getId(), executionId, LogUtil.rootMessage(e));
+                        WorkspaceManager.haltSession(cronSessionId);
+                        executionThread.interrupt();
+                        break;
+                    }
+                }
+            }));
+
+            ChannelType type = ChannelType.fromString(job.getChannelType())
+                    .orElseThrow(() -> new IllegalArgumentException("Cron job " + job.getId()
+                            + " has missing or unknown channelType: " + job.getChannelType()));
             String stripped = job.getGoal() != null
                     ? CRON_PREFIX_PATTERN
                             .matcher(job.getGoal())
@@ -132,12 +176,11 @@ public class CronJobRunner {
 
             String systemNote = "CRON MODE";
 
-            ChannelType type = ChannelType.fromString(job.getChannelType()).orElse(ChannelType.TELEGRAM);
             String role = resolveRole(finalGoal, job.getExecutionRole());
             String channel = type.name();
 
             Callable<AgentResult> op = () -> {
-                MessageContext context = createCronContext(job, cronSessionId, executionId, finalGoal, type);
+                MessageContext context = createCronContext(job, cronSessionId, finalGoal, type);
                 return agentLoop.run(cronSessionId, role, finalGoal, systemNote, engine, cronMaxIterations, context);
             };
 
@@ -148,6 +191,11 @@ public class CronJobRunner {
 
         } catch (Throwable t) {
             resultHandler.handleFailure(job, cronSessionId, executionId, t);
+        } finally {
+            running.set(false);
+            if (leaseFuture != null) {
+                leaseFuture.cancel(true);
+            }
         }
     }
 
@@ -336,11 +384,21 @@ public class CronJobRunner {
         return AgentRoleEnum.COORDINATOR.toScopedName();
     }
 
-    private MessageContext createCronContext(
-            AgentCron job, String _sessionId, String _executionId, String goal, ChannelType channelType) {
-        ChannelUser user = new ChannelUser(job.getUserId(), job.getUserId(), "Cron User", channelType);
-        ChannelMessage msg = new ChannelMessage.RestApiMessage(
-                user, goal, AgentSentinels.CRON_SESSION_PREFIX + job.getId(), Instant.now());
-        return new MessageContext(job.getChatId(), user, msg);
+    private MessageContext createCronContext(AgentCron job, String sessionId, String goal, ChannelType channelType) {
+        String platformId = job.getChannelPlatformId();
+        if (platformId == null || platformId.isBlank()) {
+            platformId = job.getChatId();
+        }
+        if (platformId == null || platformId.isBlank()) {
+            throw new IllegalArgumentException("Cron job " + job.getId() + " has no channel platform or chat ID");
+        }
+        String chatId = job.getChatId();
+        if (chatId == null || chatId.isBlank()) {
+            throw new IllegalArgumentException("Cron job " + job.getId() + " has no channel chat ID");
+        }
+        ChannelUser user = new ChannelUser(platformId, chatId, "Cron User", channelType);
+        ChannelMessage msg =
+                new ChannelMessage.GenericChannelMessage(user, goal, sessionId, Instant.now(), channelType);
+        return new MessageContext(chatId, user, msg);
     }
 }

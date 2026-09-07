@@ -242,11 +242,12 @@ export class ArcOnboarding extends LitElement {
       }
       this._updateConfigurationStatus(status);
       if (status?.credentialsOk || status?.skipOnboarding) {
+        const effectiveKey = attemptedOwnerApiKey || readPersistedOwnerApiKey() || 'authenticated';
         this.dispatchEvent(
           new CustomEvent('api-key-set', {
             bubbles: true,
             composed: true,
-            detail: { key: 'authenticated' }
+            detail: { key: effectiveKey }
           })
         );
         return;
@@ -271,11 +272,12 @@ export class ArcOnboarding extends LitElement {
       status = await this._client.onboardingStatus();
       this._updateConfigurationStatus(status);
       if (status.credentialsOk || status.skipOnboarding) {
+        const effectiveKey = readPersistedOwnerApiKey() || 'authenticated';
         this.dispatchEvent(
           new CustomEvent('api-key-set', {
             bubbles: true,
             composed: true,
-            detail: { key: 'authenticated' },
+            detail: { key: effectiveKey },
           }),
         );
         return;
@@ -401,11 +403,12 @@ export class ArcOnboarding extends LitElement {
     this._error = '';
     try {
       await this._client.commitDraft(this._draftId);
+      const effectiveKey = readPersistedOwnerApiKey() || 'authenticated';
       this.dispatchEvent(
         new CustomEvent('api-key-set', {
           bubbles: true,
           composed: true,
-          detail: { key: 'authenticated' }
+          detail: { key: effectiveKey }
         })
       );
     } catch (e: any) {

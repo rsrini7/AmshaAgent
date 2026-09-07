@@ -5,8 +5,10 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
@@ -59,23 +61,42 @@ public class CronDecisionRouter {
 
         String resolvedSessionId = resolveSessionId(cronId);
 
-        AgentCheckpoint pendingCheckpoint = ctx.applyDecisionToAll().apply(resolvedSessionId, ctx.reason);
+        AgentCron cron = resolveCronJob(cronId, resolvedSessionId);
+        if (cron == null) return "❌ Cron task not found.";
+
+        String cronRole = resolveSessionRole(resolvedSessionId, cron);
+
+        String deliveryId = cron.getLastDeliveryId();
+        if (deliveryId == null || deliveryId.isBlank()) {
+            deliveryId = UUID.randomUUID().toString();
+            cron.setLastDeliveryId(deliveryId);
+        }
+        if (!cronStore.claimForResume(cron.getId(), deliveryId)) {
+            return ctx.alreadyProcessingMsg().get();
+        }
+
+        AgentCheckpoint pendingCheckpoint;
+        try {
+            pendingCheckpoint = ctx.applyDecisionToAll().apply(resolvedSessionId, ctx.reason);
+        } catch (Exception e) {
+            cronStore.markAwaitingApprovalIfOwner(cron.getId(), deliveryId);
+            throw e;
+        }
         if (pendingCheckpoint == null || BatchDecisionUtil.hasPendingToolNames(pendingCheckpoint, objectMapper)) {
+            cronStore.markAwaitingApprovalIfOwner(cron.getId(), deliveryId);
             return ctx.errorMsg().get();
         }
         String cronSessionId = pendingCheckpoint.getSessionId();
-        String cronRole = pendingCheckpoint.getAgentRole();
+        String finalRole = pendingCheckpoint.getAgentRole() != null ? pendingCheckpoint.getAgentRole() : cronRole;
 
-        AgentCron cron = resolveCronJob(cronId, cronSessionId);
-        if (cron == null) return "❌ Cron task not found.";
-
-        if (!statefulAgentStore.claimForResume(cronSessionId, cronRole)) {
+        if (!statefulAgentStore.claimForResume(cronSessionId, finalRole)) {
+            cronStore.markAwaitingApprovalIfOwner(cron.getId(), deliveryId);
             return ctx.alreadyProcessingMsg().get();
         }
 
         AgentResult result = null;
         try {
-            String goal = ctx.cronResumeGoal().get(cronSessionId, cronRole);
+            String goal = ctx.cronResumeGoal().get(cronSessionId, finalRole);
             ctx.context.setResumeSignal(true);
             ctx.context.setGoal(goal);
 
@@ -88,10 +109,10 @@ public class CronDecisionRouter {
                     cron.getUserId(),
                     cron.getChatId(),
                     AutonomyLevel.SUPERVISED,
-                    cronRole,
+                    finalRole,
                     () -> agentLoop.run(
                             cronSessionId,
-                            cronRole,
+                            finalRole,
                             goal,
                             pendingCheckpoint.getSystemNote(),
                             reasoningEngine,
@@ -99,6 +120,7 @@ public class CronDecisionRouter {
                             ctx.context));
 
             if (result == null) {
+                markCronFailedIfOwner(cron.getId(), deliveryId, "Cron approval resume returned no result");
                 return ctx.errorMsg().get();
             }
 
@@ -106,6 +128,9 @@ public class CronDecisionRouter {
             updateLatestRun(cronSessionId, result);
             ctx.jobNotifier().accept(cron, result);
             return ctx.successResponse().get(result);
+        } catch (Exception e) {
+            markCronFailedIfOwner(cron.getId(), deliveryId, LogUtil.rootMessage(e));
+            throw e;
         } finally {
             statefulAgentStore.clearBatchResuming(cronSessionId);
             if (result != null && isTerminalResult(result)) {
@@ -115,6 +140,14 @@ public class CronDecisionRouter {
                     /* best effort */
                 }
             }
+        }
+    }
+
+    private void markCronFailedIfOwner(String cronId, String deliveryId, String reason) {
+        try {
+            cronStore.markFailedIfOwner(cronId, deliveryId, reason);
+        } catch (RuntimeException _) {
+            // Preserve the original resume failure when persistence is unavailable.
         }
     }
 
@@ -176,10 +209,22 @@ public class CronDecisionRouter {
         return match.map(AgentCheckpoint::getSessionId).orElse(cronId);
     }
 
+    private String resolveSessionRole(String resolvedSessionId, AgentCron cron) {
+        if (resolvedSessionId != null) {
+            Optional<AgentCheckpoint> cp = statefulAgentStore
+                    .findLatestAwaitingApproval(resolvedSessionId)
+                    .or(() -> statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(resolvedSessionId));
+            if (cp.isPresent() && cp.get().getAgentRole() != null) {
+                return cp.get().getAgentRole();
+            }
+        }
+        return cron != null && cron.getExecutionRole() != null ? cron.getExecutionRole() : "researcher";
+    }
+
     private AgentCron resolveCronJob(String cronId, String cronSessionId) {
         String jobId = extractJobId(cronId);
         AgentCron cron = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
-        if (cron == null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+        if (cron == null && cronSessionId != null && cronSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
             jobId = extractJobId(cronSessionId);
             cron = cronStore.findById(jobId).map(AgentCronRecord::fromDto).orElse(null);
         }

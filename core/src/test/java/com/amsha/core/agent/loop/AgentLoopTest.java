@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
@@ -333,5 +334,62 @@ class AgentLoopTest {
             assertEquals("original goal", contextCaptor.getValue().goal());
             return null;
         });
+    }
+
+    @Test
+    void terminalFinishedWithZeroStepsPersistsAnswer() throws Exception {
+        AgentLoop loop = new AgentLoop();
+
+        StatefulAgentStore agentStore = mock(StatefulAgentStore.class);
+        AgentStateMachineRunner stateMachineRunner = mock(AgentStateMachineRunner.class);
+        AuditHashUtil hashUtil = mock(AuditHashUtil.class);
+        SessionLifecycleCoordinator sessionLifecycleCoordinator = mock(SessionLifecycleCoordinator.class);
+        CheckpointResumeCoordinator checkpointResumeCoordinator = mock(CheckpointResumeCoordinator.class);
+        ObservabilityManager observabilityManager = mock(ObservabilityManager.class);
+        AgentSseService agentSseService = mock(AgentSseService.class);
+        MeterRegistry meterRegistry = mock(MeterRegistry.class);
+        Counter counter = mock(Counter.class);
+        when(meterRegistry.counter(anyString(), any(String[].class))).thenReturn(counter);
+        ChatMemoryWriter chatMemoryWriter = mock(ChatMemoryWriter.class);
+        IntentClassificationService intentClassificationService = mock(IntentClassificationService.class);
+
+        when(sessionLifecycleCoordinator.setupMdc(any(), any())).thenReturn("user");
+        when(checkpointResumeCoordinator.resolveResumePath(any(), any(), any(), any()))
+                .thenReturn(new CheckpointResumeCoordinator.ResumeDecision.FreshStart());
+
+        setField(loop, "agentStore", agentStore);
+        setField(loop, "stateMachineRunner", stateMachineRunner);
+        setField(loop, "hashUtil", hashUtil);
+        setField(loop, "sessionLifecycleCoordinator", sessionLifecycleCoordinator);
+        Span span = mock(Span.class);
+        Scope scope = mock(Scope.class);
+        when(span.makeCurrent()).thenReturn(scope);
+        when(observabilityManager.beginSession(any(), any(), any())).thenReturn(span);
+
+        setField(loop, "checkpointResumeCoordinator", checkpointResumeCoordinator);
+        CheckpointResumeHandler checkpointResumeHandler = mock(CheckpointResumeHandler.class);
+        setField(loop, "checkpointResumeHandler", checkpointResumeHandler);
+        setField(loop, "observabilityManager", observabilityManager);
+        setField(loop, "agentSseService", agentSseService);
+        setField(loop, "meterRegistry", meterRegistry);
+        setField(loop, "intentClassificationService", intentClassificationService);
+        setField(loop, "chatMemoryWriter", chatMemoryWriter);
+
+        ChannelUser user = new ChannelUser("foo", "bar", "disp", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "hello", "foo", Instant.now());
+        MessageContext ctx = new MessageContext("foo", user, msg);
+
+        String denialMessage = "❌ Tool execution was denied and the task has been cancelled.";
+        AgentResult finished = AgentResult.finished(denialMessage, List.of());
+        when(stateMachineRunner.run(any(), any(), any())).thenReturn(finished);
+
+        WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
+            AgentResult result = loop.runWithRole("s1", "coordinator", "hello", null, engine, 5, ctx);
+
+            assertTrue(result instanceof AgentResult.Finished);
+            return null;
+        });
+
+        verify(chatMemoryWriter).saveAnswer("s1", denialMessage);
     }
 }

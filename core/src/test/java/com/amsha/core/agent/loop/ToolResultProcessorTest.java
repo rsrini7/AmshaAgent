@@ -225,6 +225,7 @@ class ToolResultProcessorTest {
         StepDecision decision = processor.resolveOutcome(
                 ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, pausedMsg, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
+        assertTrue(decision.result() instanceof AgentResult.AwaitingApproval);
         String userSafe = "⏳ " + UserMessages.userSafePortion(pausedMsg);
         assertTrue(userSafe.contains("/approve"));
         assertTrue(userSafe.contains("/deny"));
@@ -245,6 +246,7 @@ class ToolResultProcessorTest {
         StepDecision decision = processor.resolveOutcome(
                 ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, obs, step, List.of(), 0);
         assertEquals(DecisionType.TERMINAL, decision.type());
+        assertTrue(decision.result() instanceof AgentResult.AwaitingApproval);
         verify(writer).saveAnswer("sess-1", "⏳ " + UserMessages.userSafePortion(obs));
     }
 

@@ -49,9 +49,34 @@ export interface WsAssistantMessage {
   role: 'assistant';
   text: string;
   audio?: WsAssistantAudio;
+  sessionId?: string;
+  approval?: {
+    tool: string;
+    params?: Record<string, unknown> | string;
+  };
+  timestamp?: number;
 }
 
-export type WsInboundFrame = WsConnectedEvent | WsAssistantMessage;
+export interface WsApprovalRequiredFrame {
+  type: 'approval_required';
+  role: 'assistant';
+  text: string;
+  sessionId: string;
+  toolName: string;
+  instructions?: string;
+  params?: Record<string, unknown> | string;
+}
+
+export interface WsErrorFrame {
+  type: 'error';
+  text: string;
+}
+
+export type WsInboundFrame =
+  | WsConnectedEvent
+  | WsAssistantMessage
+  | WsApprovalRequiredFrame
+  | WsErrorFrame;
 
 export function parseAgentPayload(payload: string): { status: string; task: string | null } {
   const sep = payload.indexOf(' : ');

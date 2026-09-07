@@ -13,11 +13,18 @@ export class ArcHitlPanel extends LitElement {
   private _appContext!: ArcAppContext;
 
   @property({ type: Array }) approvals: PendingApprovalDto[] = [];
+  @property({ type: Boolean }) channelCommandMode = false;
+  @property({ type: Boolean }) channelCommandPending = false;
+  @property({ type: String }) channelCommandError = '';
   
   @state() private _processing = new Set<string>();
   @state() private _rejectReason: Record<string, string> = {};
   @state() private _rejecting = new Set<string>();
   @state() private _error: Record<string, string> = {};
+  @state() private _statusUnknown = new Set<string>();
+
+  private readonly _idempotencyKeys = new Map<string, string>();
+  private readonly _lastActions = new Map<string, 'approved' | 'rejected'>();
 
   static styles = css`
     :host { display: block; padding: var(--space-8); box-sizing: border-box; background: var(--bg-base); }
@@ -76,19 +83,39 @@ export class ArcHitlPanel extends LitElement {
   `;
 
   private async _approve(taskId: string) {
+    this._lastActions.set(taskId, 'approved');
+    await this._runApprovalAction(taskId, 'approved');
+  }
+
+  private async _runApprovalAction(taskId: string, action: 'approved' | 'rejected') {
     this._processing.add(taskId);
+    this._statusUnknown.delete(taskId);
     this._error = { ...this._error, [taskId]: '' };
     this.requestUpdate();
 
+    if (this.channelCommandMode) {
+      this._completeAction(taskId, action);
+      this._processing.delete(taskId);
+      this.requestUpdate();
+      return;
+    }
+
+    const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
+    const idempotencyKey = this._idempotencyKey(taskId, action);
     try {
-      const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
-      await client.approveHitl(taskId);
-      this.dispatchEvent(new CustomEvent('approval-action', {
-        detail: { taskId, action: 'approved' },
-        bubbles: true, composed: true
-      }));
-    } catch (e: any) {
-      this._error = { ...this._error, [taskId]: e.message || 'Approval failed' };
+      if (action === 'approved') {
+        await client.approveHitl(taskId, 'Approved by user', { idempotencyKey });
+      } else {
+        await client.rejectHitl(taskId, this._rejectReason[taskId] || '', { idempotencyKey });
+      }
+      this._completeAction(taskId, action);
+    } catch (error: unknown) {
+      const reconciled = this._isUncertainFailure(error)
+        ? await this._reconcile(client, taskId, action)
+        : false;
+      if (!reconciled && !this._statusUnknown.has(taskId)) {
+        this._error = { ...this._error, [taskId]: this._errorMessage(error, `${action} failed`) };
+      }
     } finally {
       this._processing.delete(taskId);
       this.requestUpdate();
@@ -105,25 +132,83 @@ export class ArcHitlPanel extends LitElement {
   }
 
   private async _submitReject(taskId: string) {
-    this._processing.add(taskId);
-    this._error = { ...this._error, [taskId]: '' };
+    this._lastActions.set(taskId, 'rejected');
+    await this._runApprovalAction(taskId, 'rejected');
+    if (!this._error[taskId]) {
+      this._rejecting.delete(taskId);
+    }
     this.requestUpdate();
+  }
 
+  private _idempotencyKey(taskId: string, action: 'approved' | 'rejected'): string {
+    const key = `${action}:${taskId}`;
+    const existing = this._idempotencyKeys.get(key);
+    if (existing) return existing;
+    const generated = `arc-hitl-${action}-${taskId}`;
+    this._idempotencyKeys.set(key, generated);
+    return generated;
+  }
+
+  private _completeAction(taskId: string, action: 'approved' | 'rejected') {
+    this._statusUnknown.delete(taskId);
+    this._error = { ...this._error, [taskId]: '' };
+    this.dispatchEvent(new CustomEvent('approval-action', {
+      detail: { taskId, action },
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
+  private async _reconcile(
+    client: ArcClient,
+    taskId: string,
+    action: 'approved' | 'rejected',
+  ): Promise<boolean> {
     try {
-      const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
-      const reason = this._rejectReason[taskId] || '';
-      await client.rejectHitl(taskId, reason);
-      this.dispatchEvent(new CustomEvent('approval-action', {
-        detail: { taskId, action: 'rejected' },
-        bubbles: true, composed: true
-      }));
-    } catch (e: any) {
-      this._error = { ...this._error, [taskId]: e.message || 'Rejection failed' };
+      const result = await client.getHitl();
+      const stillPending = result.items.some((approval) => approval.taskId === taskId);
+      if (!stillPending) {
+        this._completeAction(taskId, action);
+        return true;
+      }
+      this._statusUnknown.add(taskId);
+      this._error = {
+        ...this._error,
+        [taskId]: 'Approval is still pending; status is unknown. Retry or check status again.',
+      };
+    } catch (_) {
+      this._statusUnknown.add(taskId);
+      this._error = {
+        ...this._error,
+        [taskId]: 'Could not confirm approval status. Retry or check status again.',
+      };
+    }
+    this.requestUpdate();
+    return false;
+  }
+
+  private _isUncertainFailure(error: unknown): boolean {
+    if (!error || typeof error !== 'object' || !('status' in error)) return true;
+    const status = (error as { status?: unknown }).status;
+    return typeof status !== 'number' || status === 408 || status === 429 || status >= 500;
+  }
+
+  private _errorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error && error.message ? error.message : fallback;
+  }
+
+  private async _retry(taskId: string) {
+    await this._runApprovalAction(taskId, this._lastActions.get(taskId) || 'approved');
+  }
+
+  private async _checkStatus(taskId: string) {
+    const action = this._lastActions.get(taskId) || 'approved';
+    this._processing.add(taskId);
+    this.requestUpdate();
+    try {
+      await this._reconcile(new ArcClient('/api/v1', this._appContext?.apiKey || ''), taskId, action);
     } finally {
       this._processing.delete(taskId);
-      if (!this._error[taskId]) {
-        this._rejecting.delete(taskId);
-      }
       this.requestUpdate();
     }
   }
@@ -136,6 +221,47 @@ export class ArcHitlPanel extends LitElement {
     
     if (Math.abs(diffSecs) < 60) return rtf.format(diffSecs, 'second');
     return rtf.format(diffMins, 'minute');
+  }
+
+  private _formatParams(rawParams: unknown): string {
+    if (!rawParams) {
+      return 'No parameters';
+    }
+    let paramsObj: Record<string, unknown>;
+    if (typeof rawParams === 'string') {
+      const trimmed = rawParams.trim();
+      if (!trimmed || trimmed === '{}') {
+        return 'No parameters';
+      }
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          paramsObj = parsed;
+        } else if (Array.isArray(parsed)) {
+          return JSON.stringify(parsed, null, 2);
+        } else {
+          return trimmed;
+        }
+      } catch (_) {
+        return trimmed;
+      }
+    } else if (typeof rawParams === 'object') {
+      if (Array.isArray(rawParams)) {
+        return JSON.stringify(rawParams, null, 2);
+      }
+      paramsObj = rawParams as Record<string, unknown>;
+    } else {
+      return String(rawParams);
+    }
+
+    const entries = Object.entries(paramsObj);
+    if (entries.length === 0) {
+      return 'No parameters';
+    }
+
+    return entries
+      .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v, null, 2) : v}`)
+      .join('\n');
   }
 
   render() {
@@ -156,22 +282,30 @@ export class ArcHitlPanel extends LitElement {
                 <span class="requested-at">${this._formatTime(a.requestedAt)}</span>
               </div>
               
-              <pre class="params">${Object.keys(a.params).length === 0 
-                  ? 'No parameters'
-                  : Object.entries(a.params).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n')}</pre>
+              <pre class="params">${this._formatParams(a.params)}</pre>
               
               <div class="actions">
-                ${this._processing.has(a.taskId)
-                  ? html`<span class="empty">Syncing with cluster...</span>`
-                  : html`
-                    <button class="btn btn-approve" @click="${() => this._approve(a.taskId)}">Approve Sequence</button>
-                    <button class="btn btn-reject" @click="${() => this._toggleReject(a.taskId)}" ?disabled="${this._rejecting.has(a.taskId)}">Abort</button>
-                  `
-                }
+          ${this.channelCommandPending
+            ? html`<span class="empty">Approval command sent. Waiting for scheduled task...</span>`
+            : this._processing.has(a.taskId)
+            ? html`<span class="empty">Syncing with cluster...</span>`
+            : this._statusUnknown.has(a.taskId)
+              ? html`
+                  <span class="empty">Approval status unknown.</span>
+                  <button class="btn btn-approve" @click="${() => this._retry(a.taskId)}">Retry</button>
+                  <button class="btn btn-reject" @click="${() => this._checkStatus(a.taskId)}">Check status</button>
+                `
+              : html`
+          <button class="btn btn-approve" @click="${() => this._approve(a.taskId)}">Approve Sequence</button>
+          <button class="btn btn-reject" @click="${() => this._toggleReject(a.taskId)}" ?disabled="${this._rejecting.has(a.taskId)}">Abort</button>
+        `
+        }
               </div>
               
-              ${this._rejecting.has(a.taskId) && !this._processing.has(a.taskId)
-                ? html`
+        ${this._rejecting.has(a.taskId)
+          && !this._processing.has(a.taskId)
+          && !this._statusUnknown.has(a.taskId)
+          ? html`
                   <div class="reason-form">
                     <div style="font-size: 13px; font-weight: 700; color: #ef4444;">ABORT SEQUENCE</div>
                     <input class="reason-input" type="text" placeholder="Provide reason for abortion (optional)..."
@@ -187,7 +321,9 @@ export class ArcHitlPanel extends LitElement {
                 ` : ''
               }
               
-              ${this._error[a.taskId] ? html`<div class="error-msg">${this._error[a.taskId]}</div>` : ''}
+              ${this.channelCommandError || this._error[a.taskId]
+                ? html`<div class="error-msg">${this.channelCommandError || this._error[a.taskId]}</div>`
+                : ''}
             </div>
           `)
         }

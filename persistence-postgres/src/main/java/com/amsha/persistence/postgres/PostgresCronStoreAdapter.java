@@ -71,17 +71,28 @@ public class PostgresCronStoreAdapter implements CronStorePort {
     }
 
     @Override
-    public boolean claimForFire(String id) {
-        log.debugf("Postgres: Claiming cron task %s for fire...", id);
+    public boolean claimForFire(String id, String deliveryId) {
+        log.debugf("Postgres: Claiming cron task %s for fire (deliveryId=%s)...", id, deliveryId);
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
         return jdbi.withExtension(
-                CronJdbiDao.class, dao -> dao.claimForFire(id, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name()));
+                CronJdbiDao.class,
+                dao -> dao.claimForFire(
+                        id, deliveryId, CronStatus.RUNNING.name(), CronStatus.ACTIVE.name(), Instant.now()));
+    }
+
+    @Override
+    public boolean claimForResume(String id, String deliveryId) {
+        log.debugf("Postgres: Claiming cron task %s for resume (deliveryId=%s)...", id, deliveryId);
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        return jdbi.withExtension(CronJdbiDao.class, dao -> dao.claimForResume(id, deliveryId, Instant.now()) > 0);
     }
 
     @Override
     public void releaseClaimToActive(String id) {
         log.debugf("Postgres: Releasing cron task %s back to active...", id);
         jdbi.useExtension(
-                CronJdbiDao.class, dao -> dao.releaseClaim(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name()));
+                CronJdbiDao.class,
+                dao -> dao.releaseClaim(id, CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(), Instant.now()));
     }
 
     @Override
@@ -137,7 +148,56 @@ public class PostgresCronStoreAdapter implements CronStorePort {
         log.debugf("Postgres: Reclaiming stale cron tasks (threshold=%s)...", threshold);
         jdbi.useExtension(
                 CronJdbiDao.class,
-                dao -> dao.reclaimStale(CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(), threshold));
+                dao -> dao.reclaimStale(CronStatus.ACTIVE.name(), CronStatus.RUNNING.name(), threshold, Instant.now()));
+    }
+
+    @Override
+    public boolean renewLease(String id, String deliveryId) {
+        if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
+        return jdbi.withExtension(CronJdbiDao.class, dao -> dao.renewLease(id, deliveryId, Instant.now()) > 0);
+    }
+
+    @Override
+    public boolean markCompletedIfOwner(String id, String deliveryId, Instant lastFireTime) {
+        if (id == null || id.isBlank()) return false;
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.markCompletedIfOwner(id, deliveryId, lastFireTime, Instant.now()) > 0);
+    }
+
+    @Override
+    public boolean markFiredIfOwner(String id, String deliveryId, Instant lastFireTime, Instant nextFireTime) {
+        if (id == null || id.isBlank()) return false;
+        return jdbi.withExtension(
+                CronJdbiDao.class,
+                dao -> dao.markFiredIfOwner(id, deliveryId, lastFireTime, nextFireTime, Instant.now()) > 0);
+    }
+
+    @Override
+    public boolean markAwaitingApprovalIfOwner(String id, String deliveryId) {
+        if (id == null || id.isBlank()) return false;
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.markAwaitingApprovalIfOwner(id, deliveryId, Instant.now()) > 0);
+    }
+
+    @Override
+    public boolean markAwaitingRetryIfOwner(String id, String deliveryId) {
+        if (id == null || id.isBlank()) return false;
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.markAwaitingRetryIfOwner(id, deliveryId, Instant.now()) > 0);
+    }
+
+    @Override
+    public boolean markFailedIfOwner(String id, String deliveryId, String errorReason) {
+        if (id == null || id.isBlank()) return false;
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.markFailedIfOwner(id, deliveryId, errorReason, Instant.now()) > 0);
+    }
+
+    @Override
+    public boolean markFailedIfStatus(String id, String expectedStatus, String errorReason) {
+        if (id == null || id.isBlank()) return false;
+        return jdbi.withExtension(
+                CronJdbiDao.class, dao -> dao.markFailedIfStatus(id, expectedStatus, errorReason, Instant.now()) > 0);
     }
 
     @Override

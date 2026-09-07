@@ -33,7 +33,12 @@ import com.amsha.core.agent.reasoning.ReasoningStepSerializer;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.agent.sse.HitlEventType;
+import com.amsha.core.agent.trace.AgentTraceEvent;
+import com.amsha.core.agent.trace.SafeSymbolMetadata;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.api.AgentResponseMapper;
+import com.amsha.core.api.dto.ActiveAgentResponse;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.api.dto.AuditEventResponse;
 import com.amsha.core.api.dto.CreateSessionRequest;
@@ -70,6 +75,7 @@ import com.amsha.core.routing.SystemProfileMigration;
 import com.amsha.core.routing.TurnRequirements;
 import com.amsha.core.routing.provider.NetworkPolicyEnforcer;
 import com.amsha.core.sandbox.SandboxResult;
+import com.amsha.core.security.CredentialDetectionResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.skill.CompiledSkillEntry;
@@ -97,6 +103,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AgentResponseMapper.AgentResponse.class,
             AgentResponseMapper.ApprovalRequiredResponse.class,
             AgentResponseMapper.AgentErrorResponse.class,
+            ActiveAgentResponse.class,
             AmshaErrorResponse.class,
             AgentResult.Finished.class,
             AgentResult.AwaitingApproval.class,
@@ -160,6 +167,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             GroupConsultationService.TriageResult.class,
             GroupAnalyticsService.DomainComboStats.class,
             TaskClassifierService.TaskDomain.class,
+            CredentialDetectionResult.class,
             SessionCatalogEntry.class,
             ChatMessage.class,
             UserMessage.class,
@@ -186,15 +194,23 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             AgentSseService.AgentStatusEvent.class,
             AgentSseService.SseEvent.class,
             HitlEventType.class,
+            AgentTraceEvent.class,
+            TraceStage.class,
+            StationCode.class,
             ChatModelListenerMode.class,
             ChatModelListenerRuntimeControl.class,
             ChatModelListenerRuntimeControl.Snapshot.class,
             ChatModelListenerRuntimeControl.ToggleResult.class,
             AmshaChatModelListener.class,
             SpeechDeliveryService.class,
-            ResumeToolInfoFormatter.class
+            ResumeToolInfoFormatter.class,
+            SafeSymbolMetadata.class
         },
         classNames = {
+            // Nested trace contract type: registered by binary name rather than adding a
+            // type-level @RegisterForReflection (§6.7 / AGENTS.md §8).
+            "com.amsha.core.agent.trace.AgentTraceEvent$TraceMetrics",
+            "com.amsha.core.api.dto.ActiveAgentResponse$AgentSummary",
             "dev.langchain4j.model.chat.listener.ChatModelListener",
             "dev.langchain4j.model.chat.listener.ChatModelRequestContext",
             "dev.langchain4j.model.chat.listener.ChatModelResponseContext",

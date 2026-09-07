@@ -74,6 +74,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             StructuredSchemaRequests.class,
             AudioTranscriptionRequest.class,
             AudioTranscriptionResult.class,
+            AudioTranscriptionResult.Status.class,
             SpeechSynthesisRequest.class,
             SpeechSynthesisResult.class,
             MultimodalCapability.class,

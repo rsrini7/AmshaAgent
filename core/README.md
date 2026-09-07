@@ -41,9 +41,9 @@ and CDI `Instance<T>` multi-bean discovery.
 | OpenAI | `openai` | `gpt-4o-mini` | `https://api.openai.com/v1` |
 | Ollama | `ollama` | `mistral-small:latest` | `http://localhost:11434` |
 | OpenRouter | `openrouter` | `openai/gpt-oss-20b:free` | `https://openrouter.ai/api/v1` |
-| NVIDIA | `nvidia` | `bytedance/seed-oss-36b-instruct` | `https://integrate.api.nvidia.com/v1` |
-| Cerebras | `cerebras` | `qwen-3-235b-a22b-instruct-2507` | `https://api.cerebras.ai/v1` |
-| Sarvam AI | `sarvam` | `sarvam-105b` | `https://api.sarvam.ai/v1` |
+| NVIDIA | `nvidia` | `meta/llama-3.2-11b-vision-instruct` | `https://integrate.api.nvidia.com/v1` |
+| Cerebras | `cerebras` | `qwen-3.8-27b` | `https://api.cerebras.ai/v1` |
+| Sarvam AI | `sarvam` | `sarvam-105b-conversations` | `https://api.sarvam.ai/v1` |
 | OpenCode | `opencode` | `deepseek-v4-flash-free` | `https://opencode.ai/zen/v1` |
 | Hugging Face | `huggingface` | `meta-llama/Llama-3.3-70B-Instruct` | `https://router.huggingface.co/v1` |
 | Mistral AI | `mistral` | `codestral-latest` | `https://api.mistral.ai/v1` |
@@ -65,12 +65,12 @@ and CDI `Instance<T>` multi-bean discovery.
 |---|---|---|---|
 | `amsha.llm.sarvam.api-key` | `AMSHA_SARVAM_API_KEY` | — | Sarvam AI API key |
 | `amsha.llm.sarvam.base-url` | `AMSHA_SARVAM_BASE_URL` | `https://api.sarvam.ai/v1` | Sarvam AI v1 API base URL |
-| `amsha.llm.sarvam.model` | `AMSHA_SARVAM_MODEL` | `sarvam-105b` | Default chat model |
+| `amsha.llm.sarvam.model` | `AMSHA_SARVAM_MODEL` | `sarvam-105b-conversations` | Default chat model |
 | `amsha.compaction.sarvam.api-key` | `AMSHA_COMPACTION_SARVAM_API_KEY` | — | Sarvam API key for compaction slot |
-| `amsha.compaction.sarvam.model` | `AMSHA_COMPACTION_SARVAM_MODEL` | `sarvam-105b` | Compaction slot model |
+| `amsha.compaction.sarvam.model` | `AMSHA_COMPACTION_SARVAM_MODEL` | `sarvam-105b-conversations` | Compaction slot model |
 | `amsha.compaction.sarvam.base-url` | `AMSHA_COMPACTION_SARVAM_BASE_URL` | `https://api.sarvam.ai/v1` | Compaction slot base URL |
 | `amsha.classifier.sarvam.api-key` | `AMSHA_CLASSIFIER_SARVAM_API_KEY` | — | Sarvam API key for classifier slot |
-| `amsha.classifier.sarvam.model` | `AMSHA_CLASSIFIER_SARVAM_MODEL` | `sarvam-105b` | Classifier slot model |
+| `amsha.classifier.sarvam.model` | `AMSHA_CLASSIFIER_SARVAM_MODEL` | `sarvam-105b-conversations` | Classifier slot model |
 | `amsha.classifier.sarvam.base-url` | `AMSHA_CLASSIFIER_SARVAM_BASE_URL` | `https://api.sarvam.ai/v1` | Classifier slot base URL |
 
 ## OpenCode Configuration
@@ -333,6 +333,21 @@ On every startup with the seeder enabled it logs the post-condition on `[MODALIT
 ```
 
 `[MODALITY-SEEDER] SYSTEM DEFAULT route invariant violated:` instead means the configuration did not converge and routing fell back to the legacy path. Per-turn selection is logged by `LangChain4jLlmAdapter` at `DEBUG` under `com.amsha` as `[LLM-ADAPTER] Slab B route selected for role=...: profile:<profileId>`.
+
+## Execution Trace Persistence & Retention (Issue 08)
+
+Durable execution trace persistence operates outside the JTA transaction boundary via an asynchronous
+bounded-queue worker (`TracePersistenceEngine`) running on a dedicated virtual thread. Trace records are
+redacted and serialized before entering the queue.
+
+Expired trace records are pruned periodically by `TraceRetentionReaper` via Quarkus `@Scheduled`.
+
+| Property | Environment variable | Default | Description |
+|---|---|---|---|
+| `amsha.trace.persistence.queue-capacity` | `AMSHA_TRACE_PERSISTENCE_QUEUE_CAPACITY` | `10000` | Maximum capacity of the in-memory bounded queue before oldest events are dropped. |
+| `amsha.trace.retention.max-age-days` | `AMSHA_TRACE_RETENTION_MAX_AGE_DAYS` | `7` | Maximum age in days to retain durable execution traces before scheduled pruning. |
+| `amsha.trace.retention.max-runs-per-session` | `AMSHA_TRACE_RETENTION_MAX_RUNS_PER_SESSION` | `50` | Maximum number of runs retained per session before oldest runs are pruned. |
+| `amsha.trace.retention.interval` | `AMSHA_TRACE_RETENTION_INTERVAL` | `24h` | Interval between scheduled trace retention pruning sweeps. |
 
 ## Testing
 

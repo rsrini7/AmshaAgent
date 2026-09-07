@@ -19,6 +19,9 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.sse.AgentSseService;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.audit.AuditHashUtil;
 import com.amsha.core.audit.ComplianceViolationException;
 import com.amsha.core.channel.ChannelPluginRegistry;
@@ -100,6 +103,9 @@ public class AgentLoop {
 
     @Inject
     Instance<DirectiveFeedbackPort> directiveFeedbackPortInstance;
+
+    @Inject
+    TracePublisher tracePublisher;
 
     private LoopResultHandler loopResultHandler;
 
@@ -192,6 +198,9 @@ public class AgentLoop {
             String capturedUserId) {
 
         sessionLifecycleCoordinator.setupMdc(sessionId, canonicalRole, capturedUserId);
+        TracePublisher.startTurn(sessionId);
+        String paradigm = AgentLoopTraceHelper.isMultiAgentRole(canonicalRole) ? "MULTI_AGENT" : "REACT";
+        publishTrace(TraceStage.TURN_START, sessionId, StationCode.STATION_01_INBOUND, "START", null, paradigm);
 
         AgentResult result = null;
         boolean exceptionCaught = false;
@@ -218,6 +227,7 @@ public class AgentLoop {
 
                 var decision = checkpointResumeCoordinator.resolveResumePath(
                         sessionId, canonicalRole, capturedUserId, context);
+                AgentLoopTraceHelper.publishPreflightTrace(tracePublisher, sessionId, decision, paradigm);
 
                 String effectiveRole = canonicalRole;
                 if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
@@ -235,6 +245,9 @@ public class AgentLoop {
                                 sessionId, r.checkpointRole(), canonicalRole);
                     }
                 }
+
+                publishTrace(
+                        TraceStage.ROUTE, sessionId, StationCode.STATION_03_ROUTING, "ROUTED", effectiveRole, paradigm);
 
                 StructuredOutputMode mode =
                         (structuredOutputModeInstance != null && !structuredOutputModeInstance.isUnsatisfied())
@@ -266,9 +279,7 @@ public class AgentLoop {
                     getLoopResultHandler().tryStampChannelInfo(sessionId, canonicalRole, context);
                 } else if (result instanceof AgentResult.AwaitingRetry awaitingRetry) {
                     getLoopResultHandler().updateStoreForRetry(sessionId, canonicalRole, awaitingRetry, context);
-                } else if (result != null
-                        && result.steps() != null
-                        && !result.steps().isEmpty()) {
+                } else if (result != null) {
                     getLoopResultHandler()
                             .updateStoreForTerminal(
                                     sessionId,
@@ -323,11 +334,11 @@ public class AgentLoop {
                 return result;
 
             } finally {
+                boolean isTerminal = (result != null
+                                && !(result instanceof AgentResult.AwaitingApproval)
+                                && !(result instanceof AgentResult.AwaitingRetry))
+                        || exceptionCaught;
                 try {
-                    boolean isTerminal = (result != null
-                                    && !(result instanceof AgentResult.AwaitingApproval)
-                                    && !(result instanceof AgentResult.AwaitingRetry))
-                            || exceptionCaught;
                     if (isTerminal) {
                         boolean success = !exceptionCaught
                                 && (result instanceof AgentResult.Finished
@@ -338,7 +349,12 @@ public class AgentLoop {
                     observabilityManager.notifyLoopComplete(sessionId, capturedUserId, canonicalRole, goalHash, result);
                 } finally {
                     observabilityManager.endSession(sessionId);
+                    publishTrace(
+                            TraceStage.TURN_END, sessionId, StationCode.STATION_10_OUTBOUND, "END", null, paradigm);
                     sessionLifecycleCoordinator.teardownMdc();
+                    if (isTerminal) {
+                        TracePublisher.releaseSession(sessionId);
+                    }
                 }
             }
         }
@@ -485,5 +501,17 @@ public class AgentLoop {
         } catch (Exception e) {
             log.debugf("Directive feedback skipped for session %s: %s", sessionId, LogUtil.rootMessage(e));
         }
+    }
+
+    /**
+     * Emits a lifecycle trace event for this turn. Null-safe: when {@link TracePublisher} was not
+     * injected (manually-constructed test harness) the call is a no-op, so instrumentation can
+     * never alter a turn's outcome. Honesty invariant — only real, observed transitions are
+     * published; stations without a genuine execution boundary are left to render as
+     * {@code NOT_INSTRUMENTED} on the cockpit rather than faked here.
+     */
+    private void publishTrace(
+            TraceStage stage, String sessionId, StationCode station, String status, String detail, String paradigm) {
+        AgentLoopTraceHelper.publishTrace(tracePublisher, stage, sessionId, station, status, detail, paradigm);
     }
 }

@@ -53,10 +53,60 @@ public class MockCronStorePort implements CronStorePort {
     }
 
     @Override
-    public boolean claimForFire(String id) {
+    public boolean claimForFire(String id, String deliveryId) {
         AgentCronDto c = store.get(id);
         if (c != null && "ACTIVE".equals(c.status())) {
-            store.put(id, copyWithStatus(c, "RUNNING"));
+            store.put(
+                    id,
+                    new AgentCronDto(
+                            c.id(),
+                            c.sessionId(),
+                            c.userId(),
+                            c.chatId(),
+                            c.channelType(),
+                            c.channelPlatformId(),
+                            c.cronExpression(),
+                            c.timezone(),
+                            c.runOnce(),
+                            c.goal(),
+                            c.nextFireTime(),
+                            c.lastFireTime(),
+                            "RUNNING",
+                            c.executionRole(),
+                            c.errorReason(),
+                            deliveryId,
+                            c.createdAt(),
+                            Instant.now()));
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean claimForResume(String id, String deliveryId) {
+        AgentCronDto c = store.get(id);
+        if (c != null && ("AWAITING_APPROVAL".equals(c.status()) || "AWAITING_RETRY".equals(c.status()))) {
+            store.put(
+                    id,
+                    new AgentCronDto(
+                            c.id(),
+                            c.sessionId(),
+                            c.userId(),
+                            c.chatId(),
+                            c.channelType(),
+                            c.channelPlatformId(),
+                            c.cronExpression(),
+                            c.timezone(),
+                            c.runOnce(),
+                            c.goal(),
+                            c.nextFireTime(),
+                            c.lastFireTime(),
+                            "RUNNING",
+                            c.executionRole(),
+                            c.errorReason(),
+                            deliveryId,
+                            c.createdAt(),
+                            Instant.now()));
             return true;
         }
         return false;
@@ -229,8 +279,103 @@ public class MockCronStorePort implements CronStorePort {
     @Override
     public void reclaimStaleCrons(Instant threshold) {
         store.values().stream()
-                .filter(c -> "RUNNING".equals(c.status()) && c.updatedAt().isBefore(threshold))
+                .filter(c -> "RUNNING".equals(c.status())
+                        && (c.updatedAt() != null ? c.updatedAt() : c.createdAt()).isBefore(threshold))
                 .forEach(c -> store.put(c.id(), copyWithStatus(c, "ACTIVE")));
+    }
+
+    @Override
+    public boolean renewLease(String id, String deliveryId) {
+        AgentCronDto c = store.get(id);
+        if (c != null && "RUNNING".equals(c.status()) && deliveryId.equals(c.lastDeliveryId())) {
+            store.put(
+                    id,
+                    new AgentCronDto(
+                            c.id(),
+                            c.sessionId(),
+                            c.userId(),
+                            c.chatId(),
+                            c.channelType(),
+                            c.channelPlatformId(),
+                            c.cronExpression(),
+                            c.timezone(),
+                            c.runOnce(),
+                            c.goal(),
+                            c.nextFireTime(),
+                            c.lastFireTime(),
+                            c.status(),
+                            c.executionRole(),
+                            c.errorReason(),
+                            c.lastDeliveryId(),
+                            c.createdAt(),
+                            Instant.now()));
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean markCompletedIfOwner(String id, String deliveryId, Instant lastFireTime) {
+        AgentCronDto c = store.get(id);
+        if (c != null && deliveryId != null && deliveryId.equals(c.lastDeliveryId()) && "RUNNING".equals(c.status())) {
+            markCompleted(id, lastFireTime);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean markFiredIfOwner(String id, String deliveryId, Instant lastFireTime, Instant nextFireTime) {
+        AgentCronDto c = store.get(id);
+        if (c != null && deliveryId != null && deliveryId.equals(c.lastDeliveryId()) && "RUNNING".equals(c.status())) {
+            markFired(id, lastFireTime, nextFireTime);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean markAwaitingApprovalIfOwner(String id, String deliveryId) {
+        AgentCronDto c = store.get(id);
+        if (c != null && deliveryId != null && deliveryId.equals(c.lastDeliveryId()) && "RUNNING".equals(c.status())) {
+            markAwaitingApproval(id);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean markAwaitingRetryIfOwner(String id, String deliveryId) {
+        AgentCronDto c = store.get(id);
+        if (c != null && deliveryId != null && deliveryId.equals(c.lastDeliveryId()) && "RUNNING".equals(c.status())) {
+            store.put(id, copyWithStatus(c, "AWAITING_RETRY"));
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean markFailedIfOwner(String id, String deliveryId, String errorReason) {
+        AgentCronDto c = store.get(id);
+        boolean validStatus = c != null
+                && ("RUNNING".equals(c.status())
+                        || "AWAITING_APPROVAL".equals(c.status())
+                        || "AWAITING_RETRY".equals(c.status()));
+        if (c != null && deliveryId != null && deliveryId.equals(c.lastDeliveryId()) && validStatus) {
+            markFailed(id, errorReason);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean markFailedIfStatus(String id, String expectedStatus, String errorReason) {
+        AgentCronDto c = store.get(id);
+        if (c != null && (expectedStatus == null || expectedStatus.equals(c.status()))) {
+            markFailed(id, errorReason);
+            return true;
+        }
+        return false;
     }
 
     @Override

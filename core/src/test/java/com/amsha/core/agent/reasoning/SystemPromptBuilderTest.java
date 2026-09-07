@@ -218,7 +218,7 @@ class SystemPromptBuilderTest {
                 result.contains("GENERAL FACT FINDING & SEARCH PREFERENCE:"),
                 "Should contain search preference section");
         assertTrue(
-                result.contains("Do NOT use the `github` tool for non-repository questions"),
+                result.contains("Do NOT use the `github` tool for non-GitHub questions"),
                 "Should protect github tool usage");
         assertTrue(result.contains("TIME INFERENCE RULE:"), "Should contain time inference rule");
         assertTrue(result.contains("Do NOT call"), "Should forbid web search for time");
@@ -280,7 +280,8 @@ class SystemPromptBuilderTest {
                         "For capability/self-description questions, answer directly without recall_memory_search"),
                 "Compact binding should explicitly protect capability questions from recall_memory_search");
         assertTrue(
-                result.contains("For explicit owner/repo GitHub requests, prefer `github` over text-only fallback"),
+                result.contains(
+                        "For explicit owner/repo or gist GitHub requests, prefer `github` over text-only fallback"),
                 "Compact binding should explicitly prefer github for direct repo requests");
         assertTrue(
                 !result.contains("YOUR INTERNAL ARCHITECTURE"),

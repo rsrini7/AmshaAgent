@@ -53,12 +53,31 @@ public class WebSocketSessionStore {
     }
 
     public void unregister(String platformId) {
-        WebSocketConnection conn = platformToSession.remove(platformId);
+        WebSocketConnection conn = platformToSession.get(platformId);
         if (conn != null) {
-            connToAmshaSession.remove(conn.id());
-            connToOwner.remove(conn.id());
-            connIdToConnection.remove(conn.id());
+            unregister(platformId, conn);
+        } else {
+            platformToAmsha.remove(platformId);
         }
+    }
+
+    /**
+     * Removes a mapping only when it still belongs to the expected connection.
+     * A close callback from an old socket must not remove a replacement socket
+     * registered for the same platform.
+     */
+    public void unregister(String platformId, WebSocketConnection expectedConnection) {
+        if (platformId == null || expectedConnection == null) {
+            return;
+        }
+        if (!platformToSession.remove(platformId, expectedConnection)) {
+            return;
+        }
+
+        String connectionId = expectedConnection.id();
+        connToAmshaSession.remove(connectionId);
+        connToOwner.remove(connectionId);
+        connIdToConnection.remove(connectionId, expectedConnection);
         platformToAmsha.remove(platformId);
     }
 
@@ -116,9 +135,25 @@ public class WebSocketSessionStore {
     public void updateAmshaSession(String platformId, String newAmshaSessionId) {
         WebSocketConnection conn = platformToSession.get(platformId);
         if (conn != null) {
-            connToAmshaSession.put(conn.id(), newAmshaSessionId);
-            connIdToConnection.put(conn.id(), conn);
+            updateAmshaSession(platformId, conn, newAmshaSessionId);
         }
+    }
+
+    /**
+     * Updates a session mapping only when it still belongs to the expected
+     * connection, closing the same race as {@link #unregister(String,
+     * WebSocketConnection)}.
+     */
+    public void updateAmshaSession(
+            String platformId, WebSocketConnection expectedConnection, String newAmshaSessionId) {
+        if (platformId == null || expectedConnection == null || newAmshaSessionId == null) {
+            return;
+        }
+        if (!expectedConnection.equals(platformToSession.get(platformId))) {
+            return;
+        }
+        connToAmshaSession.put(expectedConnection.id(), newAmshaSessionId);
+        connIdToConnection.put(expectedConnection.id(), expectedConnection);
         platformToAmsha.put(platformId, newAmshaSessionId);
     }
 }

@@ -392,7 +392,7 @@ public class AgentSessionService {
 
         try {
             String canonicalRole = AgentRoleEnum.fromString(role).toScopedName();
-            var checkpointOpt = agentStore.load(sessionId, canonicalRole);
+            var checkpointOpt = loadStatusCheckpoint(sessionId, canonicalRole);
             if (checkpointOpt.isEmpty()) {
                 return ServiceResult.success(
                         Map.of("sessionId", sessionId, "status", CheckpointStatus.NOT_STARTED.name()));
@@ -404,6 +404,13 @@ public class AgentSessionService {
         } catch (Exception e) {
             return ServiceResult.error("SYSTEM", e.getMessage());
         }
+    }
+
+    private Optional<AgentCheckpoint> loadStatusCheckpoint(String sessionId, String canonicalRole) {
+        if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            return agentStore.findLatestNonArchivedCheckpoint(sessionId);
+        }
+        return agentStore.load(sessionId, canonicalRole);
     }
 
     public ServiceResult<Object> terminateSession(String sessionId, String userId) {

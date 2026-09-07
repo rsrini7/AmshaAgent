@@ -264,26 +264,36 @@ public final class MultimodalMessageMapper {
         AudioTranscriptionResult result;
         try {
             if (!transcriptionPort.supports(attachment.mimeType(), mediaBytes.length)) {
+                log.infof(
+                        "Audio transcription port does not support mime=%s bytes=%d for %s",
+                        attachment.mimeType(), mediaBytes.length, attachment.attachmentId());
                 return null;
             }
             AudioTranscriptionRequest request = AudioTranscriptionRequest.ofInline(
                     attachment.attachmentId(), attachment.mimeType(), mediaBytes, null, TRANSCRIPTION_TIMEOUT);
             result = transcriptionPort.transcribe(request);
         } catch (RuntimeException e) {
-            log.debugf("Audio transcription failed for %s: %s", attachment.attachmentId(), LogUtil.rootMessage(e));
+            log.warnf("Audio transcription failed for %s: %s", attachment.attachmentId(), LogUtil.rootMessage(e));
             return null;
         }
         if (result == null || result.status() != AudioTranscriptionResult.Status.TRANSCRIBED) {
+            String status = result != null ? result.status().name() : "null";
+            String reason = result != null ? result.failureReason() : "null";
+            log.warnf(
+                    "Audio transcription returned status=%s, reason=%s for attachment %s",
+                    status, reason, attachment.attachmentId());
             return null;
         }
         String transcript = result.transcript();
         if (transcript == null || transcript.isBlank()) {
+            log.warnf("Audio transcription produced empty transcript for attachment %s", attachment.attachmentId());
             return null;
         }
         String bounded = transcript.strip();
         if (bounded.length() > MAX_TRANSCRIPT_CHARS) {
             bounded = bounded.substring(0, MAX_TRANSCRIPT_CHARS).strip();
         }
+        log.infof("Audio transcription succeeded for %s (%d chars)", attachment.attachmentId(), bounded.length());
         MultimodalMetrics.recordIngestion(
                 meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "success");
         return "[Audio transcript: " + bounded + "]";

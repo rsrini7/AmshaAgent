@@ -67,13 +67,25 @@ public interface CronJdbiDao {
     @SqlQuery("SELECT " + CRON_COLUMNS + " FROM agent_cron WHERE id = :id")
     Optional<AgentCronDto> findById(@Bind("id") String id);
 
-    @SqlUpdate("UPDATE agent_cron SET status = :status WHERE id = :id AND status = :expectedStatus")
+    @SqlUpdate(
+            "UPDATE agent_cron SET status = :status, lastDeliveryId = :deliveryId, updatedAt = :now WHERE id = :id AND status = :expectedStatus")
     boolean claimForFire(
-            @Bind("id") String id, @Bind("status") String status, @Bind("expectedStatus") String expectedStatus);
+            @Bind("id") String id,
+            @Bind("deliveryId") String deliveryId,
+            @Bind("status") String status,
+            @Bind("expectedStatus") String expectedStatus,
+            @Bind("now") String now);
 
-    @SqlUpdate("UPDATE agent_cron SET status = :status WHERE id = :id AND status = :expectedStatus")
+    @SqlUpdate(
+            "UPDATE agent_cron SET status = 'RUNNING', lastDeliveryId = :deliveryId, updatedAt = :now WHERE id = :id AND (status = 'AWAITING_APPROVAL' OR status = 'AWAITING_RETRY')")
+    int claimForResume(@Bind("id") String id, @Bind("deliveryId") String deliveryId, @Bind("now") String now);
+
+    @SqlUpdate("UPDATE agent_cron SET status = :status, updatedAt = :now WHERE id = :id AND status = :expectedStatus")
     boolean releaseClaim(
-            @Bind("id") String id, @Bind("status") String status, @Bind("expectedStatus") String expectedStatus);
+            @Bind("id") String id,
+            @Bind("status") String status,
+            @Bind("expectedStatus") String expectedStatus,
+            @Bind("now") String now);
 
     @SqlUpdate(
             "UPDATE agent_cron SET status = :status, lastFireTime = :lastFire, nextFireTime = :nextFire, updatedAt = :now WHERE id = :id")
@@ -112,9 +124,58 @@ public interface CronJdbiDao {
     void setDeliveryId(@Bind("id") String id, @Bind("deliveryId") String deliveryId);
 
     @SqlUpdate(
-            "UPDATE agent_cron SET status = :status WHERE status = :running AND (lastFireTime <= :threshold OR (lastFireTime IS NULL AND createdAt <= :threshold))")
+            "UPDATE agent_cron SET status = :status, lastDeliveryId = NULL, updatedAt = :now WHERE status = :running AND (updatedAt <= :threshold OR (updatedAt IS NULL AND createdAt <= :threshold))")
     int reclaimStale(
-            @Bind("status") String status, @Bind("running") String running, @Bind("threshold") String threshold);
+            @Bind("status") String status,
+            @Bind("running") String running,
+            @Bind("threshold") String threshold,
+            @Bind("now") String now);
+
+    @SqlUpdate(
+            "UPDATE agent_cron SET updatedAt = :now WHERE id = :id AND lastDeliveryId = :deliveryId AND status = 'RUNNING'")
+    int renewLease(@Bind("id") String id, @Bind("deliveryId") String deliveryId, @Bind("now") String now);
+
+    @SqlUpdate(
+            "UPDATE agent_cron SET status = 'COMPLETED', lastFireTime = :lastFire, updatedAt = :now WHERE id = :id AND lastDeliveryId = :deliveryId AND status = 'RUNNING'")
+    int markCompletedIfOwner(
+            @Bind("id") String id,
+            @Bind("deliveryId") String deliveryId,
+            @Bind("lastFire") String lastFire,
+            @Bind("now") String now);
+
+    @SqlUpdate(
+            "UPDATE agent_cron SET status = 'ACTIVE', lastFireTime = :lastFire, nextFireTime = :nextFire, updatedAt = :now WHERE id = :id AND lastDeliveryId = :deliveryId AND status = 'RUNNING'")
+    int markFiredIfOwner(
+            @Bind("id") String id,
+            @Bind("deliveryId") String deliveryId,
+            @Bind("lastFire") String lastFire,
+            @Bind("nextFire") String nextFire,
+            @Bind("now") String now);
+
+    @SqlUpdate(
+            "UPDATE agent_cron SET status = 'AWAITING_APPROVAL', updatedAt = :now WHERE id = :id AND lastDeliveryId = :deliveryId AND status = 'RUNNING'")
+    int markAwaitingApprovalIfOwner(
+            @Bind("id") String id, @Bind("deliveryId") String deliveryId, @Bind("now") String now);
+
+    @SqlUpdate(
+            "UPDATE agent_cron SET status = 'AWAITING_RETRY', updatedAt = :now WHERE id = :id AND lastDeliveryId = :deliveryId AND status = 'RUNNING'")
+    int markAwaitingRetryIfOwner(@Bind("id") String id, @Bind("deliveryId") String deliveryId, @Bind("now") String now);
+
+    @SqlUpdate(
+            "UPDATE agent_cron SET status = 'FAILED', errorReason = :errorReason, updatedAt = :now WHERE id = :id AND lastDeliveryId = :deliveryId AND (status = 'RUNNING' OR status = 'AWAITING_APPROVAL' OR status = 'AWAITING_RETRY')")
+    int markFailedIfOwner(
+            @Bind("id") String id,
+            @Bind("deliveryId") String deliveryId,
+            @Bind("errorReason") String errorReason,
+            @Bind("now") String now);
+
+    @SqlUpdate(
+            "UPDATE agent_cron SET status = 'FAILED', errorReason = :errorReason, updatedAt = :now WHERE id = :id AND status = :expectedStatus")
+    int markFailedIfStatus(
+            @Bind("id") String id,
+            @Bind("expectedStatus") String expectedStatus,
+            @Bind("errorReason") String errorReason,
+            @Bind("now") String now);
 
     @SqlUpdate(
             "INSERT OR REPLACE INTO agent_cron (id, sessionId, userId, chatId, channelType, channelPlatformId, cronExpression, timezone, runonce, goal, nextFireTime, lastFireTime, status, executionRole, errorReason, lastDeliveryId, createdAt, updatedAt) VALUES (:id, :sessionId, :userId, :chatId, :channelType, :channelPlatformId, :cronExpression, :timezone, :runOnce, :goal, :nextFireTime, :lastFireTime, :status, :executionRole, :errorReason, :lastDeliveryId, :createdAt, :updatedAt)")

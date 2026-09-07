@@ -145,22 +145,29 @@ public class HitlResource {
             @PathParam("taskId") String taskId,
             CheckpointApprovalRequest request,
             @HeaderParam("X-Idempotency-Key") String idempotencyKey) {
+        String userId = currentUserId();
+        if (userId == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(new AmshaErrorResponse("Authentication required", "Cannot resolve user identity"))
+                    .build();
+        }
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Response cached = idempotencyCache.getIfPresent(idempotencyKey);
             if (cached != null) return cached;
         }
         String toolName = (request != null) ? request.toolName() : null;
-        String reason = (request != null) ? request.reason() : "Approved via REST";
+        String reason = (request != null
+                        && request.reason() != null
+                        && !request.reason().isBlank())
+                ? request.reason()
+                : "Approved via REST";
         if (hitlService.isUnsatisfied()) {
             return Response.status(Response.Status.NOT_IMPLEMENTED)
                     .entity(new AmshaErrorResponse("HITL not available", "No database backend"))
                     .build();
         }
         try {
-            hitlService.get().resolve(taskId, toolName, true, reason);
-            String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
-                    ? securityContext.getUserPrincipal().getName()
-                    : "anonymous";
+            hitlService.get().resolve(taskId, toolName, true, reason, userId);
             auditService.recordMandatory(
                     HITL_AUDIT_PREFIX + taskId,
                     userId,
@@ -186,6 +193,12 @@ public class HitlResource {
             @PathParam("taskId") String taskId,
             CheckpointApprovalRequest request,
             @HeaderParam("X-Idempotency-Key") String idempotencyKey) {
+        String userId = currentUserId();
+        if (userId == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(new AmshaErrorResponse("Authentication required", "Cannot resolve user identity"))
+                    .build();
+        }
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Response cached = idempotencyCache.getIfPresent(idempotencyKey);
             if (cached != null) return cached;
@@ -202,10 +215,7 @@ public class HitlResource {
                     .build();
         }
         try {
-            hitlService.get().resolve(taskId, toolName, false, reason);
-            String userId = (securityContext != null && securityContext.getUserPrincipal() != null)
-                    ? securityContext.getUserPrincipal().getName()
-                    : "anonymous";
+            hitlService.get().resolve(taskId, toolName, false, reason, userId);
             auditService.recordMandatory(
                     HITL_AUDIT_PREFIX + taskId,
                     userId,
@@ -224,6 +234,11 @@ public class HitlResource {
     }
 
     private Response handleException(String taskId, Exception e) {
+        if (e instanceof SecurityException) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(new AmshaErrorResponse("Forbidden", e.getMessage()))
+                    .build();
+        }
         if (e.getMessage() != null && e.getMessage().contains("No pending")) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(new AmshaErrorResponse("No pending approval found", "taskId: " + taskId))
@@ -238,5 +253,13 @@ public class HitlResource {
                 .entity(new AmshaErrorResponse(
                         "System Error", e.getMessage() != null ? e.getMessage() : "Unknown error"))
                 .build();
+    }
+
+    private String currentUserId() {
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            return null;
+        }
+        String userId = securityContext.getUserPrincipal().getName();
+        return userId == null || userId.isBlank() || "anonymous".equals(userId) ? null : userId;
     }
 }

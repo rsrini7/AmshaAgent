@@ -90,6 +90,10 @@
       <groupId>com.amsha</groupId>
       <artifactId>amsha-local-ml-onnx</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.github.jsqlparser</groupId>
+      <artifactId>jsqlparser</artifactId>
+    </dependency>
 
     <!-- Test -->
     <dependency>

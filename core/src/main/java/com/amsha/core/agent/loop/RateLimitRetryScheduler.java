@@ -14,10 +14,12 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.DatabaseSafetyGuard;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.CronStorePort;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -40,6 +42,9 @@ public class RateLimitRetryScheduler {
 
     @Inject
     AgentLoop agentLoop;
+
+    @Inject
+    CronStorePort cronStore;
 
     @Inject
     MeterRegistry meterRegistry;
@@ -113,11 +118,27 @@ public class RateLimitRetryScheduler {
                     if (agentStore.claimForRetry(cp.getId())) {
                         try {
                             // Offload to background thread via AgentLoop.resume
-                            agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
+                            if (!CronSessionStatusSync.syncRunning(cp.getSessionId(), cronStore)) {
+                                agentStore.markFailed(cp.getId(), "Cron lease lost before retry resume");
+                                continue;
+                            }
+
+                            AgentResult result =
+                                    agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
+                            if (!CronSessionStatusSync.syncTerminal(cp.getSessionId(), result, cronStore)) {
+                                agentStore.markFailed(cp.getId(), "Cron lease lost during retry resume");
+                            }
                         } catch (Exception e) {
                             log.errorf(
                                     "Failed to resume rate-limited session %s:\n%s",
                                     cp.getSessionId(), LogUtil.trimmedStack(e));
+                            CronSessionStatusSync.syncTerminal(
+                                    cp.getSessionId(),
+                                    AgentResult.failed(
+                                            "Background retry failed: " + LogUtil.rootMessage(e),
+                                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                                            List.of()),
+                                    cronStore);
                             agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
                         }
                     } else {

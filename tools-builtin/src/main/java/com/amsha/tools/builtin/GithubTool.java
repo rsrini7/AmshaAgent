@@ -5,6 +5,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -12,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
@@ -75,6 +78,8 @@ public class GithubTool implements AgentTool {
     // perfectly in sync. Any divergence will cause the LLM to hallucinate values.
     private static final Set<String> ALLOWED_ACTIONS = Set.of("repo", "gist");
     private static final Set<String> ALLOWED_COMMANDS = Set.of("view", "list");
+    private static final Pattern GITHUB_USERNAME_PATTERN =
+            Pattern.compile("^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$");
 
     public static final String TOOL_NAME = ToolCapability.GITHUB.toolName();
 
@@ -88,7 +93,8 @@ public class GithubTool implements AgentTool {
         return "Interact with GitHub using the gh CLI. Read-only access only. " + "Parameters: "
                 + "1. 'action': ONLY 'repo' or 'gist' - no other values are valid. "
                 + "2. 'command': ONLY 'view' or 'list' - NEVER use 'delete', 'create', 'remove', or any other value. "
-                + "3. 'target': (Optional) The target owner or owner/repo path. "
+                + "3. 'target': (Optional) For 'repo view' the owner/repo, for 'repo list' the owner, "
+                + "for 'gist view' the GistID, for 'gist list' the GitHub username (omit for your own gists). "
                 + "4. 'ref': (Optional) Branch, tag, or commit SHA for README fetch. OMIT if not needed.";
     }
 
@@ -208,11 +214,15 @@ public class GithubTool implements AgentTool {
         // ── Case 4: gist list - allow querying other users' gists via API ──
         if ("gist".equals(action) && "list".equals(command)) {
             if (target != null && !target.isBlank() && !target.equals("@me")) {
+                String cleanTarget = target.trim();
+                if (!GITHUB_USERNAME_PATTERN.matcher(cleanTarget).matches()) {
+                    throw new IllegalArgumentException("Invalid GitHub username target: " + cleanTarget);
+                }
                 // gh CLI can't list another user's gists - use API directly
                 return List.of(
                         "gh",
                         "api",
-                        "users/" + target + "/gists",
+                        "users/" + cleanTarget + "/gists",
                         "--jq",
                         "[.[:5] | .[] | {id, description, public, created_at, files: (.files | keys)}]");
             }
@@ -264,6 +274,7 @@ public class GithubTool implements AgentTool {
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        Process process = null;
         try {
             List<String> command = buildGhCommand(params);
 
@@ -276,13 +287,15 @@ public class GithubTool implements AgentTool {
                 pb.environment().put("GH_TOKEN", ghToken);
             }
 
-            var process = pb.start();
-            var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            process = pb.start();
+            ProcessOutput processOutput = waitForProcess(process);
+            String output = processOutput.output();
+            boolean finished = processOutput.finished();
 
-            if (!finished) {
-                process.destroyForcibly();
-                return ToolResponse.infraFailure("GitHub command timed out after " + timeoutSeconds + "s");
+            if (!finished || Thread.currentThread().isInterrupted()) {
+                terminateProcess(process, null);
+                return ToolResponse.infraFailure(
+                        "GitHub command timed out or interrupted after " + timeoutSeconds + "s");
             }
 
             String result = output.trim();
@@ -291,13 +304,75 @@ public class GithubTool implements AgentTool {
             }
 
             return ToolResponse.success(postProcessOutput(result.isBlank() ? "(no output)" : result, params));
+        } catch (InterruptedException e) {
+            terminateProcess(process, null);
+            Thread.currentThread().interrupt();
+            return ToolResponse.failure(499, "GitHub command interrupted: " + LogUtil.rootMessage(e));
         } catch (IllegalArgumentException e) {
             return ToolResponse.failure(1, e.getMessage());
         } catch (Exception e) {
+            terminateProcess(process, null);
             String msg = e.getMessage();
             return ToolResponse.failure(1, msg != null ? msg : "GitHub tool execution failed");
+        } finally {
+            terminateProcess(process, null);
         }
     }
+
+    private ProcessOutput waitForProcess(Process process) throws InterruptedException {
+        AtomicReference<String> output = new AtomicReference<>("");
+        Thread reader = Thread.startVirtualThread(() -> {
+            try {
+                output.set(new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+            } catch (IOException _) {
+                // The process is being terminated or its output stream was closed.
+            }
+        });
+
+        try {
+            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            if (!finished || Thread.currentThread().isInterrupted()) {
+                terminateProcess(process, reader);
+                return new ProcessOutput(false, output.get());
+            }
+
+            reader.join(1_000);
+            if (reader.isAlive()) {
+                terminateProcess(process, reader);
+                return new ProcessOutput(false, output.get());
+            }
+            return new ProcessOutput(true, output.get());
+        } catch (InterruptedException e) {
+            terminateProcess(process, reader);
+            throw e;
+        }
+    }
+
+    private void closeOutput(Process process) {
+        try {
+            process.getInputStream().close();
+        } catch (IOException _) {
+            // Best effort while terminating the child process.
+        }
+    }
+
+    private void terminateProcess(Process process, Thread reader) {
+        if (process == null) {
+            return;
+        }
+        process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
+        closeOutput(process);
+        if (reader != null && reader.isAlive()) {
+            try {
+                reader.join(1_000);
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private record ProcessOutput(boolean finished, String output) {}
 
     private String resolveGhToken() {
         try {
@@ -330,7 +405,7 @@ public class GithubTool implements AgentTool {
                         "target",
                         "For 'repo view', use 'owner/repo'. " + "For 'repo list', use 'owner'. "
                                 + "For 'gist view', use 'GistID'. "
-                                + "For 'gist list', OMIT this parameter.")
+                                + "For 'gist list', use the GitHub username, or omit for the authenticated user.")
                 .addStringProperty(
                         "ref",
                         "Optional branch, tag, or commit SHA. Pass EXACTLY as-is including hyphens. "

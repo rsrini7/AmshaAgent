@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.routing.CapabilityAwareChatModel;
@@ -66,9 +67,10 @@ public class SarvamProviderFactory implements AgentChatModelProvider {
 
     private ChatModel createModel(String model) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Sarvam requires AMSHA_SARVAM_API_KEY"));
+        String cleanKey = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key, model, ModelDefaults.PROVIDER_SARVAM, (entryKey, entryModel) -> {
-                    ChatModel raw = ChatModelFactory.createOpenAi(
+                cleanKey, model, ModelDefaults.PROVIDER_SARVAM, (entryKey, entryModel) -> {
+                    var builder = ChatModelFactory.openAiBuilder(
                             baseUrl,
                             entryKey,
                             entryModel,
@@ -76,7 +78,10 @@ public class SarvamProviderFactory implements AgentChatModelProvider {
                             agentConfig.timeout(),
                             agentConfig.maxRetries(),
                             agentConfig.temperature(),
+                            agentConfig.logHttp(),
                             agentConfig.logHttp());
+                    builder.customHeaders(Map.of("api-subscription-key", entryKey));
+                    ChatModel raw = builder.build();
                     MultimodalCapability cap =
                             MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_SARVAM, entryModel);
                     return CapabilityAwareChatModel.withCapabilities(raw, false, cap);

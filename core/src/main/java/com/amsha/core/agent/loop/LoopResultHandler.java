@@ -81,38 +81,66 @@ public class LoopResultHandler {
             String goal) {
         if (result instanceof AgentResult.Finished) {
             persistTerminalAnswer(sessionId, result);
-            agentStore.saveAndFinalize(
-                    sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
-            agentSseService.publish(
-                    sessionId,
-                    new AgentSseService.AgentStatusEvent(
-                            sessionId, canonicalRole, CheckpointStatus.COMPLETED.name(), Instant.now()));
+            CheckpointStatus finalStatus = CheckpointStatus.COMPLETED;
+            if (agentStore != null) {
+                var current = agentStore.load(sessionId, canonicalRole);
+                if (current != null && current.isPresent() && current.get().getStatus() == CheckpointStatus.FAILED) {
+                    finalStatus = CheckpointStatus.FAILED;
+                }
+                agentStore.saveAndFinalize(
+                        sessionId, canonicalRole, userId, autonomy, result.steps(), finalStatus, goal);
+            }
+            if (agentSseService != null) {
+                agentSseService.publish(
+                        sessionId,
+                        new AgentSseService.AgentStatusEvent(
+                                sessionId, canonicalRole, finalStatus.name(), Instant.now()));
+            }
         } else if (result instanceof AgentResult.StructuredFinished) {
             persistTerminalAnswer(sessionId, result);
-            agentStore.saveAndFinalize(
-                    sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
-            agentSseService.publish(
-                    sessionId,
-                    new AgentSseService.AgentStatusEvent(
-                            sessionId, canonicalRole, CheckpointStatus.COMPLETED.name(), Instant.now()));
+            if (agentStore != null) {
+                agentStore.saveAndFinalize(
+                        sessionId, canonicalRole, userId, autonomy, result.steps(), CheckpointStatus.COMPLETED, goal);
+            }
+            if (agentSseService != null) {
+                agentSseService.publish(
+                        sessionId,
+                        new AgentSseService.AgentStatusEvent(
+                                sessionId, canonicalRole, CheckpointStatus.COMPLETED.name(), Instant.now()));
+            }
         } else if (result instanceof AgentResult.Failed f) {
-            var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
-            agentStore.markFailed(cp.getId(), f.reason());
-            agentSseService.publish(
-                    sessionId,
-                    new AgentSseService.AgentStatusEvent(
-                            sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
+            persistTerminalAnswer(sessionId, result);
+            if (agentStore != null) {
+                var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
+                if (cp != null) {
+                    agentStore.markFailed(cp.getId(), f.reason());
+                }
+            }
+            if (agentSseService != null) {
+                agentSseService.publish(
+                        sessionId,
+                        new AgentSseService.AgentStatusEvent(
+                                sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
+            }
         } else if (result instanceof AgentResult.LoopExceeded l) {
             // Quarantine only the failed turn's dangling tool requests. Preserve the
             // session history and completed tool results so the same session can recover
             // on its next goal without replaying an invalid/pending call.
-            chatMemoryWriter.scrubUnfulfilledToolCalls(sessionId);
-            var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
-            agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
-            agentSseService.publish(
-                    sessionId,
-                    new AgentSseService.AgentStatusEvent(
-                            sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
+            if (chatMemoryWriter != null) {
+                chatMemoryWriter.scrubUnfulfilledToolCalls(sessionId);
+            }
+            if (agentStore != null) {
+                var cp = agentStore.save(sessionId, canonicalRole, userId, autonomy, result.steps(), goal);
+                if (cp != null) {
+                    agentStore.markFailed(cp.getId(), "Max iterations (" + l.maxIterations() + ") exceeded");
+                }
+            }
+            if (agentSseService != null) {
+                agentSseService.publish(
+                        sessionId,
+                        new AgentSseService.AgentStatusEvent(
+                                sessionId, canonicalRole, CheckpointStatus.FAILED.name(), Instant.now()));
+            }
         }
     }
 
@@ -124,6 +152,7 @@ public class LoopResultHandler {
                 switch (result) {
                     case AgentResult.Finished f -> f.answer();
                     case AgentResult.StructuredFinished sf -> sf.answer();
+                    case AgentResult.Failed f -> f.reason();
                     default -> null;
                 };
         chatMemoryWriter.saveAnswer(sessionId, answer);

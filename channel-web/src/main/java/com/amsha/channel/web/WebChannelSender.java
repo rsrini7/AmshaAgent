@@ -84,7 +84,7 @@ public class WebChannelSender implements ChannelSender {
                 return true;
             } catch (Exception e) {
                 log.warnf("Failed to send to session %s: %s", platformId, LogUtil.rootMessage(e));
-                sessionStore.unregister(platformId);
+                sessionStore.unregister(platformId, directConn.get());
                 return false;
             }
         }

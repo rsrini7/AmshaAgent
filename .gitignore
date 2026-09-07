@@ -58,6 +58,7 @@ node_modules/
 dist-tsc/
 dist-ssr/
 /ui/dist/
+/ui/coverage/
 node/
 npm/
 *.tsbuildinfo

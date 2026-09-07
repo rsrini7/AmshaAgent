@@ -11,10 +11,10 @@ Houses all 21 built-in concrete LLM provider factories, LangChain4j concrete SDK
 | Groq | `groq` | `meta-llama/llama-4-scout-17b-16e-instruct` | `https://api.groq.com/openai/v1` |
 | OpenAI | `openai` | `gpt-4o-mini` | `https://api.openai.com/v1` |
 | Ollama | `ollama` | `mistral-small:latest` | `http://localhost:11434` |
-| OpenRouter | `openrouter` | `openai/gpt-oss-20b:free` | `https://openrouter.ai/api/v1` |
-| NVIDIA | `nvidia` | `bytedance/seed-oss-36b-instruct` | `https://integrate.api.nvidia.com/v1` |
-| Cerebras | `cerebras` | `qwen-3-235b-a22b-instruct-2507` | `https://api.cerebras.ai/v1` |
-| Sarvam AI | `sarvam` | `sarvam-105b` | `https://api.sarvam.ai/v1` |
+| OpenRouter | `openrouter` | `minimax/minimax-m3:free` | `https://openrouter.ai/api/v1` |
+| NVIDIA | `nvidia` | `meta/llama-3.2-11b-vision-instruct` | `https://integrate.api.nvidia.com/v1` |
+| Cerebras | `cerebras` | `qwen-3.8-27b` | `https://api.cerebras.ai/v1` |
+| Sarvam AI | `sarvam` | `sarvam-105b-conversations` | `https://api.sarvam.ai/v1` |
 | OpenCode | `opencode` | `deepseek-v4-flash-free` | `https://opencode.ai/zen/v1` |
 | Hugging Face | `huggingface` | `meta-llama/Llama-3.3-70B-Instruct` | `https://router.huggingface.co/v1` |
 | Mistral AI | `mistral` | `codestral-latest` | `https://api.mistral.ai/v1` |

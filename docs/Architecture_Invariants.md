@@ -2129,6 +2129,58 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 
 **Why**: The `browser-use` skill (removed in P105) appeared to be a local CLI tool but actually required a paid Browser Use Cloud API key. Without it, the LLM entered an infinite Shiva auto-heal loop (`heal:shiva:...:heal:shiva:...`) that grew session IDs until macOS rejected the workspace directory path with `File name too long`.
 
+### 24.6 Volatile Field Invariants & Modern JDK 25 Concurrency Alternatives (§24.6 INVARIANT)
+
+#### The Problem with `volatile`
+`volatile` establishes a memory visibility guarantee (happens-before edge) and prevents compiler or hardware instruction reordering across the field access boundary. However, `volatile` **does NOT provide mutual exclusion or compound atomicity**:
+1. **Check-Then-Act anti-pattern**: `if (ref == null) ref = create();` or `if (!shuttingDown) { shuttingDown = true; doShutdown(); }` creates race conditions where multiple threads execute initialization or shutdown concurrently.
+2. **Read-Modify-Write anti-pattern**: Operations like `counter++`, `tokens -= cost`, or bitwise flag manipulation are non-atomic compound operations; concurrent mutations will be lost.
+3. **Multi-field Incoherency (Fractured State)**: Maintaining multiple `volatile` fields (e.g., `long lastRefill` and `double tokens`, or `status` and `result`) allows concurrent readers to observe intermediate, inconsistent states where one field is updated before another.
+4. **Double-Checked Locking Fragility**: Hand-rolled double-checked locking with raw `volatile` is verbose, fragile, and error-prone compared to modern JDK primitives.
+
+#### Modern JDK 25 Alternatives
+1. **`AtomicReference<T>`, `AtomicBoolean`, `AtomicInteger`, `AtomicLong`**:
+   - For single-field mutable references and primitive state flags, use `java.util.concurrent.atomic.*`.
+   - **`AtomicReference<T>`**: Primary container for thread-safe lazy initialization or single-reference caching (e.g., `AtomicReference<LeaseBackedWhisperRunner> runner`). Provides explicit CAS semantics (`compareAndSet`), atomic updates (`updateAndGet`), and clear intent without verbose double-checked locking boilerplate.
+   - **`AtomicBoolean`**: Ideal for one-way lifecycle and teardown transitions. `lifecycle.compareAndSet(false, true)` guarantees exactly-once execution of teardown or bootstrap logic.
+   - **`AtomicInteger` / `AtomicLong`**: For thread-safe counters, monotonic sequences, and bounds.
+2. **High-Throughput Accumulators (`LongAdder`, `DoubleAdder`)**:
+   - For high-contention throughput counters (e.g., metrics, token counts, request tracking), prefer `LongAdder` or `DoubleAdder` over `volatile long` or `AtomicLong`. They eliminate cache-line bouncing by striping updates across thread-local cells.
+3. **Unpinned `synchronized` in JDK 25 (Loom JEP 491)**:
+   - JDK 25 completely eliminates virtual thread pinning on `synchronized` monitor entry and exit (finalized via JEP 491). Virtual threads unmount cleanly from carrier threads when blocking on `synchronized`.
+   - For multi-field coordination or compound state transitions, `synchronized` blocks are the standard, readable, and preferred concurrency primitive.
+   - *CDI Proxy Rule*: For `@ApplicationScoped` or `@WorkspaceScoped` beans, do NOT use `synchronized (this)` as it locks the client proxy. Always lock on an explicit lock object (`private final Object lock = new Object();`) or `ReentrantLock`.
+4. **Immutable `record` + `AtomicReference`**:
+   - When multiple state fields must update coherently, group them into an immutable JDK 25 `record`:
+     ```java
+     record ThrottleState(double tokens, long lastRefillMs) {
+         ThrottleState consume(double cost, long now) { ... }
+     }
+     private final AtomicReference<ThrottleState> state = new AtomicReference<>(new ThrottleState(...));
+     ```
+   - Update atomically using `state.updateAndGet(curr -> curr.consume(cost, now))`. Readers always observe a coherent, fully initialized immutable snapshot without lock contention.
+5. **`java.lang.invoke.VarHandle` (Zero-Allocation Field Access Modes)**:
+   - In internal, memory-sensitive, or hot-path infrastructure (e.g., high-volume caches, ring buffers, lease counters) where allocating an extra `AtomicReference` wrapper object per entry is unacceptable:
+   - Use a `static final VarHandle` with plain or package-private instance fields.
+   - Leverages fine-grained memory ordering modes: `getAcquire` / `setRelease` (acquire-release semantics without heavy full sequential memory fences) and `compareAndSet`.
+6. **Initialization-on-Demand Holder Idiom**:
+   - For static singletons or expensive static resources, use the static nested class holder idiom. The JVM class loader provides completely lock-free, zero-overhead thread safety without needing `volatile`, DCL, or CAS:
+     ```java
+     private static final class Holder {
+         static final HeavyEngine INSTANCE = new HeavyEngine();
+     }
+     ```
+7. **Concurrent Maps (`computeIfAbsent`)**:
+   - For keyed caching or dynamic resource registration, use `ConcurrentHashMap.computeIfAbsent(key, mappingFunction)` instead of `volatile Map` copying or synchronized map checks.
+
+#### Invariant Rules:
+- **MUST NOT** use raw `volatile` for compound state mutations (read-modify-write, increment, decrement). Use `Atomic*` or `synchronized`.
+- **MUST NOT** use raw `volatile boolean` for check-then-act lifecycle transitions. Use `AtomicBoolean.compareAndSet(false, true)`.
+- **MUST NOT** split related multi-field mutable states across multiple `volatile` variables. Bundle into an immutable `record` managed by `AtomicReference<Record>` or protect with a `synchronized` block.
+- **SHOULD** prefer `AtomicReference<T>` over double-checked locking with `volatile` fields for lazy component initialization or one-time publishing.
+- **SHOULD** prefer `synchronized` blocks over complex lock-free hand-rolled volatile algorithms when coordinating multi-field invariants; JDK 25 virtual threads run unpinned.
+- **MAY** use raw `volatile` only for simple, independent, single-variable one-way visibility flags where a single thread writes and other threads only read without conditional updates (e.g., `private volatile boolean active = true;`).
+
 ## 25. Audio, Speech Synthesis & Channel Media Delivery Invariants
 
 ### 25.1 Speech Output Policy & Intent Invariants

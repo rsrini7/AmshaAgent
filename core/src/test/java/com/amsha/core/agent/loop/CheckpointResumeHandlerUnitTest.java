@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.RejectedExecutionException;
 
 import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
@@ -156,6 +157,21 @@ class CheckpointResumeHandlerUnitTest {
     }
 
     @Test
+    void testResumeAfterBatchDecisionExecutorRejectedReleasesClaim() {
+        when(agentStore.claimForResume("s-rejected", "r-1")).thenReturn(true);
+        AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
+        doReturn(Optional.of(checkpoint)).when(agentStore).load("s-rejected", "r-1");
+        doThrow(new RejectedExecutionException("executor is closed"))
+                .when(executor)
+                .execute(any(Runnable.class));
+
+        assertFalse(handler.resumeAfterBatchDecision("s-rejected", "r-1", "u-1", "c-1", "cli"));
+
+        verify(agentStore).releaseResumeClaim("s-rejected", "r-1");
+        verify(agentStore).clearBatchResuming("s-rejected");
+    }
+
+    @Test
     void testResumeAfterBatchDecisionSyncGuards() throws Exception {
         when(agentStore.claimForResume("s-claimed", "r1")).thenReturn(false);
         assertNull(handler.resumeAfterBatchDecisionSync("s-claimed", "r1", "u1", "c1", "cli"));
@@ -251,12 +267,14 @@ class CheckpointResumeHandlerUnitTest {
         syncCronStatus.setAccessible(true);
 
         String cronSessionId = "cron-12345678-1234-1234-1234-123456789012-session";
+        when(cronStore.claimForResume("12345678-1234-1234-1234-123456789012", "session"))
+                .thenReturn(true);
         syncCronStatus.invoke(handler, cronSessionId);
-        verify(cronStore).markRunning("12345678-1234-1234-1234-123456789012");
+        verify(cronStore).claimForResume("12345678-1234-1234-1234-123456789012", "session");
 
-        Method markCronTerminal =
-                CheckpointResumeHandler.class.getDeclaredMethod("markCronTerminal", String.class, AgentResult.class);
-        markCronTerminal.setAccessible(true);
+        Method syncCronTerminalStatus = CheckpointResumeHandler.class.getDeclaredMethod(
+                "syncCronTerminalStatus", String.class, AgentResult.class);
+        syncCronTerminalStatus.setAccessible(true);
 
         AgentCronDto cronDto = new AgentCronDto(
                 "12345678-1234-1234-1234-123456789012",
@@ -271,17 +289,16 @@ class CheckpointResumeHandlerUnitTest {
                 "prompt",
                 Instant.now(),
                 null,
-                CronStatus.ACTIVE.name(),
+                CronStatus.RUNNING.name(),
                 null,
                 null,
-                null,
+                "session",
                 Instant.now(),
                 Instant.now());
         when(cronStore.findById("12345678-1234-1234-1234-123456789012")).thenReturn(Optional.of(cronDto));
 
-        markCronTerminal.invoke(
-                handler, "12345678-1234-1234-1234-123456789012", AgentResult.finished("done", List.of()));
-        verify(cronStore).markCompleted(eq("12345678-1234-1234-1234-123456789012"), any());
+        syncCronTerminalStatus.invoke(handler, cronSessionId, AgentResult.finished("done", List.of()));
+        verify(cronStore).markCompletedIfOwner(eq("12345678-1234-1234-1234-123456789012"), eq("session"), any());
     }
 
     @Test

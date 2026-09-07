@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStatus;
@@ -205,5 +206,72 @@ class FsCronStoreAdapterTest {
         List<AgentCronDto> byUser = adapter.findByUserId("usr-1", CronStatus.ACTIVE.name(), 0, 10);
         assertEquals(1, byUser.size());
         assertEquals(1, adapter.countByUserId("usr-1", CronStatus.ACTIVE.name()));
+    }
+
+    @Test
+    void testRenewLeaseAndAtomicOwnership() {
+        AtomicReference<AgentCronDto> state = new AtomicReference<>(new AgentCronDto(
+                "c1",
+                "sess-c1",
+                "usr-1",
+                "chat-1",
+                "telegram",
+                "platform-1",
+                "0 * * * *",
+                "UTC",
+                false,
+                "goal",
+                Instant.now(),
+                null,
+                CronStatus.ACTIVE.name(),
+                "role",
+                null,
+                null,
+                Instant.now(),
+                Instant.now()));
+
+        when(store.readOptional(eq(List.of("crons", "by-id", "c1.json")), eq(AgentCronDto.class)))
+                .thenAnswer(inv -> Optional.ofNullable(state.get()));
+        doAnswer(inv -> {
+                    state.set(inv.getArgument(1));
+                    return null;
+                })
+                .when(store)
+                .write(eq(List.of("crons", "by-id", "c1.json")), any(AgentCronDto.class));
+
+        // 1. Claim for fire with delivery-123
+        assertTrue(adapter.claimForFire("c1", "delivery-123"));
+        assertEquals(CronStatus.RUNNING.name(), state.get().status());
+        assertEquals("delivery-123", state.get().lastDeliveryId());
+
+        // 2. Competing claim should fail
+        assertFalse(adapter.claimForFire("c1", "delivery-456"));
+
+        // 3. Renew lease with wrong owner fails, correct owner succeeds
+        assertFalse(adapter.renewLease("c1", "wrong-owner"));
+        assertTrue(adapter.renewLease("c1", "delivery-123"));
+
+        // 4. Mark awaiting approval by owner transitions state
+        assertFalse(adapter.markAwaitingApprovalIfOwner("c1", "wrong-owner"));
+        assertTrue(adapter.markAwaitingApprovalIfOwner("c1", "delivery-123"));
+        assertEquals(CronStatus.AWAITING_APPROVAL.name(), state.get().status());
+
+        // 5. While AWAITING_APPROVAL, renewLease must fail because status is not RUNNING
+        assertFalse(adapter.renewLease("c1", "delivery-123"));
+
+        // 6. Resume claim transitions back to RUNNING with new deliveryId
+        assertFalse(adapter.claimForResume("c1", ""));
+        assertTrue(adapter.claimForResume("c1", "delivery-789"));
+        assertEquals(CronStatus.RUNNING.name(), state.get().status());
+        assertEquals("delivery-789", state.get().lastDeliveryId());
+
+        // 7. Mark completed by new owner transitions to COMPLETED
+        assertFalse(adapter.markCompletedIfOwner("c1", "delivery-123", Instant.now()));
+        assertTrue(adapter.markCompletedIfOwner("c1", "delivery-789", Instant.now()));
+        assertEquals(CronStatus.COMPLETED.name(), state.get().status());
+
+        // 8. Further updates fail because status is COMPLETED
+        assertFalse(adapter.renewLease("c1", "delivery-789"));
+        assertFalse(adapter.markFailedIfOwner("c1", "delivery-789", "err"));
     }
 }

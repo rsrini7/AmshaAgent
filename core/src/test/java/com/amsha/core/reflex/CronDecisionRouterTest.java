@@ -1,6 +1,7 @@
 package com.amsha.core.reflex;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
@@ -26,6 +28,7 @@ import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.reflex.CronDecisionRouter.CronContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronRunDto;
 import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
@@ -71,6 +74,7 @@ public class CronDecisionRouterTest {
     @BeforeEach
     public void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
+        when(cronStore.claimForResume(anyString(), anyString())).thenReturn(true);
     }
 
     @AfterEach
@@ -101,7 +105,7 @@ public class CronDecisionRouterTest {
                 "goal",
                 Instant.now(),
                 Instant.now(),
-                "ACTIVE",
+                "AWAITING_APPROVAL",
                 "coder",
                 null,
                 null,
@@ -225,5 +229,82 @@ public class CronDecisionRouterTest {
                         run -> "COMPLETED".equals(run.status()) && run.inputTokens() == 10 && run.outputTokens() == 5));
         verify(workspaceManager).terminateSession("cron-" + CRON_ID);
         verify(statefulAgentStore).clearBatchResuming("cron-" + CRON_ID);
+    }
+
+    @Test
+    public void appliesDecisionBeforePersistedCheckpointClaim() throws Exception {
+        when(statefulAgentStore.isSessionActive(anyString())).thenReturn(false);
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+                .thenReturn(Optional.empty());
+        when(cronStore.findById(CRON_ID)).thenReturn(Optional.of(cronDto()));
+
+        AgentCheckpoint checkpoint = checkpoint();
+        AtomicReference<CheckpointStatus> status = new AtomicReference<>(CheckpointStatus.AWAITING_APPROVAL);
+        when(checkpoint.getStatus()).thenAnswer(invocation -> status.get());
+        when(statefulAgentStore.findLatestAwaitingApproval(CRON_ID)).thenReturn(Optional.of(checkpoint));
+        when(statefulAgentStore.claimForResume(anyString(), anyString())).thenAnswer(invocation -> {
+            status.set(CheckpointStatus.RESUMING);
+            return true;
+        });
+
+        AgentResult.Finished finished = new AgentResult.Finished("all done", List.of(), 1, 1);
+        when(agentLoop.run(any(), any(), any(), any(), any(), anyInt(), any())).thenReturn(finished);
+
+        boolean[] decisionApplied = {false};
+        CronContext ctx = new CronContext(
+                CRON_ID,
+                "user-1",
+                "chat-1",
+                "approve",
+                mock(MessageContext.class),
+                (sessionId, reason) -> {
+                    decisionApplied[0] = true;
+                    assertEquals(CheckpointStatus.AWAITING_APPROVAL, checkpoint.getStatus());
+                    return checkpoint;
+                },
+                () -> "already processing",
+                (sessionId, role) -> "resume goal",
+                (cron, reason, result) -> {},
+                result -> "ok:" + result,
+                () -> "loop failed",
+                (cron, result) -> {});
+
+        String response = router.execute(ctx);
+
+        assertTrue(decisionApplied[0]);
+        assertEquals(CheckpointStatus.RESUMING, checkpoint.getStatus());
+        assertEquals("ok:" + finished, response);
+    }
+
+    @Test
+    public void claimsLeasesBeforeMutatingCheckpoint() throws Exception {
+        when(statefulAgentStore.isSessionActive(anyString())).thenReturn(false);
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+                .thenReturn(Optional.empty());
+        when(cronStore.findById(CRON_ID)).thenReturn(Optional.of(cronDto()));
+        when(cronStore.claimForResume(anyString(), anyString())).thenReturn(false);
+
+        boolean[] decisionMutated = {false};
+        CronContext ctx = new CronContext(
+                CRON_ID,
+                "user-1",
+                "chat-1",
+                "resume",
+                mock(MessageContext.class),
+                (sessionId, r) -> {
+                    decisionMutated[0] = true;
+                    return checkpoint();
+                },
+                () -> "already processing",
+                (sessionId, role) -> "resume goal",
+                (cron, r, result) -> {},
+                result -> "ok:" + result,
+                () -> "loop failed",
+                (cron, result) -> {});
+
+        String response = router.execute(ctx);
+
+        assertEquals("already processing", response);
+        assertFalse(decisionMutated[0]);
     }
 }

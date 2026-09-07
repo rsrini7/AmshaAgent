@@ -1,9 +1,14 @@
 package com.amsha.core.util;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -32,6 +37,41 @@ public class CronTimeResolver {
     // Negation guard (Invariant 4.11)
     private static final Pattern NEGATION_GUARD =
             Pattern.compile("\\b(?:not|don't|do not|never|cancel|stop|remove)\\b", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern SCHEDULE_VERB_PATTERN = Pattern.compile(
+            "\\b(?:schedule|scheduled|remind|reminder|timer|cron|recurring|repeat)\\b", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern ACTION_VERB_PATTERN = Pattern.compile(
+            "\\b(?:run|execute|write|send|check|perform|do|create|fetch|search)\\b", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern SCHEDULE_PREFIX_PATTERN = Pattern.compile(
+            "^\\s*(?:please\\s+)?(?:schedule(?:\\s+(?:a|the))?|remind(?:\\s+me)?|"
+                    + "set\\s+(?:a\\s+)?(?:timer|reminder)|create\\s+(?:a\\s+)?(?:cron|schedule)|cron)"
+                    + "\\s*(?:task)?\\s*(?:to|that|:)?\\s*",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Deterministic representation of an unambiguous scheduling request.
+     *
+     * <p>{@code cronExpression} is populated for recurring requests and
+     * {@code targetTime} is populated for one-shot requests. The unused value is
+     * {@code null}; callers must use {@link #runOnce()} to select the field.
+     */
+    public record ScheduleRequest(
+            String goal, boolean runOnce, String cronExpression, ZoneId timezone, ZonedDateTime targetTime) {
+        public ScheduleRequest {
+            if (goal == null || goal.isBlank()) {
+                throw new IllegalArgumentException("Schedule goal must not be blank");
+            }
+            Objects.requireNonNull(timezone, "timezone");
+            if (runOnce && targetTime == null) {
+                throw new IllegalArgumentException("One-shot schedule requires a target time");
+            }
+            if (!runOnce && (cronExpression == null || cronExpression.isBlank())) {
+                throw new IllegalArgumentException("Recurring schedule requires a cron expression");
+            }
+        }
+    }
 
     public static boolean isValidCron(String cron) {
         return cron != null && VALID_CRON_PATTERN.matcher(cron.trim()).matches();
@@ -100,7 +140,7 @@ public class CronTimeResolver {
             if ("pm".equalsIgnoreCase(m2.group(3)) && hour < 12) hour += 12;
             if ("am".equalsIgnoreCase(m2.group(3)) && hour == 12) hour = 0;
 
-            ZonedDateTime nowLocal = ZonedDateTime.now(userZone);
+            ZonedDateTime nowLocal = nowUtc.withZoneSameInstant(userZone);
             ZonedDateTime local =
                     nowLocal.withHour(hour).withMinute(minute).withSecond(0).withNano(0);
 
@@ -109,5 +149,98 @@ public class CronTimeResolver {
         }
 
         return null; // No match = not a scheduling request; caller skips injection
+    }
+
+    /**
+     * Parses only explicit, unambiguous schedule requests without calling an LLM.
+     *
+     * <p>This is deliberately narrower than a general natural-language parser. A
+     * temporal phrase must be accompanied by a scheduling or action verb, a usable
+     * goal must remain after removing the time expression, and negated requests are
+     * rejected. Ambiguous text remains on the normal reasoning path.
+     */
+    public static Optional<ScheduleRequest> parseSchedulingRequest(String message, ZoneId userZone) {
+        return parseSchedulingRequest(message, ZonedDateTime.now(ZoneOffset.UTC), userZone);
+    }
+
+    /** Testable overload using a caller-provided UTC clock snapshot. */
+    public static Optional<ScheduleRequest> parseSchedulingRequest(
+            String message, ZonedDateTime nowUtc, ZoneId userZone) {
+        if (message == null || message.isBlank() || nowUtc == null || userZone == null) {
+            return Optional.empty();
+        }
+        if (NEGATION_GUARD.matcher(message).find()) {
+            return Optional.empty();
+        }
+
+        Matcher recurring = EVERY_PATTERN.matcher(message);
+        Matcher relative = IN_RELATIVE_TIME_PATTERN.matcher(message);
+        Matcher absolute = AT_TIME_PATTERN.matcher(message);
+        Matcher temporal =
+                recurring.find() ? recurring : relative.find() ? relative : absolute.find() ? absolute : null;
+        if (temporal == null || !hasSchedulingVerb(message)) {
+            return Optional.empty();
+        }
+
+        String goal = removeTemporalExpression(message, temporal);
+        if (goal.isBlank()) {
+            return Optional.empty();
+        }
+
+        goal = SCHEDULE_PREFIX_PATTERN.matcher(goal).replaceFirst("").strip();
+        goal = goal.replaceFirst("(?i)^(?:to|that)\\s+", "").strip();
+        goal = goal.replaceFirst("^[,;:.]\\s*", "").strip();
+        if (goal.isBlank()) {
+            return Optional.empty();
+        }
+
+        if (recurring.pattern().equals(temporal.pattern())) {
+            String cron = resolveRecurringCron(message);
+            return cron == null
+                    ? Optional.empty()
+                    : Optional.of(new ScheduleRequest(goal, false, cron, userZone, null));
+        }
+
+        ZonedDateTime target = resolveTargetTime(message, nowUtc, userZone);
+        return target == null ? Optional.empty() : Optional.of(new ScheduleRequest(goal, true, null, userZone, target));
+    }
+
+    private static boolean hasSchedulingVerb(String message) {
+        return SCHEDULE_VERB_PATTERN.matcher(message).find()
+                || ACTION_VERB_PATTERN.matcher(message).find();
+    }
+
+    private static String removeTemporalExpression(String message, Matcher temporal) {
+        String withoutTime = message.substring(0, temporal.start()) + " " + message.substring(temporal.end());
+        return withoutTime
+                .replaceAll("\\s+", " ")
+                .replaceAll("\\s+([,;:.])", "$1")
+                .strip();
+    }
+
+    /**
+     * Resolves a one-shot target against CURRENT server time rather than against a
+     * caller-supplied "now".
+     *
+     * <p>{@link #resolveTargetTime} is normally called once, upstream, to build the LLM's
+     * time context. That snapshot is captured before inference; when inference is slow the
+     * resulting absolute target is already in the past by the time a tool acts on it. A
+     * run-once cron then silently rolls over to its next occurrence, turning "in 1 minute"
+     * into "same minute tomorrow". Re-resolving at execution time keeps the outcome
+     * independent of inference latency.
+     *
+     * @param msg raw user message text
+     * @param userZone zone used to interpret absolute times ("at 9 AM")
+     * @param minLead minimum lead time the target must still retain; a target falling
+     *                inside it is treated as stale and rejected
+     * @return the resolved target, or {@code null} when the wording carries no temporal
+     *         intent or the target is already stale (caller must fall back or fail)
+     */
+    public static ZonedDateTime resolveTargetTimeFromNow(String msg, ZoneId userZone, Duration minLead) {
+        Instant now = Instant.now();
+        ZonedDateTime target = resolveTargetTime(msg, ZonedDateTime.ofInstant(now, ZoneOffset.UTC), userZone);
+        if (target == null) return null;
+        Instant earliest = now.plus(minLead);
+        return target.toInstant().isBefore(earliest) ? null : target;
     }
 }

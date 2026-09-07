@@ -73,6 +73,10 @@ public class InteractiveSetupWizard {
             "AMSHA_API_KEYS_ADMIN");
 
     public static void run(Path binaryDir, String[] args) {
+        if (args != null && args.length > 0 && "models".equalsIgnoreCase(args[0])) {
+            return;
+        }
+
         if (System.getProperty("AMSHA_LLM_PROVIDER") == null && System.getenv("AMSHA_LLM_PROVIDER") == null) {
             promptProviderSelection();
         }
@@ -204,9 +208,9 @@ public class InteractiveSetupWizard {
                         ? configuredProviderList("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "groq,ollama")
                         : provider);
         if ("sarvam".equalsIgnoreCase(provider)) {
-            patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_MODEL", "sarvam-105b");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_MODEL", "sarvam-105b-conversations");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_BASE_URL", "https://api.sarvam.ai/v1");
-            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_MODEL", "sarvam-105b");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_MODEL", "sarvam-105b-conversations");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_BASE_URL", "https://api.sarvam.ai/v1");
         }
         if ("opencode".equalsIgnoreCase(provider)) {

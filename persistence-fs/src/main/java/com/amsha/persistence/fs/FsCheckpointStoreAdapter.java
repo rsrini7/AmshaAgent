@@ -167,12 +167,7 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public Optional<CheckpointDto> findLatestAwaitingApprovalBySessionContaining(String segment) {
         return helper.loadAll().stream()
-                .filter(c -> {
-                    String st = c.status();
-                    return CheckpointStatus.AWAITING_APPROVAL.name().equals(st)
-                            || CheckpointStatus.RESUMING.name().equals(st)
-                            || CheckpointStatus.IN_PROGRESS.name().equals(st);
-                })
+                .filter(c -> CheckpointStatus.AWAITING_APPROVAL.name().equals(c.status()))
                 .filter(c -> c.sessionId() != null && c.sessionId().contains(segment))
                 .max(Comparator.comparing(CheckpointDto::updatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
     }
@@ -277,35 +272,14 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             if (cp.status() != null
                     && !CheckpointStatus.COMPLETED.name().equals(cp.status())
                     && !CheckpointStatus.FAILED.name().equals(cp.status())) {
-                save(new CheckpointDto(
-                        cp.id(),
-                        cp.sessionId(),
-                        cp.agentRole(),
+                save(CheckpointDtoHelper.withFailure(
+                        cp,
                         CheckpointStatus.FAILED.name(),
-                        cp.autonomyLevel(),
-                        cp.stateJson(),
-                        cp.channelPlatformId(),
-                        cp.channelType(),
-                        cp.originalGoal(),
                         Instant.now(),
-                        cp.completedAt(),
                         "Session terminated",
-                        cp.pendingToolName(),
-                        cp.batchToolDecisions(),
-                        cp.pendingToolParametersJson(),
-                        cp.preExecutedResults(),
-                        cp.maxIterations(),
-                        cp.iterationsUsed(),
-                        cp.retryAfterMs(),
-                        cp.systemNote(),
-                        cp.contextDataJson(),
                         "SESSION_TERMINATED",
                         null,
-                        null,
-                        cp.parentCheckpointId(),
-                        cp.depth(),
-                        cp.createdAt(),
-                        Instant.now()));
+                        null));
             }
         }
     }

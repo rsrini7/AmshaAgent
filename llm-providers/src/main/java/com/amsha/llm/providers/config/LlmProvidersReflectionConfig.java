@@ -51,6 +51,9 @@ import com.amsha.llm.providers.routing.OpenAiLlmProviderFactory;
 import com.amsha.llm.providers.routing.OpenCodeLlmProviderFactory;
 import com.amsha.llm.providers.routing.OpenRouterLlmProviderFactory;
 import com.amsha.llm.providers.routing.SarvamLlmProviderFactory;
+import com.amsha.llm.providers.transport.GovernedLangChainHttpClient;
+import com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilder;
+import com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilderFactory;
 import com.amsha.llm.providers.wrapper.AgyResponsesChatModel;
 import com.amsha.llm.providers.wrapper.ClaudeCodeResponsesChatModel;
 import com.amsha.llm.providers.wrapper.CodexResponsesChatModel;
@@ -58,11 +61,14 @@ import com.amsha.llm.providers.wrapper.FoundryResponsesChatModel;
 import com.amsha.llm.providers.wrapper.KimchiResponsesChatModel;
 import com.amsha.llm.providers.wrapper.NvidiaMessageSanitizer;
 
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClient;
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilderFactory;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
  * Central GraalVM native reflection registration for {@code amsha-llm-providers}.
- * Registers all 21 reasoning factories, 21 routing factories, 5 custom chat model wrappers,
+ * Registers reasoning factories, routing factories, custom chat model wrappers,
  * token extractors, CLI executors, and catalog adapter types.
  */
 @RegisterForReflection(
@@ -105,9 +111,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OpenCodeProviderFactory.class,
             OpenRouterProviderFactory.class,
             SarvamProviderFactory.class,
-            com.amsha.llm.providers.routing.AgyProviderFactory.class,
+            com.amsha.llm.providers.routing.AgyProviderFactory.class, // fully qualified to disambiguate
             CerebrasLlmProviderFactory.class,
-            com.amsha.llm.providers.routing.ClaudeCodeProviderFactory.class,
+            com.amsha.llm.providers.routing.ClaudeCodeProviderFactory.class, // fully qualified to disambiguate
             CloudflareLlmProviderFactory.class,
             CodexLlmProviderFactory.class,
             CohereLlmProviderFactory.class,
@@ -125,7 +131,13 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OpenAiLlmProviderFactory.class,
             OpenCodeLlmProviderFactory.class,
             OpenRouterLlmProviderFactory.class,
-            SarvamLlmProviderFactory.class
+            SarvamLlmProviderFactory.class,
+            JaxRsHttpClientBuilder.class,
+            JaxRsHttpClient.class,
+            JaxRsHttpClientBuilderFactory.class,
+            GovernedLangChainHttpClientBuilder.class,
+            GovernedLangChainHttpClient.class,
+            GovernedLangChainHttpClientBuilderFactory.class
         },
         classNames = {
             "com.amsha.llm.providers.catalog.StaticProviderCatalogAdapter$RawProvider",

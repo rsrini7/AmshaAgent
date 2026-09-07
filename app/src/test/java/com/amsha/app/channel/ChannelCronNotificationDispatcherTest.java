@@ -48,6 +48,19 @@ class ChannelCronNotificationDispatcherTest {
     }
 
     @Test
+    void testCompletionPrefersCronSessionIdWhenPresent() {
+        when(telegramPlugin.jobNotifier()).thenReturn(telegramNotifier);
+        when(pluginRegistry.find(ChannelType.TELEGRAM)).thenReturn(Optional.of(telegramPlugin));
+
+        AgentJobCompleted event = new AgentJobCompleted(
+                "cron-1", "user-1", ChannelType.TELEGRAM, "chat-1", "corr-1", "Hello", null, "cron-session-1", null);
+
+        dispatcher.onJobCompleted(event);
+
+        verify(telegramNotifier).notifyJobCompleted("chat-1", "Hello", "cron-session-1");
+    }
+
+    @Test
     void testUnknownChannelTypeLogsWarning() {
         when(pluginRegistry.find(ChannelType.CLI)).thenReturn(Optional.empty());
 

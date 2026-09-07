@@ -1,11 +1,8 @@
 package com.amsha.core.agent.reasoning;
 
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -17,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -41,7 +37,6 @@ import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.tools.search.ToolSearchPort;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.llm.api.MultimodalCapability;
-import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.audio.AudioTranscriptionPort;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.MediaDownloadPort;
@@ -50,6 +45,7 @@ import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import io.micrometer.core.instrument.MeterRegistry;
@@ -62,13 +58,13 @@ import io.micrometer.core.instrument.MeterRegistry;
 public class ReasoningMessageAssembler {
 
     private static final Logger log = Logger.getLogger(ReasoningMessageAssembler.class);
-    private static final int CHITCHAT_CONTEXT_MESSAGES = 2;
 
     private final ChatHistoryAssembler historyAssembler;
     private final ToolRegistry toolRegistry;
     private final LoopStuckDetector loopStuckDetector;
     private final IntentClassificationService intentClassifier;
     private final MultimodalHistoryProjector historyProjector;
+    private final LoopStuckTracer loopStuckTracer;
 
     @Inject
     BeanManager beanManager;
@@ -101,6 +97,10 @@ public class ReasoningMessageAssembler {
     Instance<AudioTranscriptionPort> audioTranscriptionPortInstance;
 
     @Inject
+    @ConfigProperty(name = "amsha.stt.allow-fallback-on-failure", defaultValue = "false")
+    boolean allowFallbackOnFailure;
+
+    @Inject
     Instance<MeterRegistry> meterRegistryInstance;
 
     @Inject
@@ -109,12 +109,23 @@ public class ReasoningMessageAssembler {
             ToolRegistry toolRegistry,
             LoopStuckDetector loopStuckDetector,
             IntentClassificationService intentClassifier,
-            MultimodalHistoryProjector historyProjector) {
+            MultimodalHistoryProjector historyProjector,
+            LoopStuckTracer loopStuckTracer) {
         this.historyAssembler = historyAssembler;
         this.toolRegistry = toolRegistry;
         this.loopStuckDetector = loopStuckDetector;
         this.intentClassifier = intentClassifier;
         this.historyProjector = historyProjector != null ? historyProjector : new MultimodalHistoryProjector();
+        this.loopStuckTracer = loopStuckTracer;
+    }
+
+    public ReasoningMessageAssembler(
+            ChatHistoryAssembler historyAssembler,
+            ToolRegistry toolRegistry,
+            LoopStuckDetector loopStuckDetector,
+            IntentClassificationService intentClassifier,
+            MultimodalHistoryProjector historyProjector) {
+        this(historyAssembler, toolRegistry, loopStuckDetector, intentClassifier, historyProjector, null);
     }
 
     public ReasoningMessageAssembler(
@@ -200,11 +211,9 @@ public class ReasoningMessageAssembler {
                 .toList();
 
         Optional<String> stuckHint = loopStuckDetector.detectStuckHint(history, agentRole);
-        String finalSystemPrompt = resolveSystemPrompt(assembled, systemPrompt, isWriteIntent, isForceFinishRetry);
-        if (stuckHint.isPresent()) {
-            log.infof("[ReasoningAssembler] Injecting loop-stuck hint for session %s (role=%s)", sessionId, agentRole);
-            finalSystemPrompt = finalSystemPrompt + "\n\n" + stuckHint.get();
-        }
+        String finalSystemPrompt =
+                ReasoningMessageHelpers.resolveSystemPrompt(assembled, systemPrompt, isWriteIntent, isForceFinishRetry);
+        finalSystemPrompt = applyLoopStuckHint(finalSystemPrompt, sessionId, agentRole, stuckHint);
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.systemMessage(finalSystemPrompt));
@@ -216,7 +225,8 @@ public class ReasoningMessageAssembler {
                             + "Use only the tools explicitly listed in your tool schema."));
         }
 
-        List<ChatMessage> historyToInclude = filterHistory(filteredAssembled, isSimpleChitchat, isForceFinishRetry);
+        List<ChatMessage> historyToInclude =
+                ReasoningMessageHelpers.filterHistory(filteredAssembled, isSimpleChitchat, isForceFinishRetry);
 
         MultimodalCapability cap =
                 route != null && route.capability() != null ? route.capability() : resolveLegacyCapability(agentRole);
@@ -227,29 +237,18 @@ public class ReasoningMessageAssembler {
         List<ChatMessage> projectedHistory = projector.projectHistory(historyToInclude, cap, targetModelName);
 
         if (isSimpleChitchat && !isHistoryQuery) {
-            messages.addAll(recentConversationContext(projectedHistory, goal));
+            messages.addAll(ReasoningMessageHelpers.recentConversationContext(
+                    projectedHistory, goal, intentClassifier, textPatternUtils, codePolicy));
             if (attachments != null && !attachments.isEmpty()) {
                 messages.add(mapMediaMessage(context, goal, cap, targetModelName));
             } else {
                 messages.add(UserMessage.userMessage(goal));
             }
         } else {
-            if (attachments != null && !attachments.isEmpty()) {
-                boolean replaced = false;
-                for (ChatMessage m : projectedHistory) {
-                    if (!replaced && m instanceof UserMessage um && Objects.equals(extractUserText(um), goal)) {
-                        messages.add(mapMediaMessage(context, goal, cap, targetModelName));
-                        replaced = true;
-                    } else {
-                        messages.add(m);
-                    }
-                }
-                if (!replaced) {
-                    messages.add(mapMediaMessage(context, goal, cap, targetModelName));
-                }
-            } else {
-                messages.addAll(projectedHistory);
-            }
+            UserMessage mediaMessage = (attachments != null && !attachments.isEmpty())
+                    ? mapMediaMessage(context, goal, cap, targetModelName)
+                    : null;
+            ReasoningMessageHelpers.appendProjectedHistory(messages, projectedHistory, mediaMessage, goal);
             if (isForceFinishRetry) {
                 messages.add(UserMessage.userMessage("Your previous response contained raw JSON or tool-call syntax. "
                         + "Answer in plain prose only. All tools have already returned their results "
@@ -339,107 +338,40 @@ public class ReasoningMessageAssembler {
     }
 
     private AudioTranscriptionPort resolveAudioTranscriptionPort() {
-        if (audioTranscriptionPortInstance == null || !audioTranscriptionPortInstance.isResolvable()) {
+        if (audioTranscriptionPortInstance == null || audioTranscriptionPortInstance.isUnsatisfied()) {
             return null;
         }
         try {
-            return audioTranscriptionPortInstance.get();
-        } catch (Exception _) {
+            List<AudioTranscriptionPort> ports =
+                    audioTranscriptionPortInstance.stream().toList();
+            if (ports.isEmpty()) {
+                return null;
+            }
+            if (ports.size() == 1) {
+                return ports.getFirst();
+            }
+            return new CompositeAudioTranscriptionPort(ports, allowFallbackOnFailure);
+        } catch (Exception e) {
+            log.debugf("Failed to resolve AudioTranscriptionPort: %s", LogUtil.rootMessage(e));
             return null;
         }
     }
 
-    private List<ChatMessage> recentConversationContext(List<ChatMessage> history, String goal) {
-        if (intentClassifier != null && intentClassifier.isGreeting(goal)) return List.of();
-        List<ChatMessage> conversation = history.stream()
-                .filter(m -> m instanceof UserMessage || m instanceof AiMessage)
-                .filter(m -> !(m instanceof UserMessage user && Objects.equals(extractUserText(user), goal)))
-                .filter(m -> !containsCodeOrExecution(m))
-                .toList();
-        int fromIndex = Math.max(0, conversation.size() - CHITCHAT_CONTEXT_MESSAGES);
-        return conversation.subList(fromIndex, conversation.size());
-    }
-
-    private boolean containsCodeOrExecution(ChatMessage m) {
-        if (m instanceof ToolExecutionResultMessage) return true;
-        if (m instanceof AiMessage ai) {
-            if (ai.hasToolExecutionRequests()) return true;
-            String text = ai.text();
-            if (text == null || text.isBlank()) return false;
-            return text.contains("```")
-                    || text.contains("[Executed tool:")
-                    || text.contains("[Tool Output")
-                    || (textPatternUtils != null && textPatternUtils.looksLikeJson(text))
-                    || (codePolicy != null && codePolicy.isGeneratedCodeBlock(text, AgentRoleEnum.CODER.id()));
+    /**
+     * Appends the loop-stuck hint to the system prompt when the detector reports one, and emits a
+     * {@code loop_stuck} trace via the dedicated tracer. Best-effort: a missing tracer (e.g.
+     * lightweight unit test) is skipped.
+     */
+    private String applyLoopStuckHint(
+            String systemPrompt, String sessionId, String agentRole, Optional<String> stuckHint) {
+        if (stuckHint.isEmpty()) {
+            return systemPrompt;
         }
-        if (m instanceof UserMessage user) {
-            String text = extractUserText(user);
-            if (text == null || text.isBlank()) return false;
-            return text.contains("```")
-                    || text.contains("[Tool Output")
-                    || text.contains("[Executed tool:")
-                    || (textPatternUtils != null
-                            && (textPatternUtils.goalRequestsExecution(text) || textPatternUtils.looksLikeJson(text)));
+        log.infof("[ReasoningAssembler] Injecting loop-stuck hint for session %s (role=%s)", sessionId, agentRole);
+        if (loopStuckTracer != null) {
+            loopStuckTracer.emit(sessionId, agentRole);
         }
-        return false;
-    }
-
-    private static String extractUserText(UserMessage user) {
-        if (user == null) return null;
-        return MultimodalRequests.textOf(user, "history");
-    }
-
-    private String resolveSystemPrompt(
-            List<ChatMessage> assembled, String systemPrompt, boolean isWriteIntent, boolean isForceFinishRetry) {
-        String summaryContent = assembled.stream()
-                .filter(m ->
-                        m instanceof SystemMessage sm && sm.text().contains(AgentSentinels.COMPACTED_SUMMARY_SENTINEL))
-                .map(m -> ((SystemMessage) m).text())
-                .findFirst()
-                .orElse("");
-
-        String finalSystemPrompt = summaryContent.isEmpty() ? systemPrompt : summaryContent + "\n\n" + systemPrompt;
-        if (isWriteIntent && isForceFinishRetry) {
-            finalSystemPrompt = "CRITICAL OVERRIDE: The user wants to STORE data. "
-                    + "You MUST call ingest_document RIGHT NOW as your ONLY action. "
-                    + "Use the user's original message as the 'text' parameter. "
-                    + "Do NOT call FINISH. Do NOT explain.\n\n"
-                    + finalSystemPrompt;
-        }
-        return finalSystemPrompt;
-    }
-
-    private List<ChatMessage> filterHistory(
-            List<ChatMessage> filteredAssembled, boolean isSimpleChitchat, boolean isForceFinishRetry) {
-        if (isSimpleChitchat || isForceFinishRetry) {
-            return filteredAssembled.stream()
-                    .map(m -> {
-                        if (m instanceof ToolExecutionResultMessage tool) {
-                            if (isSimpleChitchat) return null;
-                            return (ChatMessage) UserMessage.userMessage(
-                                    "[Tool Output from " + tool.toolName() + "]: " + tool.text());
-                        }
-                        if (m instanceof AiMessage ai && ai.hasToolExecutionRequests()) {
-                            if (isSimpleChitchat) {
-                                return (ai.text() != null && !ai.text().isBlank())
-                                        ? AiMessage.aiMessage(ai.text())
-                                        : null;
-                            }
-                            String text = (ai.text() != null && !ai.text().isBlank())
-                                    ? ai.text()
-                                    : "[Executed tool: "
-                                            + ai.toolExecutionRequests().stream()
-                                                    .map(ToolExecutionRequest::name)
-                                                    .collect(Collectors.joining(", "))
-                                            + "]";
-                            return (ChatMessage) AiMessage.aiMessage(text);
-                        }
-                        return m;
-                    })
-                    .filter(Objects::nonNull)
-                    .toList();
-        }
-        return filteredAssembled;
+        return systemPrompt + "\n\n" + stuckHint.get();
     }
 
     private List<ToolSpecification> resolveTools(

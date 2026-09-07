@@ -107,12 +107,12 @@ if (Test-Path '.env.build-backup') {
 """
 
 [tasks."test:summary"]
-description = "Summarize surefire XML test report counts and reactor JaCoCo line coverage"
+description = "Summarize surefire XML test report counts, reactor JaCoCo coverage, and UI coverage"
 dir = "{{config_root}}"
 quiet = true
 shell = "bash -c"
 run = """
-TEST_SUMMARY=$(rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | awk -F' ' '{
+TEST_SUMMARY=$(rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" . 2>/dev/null | awk -F' ' '{
     for(i=1; i<=NF; i++) {
         if($i ~ /tests=/)    { split($i, a, "\\x22"); t += a[2] }
         if($i ~ /errors=/)   { split($i, a, "\\x22"); e += a[2] }
@@ -121,9 +121,27 @@ TEST_SUMMARY=$(rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" | a
     }
 }
 END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d", t, f, e, s }')
-echo "Tests:    $TEST_SUMMARY"
+echo "Java Tests: $TEST_SUMMARY"
 python3 ./scripts/analyze_jacoco_coverage.py --summary 2>/dev/null
+if [ -f "ui/coverage/coverage-summary.json" ] || [ -f "ui/coverage/junit.xml" ]; then
+    echo "---"
+    python3 ./scripts/analyze_ui_coverage.py --summary --sync-readme 2>/dev/null
+fi
 """
+
+[tasks."test:ui"]
+description = "Run UI Vitest test suite with V8 code coverage"
+dir = "{{config_root}}/ui"
+quiet = true
+shell = "bash -c"
+run = "npm run test:coverage"
+
+[tasks."test:ui:summary"]
+description = "Summarize UI Vitest test count and V8 line/branch coverage"
+dir = "{{config_root}}"
+quiet = true
+shell = "bash -c"
+run = "python3 ./scripts/analyze_ui_coverage.py"
 
 
 # =============================================================================

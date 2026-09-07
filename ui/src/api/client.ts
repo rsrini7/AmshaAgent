@@ -1,6 +1,7 @@
 import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
 import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto } from './types';
+import { ExecutionRunSummaryDto, ExecutionTraceDto } from '../types/trace';
 
 export class ArcApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -41,6 +42,36 @@ export function clearPersistedOwnerApiKey(expectedApiKey?: string): void {
   } catch {
     // Ignore storage cleanup failures; cookie authentication is independent.
   }
+}
+
+export function readCsrfTokenFromCookie(): string {
+  if (typeof document !== 'undefined' && document.cookie) {
+    try {
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const [rawKey, ...rawValue] = cookie.trim().split('=');
+        const key = rawKey?.trim();
+        if (
+          key === 'X-CSRF-Token' ||
+          key === 'AMSHA_CSRF_TOKEN' ||
+          key === 'csrf-token' ||
+          key === 'csrf_token'
+        ) {
+          const val = decodeURIComponent(rawValue.join('=')).trim();
+          if (val) return val;
+        }
+      }
+    } catch {
+      // Ignore cookie parsing errors in restricted environments
+    }
+  }
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const token = sessionStorage.getItem('amsha-csrf-token') || sessionStorage.getItem('csrf-token');
+      if (token && token.trim()) return token.trim();
+    } catch {}
+  }
+  return '';
 }
 
 export interface McpToolPolicy {
@@ -103,7 +134,15 @@ export interface McpApprovalExecution<T = McpConnection | McpDiscoveryPreview> {
   result: T;
 }
 
+export interface HitlRequestOptions {
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
 export class ArcClient {
+  private static readonly DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+  private static readonly HITL_REQUEST_TIMEOUT_MS = 10_000;
+  public static readonly ARENA_REQUEST_TIMEOUT_MS = 60_000;
   constructor(
     public readonly baseUrl: string,
     private readonly apiKey?: string,
@@ -114,15 +153,29 @@ export class ArcClient {
     const h: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    const platformId = sessionStorage.getItem('amsha-platform-id');
-    if (platformId) {
-      h['X-AMSHA-PLATFORM-ID'] = platformId;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const platformId = sessionStorage.getItem('amsha-platform-id');
+        if (platformId) {
+          h['X-AMSHA-PLATFORM-ID'] = platformId;
+        }
+        const workspaceId = sessionStorage.getItem('amsha-workspace-id');
+        if (workspaceId) {
+          h['X-Amsha-Workspace-Id'] = workspaceId;
+        }
+      }
+    } catch {
+      // Ignore storage access errors in non-browser or restricted contexts
     }
     const persistedOwnerApiKey = this.includePersistedOwnerApiKey ? readPersistedOwnerApiKey() : '';
     const effectiveApiKey =
       this.apiKey && this.apiKey !== 'authenticated' ? this.apiKey : persistedOwnerApiKey;
     if (effectiveApiKey && effectiveApiKey !== 'authenticated') {
       h['X-AMSHA-API-KEY'] = effectiveApiKey;
+    }
+    const csrfToken = readCsrfTokenFromCookie();
+    if (csrfToken) {
+      h['X-CSRF-Token'] = csrfToken;
     }
     return h;
   }
@@ -131,48 +184,120 @@ export class ArcClient {
     return revision === undefined ? {} : { 'If-MCP-Revision': String(revision) };
   }
 
-  private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    timeoutMs = ArcClient.DEFAULT_REQUEST_TIMEOUT_MS,
+  ): Promise<T> {
     const headers = new Headers(this.headers());
-    new Headers(options?.headers).forEach((value, key) => headers.set(key, value));
-    if (options?.body instanceof FormData) headers.delete('Content-Type');
-    const res = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      credentials: 'include',
-      headers,
-    });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-        throw new ArcApiError(
-          res.status,
-          errorData.error || `Request to ${endpoint} failed with status ${res.status}`,
-        );
+    new Headers(options.headers).forEach((value, key) => headers.set(key, value));
+    if (options.body instanceof FormData) headers.delete('Content-Type');
+
+    const requestSignal = this.createRequestSignal(options.signal, timeoutMs);
+    try {
+      const res = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
+        credentials: 'include',
+        headers,
+        signal: requestSignal.signal,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const errorMessage =
+          errorData.message || errorData.error || `Request to ${endpoint} failed with status ${res.status}`;
+        throw new ArcApiError(res.status, errorMessage);
+      }
+      if (res.status === 204) {
+        return {} as T;
+      }
+      const text = await res.text();
+      return text ? JSON.parse(text) : {} as T;
+    } finally {
+      requestSignal.dispose();
     }
-    if (res.status === 204) {
-      return {} as T;
+  }
+
+  private createRequestSignal(callerSignal: AbortSignal | null | undefined, timeoutMs: number) {
+    const controller = new AbortController();
+    const abortFromCaller = () => controller.abort(callerSignal?.reason);
+    if (callerSignal?.aborted) {
+      abortFromCaller();
+    } else {
+      callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
     }
-    const text = await res.text();
-    return text ? JSON.parse(text) : {} as T;
+    const timeoutId = globalThis.setTimeout(() => {
+      controller.abort(new DOMException('The request timed out', 'TimeoutError'));
+    }, timeoutMs);
+    return {
+      signal: controller.signal,
+      dispose: () => {
+        globalThis.clearTimeout(timeoutId);
+        callerSignal?.removeEventListener('abort', abortFromCaller);
+      },
+    };
+  }
+
+  private static hitlOptions(options?: HitlRequestOptions | string): HitlRequestOptions {
+    return typeof options === 'string' ? { idempotencyKey: options } : options || {};
   }
 
   async getAgents(): Promise<AgentStatusDto[]> {
     return this.request<AgentStatusDto[]>('/agents');
   }
 
-  async getHitl(page = 0, size = 20): Promise<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }> {
-    return this.request<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }>(`/hitl?page=${page}&size=${size}`);
+  async getSessionStatus(
+    sessionId: string,
+    role = 'coordinator',
+  ): Promise<{ sessionId: string; status: string; steps?: unknown[]; failReason?: string | null }> {
+    return this.request<{ sessionId: string; status: string; steps?: unknown[]; failReason?: string | null }>(
+      `/sessions/${encodeURIComponent(sessionId)}/status/${encodeURIComponent(role)}`,
+      {},
+      ArcClient.HITL_REQUEST_TIMEOUT_MS,
+    );
   }
 
-  async approveHitl(taskId: string): Promise<ApprovalResultDto> {
-    return this.request<ApprovalResultDto>(`/hitl/${taskId}/approve`, {
-      method: 'POST',
-    });
+  async getHitl(
+    page = 0,
+    size = 20,
+    signal?: AbortSignal,
+  ): Promise<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }> {
+    return this.request<{ items: PendingApprovalDto[]; page: number; size: number; totalCount: number; totalPages: number }>(
+      `/hitl?page=${page}&size=${size}`,
+      { signal },
+      ArcClient.HITL_REQUEST_TIMEOUT_MS,
+    );
   }
 
-  async rejectHitl(taskId: string, reason: string): Promise<ApprovalResultDto> {
-    return this.request<ApprovalResultDto>(`/hitl/${taskId}/reject`, {
+  async approveHitl(
+    taskId: string,
+    reason = 'Approved by user',
+    options?: HitlRequestOptions | string,
+  ): Promise<ApprovalResultDto> {
+    const requestOptions = ArcClient.hitlOptions(options);
+    return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/approve`, {
       method: 'POST',
+      headers: requestOptions.idempotencyKey
+        ? { 'X-Idempotency-Key': requestOptions.idempotencyKey }
+        : {},
+      signal: requestOptions.signal,
+      body: JSON.stringify({ reason }),
+    }, ArcClient.HITL_REQUEST_TIMEOUT_MS);
+  }
+
+  async rejectHitl(
+    taskId: string,
+    reason: string,
+    options?: HitlRequestOptions | string,
+  ): Promise<ApprovalResultDto> {
+    const requestOptions = ArcClient.hitlOptions(options);
+    return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/reject`, {
+      method: 'POST',
+      headers: requestOptions.idempotencyKey
+        ? { 'X-Idempotency-Key': requestOptions.idempotencyKey }
+        : {},
+      signal: requestOptions.signal,
       body: JSON.stringify({ reason: reason || 'Rejected by user' }),
-    });
+    }, ArcClient.HITL_REQUEST_TIMEOUT_MS);
   }
 
   async getTools(): Promise<ToolDto[]> {
@@ -455,6 +580,91 @@ export class ArcClient {
   async verifyAuditChain(sessionId: string): Promise<any> {
     return this.request<any>(`/audit/${sessionId}/verify`);
   }
+
+  async symbolicate(symbol: string): Promise<SafeMetadata> {
+    return this.request<SafeMetadata>(`/cockpit/symbolicate?symbol=${encodeURIComponent(symbol)}`);
+  }
+
+  async getSessionRuns(
+    sessionId: string,
+    limit = 50,
+    offset = 0,
+  ): Promise<ExecutionRunSummaryDto[]> {
+    return this.request<ExecutionRunSummaryDto[]>(
+      `/cockpit/sessions/${encodeURIComponent(sessionId)}/runs?limit=${limit}&offset=${offset}`,
+    );
+  }
+
+  async getRunTrace(
+    runId: string,
+    limit = 500,
+    offset = 0,
+  ): Promise<ExecutionTraceDto[]> {
+    return this.request<ExecutionTraceDto[]>(
+      `/cockpit/runs/${encodeURIComponent(runId)}/trace?limit=${limit}&offset=${offset}`,
+    );
+  }
+
+  async queryDb(request: DbQueryRequest): Promise<DbQueryResponse> {
+    return this.request<DbQueryResponse>('/admin/db/query', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async compareArena(request: ArenaCompareRequest): Promise<ArenaCompareResponse> {
+    return this.request<ArenaCompareResponse>(
+      '/admin/arena/compare',
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+      ArcClient.ARENA_REQUEST_TIMEOUT_MS,
+    );
+  }
+}
+
+export interface DbQueryRequest {
+  sql: string;
+  limit?: number;
+  workspaceId?: string;
+  sessionId?: string;
+}
+
+export interface DbQueryResponse {
+  columns: string[];
+  rows: any[][];
+  executionMs: number;
+  truncated: boolean;
+}
+
+export interface ArenaCompareRequest {
+  prompt: string;
+  models: string[];
+  maxTokens?: number;
+}
+
+export interface ArenaModelResult {
+  modelSlot: string;
+  output: string;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  costUsd: number;
+}
+
+export interface ArenaCompareResponse {
+  results: ArenaModelResult[];
+  totalDurationMs: number;
+}
+
+export interface SafeMetadata {
+  symbol: string;
+  station: string;
+  label: string;
+  auditHash: string;
+  subsystem?: string | null;
+  safetyInvariant?: string | null;
 }
 
 export async function getOnboardingComplete(baseUrl: string): Promise<import('./types').OnboardingCompleteDto> {

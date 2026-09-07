@@ -43,6 +43,7 @@ class HitlServicePerToolApprovalTest {
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
+        when(heartbeatTracker.getOwner(anyString())).thenReturn(Optional.of("test-user"));
     }
 
     @Test
@@ -79,7 +80,7 @@ class HitlServicePerToolApprovalTest {
 
         when(checkpointStorePort.findById(1L)).thenReturn(Optional.of(cp));
 
-        hitlService.resolve("1", ToolCapability.GITHUB.toolName(), true, "approved github");
+        hitlService.resolve("1", ToolCapability.GITHUB.toolName(), true, "approved github", "test-user");
 
         verify(checkpointApprovalService).approveTool("s1", ToolCapability.GITHUB.toolName(), "approved github");
         verify(checkpointApprovalService, never()).approveAll(anyString(), anyString());
@@ -119,7 +120,7 @@ class HitlServicePerToolApprovalTest {
 
         when(checkpointStorePort.findById(1L)).thenReturn(Optional.of(cp));
 
-        hitlService.resolve("1", "sandboxexec", false, "unsafe");
+        hitlService.resolve("1", "sandboxexec", false, "unsafe", "test-user");
 
         verify(checkpointApprovalService).denyTool("s1", "sandboxexec", "unsafe");
         verify(checkpointApprovalService, never()).denyAll(anyString(), anyString());
@@ -159,8 +160,50 @@ class HitlServicePerToolApprovalTest {
 
         when(checkpointStorePort.findById(1L)).thenReturn(Optional.of(cp));
 
-        hitlService.resolve("1", null, true, "bulk");
+        hitlService.resolve("1", null, true, "bulk", "test-user");
 
         verify(checkpointApprovalService).approveAll("s1", "bulk");
+    }
+
+    @Test
+    void test_resolve_withUuidSessionId_findsLatestAwaitingApproval() {
+        CheckpointDto cp = new CheckpointDto(
+                42L,
+                "ebbda2ec-cfd2-4dd0-8c14-df7afab87544",
+                "coder",
+                CheckpointStatus.AWAITING_APPROVAL.name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null);
+
+        when(checkpointStorePort.findLatestAwaitingApproval("ebbda2ec-cfd2-4dd0-8c14-df7afab87544"))
+                .thenReturn(Optional.of(cp));
+
+        hitlService.resolve(
+                "ebbda2ec-cfd2-4dd0-8c14-df7afab87544", "sandbox_exec", true, "approved via UI", "test-user");
+
+        verify(checkpointApprovalService)
+                .approveTool("ebbda2ec-cfd2-4dd0-8c14-df7afab87544", "sandbox_exec", "approved via UI");
     }
 }

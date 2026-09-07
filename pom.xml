@@ -72,6 +72,7 @@
     <embedded-postgres.version>2.2.2</embedded-postgres.version>
     <bucket4j.version>8.16.1</bucket4j.version>
     <wiremock.version>3.13.2</wiremock.version>
+    <jsqlparser.version>4.9</jsqlparser.version>
     <jboss-logmanager.version>3.2.2.Final</jboss-logmanager.version>
     <jline.version>3.30.16</jline.version>
     <jansi.version>2.4.3</jansi.version>
@@ -286,6 +287,11 @@
         <version>${cron-utils.version}</version>
       </dependency>
       <dependency>
+        <groupId>com.github.jsqlparser</groupId>
+        <artifactId>jsqlparser</artifactId>
+        <version>${jsqlparser.version}</version>
+      </dependency>
+      <dependency>
         <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
         <artifactId>owasp-java-html-sanitizer</artifactId>
         <version>${owasp-sanitizer.version}</version>
@@ -429,6 +435,7 @@
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
               <maven.home>${maven.home}</maven.home>
               <quarkus.http.test-port>0</quarkus.http.test-port>
+              <quarkus.profile>test</quarkus.profile>
               <amsha.dotenv.enabled>false</amsha.dotenv.enabled>
             </systemPropertyVariables>
           </configuration>

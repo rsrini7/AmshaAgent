@@ -1,12 +1,13 @@
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { AgentStatusDto, AgentEvent } from '../api/generated/models';
+import { AgentStatusDto } from '../api/generated/models';
 import { PendingApprovalDto } from '../api/types';
 import {
   ArcClient,
   clearPersistedOwnerApiKey,
+  readPersistedOwnerApiKey,
 } from '../api/client';
-import { SseManager } from '../api/sse';
+import { SseManager, SsePayload } from '../api/sse';
 import { provide } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { ROUTES } from '../routes';
@@ -21,8 +22,19 @@ import './arc-hitl-panel';
 import './arc-skills-panel';
 import './arc-scheduler-panel';
 import './arc-audit-panel';
+import './arc-db-console';
+import './arc-model-arena';
 import './arc-settings';
 import './arc-theme-toggle';
+import './arc-flow-canvas';
+import { ResizeController } from '../composables/resize-controller';
+import {
+  AgentTraceEvent,
+  isAgentTraceEvent,
+  ExecutionRunSummaryDto,
+  ExecutionTraceDto,
+  toAgentTraceEvent,
+} from '../types/trace';
 
 @customElement('arc-shell')
 export class ArcShell extends LitElement {
@@ -33,22 +45,46 @@ export class ArcShell extends LitElement {
     apiKey: '',
     sessionId: '',
     platformId: '',
+    workspaceId: typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-workspace-id') || undefined : undefined,
     sseStatus: 'disconnected'
   };
 
   @state() private _apiKey = '';
-  @state() private _sessionId = sessionStorage.getItem('amsha-chat-session') || '';
+  @state() private _sessionId = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-chat-session') || '' : '';
   @state() private _platformId = ''; // Stable ID for WebSocket
+  @state() private _workspaceId = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-workspace-id') || '' : '';
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
   @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-  @state() private _route = this._routeFromHash(window.location.hash || '#/onboarding');
+  @state() private _route =
+    typeof window !== 'undefined' ? this._routeFromHash(window.location?.hash || '#/onboarding') : '#/chat';
   @state() private _isNavOpen = false;
   @state() private _chatWsStatus: string = 'closed';
+  @state() private _dockWidth = 400;
+  @state() private _traceEvents: AgentTraceEvent[] = [];
+  @state() private _currentRunId = '';
+  @state() private _isReplayMode = false;
+  @state() private _replayRunId = '';
+  @state() private _replayTraceEvents: AgentTraceEvent[] = [];
+  @state() private _replayRuns: ExecutionRunSummaryDto[] = [];
+  /** Live trace events that arrived while replay was active, pending merge on exit. */
+  @state() private _replayBufferedEvents: AgentTraceEvent[] = [];
+
+  private _resizeController = new ResizeController({
+    defaultWidth: 400,
+    minWidth: 280,
+    maxWidth: 800,
+    onResize: (w) => {
+      this._dockWidth = w;
+    },
+  });
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
   private _boundSessionReady = ((e: Event) => this._onSessionReady(e as CustomEvent)) as EventListener;
+  private _boundWsStatusChange = (e: CustomEvent<{ status: string }>) => {
+    this._chatWsStatus = e.detail.status;
+  };
   private _pendingMcpSetupHash: string | null = null;
 
   static styles = css`
@@ -56,6 +92,74 @@ export class ArcShell extends LitElement {
       display: flex; height: 100vh; overflow: hidden; 
       background: var(--bg-base); 
       color: var(--text-primary);
+    }
+    .cockpit-container {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .cockpit-canvas-area {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .cockpit-canvas-area::-webkit-scrollbar { width: 6px; height: 6px; }
+    .cockpit-canvas-area::-webkit-scrollbar-track { background: transparent; }
+    .cockpit-canvas-area::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    .cockpit-canvas-area::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+    .cockpit-splitter {
+      width: 6px;
+      cursor: col-resize;
+      background: var(--border);
+      transition: background-color 0.2s;
+      flex-shrink: 0;
+      position: relative;
+      user-select: none;
+    }
+    .cockpit-splitter:hover, .cockpit-splitter:focus {
+      background: var(--accent-secondary);
+      outline: none;
+    }
+    .cockpit-dock-area {
+      min-width: 280px;
+      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      min-height: 0;
+      border-left: 1px solid var(--border);
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .cockpit-dock-area::-webkit-scrollbar { width: 6px; height: 6px; }
+    .cockpit-dock-area::-webkit-scrollbar-track { background: transparent; }
+    .cockpit-dock-area::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    .cockpit-dock-area::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+    @media (max-width: 800px) {
+      .cockpit-container {
+        flex-direction: column;
+      }
+      .cockpit-splitter {
+        display: none;
+      }
+      .cockpit-dock-area {
+        width: 100% !important;
+        max-width: 100%;
+        flex: 1;
+      }
     }
     main { 
       flex: 1; overflow: hidden; display: flex; flex-direction: column; 
@@ -133,10 +237,16 @@ export class ArcShell extends LitElement {
   `;
 
   private _updateContext() {
+    if (!this._workspaceId && typeof sessionStorage !== 'undefined') {
+      try {
+        this._workspaceId = sessionStorage.getItem('amsha-workspace-id') || '';
+      } catch (_) {}
+    }
     this._appContext = {
       apiKey: this._apiKey,
       sessionId: this._sessionId,
       platformId: this._platformId,
+      workspaceId: this._workspaceId || undefined,
       sseStatus: this._sseStatus
     };
   }
@@ -144,13 +254,22 @@ export class ArcShell extends LitElement {
   constructor() {
     super();
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
+    this.addEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
-    window.addEventListener('ws-status-change', ((e: CustomEvent) => this._chatWsStatus = e.detail.status) as EventListener);
+    window.addEventListener('ws-status-change', this._boundWsStatusChange as EventListener);
     window.addEventListener('session-ready', this._boundSessionReady);
+    window.addEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
 
     this._platformId = this._resolvePlatformId();
-    this._client = new ArcClient('/api/v1', '');
+    const persistedKey = readPersistedOwnerApiKey();
+    if (persistedKey) {
+      this._apiKey = persistedKey;
+    }
+    this._client = new ArcClient('/api/v1', this._apiKey);
     this._updateContext();
+    if (this._apiKey) {
+      this._fetchActiveWorkspace();
+    }
   }
 
   private _boundHashChange = () => {
@@ -176,13 +295,20 @@ export class ArcShell extends LitElement {
         this._sseManager?.connect();
       }
       if (this._route === '#/chat' && this._chatWsStatus !== 'open') {
-        this._chatWsStatus = 'connecting';
-        (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect();
+        this._handleReconnectChat();
       }
       this._fetchAgents();
       this._fetchApprovals();
     }
   };
+
+  private _handleReconnectChat(): void {
+    this._chatWsStatus = 'connecting';
+    const chat = this.shadowRoot?.querySelector('arc-chat-interface') as any;
+    if (chat?.reconnect) {
+      chat.reconnect();
+    }
+  }
 
   private _resolvePlatformId() {
     let id = sessionStorage.getItem('amsha-platform-id');
@@ -216,6 +342,9 @@ export class ArcShell extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener('hashchange', this._boundHashChange);
     window.removeEventListener('session-ready', this._boundSessionReady);
+    window.removeEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
+    this.removeEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
+    window.removeEventListener('ws-status-change', this._boundWsStatusChange as EventListener);
     this._sseManager?.disconnect();
   }
 
@@ -225,8 +354,79 @@ export class ArcShell extends LitElement {
 
   // ─── Lifecycle / Auth ────────────────────────────────────────────────────
 
+  private _boundWorkspaceSet = (e: Event) => {
+    const customEvent = e as CustomEvent<{ workspaceId: string }>;
+    const wsId = customEvent.detail?.workspaceId?.trim();
+    if (wsId) {
+      this._setWorkspaceId(wsId);
+    }
+  };
+
+  private _setWorkspaceId(wsId: string) {
+    const trimmed = wsId ? wsId.trim() : '';
+    if (!trimmed || this._workspaceId === trimmed) return;
+    this._workspaceId = trimmed;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('amsha-workspace-id', trimmed);
+      }
+    } catch (_) {}
+    this._updateContext();
+  }
+
+  private _clearWorkspaceId() {
+    this._workspaceId = '';
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('amsha-workspace-id');
+      }
+    } catch (_) {}
+    this._updateContext();
+  }
+
+  private async _fetchActiveWorkspace() {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const apiKey =
+        this._apiKey && this._apiKey !== 'authenticated' ? this._apiKey : readPersistedOwnerApiKey();
+      if (apiKey) {
+        headers['X-AMSHA-API-KEY'] = apiKey;
+      }
+      const res = await fetch('/api/v1/identity/me', {
+        headers,
+        credentials: 'include'
+      });
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          this._clearWorkspaceId();
+        }
+        return;
+      }
+      const data = await res.json();
+      const activeMemberships = Array.isArray(data.memberships)
+        ? data.memberships.filter(
+            (membership: any) =>
+              membership.status?.toUpperCase() === 'ACTIVE' &&
+              typeof membership.workspaceId === 'string' &&
+              membership.workspaceId.trim(),
+          )
+        : [];
+      const currentWorkspace = this._workspaceId?.trim();
+      const active =
+        activeMemberships.find((membership: any) => membership.workspaceId.trim() === currentWorkspace) ||
+        activeMemberships[0];
+      const wsId = active?.workspaceId?.trim();
+      if (wsId) {
+        this._setWorkspaceId(wsId);
+      } else {
+        this._clearWorkspaceId();
+      }
+    } catch (_) {}
+  }
+
   private _onApiKeySet(e: CustomEvent<{ key: string }>) {
-    this._apiKey = e.detail.key ? 'authenticated' : '';
+    const rawKey = e.detail?.key?.trim();
+    this._apiKey = rawKey || readPersistedOwnerApiKey() || '';
     this._client = new ArcClient('/api/v1', this._apiKey);
     this._updateContext();
 
@@ -242,6 +442,7 @@ export class ArcShell extends LitElement {
       } else {
         window.location.hash = '#/chat';
       }
+      this._fetchActiveWorkspace();
       this._fetchAgents();
       this._fetchApprovals();
       this._startSse();
@@ -254,34 +455,78 @@ export class ArcShell extends LitElement {
     console.warn('[Amsha Agent] Stale API key detected (401). Redirecting to onboarding...');
     clearPersistedOwnerApiKey();
     this._apiKey = '';
+    this._clearWorkspaceId();
     this._updateContext();
     window.location.hash = '#/onboarding';
   }
 
-  private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string }>) {
-    // Only update if server assigned a different ID (fallback UUID case)
-    if (this._sessionId !== e.detail.sessionId) {
-        this._sessionId = e.detail.sessionId;
-        sessionStorage.setItem('amsha-chat-session', this._sessionId);
-        this._updateContext();
+  private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string; workspaceId?: string }>) {
+    const sessionId = e.detail?.sessionId?.trim();
+    if (!sessionId) {
+      return;
     }
-
-    if (!this._sessionId) return;
-    this._startSse(); // Re-start all SSEs with new session context
+    const sessionChanged = this._sessionId !== sessionId;
+    this._sessionId = sessionId;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('amsha-chat-session', sessionId);
+      }
+    } catch (_) {}
+    const platformId = e.detail?.platformId?.trim();
+    if (platformId && platformId !== this._platformId) {
+      this._platformId = platformId;
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('amsha-platform-id', platformId);
+        }
+      } catch (_) {}
+    }
+    const workspaceId = e.detail?.workspaceId?.trim();
+    if (workspaceId) {
+      this._setWorkspaceId(workspaceId);
+    }
+    this._updateContext();
+    if (sessionChanged) {
+      this._traceEvents = [];
+      this._currentRunId = '';
+      this._isReplayMode = false;
+      this._replayTraceEvents = [];
+      this._sseManager?.resetDedup();
+      this._fetchSessionRuns(sessionId);
+    }
+    this._startSse();
   }
 
   // SSE event handlers
-  private _handleSseEvent(event: any) {
+  private _handleSseEvent(event: SsePayload) {
     if (event.sessionId && this._sessionId && event.sessionId !== this._sessionId) {
       return;
     }
 
-    const eventType = event.eventType ?? event.type;
+    if (isAgentTraceEvent(event)) {
+      if (this._isReplayMode) {
+        // While replay is active, live events do not overwrite or mutate the active replay view.
+        // Buffer them so they can be merged back when replay ends (otherwise they are lost).
+        this._replayBufferedEvents = [...this._replayBufferedEvents, event];
+        return;
+      }
+      if (event.runId && this._currentRunId && event.runId !== this._currentRunId) {
+        this._sseManager?.resetDedup();
+        this._traceEvents = [];
+      }
+      if (event.runId) {
+        this._currentRunId = event.runId;
+      }
+      this._traceEvents = [...this._traceEvents, event];
+      return;
+    }
+
+    const eventType = event.eventType ?? '';
     if (eventType === 'status_change') {
       this._fetchAgents();
       this._fetchApprovals();
     } else if (eventType === 'progress') {
-      this._publishProgress(event.agentName || 'Working', event.payload || '');
+      this._publishProgress(event.agentName || 'Working', event.payload || '', event.sessionId);
     } else if (
       eventType === 'AWAITING_APPROVAL' ||
       eventType === 'APPROVED' ||
@@ -294,12 +539,76 @@ export class ArcShell extends LitElement {
     }
   }
 
-  private _publishProgress(phase: string, detail: string) {
+  private get _activeRunEvents(): AgentTraceEvent[] {
+    if (this._isReplayMode) {
+      return this._replayTraceEvents;
+    }
+    if (!this._currentRunId) {
+      return this._traceEvents;
+    }
+    return this._traceEvents.filter((e) => !e.runId || e.runId === this._currentRunId);
+  }
+
+  async _fetchSessionRuns(sessionId: string) {
+    if (!sessionId) return;
+    try {
+      const client = this._client ?? new ArcClient('/api/v1', this._apiKey);
+      const runs = await client.getSessionRuns(sessionId, 50);
+      if (Array.isArray(runs)) {
+        this._replayRuns = runs;
+      }
+    } catch {
+      // Best-effort
+    }
+  }
+
+  async _startReplay(runId: string) {
+    if (!runId) return;
+    try {
+      const client = this._client ?? new ArcClient('/api/v1', this._apiKey);
+      const traces = await client.getRunTrace(runId, 500);
+      if (Array.isArray(traces)) {
+        this._replayTraceEvents = traces.map(toAgentTraceEvent);
+        this._replayRunId = runId;
+        this._isReplayMode = true;
+      }
+    } catch {
+      // Best-effort
+    }
+  }
+
+  _exitReplay() {
+    this._isReplayMode = false;
+    this._replayTraceEvents = [];
+    this._replayRunId = '';
+    // Merge any live trace events that arrived during replay back into the live buffer so
+    // they are not permanently lost.
+    if (this._replayBufferedEvents.length > 0) {
+      this._traceEvents = [...this._traceEvents, ...this._replayBufferedEvents];
+      this._replayBufferedEvents = [];
+    }
+  }
+
+  private get _activeParadigm(): string {
+    // Strictly read authoritative backend paradigm metadata emitted on trace events (e.g. TURN_START, ROUTE)
+    // Never guess or infer from arbitrary stage occurrences like llm_reasoning
+    const events = this._activeRunEvents;
+    for (let i = events.length - 1; i >= 0; i--) {
+      const p = events[i].paradigm;
+      if (p && typeof p === 'string' && p.trim().length > 0) {
+        return p.trim().toUpperCase();
+      }
+    }
+    return '';
+  }
+
+  private _publishProgress(phase: string, detail: string, sessionId?: string) {
     window.dispatchEvent(
       new CustomEvent('amsha-agent-progress', {
         detail: {
           phase,
-          detail
+          detail,
+          ...(sessionId ? { sessionId } : {})
         }
       })
     );
@@ -344,16 +653,16 @@ export class ArcShell extends LitElement {
   private _publishHitlProgress(event: any) {
     switch (event?.type) {
       case 'AWAITING_APPROVAL':
-        this._publishProgress('Waiting for approval', 'Approve or deny the tool request');
+        this._publishProgress('Waiting for approval', 'Approve or deny the tool request', event.sessionId);
         break;
       case 'APPROVED':
-        this._publishProgress('Approval granted', 'Tool request approved. Resuming work.');
+        this._publishProgress('Approval granted', 'Tool request approved. Resuming work.', event.sessionId);
         break;
       case 'DENIED':
-        this._publishProgress('Approval denied', 'Tool request denied.');
+        this._publishProgress('Approval denied', 'Tool request denied.', event.sessionId);
         break;
       case 'RESUMED':
-        this._publishProgress('Resuming work', 'Picking up where the agent left off.');
+        this._publishProgress('Resuming work', 'Picking up where the agent left off.', event.sessionId);
         break;
     }
   }
@@ -410,7 +719,7 @@ export class ArcShell extends LitElement {
     this._sseManager = new SseManager(
       `/api/v1/chat/stream?sessionId=${encodeURIComponent(this._sessionId)}`,
       this._apiKey,
-      (event: AgentEvent) => this._handleSseEvent(event),
+      (event: SsePayload) => this._handleSseEvent(event),
       (status) => {
         const wasDown = this._sseStatus !== 'connected';
         this._sseStatus = status;
@@ -435,7 +744,39 @@ export class ArcShell extends LitElement {
     }
 
     return html`
-      <arc-chat-interface class="content-area" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}"></arc-chat-interface>
+      <div class="cockpit-container" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}">
+        <div class="cockpit-canvas-area" role="region" aria-label="Visual Cockpit Canvas">
+          <arc-flow-canvas
+            .events=${this._activeRunEvents}
+            .runId=${this._isReplayMode ? this._replayRunId : this._currentRunId}
+            .paradigm=${this._activeParadigm}
+            .isReplayMode=${this._isReplayMode}
+            .replayRuns=${this._replayRuns}
+            @start-replay=${(e: CustomEvent) => this._startReplay(e.detail.runId)}
+            @exit-replay=${() => this._exitReplay()}
+            @refresh-runs=${() => this._fetchSessionRuns(this._sessionId)}
+          ></arc-flow-canvas>
+        </div>
+        <div
+          class="cockpit-splitter"
+          role="separator"
+          tabindex="0"
+          aria-orientation="vertical"
+          aria-valuenow="${Math.round(this._dockWidth)}"
+          aria-valuemin="280"
+          aria-valuemax="800"
+          aria-label="Resize chat dock"
+          @pointerdown=${(e: PointerEvent) => this._onSplitterPointerDown(e)}
+          @keydown=${(e: KeyboardEvent) => this._onSplitterKeyDown(e)}
+        ></div>
+        <div class="cockpit-dock-area" style="width: ${this._dockWidth}px;">
+          <arc-chat-interface
+            class="content-area"
+            style="display: flex; flex: 1;"
+            .traceEvents=${this._activeRunEvents}
+          ></arc-chat-interface>
+        </div>
+      </div>
       ${this._route === '#/mcp' ? html`
         <arc-mcp-panel class="content-area"></arc-mcp-panel>
       ` : nothing}
@@ -454,10 +795,37 @@ export class ArcShell extends LitElement {
       ${this._route === '#/audit' ? html`
         <arc-audit-panel class="content-area"></arc-audit-panel>
       ` : nothing}
+      ${this._route === '#/db' ? html`
+        <arc-db-console class="content-area"></arc-db-console>
+      ` : nothing}
+      ${this._route === '#/arena' ? html`
+        <arc-model-arena class="content-area"></arc-model-arena>
+      ` : nothing}
       ${this._route === '#/settings' ? html`
         <arc-settings class="content-area"></arc-settings>
       ` : nothing}
     `;
+  }
+
+  private _onSplitterPointerDown(e: PointerEvent) {
+    this._resizeController.handlePointerDown(e);
+    const onPointerMove = (ev: PointerEvent) => {
+      this._resizeController.handlePointerMove(ev);
+      this._dockWidth = this._resizeController.width;
+    };
+    const onPointerUp = () => {
+      this._resizeController.handlePointerUp();
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }
+
+  private _onSplitterKeyDown(e: KeyboardEvent) {
+    if (this._resizeController.handleKeyDown(e)) {
+      this._dockWidth = this._resizeController.width;
+    }
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────
@@ -487,10 +855,14 @@ export class ArcShell extends LitElement {
                             + New Session
                           </button>
                           ${this._chatWsStatus === 'error' || this._chatWsStatus === 'closed' ? html`
-                             <button @click="${() => (this.shadowRoot?.querySelector('arc-chat-interface') as any)?.reconnect()}" 
-                                     style="background:transparent; border:1px solid var(--border); color:var(--text-muted); font-size:10px; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;">
+                             <button @click="${() => this._handleReconnectChat()}"
+                                     style="background:transparent; border:1px solid var(--border); color:var(--text-muted); font-size:10px; padding:2px 8px; border-radius:4px; cursor:pointer; margin-left:4px;"
+                                     title="Reconnect WebSocket to Amsha Agent">
                                Reconnect
                              </button>
+                          ` : nothing}
+                          ${this._chatWsStatus === 'connecting' ? html`
+                             <span style="font-size:10px; color:var(--text-muted); margin-left:4px; font-style:italic;">Connecting…</span>
                           ` : nothing}
                         `
                         : ROUTES.find(r => r.hash === this._route)?.label || ''}

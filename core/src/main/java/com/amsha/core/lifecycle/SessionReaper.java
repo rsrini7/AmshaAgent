@@ -19,22 +19,20 @@ import com.amsha.channel.api.hitl.ApprovalOutcome;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.CliResultBridge;
 import com.amsha.core.agent.sse.AgentSseService;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.audit.SessionAuditSequencer;
 import com.amsha.core.compaction.CompactionInFlightFlag;
 import com.amsha.core.domain.model.AgentCheckpoint;
-import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.BatchDecisionUtil;
-import com.amsha.core.util.CronScheduleUtil;
 import com.amsha.core.util.DatabaseSafetyGuard;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
-import com.amsha.persistence.api.CronRunDto;
-import com.amsha.persistence.api.CronRunStorePort;
-import com.amsha.persistence.api.CronStorePort;
 import com.amsha.persistence.api.SessionCatalogEntry;
 import com.amsha.persistence.api.SessionCatalogStore;
 import com.amsha.persistence.api.ToolDecision;
@@ -93,16 +91,16 @@ public class SessionReaper {
     CheckpointStorePort checkpointStore;
 
     @Inject
-    CronStorePort cronStore;
-
-    @Inject
-    CronRunStorePort cronRunStore;
+    CronFailureCleanup cronFailureCleanup;
 
     @Inject
     CompactionInFlightFlag compactionInFlight;
 
     @Inject
     AgentSseService agentSseService;
+
+    @Inject
+    TracePublisher tracePublisher;
 
     @Inject
     CliResultBridge cliResultBridge;
@@ -185,6 +183,12 @@ public class SessionReaper {
                 if (ChannelType.CLI.id().equalsIgnoreCase(dto.channelType())) {
                     cliResultBridge.cancel(dto.sessionId());
                 }
+                // Trace the denial so the Visual Cockpit never renders a post-restart
+                // checkpoint as "pending" — no approval can arrive after the JVM restarted.
+                // Published BEFORE the SSE stream is completed so a connected subscriber
+                // observes the terminal state.
+                publishStaleApprovalDenied(dto.sessionId(), dto.pendingToolName());
+
                 // Telegram: fire decision event so buttons are edited to "expired"
                 // UI: complete SSE stream so subscribers are notified
                 decisionEvents.fireAsync(new ApprovalDecisionEvent(
@@ -240,6 +244,7 @@ public class SessionReaper {
                 workspaceManager.terminateSession(sessionId);
                 heartbeatTracker.removeHeartbeat(sessionId);
                 auditSequencer.releaseStaleSession(sessionId);
+                TracePublisher.releaseSession(sessionId);
             });
         } catch (RuntimeException e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
@@ -279,8 +284,6 @@ public class SessionReaper {
         try {
             Instant cutoff = Instant.now().minus(Duration.ofHours(hitlTimeoutHours));
             List<AgentCheckpoint> stale = agentStore.findStaleAwaitingApproval(cutoff);
-            if (stale.isEmpty()) return;
-
             for (AgentCheckpoint cp : stale) {
                 log.warnf(
                         "[HITL-GC] Session %s role %s has been awaiting approval for >%dh - auto-denying.",
@@ -290,6 +293,8 @@ public class SessionReaper {
                         .increment();
                 markApprovalTimedOut(cp);
             }
+
+            cronFailureCleanup.sweepOrphanedApprovals(cutoff, hitlTimeoutHours);
         } catch (RuntimeException e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
             String msg = e.getMessage() != null ? e.getMessage() : "";
@@ -309,6 +314,7 @@ public class SessionReaper {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     void markApprovalTimedOut(AgentCheckpoint cp) {
+        publishHitlTimeout(cp);
         auditService.recordMandatory(
                 cp.getSessionId(),
                 "system",
@@ -340,60 +346,50 @@ public class SessionReaper {
         workspaceManager.terminateSession(cp.getSessionId());
         heartbeatTracker.removeHeartbeat(cp.getSessionId());
         auditSequencer.releaseStaleSession(cp.getSessionId());
+        TracePublisher.releaseSession(cp.getSessionId());
 
         cleanupCronOnFailure(cp.getSessionId(), "Approval timed out after " + hitlTimeoutHours + " hours.");
     }
 
-    private void cleanupCronOnFailure(String sessionId, String reason) {
-        if (sessionId != null && sessionId.startsWith("cron-")) {
-            String sub = sessionId.substring("cron-".length());
-            if (sub.length() >= 36) {
-                String jobId = sub.substring(0, 36);
-                String executionId = sub.substring(37);
-                try {
-                    cronRunStore.findById(executionId).ifPresent(existing -> {
-                        CronRunDto updated = new CronRunDto(
-                                existing.id(),
-                                existing.cronId(),
-                                existing.sessionId(),
-                                "FAILED",
-                                existing.startedAt(),
-                                Instant.now(),
-                                reason,
-                                existing.iterationsUsed(),
-                                existing.inputTokens(),
-                                existing.outputTokens(),
-                                existing.usdCost(),
-                                existing.createdAt());
-                        cronRunStore.save(updated);
-                    });
-                } catch (Exception e) {
-                    log.warnf(
-                            "Failed to update cron run status on failure for run %s: %s",
-                            executionId, LogUtil.rootMessage(e));
-                }
+    /**
+     * Emits a {@code hitl_timeout} trace when a checkpoint's approval window expires.
+     * Best-effort: a missing publisher (e.g. lightweight unit test) is skipped.
+     */
+    void publishHitlTimeout(AgentCheckpoint cp) {
+        if (tracePublisher == null || cp == null) {
+            return;
+        }
+        tracePublisher.publish(TracePublisher.newEvent(cp.getSessionId(), TraceStage.HITL_TIMEOUT)
+                .withStation(StationCode.STATION_05_TOOL_GUARD)
+                .withStatus("TIMEOUT")
+                .withDetail(cp.getPendingToolName()));
+    }
 
-                try {
-                    var dto = cronStore.findById(jobId).orElse(null);
-                    if (dto != null) {
-                        var cron = AgentCronRecord.fromDto(dto);
-                        if (!cron.isRunOnce()
-                                && cron.getCronExpression() != null
-                                && !cron.getCronExpression().isBlank()) {
-                            Instant next = CronScheduleUtil.computeNext(cron.getCronExpression(), cron.getTimezone());
-                            cronStore.markFired(jobId, Instant.now(), next);
-                            log.infof(
-                                    "CRON-REAP-RETRY recurring cronId=%s failed/timed out (rescheduled for %s)",
-                                    jobId, next);
-                        } else {
-                            cronStore.markFailed(jobId, reason);
-                            log.warnf("CRON-REAP-FAILED one-shot cronId=%s failed/timed out", jobId);
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warnf("Failed to update cron status on failure for job %s: %s", jobId, LogUtil.rootMessage(e));
-                }
-            }
+    /**
+     * Emits a {@code hitl_timeout} trace when a stale {@code AWAITING_APPROVAL} checkpoint is
+     * auto-denied during startup recovery (Issue 03, AC2).
+     *
+     * <p>Without this the cockpit would keep rendering the checkpoint as {@code pending} even
+     * though the JVM restarted and no approval can ever arrive. Status is {@code DENIED_RESTART}
+     * so the UI can distinguish a restart denial from a wall-clock expiry, while still mapping to
+     * the same {@code hitl_timeout} stage.
+     *
+     * <p>Best-effort and transaction-free (§5.9): a missing publisher (lightweight unit test) is
+     * skipped, and publishing can never change the denial outcome.
+     */
+    void publishStaleApprovalDenied(String sessionId, String toolName) {
+        if (tracePublisher == null || sessionId == null) {
+            return;
+        }
+        tracePublisher.publish(TracePublisher.newEvent(sessionId, TraceStage.HITL_TIMEOUT)
+                .withStation(StationCode.STATION_05_TOOL_GUARD)
+                .withStatus("DENIED_RESTART")
+                .withDetail(toolName));
+    }
+
+    private void cleanupCronOnFailure(String sessionId, String reason) {
+        if (cronFailureCleanup != null) {
+            cronFailureCleanup.cleanupCronOnFailure(sessionId, reason);
         }
     }
 

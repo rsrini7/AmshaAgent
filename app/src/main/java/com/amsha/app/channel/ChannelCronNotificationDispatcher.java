@@ -46,8 +46,11 @@ public class ChannelCronNotificationDispatcher {
                                         event.toolName(),
                                         event.renderedAnswer());
                             } else {
-                                n.notifyJobCompleted(
-                                        event.channelPlatformId(), event.renderedAnswer(), event.correlationId());
+                                String sessionId = event.cronSessionId();
+                                if (sessionId == null || sessionId.isBlank()) {
+                                    sessionId = event.correlationId();
+                                }
+                                n.notifyJobCompleted(event.channelPlatformId(), event.renderedAnswer(), sessionId);
                             }
                         },
                         () -> {

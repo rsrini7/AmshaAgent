@@ -9,6 +9,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.trace.StationCode;
+import com.amsha.core.agent.trace.TracePublisher;
+import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.compaction.CompactionInFlightFlag;
 import com.amsha.core.compaction.CompactionRequest;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -59,6 +62,9 @@ public class CompactionEventBridge {
 
     @Inject
     StatefulAgentStore agentStore;
+
+    @Inject
+    TracePublisher tracePublisher;
 
     /**
      * Called synchronously by CompactionHandler (order=60) before firing the
@@ -157,7 +163,13 @@ public class CompactionEventBridge {
                 return;
             }
 
-            compactionService.compact(request.sessionId(), request.userId());
+            boolean compacted = compactionService.compact(request.sessionId(), request.userId());
+            if (compacted && tracePublisher != null) {
+                tracePublisher.publish(TracePublisher.newEvent(request.sessionId(), TraceStage.CONSOLIDATION)
+                        .withStation(StationCode.STATION_09_CONSOLIDATION)
+                        .withStatus("COMPLETED")
+                        .withDetail("history_compaction_consolidated"));
+            }
         } catch (Exception e) {
             log.errorf("Compaction failed for session %s: %s", request.sessionId(), LogUtil.rootMessage(e));
             if (log.isTraceEnabled()) {
