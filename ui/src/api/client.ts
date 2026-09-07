@@ -45,18 +45,31 @@ export function clearPersistedOwnerApiKey(expectedApiKey?: string): void {
 }
 
 export function readCsrfTokenFromCookie(): string {
-  if (typeof document === 'undefined' || !document.cookie) return '';
-  try {
-    const cookies = document.cookie.split(';');
-    for (const cookie of cookies) {
-      const [rawKey, ...rawValue] = cookie.trim().split('=');
-      const key = rawKey?.trim();
-      if (key === 'X-CSRF-Token' || key === 'AMSHA_CSRF_TOKEN' || key === 'csrf-token') {
-        return decodeURIComponent(rawValue.join('=')).trim();
+  if (typeof document !== 'undefined' && document.cookie) {
+    try {
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {
+        const [rawKey, ...rawValue] = cookie.trim().split('=');
+        const key = rawKey?.trim();
+        if (
+          key === 'X-CSRF-Token' ||
+          key === 'AMSHA_CSRF_TOKEN' ||
+          key === 'csrf-token' ||
+          key === 'csrf_token'
+        ) {
+          const val = decodeURIComponent(rawValue.join('=')).trim();
+          if (val) return val;
+        }
       }
+    } catch {
+      // Ignore cookie parsing errors in restricted environments
     }
-  } catch {
-    // Ignore cookie parsing errors in restricted environments
+  }
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const token = sessionStorage.getItem('amsha-csrf-token') || sessionStorage.getItem('csrf-token');
+      if (token && token.trim()) return token.trim();
+    } catch {}
   }
   return '';
 }

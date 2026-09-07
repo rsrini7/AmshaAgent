@@ -118,7 +118,11 @@ public enum SecurityEventType {
 
     // Media ingestion
     MEDIA_DOWNLOADED, // Governed external media attachment download
-    MEDIA_DOWNLOAD_DENIED; // Governed media download rejected before transport
+    MEDIA_DOWNLOAD_DENIED, // Governed media download rejected before transport
+
+    // DB Console & Model Arena
+    DATABASE_QUERY_FAILED, // DB console query execution error or database unavailable
+    PROVIDER_EGRESS_VALIDATED; // Model Arena governed provider egress validation succeeded
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -166,6 +170,8 @@ public enum SecurityEventType {
                     MCP_CREDENTIAL_ROTATED,
                     MCP_CREDENTIAL_REMOVED,
                     MCP_CREDENTIAL_CLEANUP_FAILED,
+                    DATABASE_QUERY_FAILED,
+                    PROVIDER_EGRESS_VALIDATED,
                     DELEGATION_DISPATCHED -> true;
             default -> false;
         };

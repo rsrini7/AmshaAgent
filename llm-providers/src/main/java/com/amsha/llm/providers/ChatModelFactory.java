@@ -46,6 +46,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.InstanceHandle;
@@ -456,6 +457,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
     public static ChatModel createGemini(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
         String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_GEMINI_MODEL : model;
         GoogleAiGeminiChatModel.GoogleAiGeminiChatModelBuilder builder = GoogleAiGeminiChatModel.builder()
+                .httpClientBuilder(new JaxRsHttpClientBuilder())
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .temperature(config.temperature())

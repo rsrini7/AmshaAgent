@@ -92,6 +92,18 @@ class AgentProviderFactoryCoverageTest {
                 () -> assertNotNull(config.structuredOutputMode()));
     }
 
+    @Test
+    void geminiProviderFactoryBuildsModelWithValidCredentials() throws Exception {
+        GeminiProviderFactory factory = new GeminiProviderFactory();
+        initializeFields(factory);
+        set(factory, "apiKey", Optional.of("test-gemini-key"));
+        set(factory, "baseUrl", "https://generativelanguage.googleapis.com/v1beta");
+        set(factory, "modelName", "gemini-2.5-flash");
+
+        assertNotNull(factory.create());
+        assertNotNull(factory.create("gemini-1.5-pro"));
+    }
+
     private static void initializeFields(Object target) throws Exception {
         for (Field field : target.getClass().getDeclaredFields()) {
             if (Modifier.isStatic(field.getModifiers())) continue;

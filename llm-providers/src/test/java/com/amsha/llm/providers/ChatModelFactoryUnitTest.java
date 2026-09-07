@@ -195,7 +195,9 @@ class ChatModelFactoryUnitTest {
         when(config.structuredOutputMode()).thenReturn(StructuredOutputMode.NATIVE);
 
         assertNotNull(factory.createForAdapter("ollama", "http://localhost:11434", null, "llama3", config));
+        assertNotNull(factory.createForAdapter("gemini", null, "dummy-key", "gemini-2.5-flash", config));
         assertTrue(factory.supportsAdapter("openai"));
+        assertTrue(factory.supportsAdapter("gemini"));
         assertTrue(factory.supportsAdapter("groq"));
         assertTrue(factory.supportsAdapter("cerebras"));
         assertTrue(factory.supportsAdapter("sarvam"));

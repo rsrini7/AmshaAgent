@@ -45,7 +45,6 @@ import com.amsha.persistence.api.SessionCatalogStore;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-import io.agroal.api.AgroalDataSource;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
 /**
@@ -147,10 +146,18 @@ public class DbConsoleResource {
                 verifySessionOwnership(wsId, sessId, callerUserId);
             }
         } catch (DbValidationException ex) {
-            recordErrorAudit(
-                    callerUserId,
-                    SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "DB query rejected: hash=" + queryHash + " code=VALIDATION_FAILED");
+            try {
+                recordMandatoryAudit(
+                        callerUserId,
+                        SecurityEventType.UNAUTHORIZED_ACCESS,
+                        "DB query rejected: hash=" + queryHash + " code=VALIDATION_FAILED");
+            } catch (Exception auditEx) {
+                log.errorf(
+                        "DbConsole mandatory audit failure for hash=%s: %s", queryHash, LogUtil.rootMessage(auditEx));
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity(new AmshaErrorResponse("Mandatory audit logging failed"))
+                        .build();
+            }
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new AmshaErrorResponse(ex.getMessage()))
                     .build();
@@ -196,18 +203,34 @@ public class DbConsoleResource {
             return Response.ok(new DbQueryResponse(result.columns(), result.rows(), executionMs, result.truncated()))
                     .build();
         } catch (DbValidationException ex) {
-            recordErrorAudit(
-                    callerUserId,
-                    SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "DB query rejected: hash=" + queryHash + " code=VALIDATION_FAILED");
+            try {
+                recordMandatoryAudit(
+                        callerUserId,
+                        SecurityEventType.UNAUTHORIZED_ACCESS,
+                        "DB query rejected: hash=" + queryHash + " code=VALIDATION_FAILED");
+            } catch (Exception auditEx) {
+                log.errorf(
+                        "DbConsole mandatory audit failure for hash=%s: %s", queryHash, LogUtil.rootMessage(auditEx));
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity(new AmshaErrorResponse("Mandatory audit logging failed"))
+                        .build();
+            }
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new AmshaErrorResponse(ex.getMessage()))
                     .build();
         } catch (SQLException ex) {
-            recordErrorAudit(
-                    callerUserId,
-                    SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "DB query execution failure: hash=" + queryHash + " code=DATABASE_EXECUTION_ERROR");
+            try {
+                recordMandatoryAudit(
+                        callerUserId,
+                        SecurityEventType.DATABASE_QUERY_FAILED,
+                        "DB query execution failure: hash=" + queryHash + " code=DATABASE_EXECUTION_ERROR");
+            } catch (Exception auditEx) {
+                log.errorf(
+                        "DbConsole mandatory audit failure for hash=%s: %s", queryHash, LogUtil.rootMessage(auditEx));
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity(new AmshaErrorResponse("Mandatory audit logging failed"))
+                        .build();
+            }
             log.warnf(
                     "DbConsole query failed for hash=%s: sqlState=%s errorCode=%d",
                     queryHash, ex.getSQLState(), ex.getErrorCode());
@@ -215,10 +238,18 @@ public class DbConsoleResource {
                     .entity(new AmshaErrorResponse("Database execution error: query execution failed"))
                     .build();
         } catch (RuntimeException ex) {
-            recordErrorAudit(
-                    callerUserId,
-                    SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "DB query execution failure: hash=" + queryHash + " code=DATABASE_UNAVAILABLE");
+            try {
+                recordMandatoryAudit(
+                        callerUserId,
+                        SecurityEventType.DATABASE_QUERY_FAILED,
+                        "DB query execution failure: hash=" + queryHash + " code=DATABASE_UNAVAILABLE");
+            } catch (Exception auditEx) {
+                log.errorf(
+                        "DbConsole mandatory audit failure for hash=%s: %s", queryHash, LogUtil.rootMessage(auditEx));
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity(new AmshaErrorResponse("Mandatory audit logging failed"))
+                        .build();
+            }
             log.warnf("DbConsole database unavailable hash=%s: %s", queryHash, LogUtil.rootMessage(ex));
             return Response.status(Response.Status.SERVICE_UNAVAILABLE)
                     .entity(new AmshaErrorResponse("Database execution unavailable"))
@@ -286,20 +317,13 @@ public class DbConsoleResource {
                 throw new DbValidationException("Unsupported database product");
             }
 
-            if (query.isPragma()) {
-                if (!isSqlite) {
-                    throw new DbValidationException("PRAGMA introspection is supported only on SQLite backends");
-                }
-                try (Statement pragmaStmt = conn.createStatement()) {
-                    pragmaStmt.setQueryTimeout(2);
-                    pragmaStmt.setMaxRows(limit + 1);
-                    try (ResultSet rs = pragmaStmt.executeQuery(query.sql())) {
-                        return DbResultMapper.mapResultSet(rs, limit);
-                    }
-                }
+            if (query.isPragma() && !isSqlite) {
+                throw new DbValidationException("PRAGMA introspection is supported only on SQLite backends");
             }
 
             boolean sqliteQueryOnlyConfigured = isSqlite;
+            SQLException resetFailure = null;
+            Throwable primaryEx = null;
             try {
                 if (isSqlite) {
                     try (Statement pragmaStmt = conn.createStatement()) {
@@ -310,6 +334,16 @@ public class DbConsoleResource {
                     conn.setReadOnly(true);
                     try (Statement timeoutStmt = conn.createStatement()) {
                         timeoutStmt.execute("SET LOCAL statement_timeout = 2000;");
+                    }
+                }
+
+                if (query.isPragma()) {
+                    try (Statement pragmaStmt = conn.createStatement()) {
+                        pragmaStmt.setQueryTimeout(2);
+                        pragmaStmt.setMaxRows(limit + 1);
+                        try (ResultSet rs = pragmaStmt.executeQuery(query.sql())) {
+                            return DbResultMapper.mapResultSet(rs, limit);
+                        }
                     }
                 }
 
@@ -326,6 +360,9 @@ public class DbConsoleResource {
                         return DbResultMapper.mapResultSet(rs, limit);
                     }
                 }
+            } catch (Throwable t) {
+                primaryEx = t;
+                throw t;
             } finally {
                 if (isPostgres) {
                     try {
@@ -343,6 +380,7 @@ public class DbConsoleResource {
                                 "Failed to restore PostgreSQL connection state; discarding connection: %s",
                                 LogUtil.rootMessage(resetEx));
                         discardConnection(conn);
+                        resetFailure = resetEx;
                     }
                 }
                 if (sqliteQueryOnlyConfigured) {
@@ -355,6 +393,19 @@ public class DbConsoleResource {
                                 "Failed to reset SQLite query_only on pooled connection; discarding: %s",
                                 LogUtil.rootMessage(resetEx));
                         discardConnection(conn);
+                        if (resetFailure == null) {
+                            resetFailure = resetEx;
+                        } else {
+                            resetFailure.addSuppressed(resetEx);
+                        }
+                    }
+                }
+                if (resetFailure != null) {
+                    if (primaryEx != null) {
+                        primaryEx.addSuppressed(resetFailure);
+                    } else {
+                        throw new SQLException(
+                                "Failed to restore connection state: " + resetFailure.getMessage(), resetFailure);
                     }
                 }
             }
@@ -363,6 +414,18 @@ public class DbConsoleResource {
 
     /** Aborts and flushes a corrupted pooled connection so Agroal evicts it instead of reusing it. */
     private void discardConnection(Connection conn) {
+        try {
+            Connection raw = conn.isWrapperFor(Connection.class) ? conn.unwrap(Connection.class) : conn;
+            if (raw != null && raw != conn) {
+                try {
+                    raw.close();
+                } catch (Throwable _) {
+                    // Ignore raw close error during discard
+                }
+            }
+        } catch (Throwable _) {
+            // Ignore unwrap error
+        }
         try {
             conn.abort(Runnable::run);
         } catch (Throwable t) {
@@ -373,32 +436,13 @@ public class DbConsoleResource {
                 log.debugf("Failed to close connection after abort failure: %s", LogUtil.rootMessage(closeEx));
             }
         }
-        try {
-            if (dataSourceInstance != null && dataSourceInstance.isResolvable()) {
-                DataSource ds = dataSourceInstance.get();
-                if (ds instanceof AgroalDataSource agroalDs) {
-                    agroalDs.flush(AgroalDataSource.FlushMode.INVALID);
-                }
-            }
-        } catch (Throwable t) {
-            log.debugf("Failed to flush invalid pool connections: %s", LogUtil.rootMessage(t));
-        }
     }
 
     private void recordMandatoryAudit(String callerUserId, SecurityEventType type, String message) {
-        if (auditService != null) {
-            auditService.recordMandatory("db-console", callerUserId, "operator", type, message);
+        if (auditService == null) {
+            throw new IllegalStateException("AuditService is unavailable for mandatory audit logging");
         }
-    }
-
-    private void recordErrorAudit(String callerUserId, SecurityEventType type, String message) {
-        if (auditService != null) {
-            try {
-                auditService.recordMandatory("db-console", callerUserId, "operator", type, message);
-            } catch (Exception e) {
-                log.warnf(e, "DbConsole: error audit logging failed; message=%s", message);
-            }
-        }
+        auditService.recordMandatory("db-console", callerUserId, "operator", type, message);
     }
 
     private static String hashQuery(String sql) {

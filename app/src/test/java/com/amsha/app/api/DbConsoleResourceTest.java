@@ -231,6 +231,8 @@ class DbConsoleResourceTest {
 
         assertTrue(msgCaptor.getValue().contains("hash="));
         assertFalse(msgCaptor.getValue().contains("plain-secret-password"));
+        verify(pragmaStmt).execute("PRAGMA query_only = ON;");
+        verify(pragmaStmt).execute("PRAGMA query_only = OFF;");
     }
 
     @Test
@@ -245,6 +247,54 @@ class DbConsoleResourceTest {
         Response resp = resource.executeQuery(new DbQueryRequest("PRAGMA table_info('identity_user')", 10));
         assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), resp.getStatus());
         assertTrue(resp.getEntity().toString().contains("PRAGMA introspection is supported only on SQLite backends"));
+    }
+
+    @Test
+    void informationSchemaWildcardForbiddenAndSpecificColumnsAllowed() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+
+        // Wildcard on information_schema.tables is rejected
+        Response wildcardResp =
+                resource.executeQuery(new DbQueryRequest("SELECT * FROM information_schema.tables", 10));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), wildcardResp.getStatus());
+        assertTrue(wildcardResp.getEntity().toString().contains("Wildcard '*' is forbidden on schema metadata tables"));
+
+        // Unapproved columns on information_schema.tables is rejected
+        Response unapprovedResp = resource.executeQuery(
+                new DbQueryRequest("SELECT table_name, non_existent FROM information_schema.tables", 10));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), unapprovedResp.getStatus());
+        assertTrue(unapprovedResp
+                .getEntity()
+                .toString()
+                .contains("Access to column 'non_existent' in schema metadata is forbidden"));
+
+        // Approved columns on information_schema.tables executes normally on PostgreSQL
+        Connection conn = mock(Connection.class);
+        Statement timeoutStmt = mock(Statement.class);
+        PreparedStatement stmt = mock(PreparedStatement.class);
+        ResultSet rs = mock(ResultSet.class);
+        ResultSetMetaData meta = mock(ResultSetMetaData.class);
+        DatabaseMetaData dbMeta = mock(DatabaseMetaData.class);
+
+        when(dataSource.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenReturn(dbMeta);
+        when(dbMeta.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(conn.createStatement()).thenReturn(timeoutStmt);
+        when(conn.prepareStatement(anyString())).thenReturn(stmt);
+        when(stmt.executeQuery()).thenReturn(rs);
+        when(rs.getMetaData()).thenReturn(meta);
+        when(meta.getColumnCount()).thenReturn(2);
+        when(meta.getColumnLabel(1)).thenReturn("table_name");
+        when(meta.getColumnLabel(2)).thenReturn("table_type");
+        when(rs.next()).thenReturn(true, false);
+        when(rs.getObject(1)).thenReturn("session_catalog");
+        when(rs.getObject(2)).thenReturn("BASE TABLE");
+
+        Response okResp = resource.executeQuery(
+                new DbQueryRequest("SELECT table_name, table_type FROM information_schema.tables", 10));
+        assertEquals(Response.Status.OK.getStatusCode(), okResp.getStatus());
     }
 
     @Test
@@ -424,7 +474,7 @@ class DbConsoleResourceTest {
                         eq("db-console"),
                         eq("test-operator"),
                         eq("operator"),
-                        eq(SecurityEventType.UNAUTHORIZED_ACCESS),
+                        eq(SecurityEventType.DATABASE_QUERY_FAILED),
                         msgCaptor.capture());
         String auditMsg = msgCaptor.getValue();
         assertFalse(auditMsg.contains("/secret/tokens.db"));
@@ -613,6 +663,57 @@ class DbConsoleResourceTest {
                 .recordMandatory(eq("db-console"), any(), any(), eq(SecurityEventType.SESSION_INSPECTED), any());
 
         Response resp = resource.executeQuery(new DbQueryRequest("PRAGMA table_list;", 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+        AmshaErrorResponse err = (AmshaErrorResponse) resp.getEntity();
+        assertEquals("Mandatory audit logging failed", err.error());
+    }
+
+    @Test
+    void sqliteResetFailureDiscardsConnectionAndRethrows() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+
+        Connection conn = mock(Connection.class);
+        Statement pragmaStmt = mock(Statement.class);
+        PreparedStatement stmt = mock(PreparedStatement.class);
+        ResultSet rs = mock(ResultSet.class);
+        ResultSetMetaData meta = mock(ResultSetMetaData.class);
+        DatabaseMetaData dbMeta = mock(DatabaseMetaData.class);
+
+        when(dataSource.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenReturn(dbMeta);
+        when(dbMeta.getDatabaseProductName()).thenReturn("SQLite");
+        when(conn.prepareStatement(anyString())).thenReturn(stmt);
+        when(stmt.executeQuery()).thenReturn(rs);
+        when(rs.getMetaData()).thenReturn(meta);
+        when(meta.getColumnCount()).thenReturn(1);
+        when(meta.getColumnLabel(1)).thenReturn("id");
+        when(rs.next()).thenReturn(false);
+
+        Statement resetStmt = mock(Statement.class);
+        when(conn.createStatement()).thenReturn(pragmaStmt).thenReturn(resetStmt);
+        doThrow(new SQLException("Failed to reset query_only")).when(resetStmt).execute("PRAGMA query_only = OFF;");
+
+        Response resp =
+                resource.executeQuery(new DbQueryRequest("SELECT id FROM session_catalog_view", 10, "ws-1", "s-1"));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), resp.getStatus());
+        AmshaErrorResponse err = (AmshaErrorResponse) resp.getEntity();
+        assertEquals("Database execution error: query execution failed", err.error());
+        verify(conn).abort(any());
+    }
+
+    @Test
+    void errorAuditFailureFailsClosedWith500() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+
+        doThrow(new RuntimeException("Audit disk full"))
+                .when(auditService)
+                .recordMandatory(eq("db-console"), any(), any(), eq(SecurityEventType.UNAUTHORIZED_ACCESS), any());
+
+        Response resp = resource.executeQuery(new DbQueryRequest("SELECT * FROM invalid_table_drop", 10));
         assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
         AmshaErrorResponse err = (AmshaErrorResponse) resp.getEntity();
         assertEquals("Mandatory audit logging failed", err.error());

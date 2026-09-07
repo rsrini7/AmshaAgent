@@ -14,6 +14,7 @@ import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.RoutingChatModelProvider;
 
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -37,7 +38,8 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
         // Hardening: Strip quotes and whitespace
         key = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
 
-        ChatModel model = GoogleAiGeminiChatModel.builder()
+        var builder = GoogleAiGeminiChatModel.builder()
+                .httpClientBuilder(new JaxRsHttpClientBuilder())
                 .apiKey(key)
                 .modelName(config.modelName())
                 .temperature(0.0)
@@ -45,8 +47,11 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
                 // .thinkingBudget(0L)
                 .timeout(config.timeout().orElse(Duration.ofSeconds(30)))
                 .logRequests(false)
-                .logResponses(false)
-                .build();
+                .logResponses(false);
+        if (config.baseUrl() != null && !config.baseUrl().isBlank()) {
+            builder.baseUrl(config.baseUrl());
+        }
+        ChatModel model = builder.build();
         MultimodalCapability multimodalCap =
                 MultimodalCapabilities.defaultCapabilityForModel("gemini", config.modelName());
         return CapabilityAwareChatModel.withCapabilities(model, false, multimodalCap);

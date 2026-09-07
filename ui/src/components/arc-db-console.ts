@@ -521,15 +521,24 @@ export class ArcDbConsole extends LitElement {
       if (err instanceof ArcApiError && err.status === 401) {
         this._authStatus = 401;
         this._isUnavailable = true;
+        this._error = null;
       } else if (err instanceof ArcApiError && err.status === 403) {
         const msg = (err.message || '').toLowerCase();
-        if (msg.includes('csrf')) {
-          this._authStatus = null;
-          this._isUnavailable = false;
-          this._error = err.message || 'CSRF validation failed. Please refresh or re-authenticate.';
-        } else {
+        if (/\b(internal|role\s+required|operator\s+role)\b/i.test(msg)) {
           this._authStatus = 403;
           this._isUnavailable = true;
+          this._error = null;
+        } else {
+          this._authStatus = null;
+          this._isUnavailable = false;
+          if (msg.includes('csrf')) {
+            this._error = err.message || 'CSRF validation failed. Please refresh or re-authenticate.';
+          } else {
+            this._error =
+              err.message && !msg.includes('forbidden')
+                ? err.message
+                : 'Access forbidden (403): CSRF or security check failed. Please refresh or re-authenticate.';
+          }
         }
       } else {
         this._authStatus = null;

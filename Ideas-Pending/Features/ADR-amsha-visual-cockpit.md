@@ -64,6 +64,13 @@ in the existing Lit UI. Concretely:
    in-process ONNX seq2seq runner behind `OnnxSessionLeaseManager`, and `CompositeAudioTranscriptionPort`
    providing priority routing (local first, OMLX fallback) with per-delegate exception isolation and cascading.
    The feature remains disabled by default (`amsha.stt.local.enabled=false`) with zero runtime downloads and zero egress.
+10. **Plan-Execute and Reflexion execution paradigms audited (Issue 11).** Audited the Amsha backend runtime and confirmed that only `REACT` and `MULTI_AGENT` / `GROUP_CONSULTATION` execution paradigms are implemented. No Plan-Execute or Reflexion runtime loops exist in the Java backend. Per the non-fabrication invariant, unconfirmed paradigms are strictly rejected and `arc-topology-graph.ts` permanently falls back to the governed ten-station conveyor view.
+11. **Safe allowlisted symbolication enforced over raw-source X-Ray (Issue 12).** Formally rejected streaming raw Java source files, arbitrary method parameters, prompts, completions, and secret keys due to severe information-disclosure and multi-tenant isolation risks. Implemented safe allowlisted symbolication only via `TraceSymbolicationService` (strictly 9 architectural classes), resource-layer `isInternal()` authorization in `CockpitResource`, multi-tenant session ownership with 404 non-disclosure, mandatory operator audit logging, and server-side trace redaction via `TraceRedactor`.
+12. **Read-Only DB Console and Model Arena implemented (Issue 13).** Delivered internal-only operator surfaces:
+    - **Read-Only DB Console** (`POST /api/v1/admin/db/query`): AST-level read-only SQL validation (single-statement enforcement, recursive DML/DDL rejection under EXPLAIN/CTE, exact PRAGMA allowlist), schema-metadata allowlist and wildcard ban enforced across SQLite (`sqlite_master`, `sqlite_schema`) and PostgreSQL (`information_schema.tables`, `flyway_schema_history`), two-tier programmatic tenant isolation predicates, SQLite `PRAGMA query_only = ON;`, PostgreSQL read-only transaction boundaries with guaranteed rollback, poisoned connection discard on reset failure, and mandatory audit logging.
+    - **Model Arena** (`POST /api/v1/admin/arena/compare`): Dedicated fail-closed `CredentialDetector` contract (400 Bad Request), PII policy enforcement, strict token bounding (<=2,048 input tokens, <=1,024 output tokens), provider endpoint resolution, per-provider pre-invocation egress governance via `GovernedTransportService.validateEgress()` with mandatory audit gating (zero agent tool / shell execution; chat completions delegate to resolved `ChatModel` instances, with byte-level `GovernedTransportService.send()` unification across third-party SDKs tracked under provider transport roadmap §O2), and mandatory categorical audit logging (zero prompt or completion disclosure).
+    - **Operator UI Baseline**: Client security preserves session-scoped CSRF resolution (`sessionStorage` fallback alongside document cookies, strictly excluding persistent `localStorage`) and explicit 403 differentiation (distinguishing role-based authorization from transient/CSRF failures without broad substring leakage).
+13. **Advanced surfaces registry fully resolved and reconciled (Issue 07).** Every P3 advanced surface listed in Issue 07 has cleared its evidence gate: durable trace storage (Issue 08, implemented), third-party GSAP motion (Issue 09, evaluated & rejected in favor of calm SVG/CSS), local Whisper (Issue 10, implemented), additional paradigm loops (Issue 11, audited; non-fabricating conveyor fallback retained), raw-source X-Ray (Issue 12, rejected; safe symbolication retained), and DB console/Model Arena (Issue 13, DB Console evidence-verified; Model Arena core verified, with byte-level `GovernedTransportService.send()` provider execution tracked under §O2).
 
 ## 3. Alternatives Rejected
 
@@ -82,6 +89,15 @@ in the existing Lit UI. Concretely:
 - **Equating external OMLX STT with local in-process Whisper**: rejected — outbound HTTP audio
   transcription requires an external provider service; in-process local Whisper requires pinned local ONNX
   weights, STFT/mel feature extraction, and zero-egress verification.
+- **Fabricating Plan-Execute or Reflexion topology loops**: rejected (Issue 11) — visualization must only
+  reflect observed backend runtime execution; intermediate steps or loops not present in the runtime are
+  never synthesized.
+- **Raw source code streaming and arbitrary parameter inspection**: rejected (Issue 12) — raw Java source
+  traversal exposes class logic and infrastructure details; safe allowlisted symbolication satisfies operator
+  diagnostic needs while strictly preserving tenant boundaries.
+- **Unbounded, ungoverned DB queries or model benchmarks**: rejected (Issue 13) — arbitrary SQL mutations,
+  PRAGMA manipulation, un-governed provider egress, or prompt/completion logging in audit trails violate core
+  security invariants.
 
 ## 4. Consequences
 
@@ -122,6 +138,6 @@ native --binary dist/amsha-sqlite` (zero reflection-registration errors).
 ## 6. Status and Review
 
 - **Status**: Proposed.
-- **Review date**: 2026-09-01.
-- Detailed scope, claim classification, and issue breakdown live in the feature tracker under
-  `.scratch/amsha-visual-cockpit/` (`spec.md` and `issues/`).
+- **Decision Date**: 2026-09-01.
+- **Reconciliation Date**: 2026-09-07.
+- Core visual cockpit iterations (P0, P1, P2) and P3 advanced surfaces (Issues 08, 09, 10, 11, 12, and DB Console in Issue 13) are evidence-verified. Full implementation status for the ADR is held in Proposed pending Issue 13's byte-level `GovernedTransportService.send()` provider execution unification under provider transport roadmap §O2. Detailed scope, claim classification, and iteration issues live in the feature tracker under `.scratch/amsha-visual-cockpit/` (`spec.md` and `issues/`).

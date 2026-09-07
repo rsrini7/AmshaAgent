@@ -21,6 +21,7 @@ import com.amsha.llm.providers.ChatModelFactory;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
 import io.quarkus.arc.Unremovable;
 
 @ApplicationScoped
@@ -77,15 +78,19 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
 
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
                 cleanKey, effectiveModel, ModelDefaults.PROVIDER_GEMINI, (entryKey, entryModel) -> {
-                    ChatModel raw = GoogleAiGeminiChatModel.builder()
+                    var builder = GoogleAiGeminiChatModel.builder()
+                            .httpClientBuilder(new JaxRsHttpClientBuilder())
                             .apiKey(entryKey)
                             .modelName(entryModel)
                             .temperature(agentConfig.temperature())
                             .maxOutputTokens(agentConfig.maxTokens())
                             .timeout(agentConfig.timeout())
                             .logRequests(logRequests)
-                            .logResponses(logResponses)
-                            .build();
+                            .logResponses(logResponses);
+                    if (baseUrl != null && !baseUrl.isBlank()) {
+                        builder.baseUrl(baseUrl);
+                    }
+                    ChatModel raw = builder.build();
                     MultimodalCapability cap =
                             MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_GEMINI, entryModel);
                     return CapabilityAwareChatModel.withCapabilities(raw, false, cap);

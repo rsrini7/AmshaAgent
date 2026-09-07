@@ -136,6 +136,32 @@ describe('ArcDbConsole Component & Fallback Behavior (Issue 13)', () => {
     }
   });
 
+  it('displays error banner and not "Internal Role Required" on generic 403 without internal role error', async () => {
+    const consoleComp = new ArcDbConsole();
+    consoleComp.sql = 'SELECT * FROM session_history_view;';
+
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async (url: any, _init: any) => {
+        expect(String(url)).toContain('/api/v1/admin/db/query');
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ error: 'Forbidden' }),
+        } as any;
+      };
+
+      await consoleComp.executeQuery();
+      const rendered = consoleComp.render();
+      const str = JSON.stringify(rendered);
+
+      expect(str).toContain('Access forbidden (403)');
+      expect(str).not.toContain('Operator Surface Unavailable (Internal Role Required)');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('reads CSRF token from document cookie and forwards X-CSRF-Token header in ArcClient', async () => {
     const originalDocument = globalThis.document;
     const originalFetch = globalThis.fetch;
@@ -162,6 +188,40 @@ describe('ArcDbConsole Component & Fallback Behavior (Issue 13)', () => {
       expect(interceptedHeaders?.get('X-CSRF-Token')).toBe('csrf-secret-12345');
     } finally {
       (globalThis as any).document = originalDocument;
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('reads CSRF token from sessionStorage fallback when document cookie is absent', async () => {
+    const originalDocument = globalThis.document;
+    const originalSessionStorage = globalThis.sessionStorage;
+    const originalFetch = globalThis.fetch;
+    let interceptedHeaders: any = null;
+
+    try {
+      (globalThis as any).document = { cookie: '' };
+      const storage: Record<string, string> = { 'amsha-csrf-token': 'session-csrf-999' };
+      (globalThis as any).sessionStorage = {
+        getItem: (k: string) => storage[k] || null,
+      };
+      globalThis.fetch = async (_url: any, init: any) => {
+        interceptedHeaders = new Headers(init?.headers);
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ columns: ['ok'], rows: [], executionMs: 1, truncated: false }),
+        } as any;
+      };
+
+      const { ArcClient } = await import('../api/client');
+      const client = new ArcClient('/api/v1');
+      await client.queryDb({ sql: 'PRAGMA table_list;' });
+
+      expect(interceptedHeaders).not.toBeNull();
+      expect(interceptedHeaders?.get('X-CSRF-Token')).toBe('session-csrf-999');
+    } finally {
+      (globalThis as any).document = originalDocument;
+      (globalThis as any).sessionStorage = originalSessionStorage;
       globalThis.fetch = originalFetch;
     }
   });
@@ -300,6 +360,58 @@ describe('ArcModelArena Component & Fallback Behavior (Issue 13)', () => {
       expect(str).toContain('Operator Surface Unavailable (Internal Role Required)');
       // Never fabricate mock benchmark latencies or model outputs on 403
       expect(str).not.toContain('results-grid');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('displays error banner and not "Internal Role Required" on generic 403 without internal role error', async () => {
+    const arena = new ArcModelArena();
+    arena.prompt = 'Benchmark prompt';
+
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async (url: any, _init: any) => {
+        expect(String(url)).toContain('/api/v1/admin/arena/compare');
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ error: 'Forbidden' }),
+        } as any;
+      };
+
+      await arena.runCompare();
+      const rendered = arena.render();
+      const str = JSON.stringify(rendered);
+
+      expect(str).toContain('Access forbidden (403)');
+      expect(str).not.toContain('Operator Surface Unavailable (Internal Role Required)');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not misclassify 403 containing control words like "control" or "patrol" as role failure', async () => {
+    const arena = new ArcModelArena();
+    arena.prompt = 'Benchmark prompt';
+
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async (url: any, _init: any) => {
+        expect(String(url)).toContain('/api/v1/admin/arena/compare');
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ error: 'Access control policy violation' }),
+        } as any;
+      };
+
+      await arena.runCompare();
+      const rendered = arena.render();
+      const str = JSON.stringify(rendered);
+
+      expect(str).toContain('Access control policy violation');
+      expect(str).not.toContain('Operator Surface Unavailable (Internal Role Required)');
     } finally {
       globalThis.fetch = originalFetch;
     }

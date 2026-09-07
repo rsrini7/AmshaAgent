@@ -48,12 +48,12 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.CredentialDetectionResult;
 import com.amsha.core.security.CredentialDetector;
 import com.amsha.llm.api.AgentChatModelProvider;
-import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.GovernedTransportService;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -74,12 +74,9 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 public class ModelArenaResource {
 
     private static final Logger log = Logger.getLogger(ModelArenaResource.class);
-    private static final int MAX_INPUT_TOKENS = 2048;
-    private static final int MAX_OUTPUT_TOKENS = 1024;
-    private static final int DEFAULT_OUTPUT_TOKENS = 512;
-    private static final int MAX_MODELS = 3;
-    private static final long TIMEOUT_SECONDS = 30L;
-    private static final int MAX_SLOT_LENGTH = ModelArenaHelper.MAX_SLOT_LENGTH;
+
+    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    String defaultProviderName;
 
     @Inject
     CredentialDetector credentialDetector;
@@ -113,51 +110,19 @@ public class ModelArenaResource {
     @Path("/compare")
     public Response compareModels(ArenaCompareRequest request) {
         if (!isInternal()) {
-            return Response.status(Response.Status.FORBIDDEN)
-                    .entity(new AmshaErrorResponse("Internal operator role required for Model Arena"))
-                    .build();
+            return error(Response.Status.FORBIDDEN, "Internal operator role required for Model Arena");
         }
 
-        if (request == null || request.prompt() == null || request.prompt().isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new AmshaErrorResponse("Prompt is required"))
-                    .build();
+        Response validationError = validateCompareRequest(request);
+        if (validationError != null) {
+            return validationError;
         }
 
         String prompt = request.prompt(); // Faithful prompt invocation: preserve leading/trailing whitespace
-        int estimatedInTokens = ModelArenaHelper.estimateTokens(prompt);
-        if (estimatedInTokens > MAX_INPUT_TOKENS) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new AmshaErrorResponse("Prompt exceeds maximum input budget of " + MAX_INPUT_TOKENS
-                            + " tokens (estimated: " + estimatedInTokens + ")"))
-                    .build();
-        }
-
         List<String> modelSlots = request.models();
-        if (modelSlots == null || modelSlots.isEmpty()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new AmshaErrorResponse("At least one model slot must be specified"))
-                    .build();
-        }
-        if (modelSlots.size() > MAX_MODELS) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new AmshaErrorResponse("Maximum of " + MAX_MODELS + " models can be compared concurrently"))
-                    .build();
-        }
-
-        for (String slot : modelSlots) {
-            try {
-                ModelArenaHelper.validateAndExtractProvider(slot);
-            } catch (IllegalArgumentException _) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity(new AmshaErrorResponse("Model slot is not allowlisted"))
-                        .build();
-            }
-        }
-
         int maxOutputTokens = request.maxTokens() != null
-                ? Math.min(Math.max(1, request.maxTokens()), MAX_OUTPUT_TOKENS)
-                : DEFAULT_OUTPUT_TOKENS;
+                ? Math.min(Math.max(1, request.maxTokens()), ModelArenaHelper.MAX_OUTPUT_TOKENS)
+                : ModelArenaHelper.DEFAULT_OUTPUT_TOKENS;
 
         String callerUserId = resolveUserId();
         String promptHash = ModelArenaHelper.hashText(prompt);
@@ -165,23 +130,35 @@ public class ModelArenaResource {
         // Security Stage 1: Credential Detection (Fail-Closed Rejection)
         CredentialDetectionResult credResult = credentialDetector.detect(prompt);
         if (credResult.detected()) {
-            recordErrorAudit(
-                    callerUserId,
-                    SecurityEventType.UNAUTHORIZED_ACCESS,
-                    "Prompt credential detected: type=" + credResult.credentialType() + " promptHash=" + promptHash);
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new AmshaErrorResponse(
-                            "Prompt contains prohibited credentials (" + credResult.credentialType() + ")"))
-                    .build();
+            try {
+                recordMandatoryAudit(
+                        callerUserId,
+                        SecurityEventType.UNAUTHORIZED_ACCESS,
+                        "Prompt credential detected: type=" + credResult.credentialType() + " promptHash="
+                                + promptHash);
+            } catch (Exception ex) {
+                log.errorf("ModelArena mandatory error audit failure: %s", LogUtil.rootMessage(ex));
+                return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
+            }
+            return error(
+                    Response.Status.BAD_REQUEST,
+                    "Prompt contains prohibited credentials (" + credResult.credentialType() + ")");
         }
 
         // Security Stage 2: PII Policy Enforcement
-        String promptToUse = evaluatePiiPolicy(prompt, callerUserId, promptHash);
-        if (promptToUse == null) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new AmshaErrorResponse("Prompt rejected by PII policy"))
-                    .build();
+        String promptToUse;
+        try {
+            promptToUse = evaluatePiiPolicy(prompt, callerUserId, promptHash);
+        } catch (Exception ex) {
+            log.errorf("ModelArena mandatory error audit failure: %s", LogUtil.rootMessage(ex));
+            return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
         }
+        if (promptToUse == null) {
+            return error(Response.Status.BAD_REQUEST, "Prompt rejected by PII policy");
+        }
+        final String benchmarkPrompt = ModelArenaHelper.estimateTokens(promptToUse) > ModelArenaHelper.MAX_INPUT_TOKENS
+                ? ModelArenaHelper.truncateToTokenBudget(promptToUse, ModelArenaHelper.MAX_INPUT_TOKENS)
+                : promptToUse;
 
         // Execution Stage: Parallel Provider Invocation on Virtual Threads with Global Deadline
         long overallStartNs = System.nanoTime();
@@ -190,11 +167,11 @@ public class ModelArenaResource {
         try {
             List<Future<ArenaModelResult>> futures = new ArrayList<>();
             for (String slot : modelSlots) {
-                futures.add(
-                        executor.submit(() -> executeModelBenchmark(slot, promptToUse, maxOutputTokens, callerUserId)));
+                futures.add(executor.submit(
+                        () -> executeModelBenchmark(slot, benchmarkPrompt, maxOutputTokens, callerUserId)));
             }
 
-            long deadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+            long deadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(ModelArenaHelper.TIMEOUT_SECONDS);
             for (int i = 0; i < futures.size(); i++) {
                 Future<ArenaModelResult> f = futures.get(i);
                 String slot = modelSlots.get(i);
@@ -204,22 +181,35 @@ public class ModelArenaResource {
                         results.add(f.get());
                     } else if (remainingNs <= 0) {
                         f.cancel(true);
-                        results.add(new ArenaModelResult(slot, "PROVIDER_TIMEOUT", 0, 0, TIMEOUT_SECONDS * 1000L, 0.0));
+                        results.add(new ArenaModelResult(
+                                slot, "PROVIDER_TIMEOUT", 0, 0, ModelArenaHelper.TIMEOUT_SECONDS * 1000L, 0.0));
                     } else {
                         results.add(f.get(remainingNs, TimeUnit.NANOSECONDS));
                     }
                 } catch (TimeoutException _) {
                     f.cancel(true);
-                    results.add(new ArenaModelResult(slot, "PROVIDER_TIMEOUT", 0, 0, TIMEOUT_SECONDS * 1000L, 0.0));
+                    results.add(new ArenaModelResult(
+                            slot, "PROVIDER_TIMEOUT", 0, 0, ModelArenaHelper.TIMEOUT_SECONDS * 1000L, 0.0));
                 } catch (InterruptedException _) {
                     f.cancel(true);
                     Thread.currentThread().interrupt();
                     results.add(new ArenaModelResult(slot, "PROVIDER_INTERRUPTED", 0, 0, 0L, 0.0));
                 } catch (ExecutionException e) {
                     f.cancel(true);
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    if (cause instanceof ModelArenaHelper.ArenaAuditException) {
+                        log.errorf("ModelArena mandatory governance failure: %s", LogUtil.rootMessage(cause));
+                        return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
+                    }
+                    if (cause instanceof ModelArenaHelper.ArenaConfigurationException ace) {
+                        log.errorf(
+                                "ModelArena provider configuration failure for slot %s: %s (root: %s)",
+                                slot, ace.getMessage(), LogUtil.rootMessage(ace));
+                        return error(Response.Status.INTERNAL_SERVER_ERROR, "Provider configuration failure");
+                    }
                     log.warnf(
                             "ModelArena provider execution error for slot %s: errorClass=%s",
-                            slot, e.getClass().getSimpleName());
+                            slot, cause.getClass().getSimpleName());
                     results.add(new ArenaModelResult(slot, "PROVIDER_EXECUTION_ERROR", 0, 0, 0L, 0.0));
                 }
             }
@@ -243,9 +233,7 @@ public class ModelArenaResource {
                                 + " totalCostUsd=" + totalCostUsd);
             } catch (Exception ex) {
                 log.errorf("ModelArena mandatory audit failure: %s", LogUtil.rootMessage(ex));
-                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                        .entity(new AmshaErrorResponse("Mandatory audit logging failed"))
-                        .build();
+                return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
             }
 
             return Response.ok(new ArenaCompareResponse(results, totalDurationMs))
@@ -261,7 +249,7 @@ public class ModelArenaResource {
                     WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "arena-session";
             GuardDecision decision = piiInputGuard.get().validate(sessionId, callerUserId, prompt, prompt);
             if (decision.isBlocked()) {
-                recordErrorAudit(
+                recordMandatoryAudit(
                         callerUserId,
                         SecurityEventType.UNAUTHORIZED_ACCESS,
                         "Prompt blocked by PII policy: promptHash=" + promptHash);
@@ -277,6 +265,7 @@ public class ModelArenaResource {
     private ArenaModelResult executeModelBenchmark(
             String slot, String prompt, int maxOutputTokens, String callerUserId) {
         long startNs = System.nanoTime();
+        int tokenCap = Math.min(maxOutputTokens, ModelArenaHelper.MAX_OUTPUT_TOKENS);
         try {
             String cleanProv = ModelArenaHelper.validateAndExtractProvider(slot);
             ResolvedProvider resolved = resolveProviderAndModel(slot);
@@ -303,7 +292,7 @@ public class ModelArenaResource {
             ChatRequest chatReq = ChatRequest.builder()
                     .messages(UserMessage.from(prompt))
                     .parameters(ChatRequestParameters.builder()
-                            .maxOutputTokens(maxOutputTokens)
+                            .maxOutputTokens(tokenCap)
                             .build())
                     .build();
 
@@ -322,29 +311,36 @@ public class ModelArenaResource {
                 if (response.tokenUsage() != null && response.tokenUsage().inputTokenCount() != null) {
                     inTokens = response.tokenUsage().inputTokenCount();
                 }
-                if (outTokens > maxOutputTokens || ModelArenaHelper.estimateTokens(output) > maxOutputTokens) {
-                    output = ModelArenaHelper.truncateToTokenBudget(output, maxOutputTokens);
-                    outTokens = Math.min(ModelArenaHelper.estimateTokens(output), maxOutputTokens);
-                }
             } else {
                 output = "";
                 outTokens = 0;
+            }
+
+            if (outTokens > tokenCap || ModelArenaHelper.estimateTokens(output) > tokenCap) {
+                output = ModelArenaHelper.truncateToTokenBudget(output, tokenCap);
+                outTokens = Math.min(ModelArenaHelper.estimateTokens(output), tokenCap);
             }
 
             long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
             if (traceRedactor == null) {
                 return new ArenaModelResult(slot, "ARENA_REDACTION_UNAVAILABLE", 0, 0, durationMs, 0.0);
             }
-            String safeOutput = traceRedactor.redactText(output, 2048);
+            int maxRedactionBytes = tokenCap * 4;
+            String safeOutput = traceRedactor.redactText(output, maxRedactionBytes);
             if (safeOutput == null) {
                 safeOutput = "";
             }
 
-            // Estimated USD – placeholder rates based on common blended token pricing
-            double cost = (inTokens * 0.0000015) + (outTokens * 0.000002);
-
+            double cost = ModelArenaHelper.estimateCostUsd(inTokens, outTokens);
             return new ArenaModelResult(slot, safeOutput, inTokens, outTokens, durationMs, cost);
         } catch (Exception e) {
+            if (e instanceof ModelArenaHelper.ArenaAuditException
+                    || e instanceof ModelArenaHelper.ArenaConfigurationException) {
+                if (e instanceof RuntimeException re) {
+                    throw re;
+                }
+                throw new IllegalStateException(e.getMessage(), e);
+            }
             long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
             String categoricalCode = ModelArenaHelper.categorizeError(e);
             log.warnf(
@@ -363,7 +359,10 @@ public class ModelArenaResource {
 
         if ("default".equalsIgnoreCase(slot)) {
             ChatModel model = chatModelProducer != null ? chatModelProducer.chatModel() : null;
-            return new ResolvedProvider(model, ModelDefaults.DEFAULT_OLLAMA_BASE_URL);
+            String cleanDefault = (defaultProviderName != null && !defaultProviderName.isBlank())
+                    ? defaultProviderName.trim().toLowerCase(Locale.ROOT)
+                    : "groq";
+            return new ResolvedProvider(model, resolveBaseUrl(cleanDefault));
         }
 
         String providerName = slot;
@@ -375,59 +374,111 @@ public class ModelArenaResource {
         }
 
         String cleanProvider = providerName.trim().toLowerCase(Locale.ROOT);
+        ChatModel model = null;
         if (providers != null) {
             for (AgentChatModelProvider p : providers) {
                 if (p != null && p.providerName().equalsIgnoreCase(cleanProvider)) {
-                    ChatModel model =
-                            (customModel != null && !customModel.isBlank()) ? p.create(customModel) : p.create();
-                    String base = p.baseUrl();
-                    String targetUrl = (base != null && !base.isBlank() && !"unknown".equalsIgnoreCase(base.trim()))
-                            ? base.trim()
-                            : ModelArenaHelper.PROVIDER_BASE_URLS.get(cleanProvider);
-                    return new ResolvedProvider(model, targetUrl);
+                    try {
+                        model = (customModel != null && !customModel.isBlank()) ? p.create(customModel) : p.create();
+                    } catch (Exception e) {
+                        throw new ModelArenaHelper.ArenaConfigurationException(
+                                "Failed to construct model provider '" + cleanProvider + "': " + e.getMessage(), e);
+                    }
+                    break;
                 }
             }
         }
+        return new ResolvedProvider(model, resolveBaseUrl(cleanProvider));
+    }
 
-        String fallbackUrl = ModelArenaHelper.PROVIDER_BASE_URLS.get(cleanProvider);
-        return new ResolvedProvider(null, fallbackUrl);
+    private Response validateCompareRequest(ArenaCompareRequest request) {
+        if (request == null || request.prompt() == null || request.prompt().isBlank()) {
+            return error(Response.Status.BAD_REQUEST, "Prompt is required");
+        }
+        String prompt = request.prompt();
+        int estimatedInTokens = ModelArenaHelper.estimateTokens(prompt);
+        if (estimatedInTokens > ModelArenaHelper.MAX_INPUT_TOKENS) {
+            return error(
+                    Response.Status.BAD_REQUEST,
+                    "Prompt exceeds maximum input budget of " + ModelArenaHelper.MAX_INPUT_TOKENS
+                            + " tokens (estimated: " + estimatedInTokens + ")");
+        }
+        List<String> modelSlots = request.models();
+        if (modelSlots == null || modelSlots.isEmpty()) {
+            return error(Response.Status.BAD_REQUEST, "At least one model slot must be specified");
+        }
+        if (modelSlots.size() > ModelArenaHelper.MAX_MODELS) {
+            return error(
+                    Response.Status.BAD_REQUEST,
+                    "Maximum of " + ModelArenaHelper.MAX_MODELS + " models can be compared concurrently");
+        }
+        for (String slot : modelSlots) {
+            try {
+                ModelArenaHelper.validateAndExtractProvider(slot);
+            } catch (IllegalArgumentException _) {
+                return error(Response.Status.BAD_REQUEST, "Model slot is not allowlisted");
+            }
+        }
+        return null;
+    }
+
+    private String resolveBaseUrl(String providerName) {
+        if (providers != null) {
+            for (AgentChatModelProvider p : providers) {
+                if (p != null && p.providerName().equalsIgnoreCase(providerName)) {
+                    String base = extractBaseUrl(p);
+                    if (base != null) {
+                        return base;
+                    }
+                    break;
+                }
+            }
+        }
+        return ModelArenaHelper.PROVIDER_BASE_URLS.get(providerName);
+    }
+
+    private static String extractBaseUrl(AgentChatModelProvider p) {
+        String base = p != null ? p.baseUrl() : null;
+        return (base != null && !base.isBlank() && !"unknown".equalsIgnoreCase(base.trim())) ? base.trim() : null;
     }
 
     private void validateProviderDispatch(String cleanProv, String targetUrl, String callerUserId) {
         if (governedTransport == null || !governedTransport.isResolvable()) {
-            throw new IllegalStateException("Governed provider transport is unavailable");
+            throw new ModelArenaHelper.ArenaConfigurationException("Governed provider transport is unavailable");
         }
-        if (targetUrl != null && !targetUrl.isBlank()) {
-            governedTransport.get().validateEgress(targetUrl, OutboundPurpose.PROVIDER_API_CALL, callerUserId);
+        if (targetUrl == null || targetUrl.isBlank()) {
+            throw new ModelArenaHelper.ArenaConfigurationException(
+                    "Configured provider endpoint URL is missing or blank for provider: " + cleanProv);
         }
+        governedTransport.get().validateEgress(targetUrl, OutboundPurpose.PROVIDER_API_CALL, callerUserId);
         recordGovernedProviderAudit(callerUserId, cleanProv);
     }
 
     private void recordGovernedProviderAudit(String callerUserId, String provider) {
-        if (auditService != null) {
-            auditService.recordMandatory(
-                    "arena-egress",
-                    callerUserId,
-                    "operator",
-                    SecurityEventType.TOOL_INVOKED,
-                    "governed_egress_enforced purpose=" + OutboundPurpose.PROVIDER_API_CALL + " provider=" + provider);
-        }
+        recordStreamAudit(
+                "arena-egress",
+                callerUserId,
+                SecurityEventType.PROVIDER_EGRESS_VALIDATED,
+                "governed_egress_enforced purpose=" + OutboundPurpose.PROVIDER_API_CALL + " provider=" + provider);
     }
 
     private void recordMandatoryAudit(String callerUserId, SecurityEventType type, String message) {
-        if (auditService != null) {
-            auditService.recordMandatory("arena", callerUserId, "operator", type, message);
+        recordStreamAudit("arena", callerUserId, type, message);
+    }
+
+    private void recordStreamAudit(String stream, String callerUserId, SecurityEventType type, String message) {
+        if (auditService == null) {
+            throw new ModelArenaHelper.ArenaAuditException("AuditService is unavailable for mandatory audit logging");
+        }
+        try {
+            auditService.recordMandatory(stream, callerUserId, "operator", type, message);
+        } catch (Exception e) {
+            throw new ModelArenaHelper.ArenaAuditException("Mandatory audit logging failed: " + e.getMessage(), e);
         }
     }
 
-    private void recordErrorAudit(String callerUserId, SecurityEventType type, String message) {
-        if (auditService != null) {
-            try {
-                auditService.recordMandatory("arena", callerUserId, "operator", type, message);
-            } catch (Exception e) {
-                log.warnf(e, "ModelArena: error audit logging failed; message=%s", message);
-            }
-        }
+    private static Response error(Response.Status status, String msg) {
+        return Response.status(status).entity(new AmshaErrorResponse(msg)).build();
     }
 
     private boolean isInternal() {

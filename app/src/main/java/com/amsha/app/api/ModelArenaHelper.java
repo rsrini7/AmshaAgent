@@ -116,12 +116,16 @@ final class ModelArenaHelper {
                 || msg.contains("invalid key")
                 || msg.contains("auth token")
                 || msg.contains("authentication")
-                || msg.contains("key")
-                || msg.contains("auth")) {
+                || msg.contains("access token")
+                || msg.contains("bearer token")) {
             return "PROVIDER_AUTHENTICATION_ERROR";
         }
         if (msg.contains("429") || msg.contains("rate limit") || msg.contains("quota")) return "PROVIDER_RATE_LIMIT";
-        if (msg.contains("not found") || msg.contains("unknown model") || msg.contains("unknown")) {
+        if (msg.contains("not found")
+                || msg.contains("unknown model")
+                || msg.contains("model not found")
+                || msg.contains("does not exist")
+                || msg.contains("model_not_found")) {
             return "PROVIDER_UNKNOWN_MODEL";
         }
         return "PROVIDER_EXECUTION_ERROR";
@@ -140,6 +144,13 @@ final class ModelArenaHelper {
         return text.length() <= maxChars ? text : text.substring(0, maxChars);
     }
 
+    static double estimateCostUsd(int inTokens, int outTokens) {
+        if (inTokens <= 0 && outTokens <= 0) {
+            return 0.0;
+        }
+        return (inTokens * 0.0000015) + (outTokens * 0.000002);
+    }
+
     static String hashText(String text) {
         if (text == null) return "null";
         try {
@@ -148,6 +159,26 @@ final class ModelArenaHelper {
             return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException e) {
             return "sha256-error";
+        }
+    }
+
+    static class ArenaConfigurationException extends RuntimeException {
+        ArenaConfigurationException(String msg) {
+            super(msg);
+        }
+
+        ArenaConfigurationException(String msg, Throwable cause) {
+            super(msg, cause);
+        }
+    }
+
+    static class ArenaAuditException extends RuntimeException {
+        ArenaAuditException(String msg) {
+            super(msg);
+        }
+
+        ArenaAuditException(String msg, Throwable cause) {
+            super(msg, cause);
         }
     }
 }

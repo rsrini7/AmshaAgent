@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Result of evaluating an individual model in the Model Arena.
- * Note: {@code costUsd} is an estimated USD cost based on placeholder token rates.
+ * Note: {@code costUsd} is an estimated USD cost based on token usage and standard rates.
  */
 public record ArenaModelResult(
         @JsonProperty("modelSlot") String modelSlot,

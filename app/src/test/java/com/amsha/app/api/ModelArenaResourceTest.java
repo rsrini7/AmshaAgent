@@ -2,6 +2,7 @@ package com.amsha.app.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -96,8 +97,11 @@ class ModelArenaResourceTest {
         resource.traceRedactor = new TraceRedactor();
         resource.auditService = auditService;
         resource.chatModelProducer = mock(ChatModelProducer.class);
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.<AgentChatModelProvider>of().iterator());
         resource.providers = providersInstance;
         resource.securityContext = securityContext;
+        resource.defaultProviderName = "groq";
     }
 
     @Test
@@ -188,7 +192,6 @@ class ModelArenaResourceTest {
                         .aiMessage(AiMessage.from("This is the model completion."))
                         .tokenUsage(new TokenUsage(5, 6))
                         .build());
-        when(mockModel.chat(anyString())).thenReturn("This is the model completion.");
 
         Iterator<AgentChatModelProvider> providerIterator =
                 List.of(mockProvider).iterator();
@@ -202,6 +205,7 @@ class ModelArenaResourceTest {
         assertEquals(1, body.results().size());
         assertEquals("omlx", body.results().get(0).modelSlot());
         assertEquals("This is the model completion.", body.results().get(0).output());
+        assertTrue(body.results().get(0).costUsd() > 0.0);
 
         ArgumentCaptor<String> msgCaptor = ArgumentCaptor.forClass(String.class);
         verify(auditService)
@@ -215,8 +219,43 @@ class ModelArenaResourceTest {
         String auditMsg = msgCaptor.getValue();
         assertTrue(auditMsg.contains("promptHash="));
         assertTrue(auditMsg.contains("models=omlx"));
+        assertTrue(auditMsg.contains("totalCostUsd="));
+        assertFalse(auditMsg.contains("totalCostUsd=0.0"));
         assertFalse(auditMsg.contains(prompt));
         assertFalse(auditMsg.contains("This is the model completion"));
+    }
+
+    @Test
+    void sanitizedPromptExceedingInputBudgetIsTruncatedBeforeDispatch() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+
+        // PII guard expands input beyond 2048 tokens
+        String expandedPrompt = "A".repeat(2048 * 4 + 100);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Sanitize(expandedPrompt));
+
+        AgentChatModelProvider mockProvider = mock(AgentChatModelProvider.class);
+        ChatModel mockModel = mock(ChatModel.class);
+        when(mockProvider.providerName()).thenReturn("omlx");
+        when(mockProvider.create()).thenReturn(mockModel);
+
+        ArgumentCaptor<ChatRequest> reqCaptor = ArgumentCaptor.forClass(ChatRequest.class);
+        when(mockModel.chat(reqCaptor.capture()))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Completion"))
+                        .tokenUsage(new TokenUsage(10, 10))
+                        .build());
+
+        when(providersInstance.iterator()).thenReturn(List.of(mockProvider).iterator());
+
+        Response resp = resource.compareModels(new ArenaCompareRequest("Initial valid prompt", List.of("omlx"), 50));
+        assertEquals(Response.Status.OK.getStatusCode(), resp.getStatus());
+
+        ChatRequest dispatchedReq = reqCaptor.getValue();
+        assertNotNull(dispatchedReq);
+        UserMessage userMsg = (UserMessage) dispatchedReq.messages().get(0);
+        assertTrue(userMsg.singleText().length() <= 2048 * 4);
     }
 
     @Test
@@ -241,8 +280,6 @@ class ModelArenaResourceTest {
         when(mockProvider.providerName()).thenReturn("omlx");
         when(mockProvider.create()).thenReturn(mockModel);
         when(mockModel.chat(any(ChatRequest.class)))
-                .thenThrow(new RuntimeException("401 Unauthorized https://api.omlx.local/chat sk-sensitive-token"));
-        when(mockModel.chat(anyString()))
                 .thenThrow(new RuntimeException("401 Unauthorized https://api.omlx.local/chat sk-sensitive-token"));
 
         when(providersInstance.iterator()).thenReturn(List.of(mockProvider).iterator());
@@ -280,6 +317,8 @@ class ModelArenaResourceTest {
         assertEquals("default", body.results().get(0).modelSlot());
         assertEquals("Default completion", body.results().get(0).output());
         assertEquals(10, body.results().get(0).outputTokens());
+        verify(transportService)
+                .validateEgress("https://api.groq.com/openai/v1", OutboundPurpose.PROVIDER_API_CALL, "test-operator");
     }
 
     @Test
@@ -355,12 +394,34 @@ class ModelArenaResourceTest {
                         .aiMessage(AiMessage.from("Generic response"))
                         .build());
 
-        when(providersInstance.iterator()).thenReturn(List.of(mockProvider).iterator());
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(mockProvider).iterator());
 
         Response resp = resource.compareModels(new ArenaCompareRequest("Test prompt", List.of("generic-openai"), 10));
         assertEquals(Response.Status.OK.getStatusCode(), resp.getStatus());
         verify(transportService)
                 .validateEgress("http://127.0.0.1:9090/v1", OutboundPurpose.PROVIDER_API_CALL, "test-operator");
+    }
+
+    @Test
+    void validateProviderDispatchFailsClosedWhenEndpointUrlIsMissing() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        AgentChatModelProvider mockProvider = mock(AgentChatModelProvider.class);
+        ChatModel mockModel = mock(ChatModel.class);
+        when(mockProvider.providerName()).thenReturn("generic-openai");
+        when(mockProvider.baseUrl()).thenReturn(null);
+        when(mockProvider.create()).thenReturn(mockModel);
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(mockProvider).iterator());
+
+        Response resp = resource.compareModels(new ArenaCompareRequest("Test prompt", List.of("generic-openai"), 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+        AmshaErrorResponse error = (AmshaErrorResponse) resp.getEntity();
+        assertEquals("Provider configuration failure", error.error());
     }
 
     @Test
@@ -377,13 +438,42 @@ class ModelArenaResourceTest {
         when(mockModel.chat(any(ChatRequest.class)))
                 .thenReturn(
                         ChatResponse.builder().aiMessage(AiMessage.from("ok")).build());
-        when(providersInstance.iterator()).thenReturn(List.of(mockProvider).iterator());
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(mockProvider).iterator());
 
         doThrow(new RuntimeException("Audit disk full"))
                 .when(auditService)
                 .recordMandatory(eq("arena"), any(), any(), eq(SecurityEventType.SESSION_INSPECTED), any());
 
         Response resp = resource.compareModels(new ArenaCompareRequest("Test audit failure", List.of("omlx"), 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+        AmshaErrorResponse error = (AmshaErrorResponse) resp.getEntity();
+        assertEquals("Mandatory audit logging failed", error.error());
+    }
+
+    @Test
+    void mandatoryAuditFailureOnEgressFailsClosedWith500() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        AgentChatModelProvider mockProvider = mock(AgentChatModelProvider.class);
+        ChatModel mockModel = mock(ChatModel.class);
+        when(mockProvider.providerName()).thenReturn("omlx");
+        when(mockProvider.create()).thenReturn(mockModel);
+        when(mockModel.chat(any(ChatRequest.class)))
+                .thenReturn(
+                        ChatResponse.builder().aiMessage(AiMessage.from("ok")).build());
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(mockProvider).iterator());
+
+        doThrow(new RuntimeException("Audit disk full"))
+                .when(auditService)
+                .recordMandatory(eq("arena-egress"), any(), any(), any(), any());
+
+        Response resp =
+                resource.compareModels(new ArenaCompareRequest("Test egress audit failure", List.of("omlx"), 10));
         assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
         AmshaErrorResponse error = (AmshaErrorResponse) resp.getEntity();
         assertEquals("Mandatory audit logging failed", error.error());
@@ -457,5 +547,24 @@ class ModelArenaResourceTest {
                 "openrouter:minimax/minimax-m3:free",
                 compareResp.results().get(0).modelSlot());
         assertEquals("Custom slot ok", compareResp.results().get(0).output());
+    }
+
+    @Test
+    void providerConstructionFailureFailsClosedWith500() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        AgentChatModelProvider mockProvider = mock(AgentChatModelProvider.class);
+        when(mockProvider.providerName()).thenReturn("omlx");
+        when(mockProvider.create()).thenThrow(new RuntimeException("Configuration failure: missing credentials"));
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(mockProvider).iterator());
+
+        Response resp = resource.compareModels(new ArenaCompareRequest("Test prompt", List.of("omlx"), 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+        AmshaErrorResponse error = (AmshaErrorResponse) resp.getEntity();
+        assertEquals("Provider configuration failure", error.error());
     }
 }

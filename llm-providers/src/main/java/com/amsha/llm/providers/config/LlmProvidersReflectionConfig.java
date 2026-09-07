@@ -58,6 +58,9 @@ import com.amsha.llm.providers.wrapper.FoundryResponsesChatModel;
 import com.amsha.llm.providers.wrapper.KimchiResponsesChatModel;
 import com.amsha.llm.providers.wrapper.NvidiaMessageSanitizer;
 
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClient;
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilder;
+import io.quarkiverse.langchain4j.jaxrsclient.JaxRsHttpClientBuilderFactory;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -105,9 +108,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OpenCodeProviderFactory.class,
             OpenRouterProviderFactory.class,
             SarvamProviderFactory.class,
-            com.amsha.llm.providers.routing.AgyProviderFactory.class,
+            com.amsha.llm.providers.routing.AgyProviderFactory.class, // fully qualified to disambiguate
             CerebrasLlmProviderFactory.class,
-            com.amsha.llm.providers.routing.ClaudeCodeProviderFactory.class,
+            com.amsha.llm.providers.routing.ClaudeCodeProviderFactory.class, // fully qualified to disambiguate
             CloudflareLlmProviderFactory.class,
             CodexLlmProviderFactory.class,
             CohereLlmProviderFactory.class,
@@ -125,7 +128,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OpenAiLlmProviderFactory.class,
             OpenCodeLlmProviderFactory.class,
             OpenRouterLlmProviderFactory.class,
-            SarvamLlmProviderFactory.class
+            SarvamLlmProviderFactory.class,
+            JaxRsHttpClientBuilder.class,
+            JaxRsHttpClient.class,
+            JaxRsHttpClientBuilderFactory.class
         },
         classNames = {
             "com.amsha.llm.providers.catalog.StaticProviderCatalogAdapter$RawProvider",

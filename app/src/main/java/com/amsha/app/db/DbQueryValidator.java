@@ -17,6 +17,7 @@ import net.sf.jsqlparser.util.TablesNamesFinder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -208,17 +209,20 @@ public final class DbQueryValidator {
 
         if (referencesSchemaMetadata) {
             PlainSelect ps = extractPlainSelect(select);
-            boolean isDirectRootFrom = ps != null
-                    && ps.getFromItem() instanceof Table rootTable
-                    && isSchemaMetadataTable(cleanIdentifier(rootTable.getName()))
+            Table rootTable = (ps != null && ps.getFromItem() instanceof Table t) ? t : null;
+            boolean isDirectRootFrom = rootTable != null
+                    && isSchemaMetadataTable(rootTable)
                     && (ps.getJoins() == null || ps.getJoins().isEmpty())
                     && (select.getWithItemsList() == null
                             || select.getWithItemsList().isEmpty());
             if (!isDirectRootFrom) {
                 throw new DbValidationException(
-                        "Schema metadata tables (sqlite_master, sqlite_schema) may only be queried directly as the root FROM table (joins, CTEs, and scalar subqueries are prohibited)");
+                        "Schema metadata tables (" + String.join(", ", SYSTEM_METADATA_TABLES)
+                                + ") may only be queried directly as the root FROM table (joins, CTEs, and scalar subqueries are prohibited)");
             }
-            checkSchemaColumns(select);
+            String rootName =
+                    rootTable.getFullyQualifiedName() != null ? rootTable.getFullyQualifiedName() : rootTable.getName();
+            checkSchemaColumns(select, rootName);
         }
 
         if (referencesAllowedView) {
@@ -242,8 +246,34 @@ public final class DbQueryValidator {
 
     public static final Set<String> APPROVED_SCHEMA_METADATA_COLUMNS = Set.of("type", "name", "tbl_name", "rootpage");
 
+    private static final Map<String, Set<String>> APPROVED_METADATA_COLUMNS_BY_TABLE = Map.of(
+            "sqlite_master", APPROVED_SCHEMA_METADATA_COLUMNS,
+            "sqlite_schema", APPROVED_SCHEMA_METADATA_COLUMNS,
+            "information_schema.tables", Set.of("table_catalog", "table_schema", "table_name", "table_type"),
+            "tables", Set.of("table_catalog", "table_schema", "table_name", "table_type"),
+            "flyway_schema_history",
+                    Set.of(
+                            "installed_rank",
+                            "version",
+                            "description",
+                            "type",
+                            "script",
+                            "checksum",
+                            "installed_by",
+                            "installed_on",
+                            "execution_time",
+                            "success"));
+
+    private static boolean isSchemaMetadataTable(Table table) {
+        return table != null
+                && (isSchemaMetadataTable(table.getFullyQualifiedName()) || isSchemaMetadataTable(table.getName()));
+    }
+
     private static boolean isSchemaMetadataTable(String table) {
-        return "sqlite_master".equalsIgnoreCase(table) || "sqlite_schema".equalsIgnoreCase(table);
+        String clean = cleanIdentifier(table);
+        return SYSTEM_METADATA_TABLES.contains(clean)
+                || "sqlite_master".equalsIgnoreCase(clean)
+                || "sqlite_schema".equalsIgnoreCase(clean);
     }
 
     /**
@@ -253,24 +283,26 @@ public final class DbQueryValidator {
      * {@code SELECT (SELECT sql FROM sqlite_master LIMIT 1)} cannot smuggle the full DDL past
      * the allowlist by hiding the column inside a subquery.
      */
-    private static void checkSchemaColumns(Select select) {
+    private static void checkSchemaColumns(Select select, String rootTableName) {
         PlainSelect ps = extractPlainSelect(select);
         if (ps == null || ps.getSelectItems() == null) return;
 
         DbQueryAstScanner scanner = DbQueryAstScanner.scan(select);
+        Set<String> approved = APPROVED_METADATA_COLUMNS_BY_TABLE.getOrDefault(
+                cleanIdentifier(rootTableName), APPROVED_SCHEMA_METADATA_COLUMNS);
 
         if (!scanner.wildcards().isEmpty()) {
             throw new DbValidationException(
                     "Wildcard '*' is forbidden on schema metadata tables. Specify approved columns: "
-                            + String.join(", ", APPROVED_SCHEMA_METADATA_COLUMNS));
+                            + String.join(", ", approved));
         }
 
         for (Column col : scanner.columns()) {
             String colName = cleanColumnName(col.getColumnName());
-            if ("sql".equals(colName) || !APPROVED_SCHEMA_METADATA_COLUMNS.contains(colName)) {
+            if ("sql".equals(colName) || !approved.contains(colName)) {
                 throw new DbValidationException("Access to column '" + colName
                         + "' in schema metadata is forbidden. Allowed columns: "
-                        + String.join(", ", APPROVED_SCHEMA_METADATA_COLUMNS));
+                        + String.join(", ", approved));
             }
         }
     }
