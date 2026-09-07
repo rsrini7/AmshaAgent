@@ -2205,3 +2205,36 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 1. **Camel Telegram Buffer Constraint**: Apache Camel's `camel-quarkus-telegram` component allocates an internal multipart upload buffer (~2 MB). Uncompressed PCM WAV files exceeding this ceiling trigger `java.nio.BufferOverflowException`.
 2. **Local Transcoding**: `TelegramChannelSender.sendAudio()` automatically compresses raw WAV payloads exceeding 1 MB into native Telegram-compatible **OGG Opus** (`libopus`, 32 kbps) using local `ffmpeg`, shrinking multi-megabyte payloads to ~100 KB and ensuring reliable delivery over the Telegram Bot API.
 
+---
+
+## 26. Visual Cockpit, Health & Operator Console Invariants
+
+### 26.1 Safe Bounded Health Reporting (§26.1 INVARIANT)
+- **Categorical Only**: `/api/v1/admin/cockpit/health` MUST report only bounded categorical health states (`UP`, `DEGRADED`, `DOWN`).
+- **Zero Diagnostic Leakage**: Responses MUST NOT expose raw JDBC connection URLs, database passwords, network topology, internal file paths, or exception stack traces. Unchecked exception details must be sanitized via bounded categorical labels.
+- **Provider Probing Parity**: Health probing MUST recognize default provider aliases (such as `claude-code` $\leftrightarrow$ `anthropic` $\leftrightarrow$ `claudecode`).
+
+### 26.2 Read-Only Database Console (§26.2 INVARIANT)
+- **AST SQL Validation**: Every incoming query to `/api/v1/admin/db/query` MUST be parsed into an AST via JSqlParser before execution.
+- **Strict Read-Only**: Queries MUST be single-statement `SELECT` queries. DML (`INSERT`, `UPDATE`, `DELETE`) and DDL (`DROP`, `ALTER`, `CREATE`, `TRUNCATE`) statements MUST be rejected recursively, even when nested inside `EXPLAIN` or CTE (`WITH ...`) blocks.
+- **PRAGMA & Catalog Protection**: PRAGMA executions must match an exact allowlist. Catalog tables are restricted to allowlisted system schemas (`sqlite_master`, `sqlite_schema`, `information_schema.tables`, `flyway_schema_history`).
+- **Connection Poisoning Prevention**: SQLite queries MUST execute under `PRAGMA query_only = ON;`. PostgreSQL queries MUST execute within a read-only transaction with guaranteed rollback. If connection state reset fails, the connection MUST be closed and discarded from the pool rather than returned.
+- **Mandatory Audit**: Every console query MUST record `DB_QUERY_EXECUTED` or `DB_QUERY_REJECTED` in the audit log.
+
+### 26.3 Governed LLM Transport & Model Arena (§26.3 INVARIANT)
+- **Byte-Level Governed Egress**: Outbound model HTTP requests MUST route through `GovernedTransportService.validateEgress(...)` via `GovernedLangChainHttpClient`. No provider SDK may bypass this governed client.
+- **SSRF & Header Sanitization**: Destination addresses MUST be checked against the IP blocklist (blocking loopback, private IPv4/IPv6, and metadata addresses). Restricted and hop-by-hop headers MUST be stripped.
+- **Actor Attenuation**: Outbound requests MUST propagate the caller identity from `ScopedValue` (`USER_ID`) or session context.
+- **Fail-Closed Credential Gating**: Arena comparisons (`/api/v1/admin/arena/compare`) MUST scan input prompts via `CredentialDetector` and fail-closed with HTTP 400 if credentials, vault peppers, or API keys are present.
+- **Token Ceiling Bounding**: Input tokens are capped at $\le 2,048$ and output tokens at $\le 1,024$. Truncation MUST use script-aware character bounds to prevent budget bypass with multi-byte or CJK text.
+
+### 26.4 Operator Surface UI Invariants (§26.4 INVARIANT)
+- **Resource Lifecycle**: Operator Lit components (`arc-health-dashboard`, `arc-db-console`, `arc-model-arena`) MUST clear active timers, auto-refresh loops, and event listeners in `disconnectedCallback()` to prevent memory leaks and zombie polling.
+- **CSRF & Token Storage**: Mutating operator endpoints MUST enforce CSRF validation. Transient operator state and CSRF tokens MUST NOT be placed in persistent `localStorage`; use `sessionStorage` or cookies.
+- **Accessibility**: Components MUST comply with WAI-ARIA standards, providing distinct `aria-label` attributes for icon buttons, search inputs, and dropdown filters.
+
+### 26.5 Dynamic Provider Discovery Invariant (§26.5 INVARIANT)
+- **No Hardcoded Static Provider Sets**: `ModelArenaHelper` and health resources MUST NOT hardcode static sets of allowed providers or base URL maps in application source code.
+- **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
+
+

@@ -43,7 +43,7 @@
     <!-- amsha-app -->
     <rect x="260" y="16" width="380" height="52" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
     <text x="450" y="38" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#cecbf6">amsha-app</text>
-    <text x="450" y="56" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#afa9ec">CLI · REST · Security · CDI Wiring</text>
+    <text x="450" y="56" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#afa9ec">CLI · REST · Health Cockpit · DB Console · Arena</text>
 
     <!-- amsha-core -->
     <rect x="260" y="92" width="380" height="52" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
@@ -88,7 +88,7 @@
     <!-- amsha-llm-providers -->
     <rect x="680" y="16" width="260" height="42" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
     <text x="810" y="32" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#b5d4f4">amsha-llm-providers</text>
-    <text x="810" y="47" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">21 provider factories · SDKs</text>
+    <text x="810" y="47" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">22 providers · Governed HTTP transport</text>
 
     <!-- amsha-tools-builtin -->
     <rect x="680" y="64" width="260" height="42" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
@@ -118,7 +118,7 @@
     <!-- ui -->
     <rect x="680" y="304" width="260" height="42" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
     <text x="810" y="320" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#cecbf6">ui</text>
-    <text x="810" y="335" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#afa9ec">Lit 3.x · TypeScript · Vite SPA</text>
+    <text x="810" y="335" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#afa9ec">Lit 3.x · Chat · MCP · Health · DB · Arena</text>
 
     <text x="680" y="362" font-size="9" fill="#888">Extracted subsystems (impl tier — wired in amsha-app)</text>
 
@@ -203,6 +203,6 @@
     <text x="90" y="636" fill="#c2c0b6">compile dependency</text>
     <line x1="250" y1="632" x2="290" y2="632" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
     <text x="300" y="636" fill="#c2c0b6">optional / build-time / CDI-discovered</text>
-    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.38.3 · SQLite WAL + FTS5 + vec0 · Multi-provider LLM SPIs · Extracted Security · Memory · Skills · Tool/Classifier/Rerank APIs</text>
+    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.38.3 · Governed LLM Transport · Health Cockpit · Read-Only DB · Model Arena</text>
   </g>
 </svg>

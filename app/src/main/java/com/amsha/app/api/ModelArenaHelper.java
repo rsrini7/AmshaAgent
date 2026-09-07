@@ -11,8 +11,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
@@ -33,58 +31,29 @@ final class ModelArenaHelper {
 
     static final Pattern SLOT_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+(:[a-zA-Z0-9_./:-]+)?$");
 
-    static final Set<String> ALLOWED_PROVIDERS = Set.of(
-            ModelDefaults.PROVIDER_GROQ,
-            ModelDefaults.PROVIDER_OPENAI,
-            ModelDefaults.PROVIDER_OPENROUTER,
-            ModelDefaults.PROVIDER_CEREBRAS,
-            ModelDefaults.PROVIDER_SARVAM,
-            ModelDefaults.PROVIDER_OPENCODE,
-            ModelDefaults.PROVIDER_HUGGINGFACE,
-            ModelDefaults.PROVIDER_MISTRAL,
-            ModelDefaults.PROVIDER_CLOUDFLARE,
-            ModelDefaults.PROVIDER_COHERE,
-            ModelDefaults.PROVIDER_CODEX,
-            ModelDefaults.PROVIDER_NVIDIA,
-            ModelDefaults.PROVIDER_OLLAMA,
-            ModelDefaults.PROVIDER_OMLX,
-            ModelDefaults.PROVIDER_LLAMACPP,
-            ModelDefaults.PROVIDER_ANTHROPIC,
-            ModelDefaults.PROVIDER_CLAUDE_CODE,
-            ModelDefaults.PROVIDER_AGY,
-            ModelDefaults.PROVIDER_KIMCHI,
-            ModelDefaults.PROVIDER_FOUNDRY,
-            ModelDefaults.PROVIDER_GEMINI,
-            ModelDefaults.PROVIDER_GENERIC_OPENAI,
-            "default");
-
-    static final Map<String, String> PROVIDER_BASE_URLS = Map.ofEntries(
-            Map.entry(ModelDefaults.PROVIDER_GROQ, ModelDefaults.DEFAULT_GROQ_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_OPENAI, ModelDefaults.DEFAULT_OPENAI_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_OPENROUTER, ModelDefaults.DEFAULT_OPENROUTER_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_CEREBRAS, ModelDefaults.DEFAULT_CEREBRAS_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_SARVAM, ModelDefaults.DEFAULT_SARVAM_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_OPENCODE, ModelDefaults.DEFAULT_OPENCODE_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_HUGGINGFACE, ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_MISTRAL, ModelDefaults.DEFAULT_MISTRAL_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_CLOUDFLARE, ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_COHERE, ModelDefaults.DEFAULT_COHERE_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_CODEX, ModelDefaults.DEFAULT_CODEX_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_NVIDIA, ModelDefaults.DEFAULT_NVIDIA_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_OLLAMA, ModelDefaults.DEFAULT_OLLAMA_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_OMLX, ModelDefaults.DEFAULT_OMLX_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_LLAMACPP, ModelDefaults.DEFAULT_LLAMACPP_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_ANTHROPIC, ModelDefaults.DEFAULT_ANTHROPIC_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_CLAUDE_CODE, ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_AGY, ModelDefaults.DEFAULT_AGY_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_KIMCHI, ModelDefaults.DEFAULT_KIMCHI_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_FOUNDRY, ModelDefaults.DEFAULT_FOUNDRY_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_GEMINI, ModelDefaults.DEFAULT_GEMINI_BASE_URL),
-            Map.entry(ModelDefaults.PROVIDER_GENERIC_OPENAI, ""));
-
     private ModelArenaHelper() {}
 
+    static boolean isProviderAllowed(String cleanProv, Iterable<AgentChatModelProvider> providers) {
+        if (cleanProv == null || cleanProv.isBlank()) {
+            return false;
+        }
+        if ("default".equals(cleanProv)) {
+            return true;
+        }
+        if (isClaudeAlias(cleanProv)) {
+            return true;
+        }
+        if (ModelDefaults.isKnownProvider(cleanProv)) {
+            return true;
+        }
+        return findProvider(cleanProv, providers) != null;
+    }
+
     static String validateAndExtractProvider(String slot) {
+        return validateAndExtractProvider(slot, null);
+    }
+
+    static String validateAndExtractProvider(String slot, Iterable<AgentChatModelProvider> providers) {
         if (slot == null || slot.isBlank()) {
             throw new IllegalArgumentException("Model slot cannot be blank");
         }
@@ -96,15 +65,22 @@ final class ModelArenaHelper {
         }
         String provider = slot.contains(":") ? slot.substring(0, slot.indexOf(':')) : slot;
         String cleanProv = provider.trim().toLowerCase(Locale.ROOT);
-        if (!ALLOWED_PROVIDERS.contains(cleanProv)) {
+        if (!isProviderAllowed(cleanProv, providers)) {
             throw new IllegalArgumentException("Unallowlisted model slot provider: " + cleanProv);
+        }
+        if ("claudecode".equals(cleanProv) || "claude".equals(cleanProv)) {
+            return ModelDefaults.PROVIDER_CLAUDE_CODE;
         }
         return cleanProv;
     }
 
     static String categoricalModelSlots(List<String> slots) {
+        return categoricalModelSlots(slots, null);
+    }
+
+    static String categoricalModelSlots(List<String> slots, Iterable<AgentChatModelProvider> providers) {
         return slots.stream()
-                .map(ModelArenaHelper::validateAndExtractProvider)
+                .map(slot -> validateAndExtractProvider(slot, providers))
                 .distinct()
                 .sorted()
                 .reduce((left, right) -> left + "," + right)
@@ -238,6 +214,10 @@ final class ModelArenaHelper {
     }
 
     static Response validateCompareRequest(ArenaCompareRequest request) {
+        return validateCompareRequest(request, null);
+    }
+
+    static Response validateCompareRequest(ArenaCompareRequest request, Iterable<AgentChatModelProvider> providers) {
         if (request == null || request.prompt() == null || request.prompt().isBlank()) {
             return error(Response.Status.BAD_REQUEST, "Prompt is required");
         }
@@ -259,7 +239,7 @@ final class ModelArenaHelper {
         }
         for (String slot : modelSlots) {
             try {
-                validateAndExtractProvider(slot);
+                validateAndExtractProvider(slot, providers);
             } catch (IllegalArgumentException _) {
                 return error(Response.Status.BAD_REQUEST, "Model slot is not allowlisted");
             }
@@ -267,19 +247,56 @@ final class ModelArenaHelper {
         return null;
     }
 
-    static String resolveBaseUrl(String providerName, Iterable<AgentChatModelProvider> providers) {
-        if (providers != null) {
-            for (AgentChatModelProvider p : providers) {
-                if (p != null && p.providerName().equalsIgnoreCase(providerName)) {
-                    String base = extractBaseUrl(p);
-                    if (base != null) {
-                        return base;
+    static AgentChatModelProvider findProvider(String cleanProvider, Iterable<AgentChatModelProvider> providers) {
+        if (providers == null || cleanProvider == null) {
+            return null;
+        }
+        AgentChatModelProvider aliasMatch = null;
+        for (AgentChatModelProvider p : providers) {
+            if (p != null) {
+                String actual = p.providerName();
+                if (actual != null) {
+                    if (actual.equalsIgnoreCase(cleanProvider)) {
+                        return p;
                     }
-                    break;
+                    if (aliasMatch == null && matchesClaudeAlias(actual, cleanProvider)) {
+                        aliasMatch = p;
+                    }
                 }
             }
         }
-        return PROVIDER_BASE_URLS.get(providerName);
+        return aliasMatch;
+    }
+
+    static boolean matchesClaudeAlias(String a, String b) {
+        return isClaudeAlias(a) && isClaudeAlias(b);
+    }
+
+    static boolean isClaudeAlias(String name) {
+        if (name == null) {
+            return false;
+        }
+        String n = name.trim().toLowerCase(Locale.ROOT);
+        return ModelDefaults.PROVIDER_CLAUDE_CODE.equals(n)
+                || ModelDefaults.PROVIDER_ANTHROPIC.equals(n)
+                || "claudecode".equals(n)
+                || "claude".equals(n);
+    }
+
+    static String resolveBaseUrl(String providerName, Iterable<AgentChatModelProvider> providers) {
+        AgentChatModelProvider p = findProvider(providerName, providers);
+        if (p != null) {
+            String base = extractBaseUrl(p);
+            if (base != null) {
+                return base;
+            }
+        }
+        String clean = providerName != null ? providerName.trim().toLowerCase(Locale.ROOT) : "";
+        if (isClaudeAlias(clean)) {
+            clean = ModelDefaults.PROVIDER_CLAUDE_CODE;
+        }
+        String defaultUrl = ModelDefaults.defaultBaseUrlForProvider(clean);
+        return (defaultUrl != null && !defaultUrl.isBlank()) ? defaultUrl : null;
     }
 
     static String extractBaseUrl(AgentChatModelProvider p) {

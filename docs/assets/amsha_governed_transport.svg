@@ -1,0 +1,104 @@
+<svg width="100%" viewBox="0 0 880 580" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <text x="20" y="32" font-size="16" font-weight="600" fill="#d3d1c7">Governed Outbound HTTP Transport for LLM Providers &amp; Arena</text>
+    <text x="20" y="52" font-size="11" fill="#9c9a92">All outbound model requests route through GovernedTransportService for SSRF defense, audit HMAC, and credential leak prevention.</text>
+  </g>
+
+  <!-- Left: Invocations / Callers -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <!-- Agent Loop Reasoning -->
+    <rect x="20" y="80" width="210" height="60" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
+    <text x="125" y="103" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#cecbf6">Agent Loop Reasoning</text>
+    <text x="125" y="122" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#afa9ec">ChatModel · Per-turn reasoning</text>
+
+    <!-- Model Arena Benchmark -->
+    <rect x="20" y="160" width="210" height="60" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
+    <text x="125" y="183" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#cecbf6">Model Arena Benchmark</text>
+    <text x="125" y="202" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#afa9ec">ModelArenaResource · Compare</text>
+  </g>
+
+  <!-- Center-Left: GovernedLangChainHttpClient SPI Boundary -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="270" y="80" width="240" height="140" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="390" y="105" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#b5d4f4">GovernedLangChainHttpClient</text>
+    <text x="390" y="124" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#85b7eb">LangChain4j HttpClientBuilderFactory SPI</text>
+    <line x1="285" y1="138" x2="495" y2="138" stroke="#85b7eb" stroke-width="0.5" stroke-dasharray="2 2"/>
+    <text x="390" y="154" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#b5d4f4">• ScopedValue user-id propagation</text>
+    <text x="390" y="170" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#b5d4f4">• OutboundPurpose.PROVIDER_API_CALL</text>
+    <text x="390" y="186" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#b5d4f4">• Restricted header sanitization</text>
+    <text x="390" y="202" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#b5d4f4">• Connect / Read timeout bounds</text>
+  </g>
+
+  <!-- Center: GovernedTransportService (Security Core) -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="550" y="80" width="300" height="240" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="700" y="105" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#9fe1cb">GovernedTransportService</text>
+    <text x="700" y="124" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#5dcaa5">Egress Gatekeeper &amp; Audit Engine</text>
+    <line x1="565" y1="138" x2="835" y2="138" stroke="#5dcaa5" stroke-width="0.5" stroke-dasharray="2 2"/>
+
+    <!-- Check 1: SSRF -->
+    <rect x="565" y="148" width="270" height="32" rx="4" fill="#0e3a31" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="575" y="164" font-size="10" font-weight="600" fill="#9fe1cb">1. SSRF &amp; IP Blocklist Defense</text>
+    <text x="575" y="174" font-size="9" fill="#5dcaa5">Blocks 127.0.0.1, 10/8, 172.16/12, 192.168/16, metadata</text>
+
+    <!-- Check 2: Credential Leakage -->
+    <rect x="565" y="188" width="270" height="32" rx="4" fill="#0e3a31" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="575" y="204" font-size="10" font-weight="600" fill="#9fe1cb">2. Credential Detection</text>
+    <text x="575" y="214" font-size="9" fill="#5dcaa5">Rejects requests with leaked vault/API keys in payload</text>
+
+    <!-- Check 3: Audit Logging -->
+    <rect x="565" y="228" width="270" height="32" rx="4" fill="#0e3a31" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="575" y="244" font-size="10" font-weight="600" fill="#9fe1cb">3. Pre-send Audit Logging</text>
+    <text x="575" y="254" font-size="9" fill="#5dcaa5">Tamper-evident HMAC chain (EGRESS_TRANSPORT_SUCCESS)</text>
+
+    <!-- Check 4: Telemetry -->
+    <rect x="565" y="268" width="270" height="42" rx="4" fill="#0e3a31" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="575" y="284" font-size="10" font-weight="600" fill="#9fe1cb">4. Micrometer Telemetry</text>
+    <text x="575" y="294" font-size="9" fill="#5dcaa5">amsha.transport.requests.total &amp; amsha.transport.duration</text>
+    <text x="575" y="304" font-size="9" fill="#5dcaa5">Tagged by: purpose, status (success, ssrf_denied, error)</text>
+  </g>
+
+  <!-- Bottom-Center: JDK HttpClient -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="270" y="360" width="240" height="54" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>
+    <text x="390" y="383" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#d3d1c7">JDK HttpClient (Virtual Threads)</text>
+    <text x="390" y="401" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#b4b2a9">TLS 1.3 · HTTP/2 · Zero Carrier Pinning</text>
+  </g>
+
+  <!-- Bottom-Right: Providers & Destinations -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="550" y="360" width="300" height="180" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="700" y="383" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#fac775">Outbound LLM Endpoints</text>
+    <text x="700" y="401" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#ef9f27">Dynamic CDI Providers &amp; ModelDefaults</text>
+    <line x1="565" y1="415" x2="835" y2="415" stroke="#ef9f27" stroke-width="0.5" stroke-dasharray="2 2"/>
+
+    <text x="570" y="435" font-size="11" fill="#fac775">• Subscription / CLI OAuth:</text>
+    <text x="585" y="450" font-size="10" fill="#ef9f27">Codex CLI (ChatGPT Plus), Claude Code (Anthropic)</text>
+
+    <text x="570" y="475" font-size="11" fill="#fac775">• Cloud Providers:</text>
+    <text x="585" y="490" font-size="10" fill="#ef9f27">OpenAI, Anthropic, Gemini, Groq, Mistral, Cerebras, Sarvam, NVIDIA</text>
+
+    <text x="570" y="515" font-size="11" fill="#fac775">• Local &amp; Private Runtimes:</text>
+    <text x="585" y="530" font-size="10" fill="#ef9f27">Ollama, LlamaCpp, OMLX, Foundry Local</text>
+  </g>
+
+  <!-- Flow Arrows -->
+  <line x1="230" y1="110" x2="270" y2="110" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="230" y1="190" x2="270" y2="190" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="510" y1="150" x2="550" y2="150" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <path d="M700 320 L700 340 L390 340 L390 360" fill="none" stroke="#5dcaa5" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="510" y1="387" x2="550" y2="387" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Legend -->
+  <g font-family="'Segoe UI', system-ui, sans-serif" font-size="10" fill="#888">
+    <text x="20" y="555">Amsha Governed Transport · Fail-Closed Posture · ScopedValue Actor Resolution · Zero Payload in Audit</text>
+  </g>
+</svg>

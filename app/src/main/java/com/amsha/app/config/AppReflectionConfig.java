@@ -17,6 +17,7 @@ import com.amsha.app.cli.ModelInstaller;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
 import com.amsha.app.skill.SkillResource;
+import com.amsha.app.ui.CockpitHealthResource;
 import com.amsha.app.ui.CockpitResource;
 import com.amsha.app.ui.dto.AgentEvent;
 import com.amsha.app.ui.dto.AgentStatusDto;
@@ -27,10 +28,15 @@ import com.amsha.app.ui.dto.ChatMessageDto;
 import com.amsha.app.ui.dto.ChatRequest;
 import com.amsha.app.ui.dto.CheckpointApprovalRequest;
 import com.amsha.app.ui.dto.CheckpointApprovalResponse;
+import com.amsha.app.ui.dto.CockpitHealthResponse;
+import com.amsha.app.ui.dto.DbConnectionPoolSummary;
 import com.amsha.app.ui.dto.DbQueryRequest;
 import com.amsha.app.ui.dto.DbQueryResponse;
+import com.amsha.app.ui.dto.HealthCheckDetail;
 import com.amsha.app.ui.dto.PageDto;
 import com.amsha.app.ui.dto.PendingApprovalDto;
+import com.amsha.app.ui.dto.ProviderHealthSummary;
+import com.amsha.app.ui.dto.SmallRyeHealthSummary;
 import com.amsha.onboarding.BootstrapResource;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
@@ -105,6 +111,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ExternalIdentityDto.class,
             IdentityInvitationDto.class,
             CockpitResource.class,
+            CockpitHealthResource.class,
             DbConsoleResource.class,
             ModelArenaResource.class,
             DbQueryRequest.class,
@@ -112,6 +119,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ArenaCompareRequest.class,
             ArenaCompareResponse.class,
             ArenaModelResult.class,
+            CockpitHealthResponse.class,
+            SmallRyeHealthSummary.class,
+            HealthCheckDetail.class,
+            DbConnectionPoolSummary.class,
+            ProviderHealthSummary.class,
             ModelInstaller.ModelCatalogEntry.class,
             ModelInstaller.ModelFileSpec.class,
             ModelInstaller.ModelStatus.class

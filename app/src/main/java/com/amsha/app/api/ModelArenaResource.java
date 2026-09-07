@@ -1,5 +1,7 @@
 package com.amsha.app.api;
 
+import static com.amsha.app.api.ModelArenaHelper.error;
+
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -35,7 +37,6 @@ import com.amsha.app.ui.dto.ArenaModelResult;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ChatModelProducer;
 import com.amsha.core.agent.trace.TraceRedactor;
-import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.guardrail.GuardDecision;
@@ -51,11 +52,13 @@ import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.security.api.OutboundPurpose;
+import com.amsha.security.http.GovernedTransportMetrics;
 import com.amsha.security.http.GovernedTransportService;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
 /**
@@ -103,6 +106,9 @@ public class ModelArenaResource {
     @Inject
     Instance<ModelRouteSelector> modelRouteSelector;
 
+    @Inject
+    Instance<MeterRegistry> meterRegistryInstance;
+
     @Context
     SecurityContext securityContext;
 
@@ -113,11 +119,13 @@ public class ModelArenaResource {
             return error(Response.Status.FORBIDDEN, "Internal operator role required for Model Arena");
         }
 
-        Response validationError = ModelArenaHelper.validateCompareRequest(request);
+        Response validationError = ModelArenaHelper.validateCompareRequest(request, providers);
         if (validationError != null) {
             return validationError;
         }
 
+        long overallStartNs = System.nanoTime();
+        MeterRegistry meterRegistry = GovernedTransportMetrics.resolve(meterRegistryInstance);
         String prompt = request.prompt(); // Faithful prompt invocation: preserve leading/trailing whitespace
         List<String> modelSlots = request.models();
         int maxOutputTokens = request.maxTokens() != null
@@ -138,8 +146,18 @@ public class ModelArenaResource {
                                 + promptHash);
             } catch (Exception ex) {
                 log.errorf("ModelArena mandatory error audit failure: %s", LogUtil.rootMessage(ex));
+                ModelArenaMetrics.recordComparison(
+                        meterRegistry, "audit_error", modelSlots.size(), System.nanoTime() - overallStartNs, 0, 0, 0.0);
                 return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
             }
+            ModelArenaMetrics.recordComparison(
+                    meterRegistry,
+                    "credential_blocked",
+                    modelSlots.size(),
+                    System.nanoTime() - overallStartNs,
+                    0,
+                    0,
+                    0.0);
             return error(
                     Response.Status.BAD_REQUEST,
                     "Prompt contains prohibited credentials (" + credResult.credentialType() + ")");
@@ -151,9 +169,13 @@ public class ModelArenaResource {
             promptToUse = evaluatePiiPolicy(prompt, callerUserId, promptHash);
         } catch (Exception ex) {
             log.errorf("ModelArena mandatory error audit failure: %s", LogUtil.rootMessage(ex));
+            ModelArenaMetrics.recordComparison(
+                    meterRegistry, "audit_error", modelSlots.size(), System.nanoTime() - overallStartNs, 0, 0, 0.0);
             return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
         }
         if (promptToUse == null) {
+            ModelArenaMetrics.recordComparison(
+                    meterRegistry, "policy_blocked", modelSlots.size(), System.nanoTime() - overallStartNs, 0, 0, 0.0);
             return error(Response.Status.BAD_REQUEST, "Prompt rejected by PII policy");
         }
         final String benchmarkPrompt = ModelArenaHelper.estimateTokens(promptToUse) > ModelArenaHelper.MAX_INPUT_TOKENS
@@ -161,7 +183,62 @@ public class ModelArenaResource {
                 : promptToUse;
 
         // Execution Stage: Parallel Provider Invocation on Virtual Threads with Global Deadline
-        long overallStartNs = System.nanoTime();
+        List<ArenaModelResult> results;
+        try {
+            results = executeInParallel(modelSlots, benchmarkPrompt, maxOutputTokens, callerUserId);
+        } catch (ModelArenaHelper.ArenaAuditException cause) {
+            log.errorf("ModelArena mandatory governance failure: %s", LogUtil.rootMessage(cause));
+            ModelArenaMetrics.recordComparison(
+                    meterRegistry, "audit_error", modelSlots.size(), System.nanoTime() - overallStartNs, 0, 0, 0.0);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
+        } catch (ModelArenaHelper.ArenaConfigurationException ace) {
+            log.errorf(
+                    "ModelArena provider configuration failure: %s (root: %s)",
+                    ace.getMessage(), LogUtil.rootMessage(ace));
+            ModelArenaMetrics.recordComparison(
+                    meterRegistry, "config_error", modelSlots.size(), System.nanoTime() - overallStartNs, 0, 0, 0.0);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, "Provider configuration failure");
+        }
+
+        long totalDurationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - overallStartNs);
+        int inTok = results.stream().mapToInt(ArenaModelResult::inputTokens).sum();
+        int outTok = results.stream().mapToInt(ArenaModelResult::outputTokens).sum();
+        int totalTokens = inTok + outTok;
+        double totalCostUsd =
+                results.stream().mapToDouble(ArenaModelResult::costUsd).sum();
+
+        // Security Stage 3: Mandatory Audit Logging (Hashes and Categorical Metadata Only)
+        try {
+            recordMandatoryAudit(
+                    callerUserId,
+                    SecurityEventType.SESSION_INSPECTED,
+                    "Arena comparison executed: models="
+                            + ModelArenaHelper.categoricalModelSlots(modelSlots, providers)
+                            + " promptHash=" + promptHash
+                            + " totalTokens=" + totalTokens
+                            + " durationMs=" + totalDurationMs
+                            + " totalCostUsd=" + totalCostUsd);
+        } catch (Exception ex) {
+            log.errorf("ModelArena mandatory audit failure: %s", LogUtil.rootMessage(ex));
+            ModelArenaMetrics.recordComparison(
+                    meterRegistry, "audit_error", modelSlots.size(), System.nanoTime() - overallStartNs, 0, 0, 0.0);
+            return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
+        }
+
+        ModelArenaMetrics.recordComparison(
+                meterRegistry,
+                "success",
+                modelSlots.size(),
+                System.nanoTime() - overallStartNs,
+                inTok,
+                outTok,
+                totalCostUsd);
+
+        return Response.ok(new ArenaCompareResponse(results, totalDurationMs)).build();
+    }
+
+    private List<ArenaModelResult> executeInParallel(
+            List<String> modelSlots, String benchmarkPrompt, int maxOutputTokens, String callerUserId) {
         List<ArenaModelResult> results = new ArrayList<>();
         var executor = new ContextAwareExecutorService(Executors.newVirtualThreadPerTaskExecutor());
         boolean wasInterrupted = false;
@@ -198,15 +275,11 @@ public class ModelArenaResource {
                 } catch (ExecutionException e) {
                     f.cancel(true);
                     Throwable cause = e.getCause() != null ? e.getCause() : e;
-                    if (cause instanceof ModelArenaHelper.ArenaAuditException) {
-                        log.errorf("ModelArena mandatory governance failure: %s", LogUtil.rootMessage(cause));
-                        return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
+                    if (cause instanceof ModelArenaHelper.ArenaAuditException aae) {
+                        throw aae;
                     }
                     if (cause instanceof ModelArenaHelper.ArenaConfigurationException ace) {
-                        log.errorf(
-                                "ModelArena provider configuration failure for slot %s: %s (root: %s)",
-                                slot, ace.getMessage(), LogUtil.rootMessage(ace));
-                        return error(Response.Status.INTERNAL_SERVER_ERROR, "Provider configuration failure");
+                        throw ace;
                     }
                     log.warnf(
                             "ModelArena provider execution error for slot %s: errorClass=%s",
@@ -214,31 +287,7 @@ public class ModelArenaResource {
                     results.add(new ArenaModelResult(slot, "PROVIDER_EXECUTION_ERROR", 0, 0, 0L, 0.0));
                 }
             }
-
-            long totalDurationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - overallStartNs);
-            int totalTokens = results.stream()
-                    .mapToInt(r -> r.inputTokens() + r.outputTokens())
-                    .sum();
-            double totalCostUsd =
-                    results.stream().mapToDouble(ArenaModelResult::costUsd).sum();
-
-            // Security Stage 3: Mandatory Audit Logging (Hashes and Categorical Metadata Only)
-            try {
-                recordMandatoryAudit(
-                        callerUserId,
-                        SecurityEventType.SESSION_INSPECTED,
-                        "Arena comparison executed: models=" + ModelArenaHelper.categoricalModelSlots(modelSlots)
-                                + " promptHash=" + promptHash
-                                + " totalTokens=" + totalTokens
-                                + " durationMs=" + totalDurationMs
-                                + " totalCostUsd=" + totalCostUsd);
-            } catch (Exception ex) {
-                log.errorf("ModelArena mandatory audit failure: %s", LogUtil.rootMessage(ex));
-                return error(Response.Status.INTERNAL_SERVER_ERROR, "Mandatory audit logging failed");
-            }
-
-            return Response.ok(new ArenaCompareResponse(results, totalDurationMs))
-                    .build();
+            return results;
         } finally {
             executor.shutdownNow();
             if (wasInterrupted) {
@@ -252,15 +301,15 @@ public class ModelArenaResource {
             String sessionId =
                     WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "arena-session";
             GuardDecision decision = piiInputGuard.get().validate(sessionId, callerUserId, prompt, prompt);
-            if (decision.isBlocked()) {
+            if (decision != null && decision.isBlocked()) {
                 recordMandatoryAudit(
                         callerUserId,
                         SecurityEventType.UNAUTHORIZED_ACCESS,
                         "Prompt blocked by PII policy: promptHash=" + promptHash);
                 return null;
             }
-            if (decision.isSanitize()) {
-                return ((GuardDecision.Sanitize) decision).sanitizedInput();
+            if (decision instanceof GuardDecision.Sanitize sanitize) {
+                return sanitize.sanitizedInput();
             }
         }
         return prompt;
@@ -272,7 +321,7 @@ public class ModelArenaResource {
         int tokenCap = Math.min(maxOutputTokens, ModelArenaHelper.MAX_OUTPUT_TOKENS);
         try {
             return ScopedValue.where(WorkspaceContext.USER_ID, callerUserId).call(() -> {
-                String cleanProv = ModelArenaHelper.validateAndExtractProvider(slot);
+                String cleanProv = ModelArenaHelper.validateAndExtractProvider(slot, providers);
                 ResolvedProvider resolved = resolveProviderAndModel(slot);
                 if (resolved == null || resolved.model() == null) {
                     return new ArenaModelResult(slot, "PROVIDER_UNKNOWN_MODEL", 0, 0, 0L, 0.0);
@@ -380,18 +429,14 @@ public class ModelArenaResource {
         }
 
         String cleanProvider = providerName.trim().toLowerCase(Locale.ROOT);
+        AgentChatModelProvider p = ModelArenaHelper.findProvider(cleanProvider, providers);
         ChatModel model = null;
-        if (providers != null) {
-            for (AgentChatModelProvider p : providers) {
-                if (p != null && p.providerName().equalsIgnoreCase(cleanProvider)) {
-                    try {
-                        model = (customModel != null && !customModel.isBlank()) ? p.create(customModel) : p.create();
-                    } catch (Exception e) {
-                        throw new ModelArenaHelper.ArenaConfigurationException(
-                                "Failed to construct model provider '" + cleanProvider + "': " + e.getMessage(), e);
-                    }
-                    break;
-                }
+        if (p != null) {
+            try {
+                model = (customModel != null && !customModel.isBlank()) ? p.create(customModel) : p.create();
+            } catch (Exception e) {
+                throw new ModelArenaHelper.ArenaConfigurationException(
+                        "Failed to construct model provider '" + cleanProvider + "': " + e.getMessage(), e);
             }
         }
         return new ResolvedProvider(model, ModelArenaHelper.resolveBaseUrl(cleanProvider, providers));
@@ -430,10 +475,6 @@ public class ModelArenaResource {
         } catch (Exception e) {
             throw new ModelArenaHelper.ArenaAuditException("Mandatory audit logging failed: " + e.getMessage(), e);
         }
-    }
-
-    private static Response error(Response.Status status, String msg) {
-        return Response.status(status).entity(new AmshaErrorResponse(msg)).build();
     }
 
     private boolean isInternal() {

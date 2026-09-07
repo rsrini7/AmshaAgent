@@ -39,6 +39,18 @@ Concrete provider factories are annotated with `@ApplicationScoped` and discover
 - **Token Resolvers & CLI Helpers**: Caching and fallback resolution in `com.amsha.llm.providers.helper`.
 - **Native Reflection**: Registered in `LlmProvidersReflectionConfig`.
 
+## Governed HTTP Transport (`GovernedLangChainHttpClient`)
+
+Outbound provider requests across OpenAI, Anthropic, Gemini, Ollama, LlamaCpp, and custom OpenAI-compatible providers are routed through Amsha's governed transport layer:
+- **`GovernedLangChainHttpClient`**: Custom LangChain4j `HttpClient` implementation that delegates requests to `GovernedTransportService.send()` with purpose `OutboundPurpose.LLM_INFERENCE`.
+- **`GovernedLangChainHttpClientBuilder`** and **`GovernedLangChainHttpClientBuilderFactory`**: Registered via Java SPI (`META-INF/services/dev.langchain4j.http.client.HttpClientBuilderFactory`) and configured as the default factory system property (`dev.langchain4j.http.client.builder.factory`).
+- **Security Invariants Enforced**:
+  - **SSRF Defense**: IP blocklist filtering prevents routing to loopback, private IPv4/IPv6, or cloud metadata IP ranges (`169.254.169.254`).
+  - **Credential Leak Prevention**: Inspects request payloads before dispatch to ensure raw vault pepper, API secret keys, or passwords are not inadvertently echoed.
+  - **Actor Propagation**: Extracts authenticated user ID from `ScopedValue` (`USER_ID`) or session context and binds it to the audit record.
+  - **Audit Logging**: Successful outbound dispatches record `EGRESS_TRANSPORT_SUCCESS` in the tamper-evident HMAC audit log. Blocked attempts record `EGRESS_TRANSPORT_BLOCKED`.
+  - **Metrics**: Emits `amsha.transport.requests.total` and `amsha.transport.duration` Micrometer metrics.
+
 ## Multimodal Model Capabilities
 
 Provider models declare or dynamically resolve multimodal capabilities via `MultimodalCapability` (contract from `amsha-llm-provider-api`):

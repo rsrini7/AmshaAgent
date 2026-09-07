@@ -40,7 +40,7 @@ and CDI `Instance<T>` multi-bean discovery.
 | Groq | `groq` | `meta-llama/llama-4-scout-17b-16e-instruct` | `https://api.groq.com/openai/v1` |
 | OpenAI | `openai` | `gpt-4o-mini` | `https://api.openai.com/v1` |
 | Ollama | `ollama` | `mistral-small:latest` | `http://localhost:11434` |
-| OpenRouter | `openrouter` | `openai/gpt-oss-20b:free` | `https://openrouter.ai/api/v1` |
+| OpenRouter | `openrouter` | `minimax/minimax-m3:free` | `https://openrouter.ai/api/v1` |
 | NVIDIA | `nvidia` | `meta/llama-3.2-11b-vision-instruct` | `https://integrate.api.nvidia.com/v1` |
 | Cerebras | `cerebras` | `qwen-3.8-27b` | `https://api.cerebras.ai/v1` |
 | Sarvam AI | `sarvam` | `sarvam-105b-conversations` | `https://api.sarvam.ai/v1` |

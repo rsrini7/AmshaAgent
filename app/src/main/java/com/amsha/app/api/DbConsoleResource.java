@@ -14,15 +14,11 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Semaphore;
@@ -41,10 +37,12 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.SessionCatalogStore;
+import com.amsha.security.http.GovernedTransportMetrics;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
 /**
@@ -86,6 +84,9 @@ public class DbConsoleResource {
     @Inject
     AuditService auditService;
 
+    @Inject
+    Instance<MeterRegistry> meterRegistryInstance;
+
     @Context
     SecurityContext securityContext;
 
@@ -106,7 +107,7 @@ public class DbConsoleResource {
 
         String callerUserId = resolveUserId();
         String rawSql = request.sql();
-        String queryHash = hashQuery(rawSql);
+        String queryHash = DbResultMapper.hashQuery(rawSql);
 
         if ("fs".equalsIgnoreCase(runtimeBackend) || "filesystem".equalsIgnoreCase(runtimeBackend)) {
             try {
@@ -176,6 +177,8 @@ public class DbConsoleResource {
         }
 
         if (!acquired) {
+            DbConsoleMetrics.recordQuery(
+                    GovernedTransportMetrics.resolve(meterRegistryInstance), runtimeBackend, "rate_limited", 0, 0);
             return Response.status(429)
                     .entity(new AmshaErrorResponse("Database console query concurrency limit reached (max 2)"))
                     .build();
@@ -195,14 +198,33 @@ public class DbConsoleResource {
                                 + result.rows().size() + " durationMs=" + executionMs);
             } catch (Exception ex) {
                 log.errorf("DbConsole mandatory audit failure for hash=%s: %s", queryHash, LogUtil.rootMessage(ex));
+                DbConsoleMetrics.recordQuery(
+                        GovernedTransportMetrics.resolve(meterRegistryInstance),
+                        runtimeBackend,
+                        "audit_error",
+                        System.nanoTime() - startNs,
+                        0);
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                         .entity(new AmshaErrorResponse("Mandatory audit logging failed"))
                         .build();
             }
 
+            DbConsoleMetrics.recordQuery(
+                    GovernedTransportMetrics.resolve(meterRegistryInstance),
+                    runtimeBackend,
+                    "success",
+                    System.nanoTime() - startNs,
+                    result.rows().size());
+
             return Response.ok(new DbQueryResponse(result.columns(), result.rows(), executionMs, result.truncated()))
                     .build();
         } catch (DbValidationException ex) {
+            DbConsoleMetrics.recordQuery(
+                    GovernedTransportMetrics.resolve(meterRegistryInstance),
+                    runtimeBackend,
+                    "validation_failed",
+                    System.nanoTime() - startNs,
+                    0);
             try {
                 recordMandatoryAudit(
                         callerUserId,
@@ -219,6 +241,12 @@ public class DbConsoleResource {
                     .entity(new AmshaErrorResponse(ex.getMessage()))
                     .build();
         } catch (SQLException ex) {
+            DbConsoleMetrics.recordQuery(
+                    GovernedTransportMetrics.resolve(meterRegistryInstance),
+                    runtimeBackend,
+                    "sql_error",
+                    System.nanoTime() - startNs,
+                    0);
             try {
                 recordMandatoryAudit(
                         callerUserId,
@@ -238,6 +266,12 @@ public class DbConsoleResource {
                     .entity(new AmshaErrorResponse("Database execution error: query execution failed"))
                     .build();
         } catch (RuntimeException ex) {
+            DbConsoleMetrics.recordQuery(
+                    GovernedTransportMetrics.resolve(meterRegistryInstance),
+                    runtimeBackend,
+                    "error",
+                    System.nanoTime() - startNs,
+                    0);
             try {
                 recordMandatoryAudit(
                         callerUserId,
@@ -443,17 +477,6 @@ public class DbConsoleResource {
             throw new IllegalStateException("AuditService is unavailable for mandatory audit logging");
         }
         auditService.recordMandatory("db-console", callerUserId, "operator", type, message);
-    }
-
-    private static String hashQuery(String sql) {
-        if (sql == null) return "null";
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(sql.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            return "sha256-error";
-        }
     }
 
     private boolean isInternal() {

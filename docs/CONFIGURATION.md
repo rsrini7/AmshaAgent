@@ -592,6 +592,13 @@ Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDown
 | `AMSHA_TTS_RESPONSE_FORMAT` | `wav` | Audio encoding format emitted by the synthesis port (`wav`, `mp3`, `ogg`). |
 | `AMSHA_STT_PROVIDER` | `omlx` | Speech-to-text recognition provider (`omlx` or `openai`). |
 | `AMSHA_STT_MODEL` | `whisper-large-v3` | Model identifier for STT transcription. |
+| `AMSHA_STT_LOCAL_ENABLED` | `false` | Enables local in-process ONNX Whisper audio transcription under `AudioTranscriptionPort` (requires `AMSHA_ONNX_ENABLED=true`). |
+| `AMSHA_STT_LOCAL_BUNDLE_ID` | `whisper-tiny-en-v1` | Verified local Whisper model bundle identifier under `data/models/`. |
+| `AMSHA_STT_LOCAL_TIMEOUT` | `PT30S` | Total deadline for one local audio transcription request. |
+| `AMSHA_STT_LOCAL_MAX_AUDIO_BYTES` | `26214400` | Maximum raw audio payload bytes accepted for admission (<= 25 MiB). |
+| `AMSHA_STT_LOCAL_MAX_TRANSCRIPT_CHARS` | `12000` | Maximum character length of output transcript text. |
+| `AMSHA_STT_FFMPEG_PATH` | `ffmpeg` | Path to ffmpeg executable used to transcode compressed audio to mono 16 kHz WAV. |
+| `AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE` | `false` | If true, cascades to secondary STT providers on failure/timeout. False guarantees zero egress. |
 
 ## Retry
 

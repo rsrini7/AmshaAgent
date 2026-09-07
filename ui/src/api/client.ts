@@ -622,6 +622,10 @@ export class ArcClient {
       ArcClient.ARENA_REQUEST_TIMEOUT_MS,
     );
   }
+
+  async getCockpitHealth(): Promise<CockpitHealthResponse> {
+    return this.request<CockpitHealthResponse>('/admin/cockpit/health');
+  }
 }
 
 export interface DbQueryRequest {
@@ -665,6 +669,45 @@ export interface SafeMetadata {
   auditHash: string;
   subsystem?: string | null;
   safetyInvariant?: string | null;
+}
+
+export interface SmallRyeHealthCheck {
+  name: string;
+  status: string;
+  data?: Record<string, any>;
+}
+
+export interface SmallRyeHealthSummary {
+  status: string;
+  totalChecks: number;
+  passingChecks: number;
+  checks: SmallRyeHealthCheck[];
+}
+
+export interface DbConnectionPoolSummary {
+  backend: string;
+  status: string;
+  poolEnabled: boolean;
+  activeConnections?: number;
+  availableConnections?: number;
+  maxPoolSize?: number;
+  awaitingConnections?: number;
+}
+
+export interface ProviderHealthSummary {
+  providerName: string;
+  isDefault: boolean;
+  status: string;
+  baseUrl: string;
+  details: string;
+}
+
+export interface CockpitHealthResponse {
+  status: string;
+  healthChecks: SmallRyeHealthSummary;
+  database: DbConnectionPoolSummary;
+  providers: ProviderHealthSummary[];
+  timestamp: number;
 }
 
 export async function getOnboardingComplete(baseUrl: string): Promise<import('./types').OnboardingCompleteDto> {

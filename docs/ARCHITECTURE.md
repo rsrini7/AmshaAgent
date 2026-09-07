@@ -1143,18 +1143,82 @@ Lifecycle: `@PostConstruct` registers a ready implementation (`effective=request
 
 | Component | Role |
 |---|---|
-| `arc-chat-interface` | Main chat UI; WebSocket + HITL approval cards via SSE |
-| `arc-settings` | LLM provider switch, API key update, system prompt edit |
-| `arc-onboarding` | Durable draft/saga onboarding UI; posts to `/api/v1/onboarding/drafts*` (legacy `/onboarding/step/{N}` + `/complete` removed in P110) |
+| `arc-chat-interface` | Main chat UI; WebSocket + HITL approval cards via SSE (`#/chat`) |
+| `arc-health-dashboard` | System health & diagnostics: memory, storage, database latency, provider status (`#/health`) |
+| `arc-db-console` | Operator read-only SQL console with AST validation and schema explorer (`#/db-console`) |
+| `arc-model-arena` | Comparative LLM benchmarking, categorical slots, cost estimation, and token bounding (`#/arena`) |
+| `arc-settings` | LLM provider switch, API key update, system prompt edit (`#/settings`) |
+| `arc-onboarding` | Durable draft/saga onboarding UI; posts to `/api/v1/onboarding/drafts*` (`#/onboarding`) |
 | `arc-agent-status` | Live agent status via REST poll + SSE |
-| `arc-audit-panel` | WORM audit chain event display |
-| `arc-scheduler-panel` | Cron job management |
-| `arc-hitl-panel` | HITL approval management |
-| `arc-skills-panel` | Skill management |
+| `arc-audit-panel` | WORM audit chain event display (`#/audit`) |
+| `arc-scheduler-panel` | Cron job management (`#/scheduler`) |
+| `arc-hitl-panel` | HITL approval management (`#/hitl`) |
+| `arc-skills-panel` | Skill management (`#/skills`) |
 
 **WebSocket protocol:** `{"type":"message","text":"..."}` (client→server), `{"type":"message","role":"assistant","text":"..."}` (server→client).
 
 ---
+
+## Visual Cockpit & Operator Consoles
+
+Amsha Agent provides operator-facing diagnostic and management consoles designed for high observability without compromising tenant isolation or credential security:
+
+### 1. System Health Dashboard (`GET /api/v1/admin/cockpit/health`, `#/health`)
+- **Diagnostic Probes**: Combines SmallRye health checks with runtime telemetry:
+  - **Database Connection**: Bounded ping and round-trip query latency (`AgroalDataSource.getConnection().isValid(2)`).
+  - **JVM Memory**: Max memory, total allocated, and free memory in megabytes.
+  - **Storage**: Total and usable disk capacity on the active workspace drive.
+  - **Provider Reachability**: Probes all 22 supported providers, honoring default provider aliasing (e.g. `claude-code` / `anthropic` / `claudecode`).
+- **Data Protection & Sanitization**: Responses contain only bounded categorical health states (`UP`, `DEGRADED`, `DOWN`). Sensitive database connection strings, credentials, network addresses, and raw exception stack traces are strictly stripped before reaching the client.
+- **Operator UI**: `arc-health-dashboard.ts` features interactive provider filtering (*All*, *Configured*, *Not Configured*), search filtering by name and alias tags, system checks grid, auto-refresh toggles (15s/30s/60s), and WAI-ARIA accessibility compliance.
+
+### 2. Read-Only Database Console (`POST /api/v1/admin/db/query`, `#/db-console`)
+- **AST SQL Parser Validation**: Incoming SQL is parsed via JSqlParser before execution:
+  - Enforces strictly single-statement `SELECT` queries.
+  - Recursively rejects DML/DDL statements (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`), even when embedded within `EXPLAIN` or Common Table Expressions (`WITH ...`).
+  - Strict PRAGMA allowlist (e.g., `PRAGMA table_info(...)`).
+- **Schema Allowlisting**: Only system catalog tables (`sqlite_master`, `sqlite_schema`, `information_schema.tables`, `flyway_schema_history`) and known application tables may be queried.
+- **Transaction Isolation**:
+  - SQLite: Executed under `PRAGMA query_only = ON;`.
+  - PostgreSQL: Read-only transaction boundaries with guaranteed rollback. If resetting connection state fails, the pooled connection is forcefully discarded to prevent poisoning.
+- **Security & Telemetry**: Every query requires `isInternal()` operator authorization, logs `DB_QUERY_EXECUTED` or `DB_QUERY_REJECTED` in the immutable audit log, and emits `amsha.dbconsole.queries.total`, `amsha.dbconsole.query.duration`, and `amsha.dbconsole.rows.total` Micrometer metrics.
+
+### 3. Model Arena (`POST /api/v1/admin/arena/compare`, `#/arena`)
+- **Dynamic CDI Provider Discovery**: Querying model providers is fully decoupled from static lists. `ModelArenaHelper` queries injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults`, automatically recognizing dynamic enterprise providers and aliases.
+- **Categorical Slot Grouping**: Models and slots are categorized into intuitive operator groups:
+  - `Subscription / CLI OAuth`: `codex` (Codex CLI / ChatGPT Plus OAuth), `claude-code` (Claude Code CLI / Anthropic OAuth).
+  - `Cloud API`: OpenAI, Anthropic, Gemini, Groq, Mistral, Cerebras, Sarvam, NVIDIA, Cohere, OpenRouter, OpenCode, Cloudflare, Hugging Face.
+  - `Local Runtime`: Ollama, LlamaCpp, OMLX, Foundry Local.
+- **Security & Bounding**:
+  - Fail-closed `CredentialDetector`: Scans input prompts for sensitive API keys, vault peppers, and tokens, rejecting with 400 Bad Request if detected.
+  - Bounded token ceilings: $\le 2,048$ input tokens and $\le 1,024$ output tokens with script-aware truncation for multi-byte Unicode/CJK text.
+  - Zero tool execution: Arena calls execute pure reasoning models without tool or shell invocation capabilities.
+
+### 4. Execution Tracing, Replay & Scrubbing (`GET /api/v1/traces`, `GET /api/v1/traces/{runId}`)
+- **Stage Lifecycle**: Every agent turn emits versioned, redacted `AgentTraceEvent` objects across the 10-station execution sequence (`INPUT_RECEIVED`, `GOAL_EXPANDED`, `REFLEX_EVALUATED`, `RETRIEVAL_DISPATCHED`, `REASONING_INVOKED`, `TOOL_GUARD_EVALUATED`, `HITL_SUSPENDED`, `TOOL_EXECUTED`, `COMPACTED`, `TURN_COMPLETED`).
+- **Durable Persistence**: Stored via `ExecutionTraceStorePort` across SQLite (`V12__execution_trace.sql`), PostgreSQL, and filesystem backends with complete semantic parity.
+- **Scrubbing & Replay UI**: Rendered in `arc-flow-canvas.ts` and `arc-harness-conveyor.ts`, allowing operators to inspect discrete lifecycle stages, execution metrics, and time/step scrubbing without synthesizing non-existent backend steps.
+
+### 5. Safe Allowlisted Symbolication (`GET /api/v1/cockpit/symbolicate`)
+- **Allowlisted Metadata Only**: Rejects arbitrary class loading and raw source code streaming. Strictly allows symbolication for 9 core architectural classes (`AgentLoop`, `MessagePipeline`, `ToolInvocationGuard`, `CheckpointResumeCoordinator`, `ReflexRegistry`, `ApprovalStateMachine`, `AgentCronScheduler`, `GovernedTransportService`, `TraceSymbolicationService`).
+- **Access Control**: Enforces `isInternal()` authorization and strict multi-tenant session ownership checks; unauthorized or cross-tenant requests return 404 non-disclosure.
+
+---
+
+## Governed Outbound HTTP Transport for LLMs & Arena
+
+All outbound model requests from the agent reasoning loop and Model Arena are intercepted at the byte level to prevent SSRF, data exfiltration, and credential leakage:
+
+![Governed Outbound Transport for LLMs & Arena](./assets/amsha_governed_transport.svg)
+
+- **`GovernedLangChainHttpClient`**: Custom LangChain4j `HttpClient` implementation wired via the standard `HttpClientBuilderFactory` SPI.
+- **Execution Pipeline**:
+  1. **Actor Propagation**: Extracts the authenticated user identifier from `ScopedValue` (`USER_ID`) or session context.
+  2. **Egress Policy Validation**: Evaluates outbound purpose (`OutboundPurpose.PROVIDER_API_CALL`).
+  3. **SSRF & IP Defense**: Validates destination IP addresses, blocking loopback, link-local, private LAN ranges, and cloud metadata services.
+  4. **Header Sanitization**: Filters hop-by-hop and restricted headers, preventing internal header injection.
+  5. **Pre-send Audit Logging**: Successful dispatches write an append-only `EGRESS_TRANSPORT_SUCCESS` record to the HMAC audit chain before network I/O. Blocked attempts record `EGRESS_TRANSPORT_BLOCKED`.
+  6. **Metrics Instrumentation**: Emits `amsha.transport.requests.total` and `amsha.transport.duration` Micrometer metrics tagged by purpose and status.
 
 ## Onboarding (Durable Draft / Saga)
 
@@ -1193,6 +1257,7 @@ steps to self-register into the effective plan.
 | `agent_skill` | User-defined skill definitions (YAML) |
 | `rag_chunk` | RAG text chunks (hydration for vec0 results) |
 | `encrypted_secrets` | AES-GCM-SIV encrypted vault entries |
+| `execution_trace` | Redacted execution trace events and run summaries for cockpit replay (V12) |
 | `advisory_lock` | Distributed advisory locking |
 | `reasoning_step` | Individual reasoning step persistence |
 | `fts.vec_global` | vec0 virtual table for global KNN embedding search |
