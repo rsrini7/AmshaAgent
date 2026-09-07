@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.exception.HttpException;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -29,6 +30,7 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.security.Principal;
 import java.util.Iterator;
 import java.util.List;
@@ -37,6 +39,7 @@ import java.util.Optional;
 
 import com.amsha.app.ui.dto.ArenaCompareRequest;
 import com.amsha.app.ui.dto.ArenaCompareResponse;
+import com.amsha.app.ui.dto.ArenaModelResult;
 import com.amsha.core.agent.reasoning.ChatModelProducer;
 import com.amsha.core.agent.trace.TraceRedactor;
 import com.amsha.core.api.dto.AmshaErrorResponse;
@@ -60,6 +63,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.ArgumentCaptor;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @Isolated
 class ModelArenaResourceTest {
@@ -775,5 +781,140 @@ class ModelArenaResourceTest {
                 System.clearProperty(GovernedLangChainHttpClientBuilderFactory.FACTORY_PROPERTY);
             }
         }
+    }
+
+    @Test
+    void multiSlotMixedFailuresPreservePartialResultsWithCategoricalCodes() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "test-operator";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        AgentChatModelProvider successProvider = mock(AgentChatModelProvider.class);
+        when(successProvider.providerName()).thenReturn("groq");
+        when(successProvider.baseUrl()).thenReturn("https://api.groq.com/openai/v1");
+        ChatModel successModel = mock(ChatModel.class);
+        when(successProvider.create()).thenReturn(successModel);
+        when(successModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Groq result"))
+                        .tokenUsage(new TokenUsage(10, 5))
+                        .build());
+
+        AgentChatModelProvider timeoutProvider = mock(AgentChatModelProvider.class);
+        when(timeoutProvider.providerName()).thenReturn("omlx");
+        when(timeoutProvider.baseUrl()).thenReturn("http://localhost:8000/v1");
+        ChatModel timeoutModel = mock(ChatModel.class);
+        when(timeoutProvider.create()).thenReturn(timeoutModel);
+        when(timeoutModel.chat(any(ChatRequest.class)))
+                .thenThrow(new RuntimeException(new HttpTimeoutException("read timed out")));
+
+        AgentChatModelProvider authProvider = mock(AgentChatModelProvider.class);
+        when(authProvider.providerName()).thenReturn("openai");
+        when(authProvider.baseUrl()).thenReturn("https://api.openai.com/v1");
+        ChatModel authModel = mock(ChatModel.class);
+        when(authProvider.create()).thenReturn(authModel);
+        when(authModel.chat(any(ChatRequest.class))).thenThrow(new HttpException(401, "Invalid API key"));
+
+        when(providersInstance.iterator())
+                .thenAnswer(inv ->
+                        List.of(successProvider, timeoutProvider, authProvider).iterator());
+
+        Response resp = resource.compareModels(
+                new ArenaCompareRequest("Multi slot prompt", List.of("groq", "omlx", "openai"), 100));
+        assertEquals(Response.Status.OK.getStatusCode(), resp.getStatus());
+        ArenaCompareResponse compareResp = (ArenaCompareResponse) resp.getEntity();
+        assertEquals(3, compareResp.results().size());
+
+        ArenaModelResult r1 = compareResp.results().stream()
+                .filter(r -> "groq".equals(r.modelSlot()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("Groq result", r1.output());
+        assertEquals(10, r1.inputTokens());
+        assertEquals(5, r1.outputTokens());
+
+        ArenaModelResult r2 = compareResp.results().stream()
+                .filter(r -> "omlx".equals(r.modelSlot()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("PROVIDER_TIMEOUT", r2.output());
+
+        ArenaModelResult r3 = compareResp.results().stream()
+                .filter(r -> "openai".equals(r.modelSlot()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("PROVIDER_AUTHENTICATION_ERROR", r3.output());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void metricsRecordedOnSuccessAndFailurePaths() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Instance<MeterRegistry> meterInstance = mock(Instance.class);
+        when(meterInstance.isResolvable()).thenReturn(true);
+        when(meterInstance.get()).thenReturn(registry);
+        resource.meterRegistryInstance = meterInstance;
+
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+
+        AgentChatModelProvider successProvider = mock(AgentChatModelProvider.class);
+        when(successProvider.providerName()).thenReturn("groq");
+        when(successProvider.baseUrl()).thenReturn("https://api.groq.com/openai/v1");
+        ChatModel successModel = mock(ChatModel.class);
+        when(successProvider.create()).thenReturn(successModel);
+        when(successModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Groq result"))
+                        .tokenUsage(new TokenUsage(10, 5))
+                        .build());
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(successProvider).iterator());
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        // 1. Success path
+        Response resp = resource.compareModels(new ArenaCompareRequest("Test prompt", List.of("groq"), 100));
+        assertEquals(200, resp.getStatus());
+        assertEquals(
+                1.0,
+                registry.get("amsha.arena.comparisons.total")
+                        .tag("status", "success")
+                        .counter()
+                        .count());
+        assertEquals(
+                10.0,
+                registry.get("amsha.arena.tokens.total")
+                        .tag("type", "input")
+                        .counter()
+                        .count());
+        assertEquals(
+                5.0,
+                registry.get("amsha.arena.tokens.total")
+                        .tag("type", "output")
+                        .counter()
+                        .count());
+
+        // 2. Credential blocked
+        Response credResp = resource.compareModels(
+                new ArenaCompareRequest("api_key=sk-1234567890abcdef1234567890abcdef", List.of("groq"), 100));
+        assertEquals(400, credResp.getStatus());
+        assertEquals(
+                1.0,
+                registry.get("amsha.arena.comparisons.total")
+                        .tag("status", "credential_blocked")
+                        .counter()
+                        .count());
+
+        // 3. Policy blocked
+        when(piiInputGuard.validate(any(), any(), any(), any()))
+                .thenReturn(new GuardDecision.Block("PII detected", "detail"));
+        Response piiResp = resource.compareModels(new ArenaCompareRequest("PII prompt", List.of("groq"), 100));
+        assertEquals(400, piiResp.getStatus());
+        assertEquals(
+                1.0,
+                registry.get("amsha.arena.comparisons.total")
+                        .tag("status", "policy_blocked")
+                        .counter()
+                        .count());
     }
 }

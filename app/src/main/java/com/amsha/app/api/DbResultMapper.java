@@ -1,9 +1,13 @@
 package com.amsha.app.api;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -70,6 +74,17 @@ final class DbResultMapper {
         }
 
         return new DbQueryResult(columns, rows, truncated);
+    }
+
+    static String hashQuery(String sql) {
+        if (sql == null) return "null";
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(sql.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException _) {
+            return "sha256-error";
+        }
     }
 
     record DbQueryResult(List<String> columns, List<List<Object>> rows, boolean truncated) {}

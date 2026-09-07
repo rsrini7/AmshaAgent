@@ -24,6 +24,7 @@ import './arc-scheduler-panel';
 import './arc-audit-panel';
 import './arc-db-console';
 import './arc-model-arena';
+import './arc-health-dashboard';
 import './arc-settings';
 import './arc-theme-toggle';
 import './arc-flow-canvas';
@@ -800,6 +801,9 @@ export class ArcShell extends LitElement {
       ` : nothing}
       ${this._route === '#/arena' ? html`
         <arc-model-arena class="content-area"></arc-model-arena>
+      ` : nothing}
+      ${this._route === '#/health' ? html`
+        <arc-health-dashboard class="content-area"></arc-health-dashboard>
       ` : nothing}
       ${this._route === '#/settings' ? html`
         <arc-settings class="content-area"></arc-settings>

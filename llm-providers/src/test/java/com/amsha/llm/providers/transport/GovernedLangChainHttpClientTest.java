@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.GovernedTransportService;
+import com.amsha.security.http.OutboundHttpException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -348,5 +349,22 @@ class GovernedLangChainHttpClientTest {
 
         assertTrue(errored.get());
         assertEquals(1, closeCount.get());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void executeTimeoutThrowsOutboundHttpException() {
+        when(transportService.send(any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenThrow(OutboundHttpException.timeout("read timed out"));
+
+        HttpRequest req = HttpRequest.builder()
+                .url("https://api.openai.com/v1/chat/completions")
+                .method(HttpMethod.POST)
+                .body("{}")
+                .build();
+
+        OutboundHttpException ex = assertThrows(OutboundHttpException.class, () -> client.execute(req));
+        assertEquals(OutboundHttpException.Category.TIMEOUT, ex.category());
+        assertTrue(ex.getMessage().contains("read timed out"));
     }
 }

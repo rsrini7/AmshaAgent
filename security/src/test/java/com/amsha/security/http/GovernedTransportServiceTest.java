@@ -11,8 +11,10 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.core.audit.AuditService;
+import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.CredentialDetector;
 import com.amsha.core.security.DefaultCredentialDetector;
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -25,7 +27,11 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * Unit tests for the governed transport facade moved in S7: audit-before-send, approval-token
@@ -35,8 +41,10 @@ class GovernedTransportServiceTest {
 
     private GovernedTransportService service;
     private ApprovalReceiptIssuer receiptIssuer;
+    private AuditService auditService;
     private HttpServer server;
     private String baseUrl;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -44,7 +52,8 @@ class GovernedTransportServiceTest {
         service = new GovernedTransportService();
         inject("policyService", fixedPolicy(OutboundPolicyDecision.allow(OutboundPurpose.PROVIDER_API_CALL, "ok")));
         inject("vault", Mockito.mock(SecretVault.class));
-        inject("auditService", Mockito.mock(AuditService.class));
+        auditService = Mockito.mock(AuditService.class);
+        inject("auditService", auditService);
         receiptIssuer = new ApprovalReceiptIssuer();
         inject("approvalReceiptIssuer", receiptIssuer);
 
@@ -52,6 +61,12 @@ class GovernedTransportServiceTest {
         when(detInstance.isResolvable()).thenReturn(true);
         when(detInstance.get()).thenReturn(new DefaultCredentialDetector());
         inject("credentialDetectorInstance", detInstance);
+
+        meterRegistry = new SimpleMeterRegistry();
+        Instance<MeterRegistry> meterInstance = Mockito.mock(Instance.class);
+        when(meterInstance.isResolvable()).thenReturn(true);
+        when(meterInstance.get()).thenReturn(meterRegistry);
+        inject("meterRegistryInstance", meterInstance);
 
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/ok", exchange -> {
@@ -224,5 +239,150 @@ class GovernedTransportServiceTest {
                         "user-1",
                         true));
         assertTrue(ex.getMessage().contains("detected credentials"));
+    }
+
+    @Test
+    void sendRecordsOperationalMetricsAndEnrichedAudit() {
+        HttpResponse<String> resp =
+                service.get(baseUrl + "/ok", OutboundPurpose.PROVIDER_API_CALL, null, "user-1", true);
+        assertEquals(200, resp.statusCode());
+        assertEquals(
+                1.0,
+                meterRegistry
+                        .counter("amsha.transport.requests.total", "purpose", "provider_api_call", "status", "success")
+                        .count());
+        assertEquals(
+                1L,
+                meterRegistry
+                        .timer("amsha.transport.duration", "purpose", "provider_api_call", "status", "success")
+                        .count());
+    }
+
+    @Test
+    void sendWithApprovalTokenAttributesAuditToApprovedByUserIdWhenCallerNull() {
+        String token = receiptIssuer.issueForExplicitApproval(
+                "approver-admin",
+                "op-99",
+                OutboundPurpose.PROVIDER_API_CALL,
+                URI.create(baseUrl).getHost());
+
+        HttpResponse<String> resp = service.send(
+                baseUrl + "/ok",
+                OutboundPurpose.PROVIDER_API_CALL,
+                null,
+                null,
+                false,
+                token,
+                getRequest(baseUrl + "/ok"),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, resp.statusCode());
+
+        ArgumentCaptor<String> actorCaptor = ArgumentCaptor.forClass(String.class);
+        verify(auditService)
+                .record(
+                        eq("governed-transport"),
+                        actorCaptor.capture(),
+                        eq("system"),
+                        eq(SecurityEventType.TOOL_EXECUTED),
+                        anyString());
+        assertEquals("approver-admin", actorCaptor.getValue());
+    }
+
+    @Test
+    void sendExecutesMandatoryAuditBeforeNetworkDispatch() {
+        AtomicInteger serverHits = new AtomicInteger(0);
+        server.createContext("/tracked-ok", exchange -> {
+            serverHits.incrementAndGet();
+            byte[] body = "ok".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+
+        HttpResponse<String> resp = service.send(
+                baseUrl + "/tracked-ok",
+                OutboundPurpose.PROVIDER_API_CALL,
+                null,
+                "user-1",
+                false,
+                getRequest(baseUrl + "/tracked-ok"),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, resp.statusCode());
+        assertEquals(1, serverHits.get());
+
+        verify(auditService)
+                .recordMandatory(
+                        eq("governed-transport"),
+                        eq("user-1"),
+                        eq("system"),
+                        eq(SecurityEventType.TOOL_INVOKED),
+                        anyString());
+        verify(auditService)
+                .record(
+                        eq("governed-transport"),
+                        eq("user-1"),
+                        eq("system"),
+                        eq(SecurityEventType.TOOL_EXECUTED),
+                        anyString());
+    }
+
+    @Test
+    void sendFailsClosedWhenMandatoryAuditFailsAndDoesNotHitWire() {
+        AtomicInteger serverHits = new AtomicInteger(0);
+        server.createContext("/tracked-fail", exchange -> {
+            serverHits.incrementAndGet();
+            byte[] body = "ok".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+
+        doThrow(new RuntimeException("Audit persistence failure"))
+                .when(auditService)
+                .recordMandatory(
+                        eq("governed-transport"),
+                        eq("user-fail"),
+                        eq("system"),
+                        eq(SecurityEventType.TOOL_INVOKED),
+                        anyString());
+
+        assertThrows(
+                Exception.class,
+                () -> service.send(
+                        baseUrl + "/tracked-fail",
+                        OutboundPurpose.PROVIDER_API_CALL,
+                        null,
+                        "user-fail",
+                        false,
+                        getRequest(baseUrl + "/tracked-fail"),
+                        HttpResponse.BodyHandlers.ofString()));
+
+        assertEquals(0, serverHits.get());
+    }
+
+    @Test
+    void postSendAuditFailureDoesNotFailSuccessfulRequest() {
+        doThrow(new RuntimeException("Post-send audit store error"))
+                .when(auditService)
+                .record(
+                        eq("governed-transport"),
+                        eq("user-safe"),
+                        eq("system"),
+                        eq(SecurityEventType.TOOL_EXECUTED),
+                        anyString());
+
+        HttpResponse<String> resp = service.send(
+                baseUrl + "/ok",
+                OutboundPurpose.PROVIDER_API_CALL,
+                null,
+                "user-safe",
+                false,
+                getRequest(baseUrl + "/ok"),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, resp.statusCode());
+        assertEquals("pong", resp.body());
     }
 }

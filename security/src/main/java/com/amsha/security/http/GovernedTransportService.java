@@ -9,7 +9,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.CredentialDetector;
@@ -20,6 +23,7 @@ import com.amsha.security.api.SecretVault;
 
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -58,6 +62,9 @@ public class GovernedTransportService {
 
     @Inject
     Instance<CredentialDetector> credentialDetectorInstance;
+
+    @Inject
+    Instance<MeterRegistry> meterRegistryInstance;
 
     /**
      * Executes a governed HTTP request with full policy enforcement.
@@ -176,13 +183,59 @@ public class GovernedTransportService {
                 .actor(effectiveActor)
                 .preApproved(effectivePreApproved)
                 .build();
-        auditService.record(
+
+        // Mandatory authorization/audit gating must happen before outbound network I/O
+        auditService.recordMandatory(
                 "governed-transport",
-                actorUserId != null ? actorUserId : "system",
+                effectiveActor != null ? effectiveActor : "system",
                 "system",
-                SecurityEventType.TOOL_EXECUTED,
-                "governed_send purpose=" + purpose + " host=" + request.uri().getHost());
-        return client.send(request, bodyHandler);
+                SecurityEventType.TOOL_INVOKED,
+                "governed_send_dispatch purpose=" + purpose + " host="
+                        + request.uri().getHost() + " preApproved=" + effectivePreApproved);
+
+        long startNs = System.nanoTime();
+        try {
+            HttpResponse<T> response = client.send(request, bodyHandler);
+            long durationNanos = System.nanoTime() - startNs;
+            long durationMs = TimeUnit.NANOSECONDS.toMillis(durationNanos);
+            GovernedTransportMetrics.recordRequest(
+                    GovernedTransportMetrics.resolve(meterRegistryInstance), purpose, "success", durationNanos);
+            try {
+                auditService.record(
+                        "governed-transport",
+                        effectiveActor != null ? effectiveActor : "system",
+                        "system",
+                        SecurityEventType.TOOL_EXECUTED,
+                        "governed_send purpose=" + purpose + " host="
+                                + request.uri().getHost() + " status=success durationMs=" + durationMs);
+            } catch (Exception auditEx) {
+                log.warnf(
+                        "GovernedTransportService: failed to record post-send completion audit: %s",
+                        LogUtil.rootMessage(auditEx));
+            }
+            return response;
+        } catch (Exception e) {
+            long durationNanos = System.nanoTime() - startNs;
+            long durationMs = TimeUnit.NANOSECONDS.toMillis(durationNanos);
+            String status = mapExceptionToStatus(e);
+            GovernedTransportMetrics.recordRequest(
+                    GovernedTransportMetrics.resolve(meterRegistryInstance), purpose, status, durationNanos);
+            try {
+                auditService.record(
+                        "governed-transport",
+                        effectiveActor != null ? effectiveActor : "system",
+                        "system",
+                        SecurityEventType.TOOL_FAILED,
+                        "governed_send_failed purpose=" + purpose + " host="
+                                + request.uri().getHost() + " status=" + status + " durationMs=" + durationMs);
+            } catch (Exception auditEx) {
+                e.addSuppressed(auditEx);
+                log.warnf(
+                        "GovernedTransportService: failed to record audit on send failure: %s",
+                        LogUtil.rootMessage(auditEx));
+            }
+            throw e;
+        }
     }
 
     /**
@@ -276,5 +329,12 @@ public class GovernedTransportService {
                 approvalToken,
                 request,
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String mapExceptionToStatus(Exception e) {
+        if (e instanceof OutboundHttpException ohe) {
+            return ohe.category().name().toLowerCase(Locale.ROOT);
+        }
+        return "error";
     }
 }
