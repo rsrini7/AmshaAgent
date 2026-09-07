@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,6 +59,7 @@ public class OnboardingSelectionScrubber {
                 modified |= scrubConnectionApiKeys(payload, ownerId);
                 modified |= scrubMcpHeaders(payload, ownerId);
                 modified |= scrubMcpServerHeaders(payload, ownerId);
+                modified |= scrubOptionalSections(payload, ownerId);
 
                 if (modified) {
                     scrubbed.add(objectMapper.writeValueAsString(payload));
@@ -84,6 +86,7 @@ public class OnboardingSelectionScrubber {
                 cleanupConnectionSecrets(payload, draft);
                 cleanupMcpHeaderSecrets(payload, draft);
                 cleanupMcpServerHeaderSecrets(payload, draft);
+                cleanupOptionalSecrets(payload, draft);
             } catch (Exception _) {
                 // not a JSON map; skip
             }
@@ -366,5 +369,74 @@ public class OnboardingSelectionScrubber {
                 log.warnf("[ONBOARDING] Failed to clean staged MCP header %s: %s", ref, e.getMessage());
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean scrubOptionalSections(Map<String, Object> payload, String ownerId) {
+        boolean modified = false;
+        String[] sections = {"integrations", "memory", "channels", "security", "advanced"};
+        for (String sec : sections) {
+            Object raw = payload.get(sec);
+            if (raw instanceof Map<?, ?> map) {
+                Map<String, Object> secMap = (Map<String, Object>) map;
+                Map<String, Object> toAdd = new LinkedHashMap<>();
+                List<String> toRemove = new ArrayList<>();
+                for (Map.Entry<String, Object> entry : secMap.entrySet()) {
+                    String k = entry.getKey();
+                    Object v = entry.getValue();
+                    if (v instanceof String str && isSecretKey(k) && !str.isBlank() && !str.startsWith("vault-key-")) {
+                        String ref = "vault-key-"
+                                + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                        vault.store(ref, str.getBytes(StandardCharsets.UTF_8), ownerId);
+                        String refKey = k.endsWith("VaultRef") ? k : k + "VaultRef";
+                        toAdd.put(refKey, ref);
+                        toRemove.add(k);
+                        modified = true;
+                    }
+                }
+                for (String r : toRemove) {
+                    secMap.remove(r);
+                }
+                secMap.putAll(toAdd);
+            }
+        }
+        return modified;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void cleanupOptionalSecrets(Map<String, Object> payload, OnboardingDraftDto draft) {
+        String[] sections = {"integrations", "memory", "channels", "security", "advanced"};
+        for (String sec : sections) {
+            Object raw = payload.get(sec);
+            if (raw instanceof Map<?, ?> map) {
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    String k = String.valueOf(entry.getKey());
+                    Object v = entry.getValue();
+                    if ((k.endsWith("VaultRef") || k.endsWith("Ref"))
+                            && v instanceof String ref
+                            && ref.startsWith("vault-key-")) {
+                        try {
+                            vault.remove(ref, draft.ownerId());
+                            log.debugf("[ONBOARDING] Cleaned staged optional secret %s draft %s", ref, draft.draftId());
+                        } catch (Exception e) {
+                            log.warnf(
+                                    "[ONBOARDING] Failed to clean staged optional secret %s: %s", ref, e.getMessage());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean isSecretKey(String key) {
+        if (key == null) return false;
+        String lower = key.toLowerCase(Locale.ROOT);
+        return (lower.contains("secret")
+                        || lower.contains("token")
+                        || lower.contains("password")
+                        || lower.contains("key")
+                        || lower.contains("pass"))
+                && !lower.endsWith("vaultref")
+                && !lower.endsWith("ref");
     }
 }

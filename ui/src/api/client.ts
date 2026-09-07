@@ -456,6 +456,36 @@ export class ArcClient {
     return this.request<any>('/onboarding/provider-catalog');
   }
 
+  async getStepDescriptors(): Promise<any> {
+    return this.request<any>('/onboarding/steps/descriptors');
+  }
+
+  async getStepDescriptor(stepId: string): Promise<any> {
+    return this.request<any>(`/onboarding/steps/${stepId}/descriptor`);
+  }
+
+  async validateDraftConnection(
+    draftId: string,
+    options?: { connectionIndex?: number; probeNetwork?: boolean; requestApproval?: boolean }
+  ): Promise<any> {
+    return this.request<any>(`/onboarding/drafts/${draftId}/validate-connection`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  }
+
+  async resolveDraftApproval(
+    draftId: string,
+    approvalId: string,
+    approved: boolean,
+    reason?: string
+  ): Promise<any> {
+    return this.request<any>(`/onboarding/drafts/${draftId}/approvals/${approvalId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ approved, reason })
+    });
+  }
+
   async getModelDefaults(): Promise<Record<string, { defaultModel: string; defaultBaseUrl?: string }>> {
     return this.request<Record<string, { defaultModel: string; defaultBaseUrl?: string }>>('/model-defaults');
   }

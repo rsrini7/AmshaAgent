@@ -199,6 +199,18 @@ export class ArcOnboarding extends LitElement {
         flex-wrap: wrap;
         gap: var(--space-3);
       }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
     `
   ];
 
@@ -378,6 +390,10 @@ export class ArcOnboarding extends LitElement {
       
       this._currentStepId = res.currentStepId;
       this._draftPayload = newPayload;
+      this.updateComplete.then(() => {
+        const target = this.shadowRoot?.querySelector('h2, .step-title, input, button.btn-primary');
+        (target as HTMLElement)?.focus?.();
+      });
     } catch (e: any) {
       this._error = e.message;
     } finally {
@@ -544,7 +560,8 @@ export class ArcOnboarding extends LitElement {
     const draftReady = Boolean(this._draftId);
 
     return html`
-      <div class="wizard-card ${isWide ? 'wide' : ''}">
+      <main class="wizard-card ${isWide ? 'wide' : ''}" role="main" aria-label="Amsha Agent Infrastructure Onboarding">
+        <div class="sr-only" aria-live="polite" id="step-announcer">Step: ${this._currentStepId}</div>
         <div class="wizard-header">
           <div class="brand-mark">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -651,7 +668,7 @@ export class ArcOnboarding extends LitElement {
               </div>
             `
           : ''}
-      </div>
+      </main>
     `;
   }
 

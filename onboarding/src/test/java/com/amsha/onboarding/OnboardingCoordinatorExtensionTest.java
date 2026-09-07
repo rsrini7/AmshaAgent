@@ -35,6 +35,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -280,6 +281,103 @@ class OnboardingCoordinatorExtensionTest {
                 .storeSystemKey(
                         eq(VaultConstants.LLM_BASE_URL_KEY),
                         eq("https://provider.example/v1".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void activateLlmSettingsDoesNotPromoteUserApiKeyToSystemVault() {
+        OnboardingDraftDto base = draft("no-key-promotion", OnboardingDraftState.DRAFT, List.of());
+        String payload = """
+                {"connections":[{"provider":"openai","modelId":"gpt-4o",
+                 "apiKeyVaultRef":"vault-key-user-123"}],
+                 "concernRoutes":{"agentLoop":[0]}}
+                """;
+        OnboardingDraftDto selected = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of(payload),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        commitSaga.activateLlmSettings(selected);
+
+        // Verify provider and model are stored in system vault, but NOT the API key!
+        verify(vault)
+                .storeSystemKey(eq(VaultConstants.LLM_PROVIDER_KEY), eq("openai".getBytes(StandardCharsets.UTF_8)));
+        verify(vault).storeSystemKey(eq(VaultConstants.LLM_MODEL_KEY), eq("gpt-4o".getBytes(StandardCharsets.UTF_8)));
+        verify(vault, never()).storeSystemKey(eq(VaultConstants.LLM_API_KEY), any());
+    }
+
+    @Test
+    void activateOptionalStagesScrubsSecretsBeforeWritingToSystemVault() {
+        OnboardingDraftDto base = draft("scrub-optional-secrets", OnboardingDraftState.DRAFT, List.of());
+        String payload = """
+                {"connections":[{"provider":"openai","modelId":"gpt-4o"}],
+                 "concernRoutes":{"agentLoop":[0]},
+                 "integrations":{"playwrightEnabled":true,"githubToken":"ghp_supersecret123"}}
+                """;
+        OnboardingDraftDto selected = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of(payload),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        commitSaga.activateLlmSettings(selected);
+
+        // Secret should be scrubbed and stored in user vault scope
+        verify(vault).store(anyString(), eq("ghp_supersecret123".getBytes(StandardCharsets.UTF_8)), eq(base.ownerId()));
+
+        // System vault should store settings:integrations without plaintext secret
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+        verify(vault).storeSystemKey(eq("settings:integrations"), captor.capture());
+        String storedJson = new String(captor.getValue(), StandardCharsets.UTF_8);
+        assertTrue(storedJson.contains("githubTokenVaultRef"));
+        assertFalse(storedJson.contains("ghp_supersecret123"));
+    }
+
+    @Test
+    void cleanupStagedSecretsCleansOptionalSectionVaultRefs() {
+        OnboardingDraftDto base = draft("cleanup-optional-secrets", OnboardingDraftState.DRAFT, List.of());
+        String payload = """
+                {"integrations":{"githubTokenVaultRef":"vault-key-staged-123"}}
+                """;
+        OnboardingDraftDto draft = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of(payload),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        coordinator.scrubber.cleanupStagedSecrets(draft);
+
+        verify(vault).remove(eq("vault-key-staged-123"), eq(base.ownerId()));
     }
 
     @Test

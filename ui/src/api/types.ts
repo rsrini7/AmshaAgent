@@ -265,3 +265,38 @@ export interface O1DraftPayload {
   channels?: ChannelsConfig;
   identity?: IdentityConfig;
 }
+
+export interface OnboardingFieldDescriptorDto {
+  name: string;
+  type: string;
+  required: boolean;
+  options: string[];
+  title: string;
+  description: string;
+}
+
+export interface OnboardingStepDescriptorDto {
+  id: string;
+  version: string;
+  order: number;
+  optional: boolean;
+  title: string;
+  description: string;
+  fields: OnboardingFieldDescriptorDto[];
+}
+
+export interface ConnectionValidationResponse {
+  tier: string;
+  status: string;
+  approvalId?: string | null;
+  summary?: string | null;
+  valid: boolean;
+  safeErrors?: string | null;
+}
+
+export interface ApprovalResolutionResponse {
+  approvalId: string;
+  status: string;
+  verified: boolean;
+  message: string;
+}

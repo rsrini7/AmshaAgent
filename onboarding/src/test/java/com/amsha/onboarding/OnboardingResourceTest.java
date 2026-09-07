@@ -13,6 +13,8 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -21,6 +23,7 @@ import com.amsha.onboarding.dto.OnboardingStatusDto;
 import com.amsha.onboarding.testutil.FlywayEnabledTestProfile;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
+import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.Test;
 
@@ -236,5 +239,137 @@ class OnboardingResourceTest {
                 .put("/onboarding/drafts/" + draftId + "/steps/connections")
                 .then()
                 .statusCode(400);
+    }
+
+    @Test
+    void testStepDescriptorsEndpoint() {
+        // Unauthenticated calls must be rejected with 401
+        given().when().get("/onboarding/steps/descriptors").then().statusCode(401);
+
+        given().when().get("/onboarding/steps/welcome/descriptor").then().statusCode(401);
+
+        // Authenticated calls return descriptors
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/steps/descriptors")
+                .then()
+                .statusCode(200)
+                .body("size()", greaterThan(0))
+                .body("[0].id", is("welcome"))
+                .body("[0].title", notNullValue());
+
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/steps/welcome/descriptor")
+                .then()
+                .statusCode(200)
+                .body("id", is("welcome"))
+                .body("title", is("Welcome to Amsha Agent"));
+
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/steps/non-existent-step/descriptor")
+                .then()
+                .statusCode(200)
+                .body("id", is("non-existent-step"));
+    }
+
+    @Test
+    void testConnectionValidationAndApprovalEndpoints() throws Exception {
+        HttpServer probeServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        probeServer.createContext("/models", exchange -> {
+            byte[] resp = "{\"object\":\"list\",\"data\":[]}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, resp.length);
+            exchange.getResponseBody().write(resp);
+            exchange.close();
+        });
+        probeServer.start();
+        int probePort = probeServer.getAddress().getPort();
+
+        try {
+            String userKey = "test-user-owner-key";
+            String draftId = given().header("X-Amsha-API-Key", userKey)
+                    .when()
+                    .post("/onboarding/drafts")
+                    .then()
+                    .statusCode(200)
+                    .extract()
+                    .path("draftId");
+
+            // Populate valid connection selection for index 0 targeting the ephemeral probe server
+            String stepJson = String.format(
+                    "{\"selectedNonSecretIds\":[\"{\\\"connections\\\":[{\\\"provider\\\":\\\"generic-openai\\\",\\\"modelId\\\":\\\"gpt-4o-mini\\\",\\\"baseUrl\\\":\\\"http://127.0.0.1:%d\\\",\\\"apiKey\\\":\\\"sk-dummy-key\\\"}]}\"]}",
+                    probePort);
+            given().header("X-Amsha-API-Key", userKey)
+                    .contentType(ContentType.JSON)
+                    .body(stepJson)
+                    .when()
+                    .put("/onboarding/drafts/" + draftId + "/steps/connections")
+                    .then()
+                    .statusCode(200);
+
+            // Format validation tier
+            given().header("X-Amsha-API-Key", userKey)
+                    .contentType(ContentType.JSON)
+                    .body(Map.of("connectionIndex", 0, "probeNetwork", false, "requestApproval", false))
+                    .when()
+                    .post("/onboarding/drafts/" + draftId + "/validate-connection")
+                    .then()
+                    .statusCode(200)
+                    .body("tier", is("FORMAT_VALID"))
+                    .body("status", is("OK"));
+
+            // Outbound probe with approval request -> transitions to WAITING_APPROVAL
+            String approvalId = given().header("X-Amsha-API-Key", userKey)
+                    .contentType(ContentType.JSON)
+                    .body(Map.of("connectionIndex", 0, "probeNetwork", true, "requestApproval", true))
+                    .when()
+                    .post("/onboarding/drafts/" + draftId + "/validate-connection")
+                    .then()
+                    .statusCode(200)
+                    .body("tier", is("CONNECTION_PROBE"))
+                    .body("status", is("WAITING_APPROVAL"))
+                    .extract()
+                    .path("approvalId");
+
+            // Unauthenticated resolve -> 401
+            given().contentType(ContentType.JSON)
+                    .body(Map.of("approved", true, "reason", "no auth"))
+                    .when()
+                    .post("/onboarding/drafts/" + draftId + "/approvals/" + approvalId + "/resolve")
+                    .then()
+                    .statusCode(401);
+
+            // Draft owner self-approval attempt -> 403 Forbidden
+            given().header("X-Amsha-API-Key", userKey)
+                    .contentType(ContentType.JSON)
+                    .body(Map.of("approved", true, "reason", "self approval"))
+                    .when()
+                    .post("/onboarding/drafts/" + draftId + "/approvals/" + approvalId + "/resolve")
+                    .then()
+                    .statusCode(403);
+
+            // Non-operator user approval attempt -> 403 Forbidden
+            given().header("X-Amsha-API-Key", "other-user-without-operator-role")
+                    .contentType(ContentType.JSON)
+                    .body(Map.of("approved", true, "reason", "non operator"))
+                    .when()
+                    .post("/onboarding/drafts/" + draftId + "/approvals/" + approvalId + "/resolve")
+                    .then()
+                    .statusCode(403);
+
+            // Distinct operator resolve approval (approved) -> 200 OK, transitions back to DRAFT
+            given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                    .contentType(ContentType.JSON)
+                    .body(Map.of("approved", true, "reason", "Operator verified endpoint"))
+                    .when()
+                    .post("/onboarding/drafts/" + draftId + "/approvals/" + approvalId + "/resolve")
+                    .then()
+                    .statusCode(200)
+                    .body("status", is("APPROVED"))
+                    .body("verified", is(true));
+        } finally {
+            probeServer.stop(0);
+        }
     }
 }

@@ -16,6 +16,7 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,7 +25,10 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.routing.ChatModelPool;
 import com.amsha.core.util.HttpConstants;
+import com.amsha.onboarding.dto.ApprovalResolutionRequestDto;
+import com.amsha.onboarding.dto.ConnectionValidationRequestDto;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
+import com.amsha.onboarding.dto.OnboardingStepDescriptorDto;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
 import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.persistence.api.LlmProfileStorePort;
@@ -71,11 +75,20 @@ public class OnboardingResource {
     @Inject
     LlmConfigurationProvenance configurationProvenance;
 
+    @Inject
+    OnboardingStepDescriptorService descriptorService;
+
+    @Inject
+    OnboardingApprovalService approvalService;
+
     @Context
     SecurityContext securityContext;
 
     @Context
     HttpServerRequest request;
+
+    @Context
+    HttpHeaders httpHeaders;
 
     @ConfigProperty(name = "amsha.ui.skip-onboarding", defaultValue = "false")
     boolean skipOnboarding;
@@ -398,9 +411,130 @@ public class OnboardingResource {
         return Response.ok(Map.of("discarded", true)).build();
     }
 
+    @GET
+    @Path("/steps/descriptors")
+    @Operation(summary = "List typed step descriptors for the effective onboarding plan")
+    public Response listStepDescriptors() {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        Locale locale = resolveLocale();
+        List<OnboardingStepDescriptorDto> descriptors =
+                descriptorService.getEffectiveDescriptors(coordinator.effectivePlan(), locale);
+        return Response.ok(descriptors).build();
+    }
+
+    @GET
+    @Path("/steps/{stepId}/descriptor")
+    @Operation(summary = "Get a single typed step descriptor")
+    public Response getStepDescriptor(@PathParam("stepId") String stepId) {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        Locale locale = resolveLocale();
+        int order = coordinator.effectivePlan().indexOf(stepId) + 1;
+        return descriptorService
+                .getDescriptor(stepId, order > 0 ? order : 1, locale)
+                .map(d -> Response.ok(d).build())
+                .orElse(Response.status(404)
+                        .entity(new AmshaErrorResponse("Not Found", "Descriptor not found"))
+                        .build());
+    }
+
+    @POST
+    @Path("/drafts/{draftId}/validate-connection")
+    @Operation(summary = "Validate connection with tiered format check or HITL-gated network probe")
+    public Response validateConnection(@PathParam("draftId") String draftId, ConnectionValidationRequestDto request) {
+        String ownerId = requireOwner();
+        if (ownerId == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        Optional<OnboardingDraftDto> draft = coordinator.findById(draftId);
+        if (draft.isEmpty() || !draft.get().ownerId().equals(ownerId)) {
+            return Response.status(404)
+                    .entity(new AmshaErrorResponse("Not Found", "Draft not found"))
+                    .build();
+        }
+        ConnectionValidationRequestDto req =
+                request != null ? request : new ConnectionValidationRequestDto(0, false, false);
+        return Response.ok(approvalService.validateConnection(draft.get(), req)).build();
+    }
+
+    @POST
+    @Path("/drafts/{draftId}/approvals/{approvalId}/resolve")
+    @Operation(summary = "Approve or deny a pending onboarding validation approval")
+    public Response resolveApproval(
+            @PathParam("draftId") String draftId,
+            @PathParam("approvalId") String approvalId,
+            ApprovalResolutionRequestDto resolution) {
+        String callerId = requireOwner();
+        if (callerId == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
+                    .build();
+        }
+        if (!isInternal()) {
+            log.warnf("Onboarding approval resolution denied: operator authorization required (caller=%s)", callerId);
+            return Response.status(403)
+                    .entity(new AmshaErrorResponse("Forbidden", "Operator authorization required for HITL approval"))
+                    .build();
+        }
+        Optional<OnboardingDraftDto> draft = coordinator.findById(draftId);
+        if (draft.isEmpty()) {
+            return Response.status(404)
+                    .entity(new AmshaErrorResponse("Not Found", "Draft not found"))
+                    .build();
+        }
+        if (draft.get().ownerId().equals(callerId)) {
+            log.warnf("Onboarding self-approval denied: draft owner cannot approve own probe (caller=%s)", callerId);
+            return Response.status(403)
+                    .entity(new AmshaErrorResponse("Forbidden", "Draft owner cannot approve their own probe request"))
+                    .build();
+        }
+        ApprovalResolutionRequestDto res =
+                resolution != null ? resolution : new ApprovalResolutionRequestDto(false, "denied");
+        return approvalService
+                .resolveApproval(draft.get(), approvalId, res, callerId)
+                .map(r -> Response.ok(r).build())
+                .orElse(Response.status(404)
+                        .entity(new AmshaErrorResponse("Not Found", "Approval not found"))
+                        .build());
+    }
+
+    private Locale resolveLocale() {
+        if (httpHeaders != null
+                && httpHeaders.getAcceptableLanguages() != null
+                && !httpHeaders.getAcceptableLanguages().isEmpty()) {
+            return httpHeaders.getAcceptableLanguages().get(0);
+        }
+        return Locale.ENGLISH;
+    }
+
     private String requireOwner() {
         return securityContext.getUserPrincipal() != null
                 ? securityContext.getUserPrincipal().getName()
                 : null;
+    }
+
+    private boolean isInternal() {
+        if (securityContext != null && securityContext.isUserInRole("internal")) {
+            return true;
+        }
+        String auth = request != null ? request.getHeader("Authorization") : null;
+        if (auth == null && request != null) {
+            auth = request.getHeader("X-Amsha-API-Key");
+        }
+        if (auth != null && auth.startsWith("Bearer ")) {
+            auth = auth.substring(7);
+        }
+        return auth != null && !auth.isBlank() && auth.equals(internalApiKey);
     }
 }
