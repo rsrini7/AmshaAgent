@@ -59,6 +59,20 @@ describe('UI Accessibility & Health Dashboard Tests (A11y)', () => {
         baseUrl: 'https://api.openai.com/v1',
         details: 'Missing OPENAI_API_KEY',
       },
+      {
+        providerName: 'claude-code',
+        isDefault: false,
+        status: 'CONFIGURED',
+        baseUrl: 'api.anthropic.com',
+        details: 'Ready (model instantiated)',
+      },
+      {
+        providerName: 'codex',
+        isDefault: false,
+        status: 'CONFIGURED',
+        baseUrl: 'chatgpt.com',
+        details: 'Ready (model instantiated)',
+      },
     ],
     timestamp: 1725700000000,
   };
@@ -177,5 +191,37 @@ describe('UI Accessibility & Health Dashboard Tests (A11y)', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('supports filtering and searching providers in ArcHealthDashboard', () => {
+    const dashboard = new ArcHealthDashboard();
+    (dashboard as any)._health = mockHealthUp;
+
+    // Default: all providers visible
+    let rendered = flattenLit(dashboard.render());
+    expect(rendered).toContain('codex');
+    expect(rendered).toContain('claude-code');
+    expect(rendered).toContain('Claude Code / Anthropic');
+    expect(rendered).toContain('Codex / ChatGPT Plus');
+
+    // Filter by search: "codex"
+    (dashboard as any)._providerSearch = 'codex';
+    rendered = flattenLit(dashboard.render());
+    expect(rendered).toContain('<strong>codex</strong>');
+    expect(rendered).not.toContain('<strong>claude-code</strong>');
+
+    // Filter by search alias: "claude" matches "claude-code"
+    (dashboard as any)._providerSearch = 'claude';
+    rendered = flattenLit(dashboard.render());
+    expect(rendered).toContain('<strong>claude-code</strong>');
+    expect(rendered).not.toContain('<strong>codex</strong>');
+
+    // Filter by status: "not_configured"
+    (dashboard as any)._providerSearch = '';
+    (dashboard as any)._providerFilter = 'not_configured';
+    rendered = flattenLit(dashboard.render());
+    expect(rendered).toContain('<strong>openai</strong>');
+    expect(rendered).not.toContain('<strong>groq</strong>');
+    expect(rendered).not.toContain('<strong>codex</strong>');
   });
 });

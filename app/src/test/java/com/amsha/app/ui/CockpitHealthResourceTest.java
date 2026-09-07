@@ -21,6 +21,7 @@ import java.sql.SQLException;
 import java.util.List;
 
 import com.amsha.app.ui.dto.CockpitHealthResponse;
+import com.amsha.app.ui.dto.ProviderHealthSummary;
 import com.amsha.llm.api.AgentChatModelProvider;
 
 import org.eclipse.microprofile.health.HealthCheck;
@@ -377,5 +378,65 @@ class CockpitHealthResourceTest {
                 CockpitHealthResource.categorizeProviderError(new IllegalArgumentException("bad config param")));
         assertEquals(
                 "INITIALIZATION_FAILED", CockpitHealthResource.categorizeProviderError(new NullPointerException()));
+    }
+
+    @Test
+    void defaultProviderAliasingClaudeCodeAndAnthropic() {
+        assertTrue(CockpitHealthResource.isDefaultProvider("claude-code", "anthropic"));
+        assertTrue(CockpitHealthResource.isDefaultProvider("claude-code", "claudecode"));
+        assertTrue(CockpitHealthResource.isDefaultProvider("claude-code", "claude"));
+        assertTrue(CockpitHealthResource.isDefaultProvider("claude-code", "claude-code"));
+        assertTrue(CockpitHealthResource.isDefaultProvider("anthropic", "claude-code"));
+        assertTrue(CockpitHealthResource.isDefaultProvider("codex", "codex"));
+        assertTrue(CockpitHealthResource.isDefaultProvider("groq", "groq"));
+
+        assertFalse(CockpitHealthResource.isDefaultProvider("codex", "openai"));
+        assertFalse(CockpitHealthResource.isDefaultProvider("openai", "codex"));
+        assertFalse(CockpitHealthResource.isDefaultProvider("claude-code", "openai"));
+        assertFalse(CockpitHealthResource.isDefaultProvider(null, "groq"));
+        assertFalse(CockpitHealthResource.isDefaultProvider("groq", null));
+    }
+
+    @Test
+    void probeProvidersIncludesCodexAndClaudeCodeWithAliases() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        when(healthChecksInstance.iterator()).thenAnswer(inv -> List.of().iterator());
+        resource.defaultProviderName = "anthropic";
+
+        AgentChatModelProvider codex = mock(AgentChatModelProvider.class);
+        when(codex.providerName()).thenReturn("codex");
+        when(codex.baseUrl()).thenReturn("https://chatgpt.com/backend-api/codex");
+        ChatModel codexModel = mock(ChatModel.class);
+        when(codex.create()).thenReturn(codexModel);
+
+        AgentChatModelProvider claudeCode = mock(AgentChatModelProvider.class);
+        when(claudeCode.providerName()).thenReturn("claude-code");
+        when(claudeCode.baseUrl()).thenReturn("https://api.anthropic.com");
+        ChatModel claudeModel = mock(ChatModel.class);
+        when(claudeCode.create()).thenReturn(claudeModel);
+
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(codex, claudeCode).iterator());
+
+        Response response = resource.getHealth();
+        CockpitHealthResponse body = (CockpitHealthResponse) response.getEntity();
+        List<ProviderHealthSummary> summaries = body.providers();
+
+        assertEquals(2, summaries.size());
+        ProviderHealthSummary claudeSummary = summaries.stream()
+                .filter(p -> "claude-code".equals(p.providerName()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(claudeSummary.isDefault(), "claude-code should match defaultProviderName=anthropic");
+        assertEquals("CONFIGURED", claudeSummary.status());
+        assertEquals("api.anthropic.com", claudeSummary.baseUrl());
+
+        ProviderHealthSummary codexSummary = summaries.stream()
+                .filter(p -> "codex".equals(p.providerName()))
+                .findFirst()
+                .orElseThrow();
+        assertFalse(codexSummary.isDefault());
+        assertEquals("CONFIGURED", codexSummary.status());
+        assertEquals("chatgpt.com", codexSummary.baseUrl());
     }
 }

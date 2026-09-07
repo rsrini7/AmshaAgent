@@ -15,6 +15,8 @@ export class ArcHealthDashboard extends LitElement {
   @state() private _authStatus: 401 | 403 | null = null;
   @state() private _health: CockpitHealthResponse | null = null;
   @state() private _autoRefresh = true;
+  @state() private _providerFilter: 'all' | 'configured' | 'not_configured' = 'all';
+  @state() private _providerSearch = '';
 
   private _refreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -248,6 +250,38 @@ export class ArcHealthDashboard extends LitElement {
       font-family: var(--font-mono, monospace);
       color: var(--text-muted, #8b949e);
       word-break: break-all;
+    }
+
+    .provider-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter-input {
+      padding: 4px 10px;
+      font-size: 12px;
+      background: var(--bg-base, #0a0b0f);
+      border: 1px solid var(--border, #2d333b);
+      border-radius: var(--radius-sm, 6px);
+      color: var(--text-primary, #ffffff);
+      outline: none;
+      min-width: 180px;
+    }
+
+    .filter-input:focus {
+      border-color: var(--accent, #6366f1);
+    }
+
+    .filter-select {
+      padding: 4px 8px;
+      font-size: 12px;
+      background: var(--bg-base, #0a0b0f);
+      border: 1px solid var(--border, #2d333b);
+      border-radius: var(--radius-sm, 6px);
+      color: var(--text-primary, #ffffff);
+      cursor: pointer;
     }
 
     .error-box {
@@ -489,32 +523,88 @@ export class ArcHealthDashboard extends LitElement {
   }
 
   private _renderProvidersCard() {
-    const providers = this._health?.providers || [];
+    const allProviders = this._health?.providers || [];
+    const search = this._providerSearch.trim().toLowerCase();
+    const filtered = allProviders.filter((p) => {
+      if (this._providerFilter === 'configured' && p.status !== 'CONFIGURED') {
+        return false;
+      }
+      if (this._providerFilter === 'not_configured' && p.status === 'CONFIGURED') {
+        return false;
+      }
+      if (search) {
+        const name = (p.providerName || '').toLowerCase();
+        const base = (p.baseUrl || '').toLowerCase();
+        const details = (p.details || '').toLowerCase();
+        const isMatch =
+          name.includes(search) ||
+          base.includes(search) ||
+          details.includes(search) ||
+          (search === 'claude' && (name === 'claude-code' || name === 'anthropic')) ||
+          (search === 'claudecode' && (name === 'claude-code' || name === 'anthropic')) ||
+          (search === 'anthropic' && (name === 'claude-code' || name === 'anthropic')) ||
+          (search === 'chatgpt' && (name === 'codex' || name === 'openai')) ||
+          (search === 'codex' && (name === 'codex' || name === 'openai'));
+        if (!isMatch) return false;
+      }
+      return true;
+    });
 
     return html`
       <div class="card" style="grid-column: 1 / -1" role="region" aria-label="LLM Provider Configuration Status">
-        <div class="card-header">
-          <h3 class="card-title">LLM Provider Configuration Status (${providers.length})</h3>
+        <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
+          <h3 class="card-title">LLM Provider Configuration Status (${filtered.length}/${allProviders.length})</h3>
+          <div class="provider-filter-bar">
+            <input
+              type="search"
+              class="filter-input"
+              placeholder="Filter providers (e.g. codex, claude)..."
+              .value="${this._providerSearch}"
+              @input="${(e: Event) => (this._providerSearch = (e.target as HTMLInputElement).value)}"
+              aria-label="Filter providers by name, host, or status"
+            />
+            <select
+              class="filter-select"
+              .value="${this._providerFilter}"
+              @change="${(e: Event) => (this._providerFilter = (e.target as HTMLSelectElement).value as any)}"
+              aria-label="Filter providers by configuration status"
+            >
+              <option value="all">All Providers</option>
+              <option value="configured">Configured Only</option>
+              <option value="not_configured">Not Configured</option>
+            </select>
+          </div>
         </div>
         <div class="stat-list">
-          ${providers.map(
-            (p) => html`
-              <div class="check-item">
-                <div class="check-header">
-                  <span style="display: flex; align-items: center; gap: 6px;">
-                    <strong>${p.providerName}</strong>
-                    ${p.isDefault ? html`<span class="badge default">Default</span>` : nothing}
-                  </span>
-                  <span class="badge ${p.status.toLowerCase()}">${p.status}</span>
+          ${filtered.length === 0
+            ? html`
+                <div style="font-size: 12px; color: var(--text-muted, #8b949e); padding: 12px; text-align: center;">
+                  No providers match the filter criteria "${this._providerSearch}".
                 </div>
-                <div class="check-data">
-                  <span>Host: ${p.baseUrl}</span>
-                  <br />
-                  <span>Status: ${p.details}</span>
-                </div>
-              </div>
-            `
-          )}
+              `
+            : filtered.map(
+                (p) => html`
+                  <div class="check-item">
+                    <div class="check-header">
+                      <span style="display: flex; align-items: center; gap: 6px;">
+                        <strong>${p.providerName}</strong>
+                        ${p.isDefault ? html`<span class="badge default">Default</span>` : nothing}
+                        ${p.providerName === 'claude-code'
+                          ? html`<span class="badge" style="font-size: 9px; opacity: 0.75;" title="Anthropic / Claude Code CLI OAuth">Claude Code / Anthropic</span>`
+                          : p.providerName === 'codex'
+                          ? html`<span class="badge" style="font-size: 9px; opacity: 0.75;" title="Codex CLI / ChatGPT Plus OAuth">Codex / ChatGPT Plus</span>`
+                          : nothing}
+                      </span>
+                      <span class="badge ${p.status.toLowerCase()}">${p.status}</span>
+                    </div>
+                    <div class="check-data">
+                      <span>Host: ${p.baseUrl}</span>
+                      <br />
+                      <span>Status: ${p.details}</span>
+                    </div>
+                  </div>
+                `
+              )}
         </div>
       </div>
     `;

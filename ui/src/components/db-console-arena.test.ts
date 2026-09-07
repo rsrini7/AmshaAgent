@@ -670,5 +670,16 @@ describe('ArcModelArena Component & Fallback Behavior (Issue 13)', () => {
     (arena as any)._customSlot = 'fake_provider:model-x';
     (arena as any)._addCustomSlot();
     expect((arena as any)._slotError).toContain('Unrecognized provider prefix');
+
+    // Add codex via catalog dropdown handler
+    (arena as any)._removeModel('groq:llama-3.3-70b-versatile');
+    (arena as any)._onSelectProvider({ target: { value: 'codex' } } as any);
+    expect(arena.selectedModels).toContain('codex');
+
+    // Add claudecode via custom slot (normalized to claude-code allowed)
+    (arena as any)._customSlot = 'claudecode:claude-sonnet-4-5';
+    (arena as any)._addCustomSlot();
+    expect(arena.selectedModels).toContain('claudecode:claude-sonnet-4-5');
+    expect(arena.selectedModels).toHaveLength(3);
   });
 });

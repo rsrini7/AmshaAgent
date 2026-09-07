@@ -1,5 +1,7 @@
 package com.amsha.app.api;
 
+import static com.amsha.app.api.ModelArenaHelper.error;
+
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
@@ -35,7 +37,6 @@ import com.amsha.app.ui.dto.ArenaModelResult;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ChatModelProducer;
 import com.amsha.core.agent.trace.TraceRedactor;
-import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.guardrail.GuardDecision;
@@ -118,7 +119,7 @@ public class ModelArenaResource {
             return error(Response.Status.FORBIDDEN, "Internal operator role required for Model Arena");
         }
 
-        Response validationError = ModelArenaHelper.validateCompareRequest(request);
+        Response validationError = ModelArenaHelper.validateCompareRequest(request, providers);
         if (validationError != null) {
             return validationError;
         }
@@ -211,7 +212,8 @@ public class ModelArenaResource {
             recordMandatoryAudit(
                     callerUserId,
                     SecurityEventType.SESSION_INSPECTED,
-                    "Arena comparison executed: models=" + ModelArenaHelper.categoricalModelSlots(modelSlots)
+                    "Arena comparison executed: models="
+                            + ModelArenaHelper.categoricalModelSlots(modelSlots, providers)
                             + " promptHash=" + promptHash
                             + " totalTokens=" + totalTokens
                             + " durationMs=" + totalDurationMs
@@ -319,7 +321,7 @@ public class ModelArenaResource {
         int tokenCap = Math.min(maxOutputTokens, ModelArenaHelper.MAX_OUTPUT_TOKENS);
         try {
             return ScopedValue.where(WorkspaceContext.USER_ID, callerUserId).call(() -> {
-                String cleanProv = ModelArenaHelper.validateAndExtractProvider(slot);
+                String cleanProv = ModelArenaHelper.validateAndExtractProvider(slot, providers);
                 ResolvedProvider resolved = resolveProviderAndModel(slot);
                 if (resolved == null || resolved.model() == null) {
                     return new ArenaModelResult(slot, "PROVIDER_UNKNOWN_MODEL", 0, 0, 0L, 0.0);
@@ -427,18 +429,14 @@ public class ModelArenaResource {
         }
 
         String cleanProvider = providerName.trim().toLowerCase(Locale.ROOT);
+        AgentChatModelProvider p = ModelArenaHelper.findProvider(cleanProvider, providers);
         ChatModel model = null;
-        if (providers != null) {
-            for (AgentChatModelProvider p : providers) {
-                if (p != null && p.providerName().equalsIgnoreCase(cleanProvider)) {
-                    try {
-                        model = (customModel != null && !customModel.isBlank()) ? p.create(customModel) : p.create();
-                    } catch (Exception e) {
-                        throw new ModelArenaHelper.ArenaConfigurationException(
-                                "Failed to construct model provider '" + cleanProvider + "': " + e.getMessage(), e);
-                    }
-                    break;
-                }
+        if (p != null) {
+            try {
+                model = (customModel != null && !customModel.isBlank()) ? p.create(customModel) : p.create();
+            } catch (Exception e) {
+                throw new ModelArenaHelper.ArenaConfigurationException(
+                        "Failed to construct model provider '" + cleanProvider + "': " + e.getMessage(), e);
             }
         }
         return new ResolvedProvider(model, ModelArenaHelper.resolveBaseUrl(cleanProvider, providers));
@@ -477,10 +475,6 @@ public class ModelArenaResource {
         } catch (Exception e) {
             throw new ModelArenaHelper.ArenaAuditException("Mandatory audit logging failed: " + e.getMessage(), e);
         }
-    }
-
-    private static Response error(Response.Status status, String msg) {
-        return Response.status(status).entity(new AmshaErrorResponse(msg)).build();
     }
 
     private boolean isInternal() {

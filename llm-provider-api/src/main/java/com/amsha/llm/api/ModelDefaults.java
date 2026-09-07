@@ -2,6 +2,7 @@ package com.amsha.llm.api;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Single source of truth for all default model names, base URLs, and provider constants.
@@ -38,6 +39,35 @@ public final class ModelDefaults {
     public static final String PROVIDER_LLAMACPP = "llamacpp";
     public static final String PROVIDER_GENERIC_OPENAI = "generic-openai";
     public static final String PROVIDER_INFINITE_LOOP = "infinite-loop";
+
+    public static final Set<String> ALL_PROVIDERS = Set.of(
+            PROVIDER_GROQ,
+            PROVIDER_OPENAI,
+            PROVIDER_OLLAMA,
+            PROVIDER_ANTHROPIC,
+            PROVIDER_CLAUDE_CODE,
+            PROVIDER_OPENROUTER,
+            PROVIDER_NVIDIA,
+            PROVIDER_CEREBRAS,
+            PROVIDER_SARVAM,
+            PROVIDER_OPENCODE,
+            PROVIDER_HUGGINGFACE,
+            PROVIDER_MISTRAL,
+            PROVIDER_CLOUDFLARE,
+            PROVIDER_COHERE,
+            PROVIDER_CODEX,
+            PROVIDER_AGY,
+            PROVIDER_KIMCHI,
+            PROVIDER_FOUNDRY,
+            PROVIDER_GEMINI,
+            PROVIDER_OMLX,
+            PROVIDER_LLAMACPP,
+            PROVIDER_GENERIC_OPENAI,
+            PROVIDER_INFINITE_LOOP);
+
+    public static boolean isKnownProvider(String provider) {
+        return provider != null && ALL_PROVIDERS.contains(provider.toLowerCase(Locale.ROOT));
+    }
 
     // ── Default Model Names ──────────────────────────────────────
 

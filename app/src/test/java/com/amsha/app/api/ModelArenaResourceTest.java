@@ -917,4 +917,107 @@ class ModelArenaResourceTest {
                         .counter()
                         .count());
     }
+
+    @Test
+    void codexProviderResolvesAndBenchmarksSuccessfully() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        AgentChatModelProvider codexProvider = mock(AgentChatModelProvider.class);
+        when(codexProvider.providerName()).thenReturn("codex");
+        when(codexProvider.baseUrl()).thenReturn("https://chatgpt.com/backend-api/codex");
+        ChatModel codexModel = mock(ChatModel.class);
+        when(codexProvider.create()).thenReturn(codexModel);
+        when(codexModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Codex response"))
+                        .tokenUsage(new TokenUsage(12, 8))
+                        .build());
+
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(codexProvider).iterator());
+
+        Response resp = resource.compareModels(new ArenaCompareRequest("Test codex prompt", List.of("codex"), 256));
+        assertEquals(Response.Status.OK.getStatusCode(), resp.getStatus());
+        ArenaCompareResponse compareResp = (ArenaCompareResponse) resp.getEntity();
+        assertEquals(1, compareResp.results().size());
+        ArenaModelResult result = compareResp.results().get(0);
+        assertEquals("codex", result.modelSlot());
+        assertEquals("Codex response", result.output());
+        assertEquals(12, result.inputTokens());
+        assertEquals(8, result.outputTokens());
+    }
+
+    @Test
+    void claudeCodeAndAnthropicAliasesResolveToClaudeCodeProvider() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        AgentChatModelProvider claudeCodeProvider = mock(AgentChatModelProvider.class);
+        when(claudeCodeProvider.providerName()).thenReturn("claude-code");
+        when(claudeCodeProvider.baseUrl()).thenReturn("https://api.anthropic.com");
+        ChatModel claudeModel = mock(ChatModel.class);
+        when(claudeCodeProvider.create()).thenReturn(claudeModel);
+        when(claudeModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Claude Code response"))
+                        .tokenUsage(new TokenUsage(15, 10))
+                        .build());
+
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(claudeCodeProvider).iterator());
+
+        // 1. anthropic slot resolves to claude-code provider
+        Response respAnthropic =
+                resource.compareModels(new ArenaCompareRequest("Test prompt", List.of("anthropic"), 256));
+        assertEquals(Response.Status.OK.getStatusCode(), respAnthropic.getStatus());
+        ArenaCompareResponse compareAnthropic = (ArenaCompareResponse) respAnthropic.getEntity();
+        assertEquals("Claude Code response", compareAnthropic.results().get(0).output());
+
+        // 2. claudecode slot resolves to claude-code provider
+        Response respClaudeCode =
+                resource.compareModels(new ArenaCompareRequest("Test prompt", List.of("claudecode"), 256));
+        assertEquals(Response.Status.OK.getStatusCode(), respClaudeCode.getStatus());
+        ArenaCompareResponse compareClaudeCode = (ArenaCompareResponse) respClaudeCode.getEntity();
+        assertEquals("Claude Code response", compareClaudeCode.results().get(0).output());
+
+        // 3. Helper validation checks
+        assertEquals("claude-code", ModelArenaHelper.validateAndExtractProvider("claudecode"));
+        assertEquals("claude-code", ModelArenaHelper.validateAndExtractProvider("claude"));
+        assertEquals("claude-code", ModelArenaHelper.validateAndExtractProvider("claude-code"));
+        assertEquals("codex", ModelArenaHelper.validateAndExtractProvider("codex"));
+    }
+
+    @Test
+    void dynamicCdiProviderNotPreconfiguredInDefaultsIsAllowlistedAndRuns() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        when(piiInputGuard.validate(any(), any(), any(), any())).thenReturn(new GuardDecision.Allow());
+
+        AgentChatModelProvider dynamicProvider = mock(AgentChatModelProvider.class);
+        when(dynamicProvider.providerName()).thenReturn("custom-enterprise-llm");
+        when(dynamicProvider.baseUrl()).thenReturn("https://enterprise.internal/v1");
+        ChatModel dynamicModel = mock(ChatModel.class);
+        when(dynamicProvider.create()).thenReturn(dynamicModel);
+        when(dynamicModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.from("Custom enterprise response"))
+                        .tokenUsage(new TokenUsage(20, 10))
+                        .build());
+
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.of(dynamicProvider).iterator());
+
+        // Validate that dynamic provider is allowed when providers are present
+        assertTrue(ModelArenaHelper.isProviderAllowed("custom-enterprise-llm", List.of(dynamicProvider)));
+        assertEquals(
+                "custom-enterprise-llm",
+                ModelArenaHelper.validateAndExtractProvider("custom-enterprise-llm", List.of(dynamicProvider)));
+
+        Response resp = resource.compareModels(
+                new ArenaCompareRequest("Enterprise test", List.of("custom-enterprise-llm"), 256));
+        assertEquals(Response.Status.OK.getStatusCode(), resp.getStatus());
+        ArenaCompareResponse compareResp = (ArenaCompareResponse) resp.getEntity();
+        assertEquals(1, compareResp.results().size());
+        assertEquals("Custom enterprise response", compareResp.results().get(0).output());
+    }
 }

@@ -30,6 +30,10 @@ const ARENA_PROVIDERS: ArenaProvider[] = [
   { id: 'nvidia', name: 'NVIDIA NIM', category: 'Frontier APIs', defaultModel: 'meta/llama-3.2-11b-vision-instruct' },
   { id: 'cohere', name: 'Cohere Command', category: 'Frontier APIs', defaultModel: 'command-r-plus-08-2024' },
 
+  // Subscription / CLI OAuth
+  { id: 'codex', name: 'Codex CLI (ChatGPT Plus)', category: 'Subscription / CLI OAuth', defaultModel: 'gpt-5.6-luna' },
+  { id: 'claude-code', name: 'Claude Code CLI (OAuth)', category: 'Subscription / CLI OAuth', defaultModel: 'claude-sonnet-4-5' },
+
   // Aggregators & Gateways
   { id: 'generic-openai', name: 'Generic OpenAI Gateway', category: 'Aggregators & Gateways', defaultModel: 'gpt-4o-mini' },
   { id: 'openrouter', name: 'OpenRouter', category: 'Aggregators & Gateways', defaultModel: 'minimax/minimax-m3:free' },
@@ -39,7 +43,7 @@ const ARENA_PROVIDERS: ArenaProvider[] = [
   { id: 'foundry', name: 'Foundry (Local/VLLM)', category: 'Aggregators & Gateways', defaultModel: 'qwen3-14b' },
 ];
 
-const POPULAR_SLOTS = ['omlx', 'groq', 'cerebras', 'generic-openai', 'openai', 'gemini', 'anthropic'];
+const POPULAR_SLOTS = ['omlx', 'groq', 'cerebras', 'generic-openai', 'openai', 'gemini', 'anthropic', 'codex', 'claude-code'];
 
 @customElement('arc-model-arena')
 export class ArcModelArena extends LitElement {
@@ -473,11 +477,18 @@ export class ArcModelArena extends LitElement {
     }
 
     const providerPart = raw.includes(':') ? raw.substring(0, raw.indexOf(':')) : raw;
-    const cleanProv = providerPart.trim().toLowerCase();
+    let cleanProv = providerPart.trim().toLowerCase();
+    if (cleanProv === 'claudecode' || cleanProv === 'claude') {
+      cleanProv = 'claude-code';
+    }
     const isAllowed =
       ARENA_PROVIDERS.some((p) => p.id === cleanProv) ||
       POPULAR_SLOTS.includes(cleanProv) ||
-      cleanProv === 'default';
+      cleanProv === 'default' ||
+      cleanProv === 'claudecode' ||
+      cleanProv === 'claude' ||
+      cleanProv === 'codex' ||
+      cleanProv === 'claude-code';
 
     if (!isAllowed) {
       this._slotError = `Unrecognized provider prefix '${cleanProv}'. Use an allowlisted provider.`;
@@ -638,7 +649,7 @@ export class ArcModelArena extends LitElement {
               <span>More Providers:</span>
               <select class="provider-dropdown" @change="${this._onSelectProvider}">
                 <option value="">+ Add Provider from Catalog...</option>
-                ${['Local / Self-Hosted', 'Ultra-Fast Cloud', 'Frontier APIs', 'Aggregators & Gateways'].map(
+                ${['Local / Self-Hosted', 'Ultra-Fast Cloud', 'Frontier APIs', 'Subscription / CLI OAuth', 'Aggregators & Gateways'].map(
                   (cat) => html`
                     <optgroup label="${cat}">
                       ${ARENA_PROVIDERS.filter((p) => p.category === cat).map(

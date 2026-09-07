@@ -211,7 +211,7 @@ public class CockpitHealthResource {
         if (providers != null) {
             for (AgentChatModelProvider p : providers) {
                 String name = p.providerName();
-                boolean isDef = name.equalsIgnoreCase(defaultProviderName);
+                boolean isDef = isDefaultProvider(name, defaultProviderName);
                 String baseUrl = sanitizeBaseUrl(p.baseUrl());
                 String status;
                 String details;
@@ -239,6 +239,25 @@ public class CockpitHealthResource {
             return a.providerName().compareToIgnoreCase(b.providerName());
         });
         return list;
+    }
+
+    static boolean isDefaultProvider(String providerName, String defaultName) {
+        if (providerName == null || defaultName == null) {
+            return false;
+        }
+        String p1 = providerName.trim().toLowerCase(Locale.ROOT);
+        String p2 = defaultName.trim().toLowerCase(Locale.ROOT);
+        if (p1.equals(p2)) {
+            return true;
+        }
+        return isClaudeCodeAlias(p1) && isClaudeCodeAlias(p2);
+    }
+
+    private static boolean isClaudeCodeAlias(String name) {
+        return "claude-code".equals(name)
+                || "anthropic".equals(name)
+                || "claudecode".equals(name)
+                || "claude".equals(name);
     }
 
     private static boolean isDefaultProviderDegraded(List<ProviderHealthSummary> providers) {
