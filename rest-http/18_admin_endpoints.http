@@ -254,3 +254,89 @@ POST {{baseUrl}}/api/v1/admin/memory/recall/purge?retentionDays=30
 X-Amsha-API-Key: {{validKey}}
 
 ###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW D: READ-ONLY DATABASE CONSOLE
+# ─────────────────────────────────────────────────────────────────
+
+### [ADMIN-DB-1] Execute read-only query (unauthorized with CI key)
+# Expect 403 Forbidden
+POST {{baseUrl}}/api/v1/admin/db/query
+Content-Type: application/json
+X-Amsha-API-Key: {{ciKey}}
+
+{
+    "sql": "SELECT name FROM sqlite_master WHERE type='table' LIMIT 5;"
+}
+
+###
+
+### [ADMIN-DB-2] Execute read-only query (authorized with internal key)
+# Expect 200 OK: {"columns":[...],"rows":[...],"executionMs":...}
+POST {{baseUrl}}/api/v1/admin/db/query
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "sql": "SELECT name FROM sqlite_master WHERE type='table' LIMIT 5;"
+}
+
+###
+
+### [ADMIN-DB-3] Reject mutating DML query (authorized internal key)
+# Expect 400 Bad Request: DML statements are forbidden in read-only console
+POST {{baseUrl}}/api/v1/admin/db/query
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "sql": "DELETE FROM audit_event WHERE 1=1;"
+}
+
+###
+
+
+# ─────────────────────────────────────────────────────────────────
+# FLOW E: MODEL ARENA BENCHMARKING
+# ─────────────────────────────────────────────────────────────────
+
+### [ADMIN-ARENA-1] Compare models in arena (unauthorized with CI key)
+# Expect 403 Forbidden
+POST {{baseUrl}}/api/v1/admin/arena/compare
+Content-Type: application/json
+X-Amsha-API-Key: {{ciKey}}
+
+{
+    "prompt": "What is the capital of France?",
+    "models": ["gemini", "groq"]
+}
+
+###
+
+### [ADMIN-ARENA-2] Compare models in arena (authorized with internal key)
+# Expect 200 OK: {"results":[...],"totalDurationMs":...}
+POST {{baseUrl}}/api/v1/admin/arena/compare
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "prompt": "What is the capital of France?",
+    "models": ["gemini", "groq"]
+}
+
+###
+
+### [ADMIN-ARENA-3] Reject prompt with credentials / API keys (fail-closed)
+# Expect 400 Bad Request: prompt contains sensitive credentials
+POST {{baseUrl}}/api/v1/admin/arena/compare
+Content-Type: application/json
+X-Amsha-API-Key: {{validKey}}
+
+{
+    "prompt": "Here is my secret: sk-1234567890abcdef1234567890abcd",
+    "models": ["gemini"]
+}
+
+###
+

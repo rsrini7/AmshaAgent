@@ -149,6 +149,58 @@ Multimodal channel messages may carry `MediaAttachment` (image, document, audio)
 
 Port contract: `security-api/MediaDownloadPort.java`, `DownloadedMedia.java`, `MediaBudgetLimits.java`; impl: `security/media/GovernedMediaDownloadService.java`, `MediaSecurityValidator.java`. Config: `amsha.media.*` (`AMSHA_MEDIA_*_MB`, `AMSHA_MEDIA_*_TIMEOUT_SECONDS`) — see [CONFIGURATION.md](./CONFIGURATION.md#media-ingestion--download-limits).
 
+---
+
+## Governed Outbound LLM Egress (`GovernedLangChainHttpClient`)
+
+Outbound HTTP connections to external LLM providers (reasoning models and Model Arena comparisons) are mediated by `GovernedLangChainHttpClient` and `GovernedTransportService` (`OutboundPurpose.PROVIDER_API_CALL`):
+
+* **SSRF Defense & IP Validation**: Destination IPs are validated against an IP blocklist that rejects loopback, link-local, private LAN ranges, and AWS/GCP/Azure instance metadata endpoints (`169.254.169.254`).
+* **Header Sanitization**: Hop-by-hop headers (`Connection`, `Keep-Alive`, `Proxy-Authenticate`, `Transfer-Encoding`, etc.) and restricted internal headers are stripped before dispatch.
+* **Credential Leak Prevention**: Inspects outbound payloads to prevent echoing system vault pepper, root API keys, or raw environment secrets.
+* **Actor Binding via `ScopedValue`**: Outbound HTTP requests propagate the authenticated user identity (`USER_ID`) into the governed transport boundary, ensuring accurate attribution in logs and audit events.
+* **Tamper-Evident Audit Logging**: Successful dispatches record `EGRESS_TRANSPORT_SUCCESS` in the append-only HMAC audit chain before network transmission. Blocked dispatches record `EGRESS_TRANSPORT_BLOCKED`.
+* **Telemetry**: Emits `amsha.transport.requests.total` and `amsha.transport.duration` Micrometer metrics categorized by purpose and status.
+
+---
+
+## Read-Only Database Console Security
+
+The internal operator database console (`POST /api/v1/admin/db/query`) enforces defense-in-depth isolation against SQL injection, privilege escalation, and unintended mutations:
+
+* **AST-Level SQL Validation**: Every incoming query is parsed into an Abstract Syntax Tree using JSqlParser:
+  - Only single-statement queries are accepted; multi-statement scripts are rejected immediately.
+  - Queries must be read-only `SELECT` statements. DML statements (`INSERT`, `UPDATE`, `DELETE`) and DDL statements (`CREATE`, `DROP`, `ALTER`, `TRUNCATE`) are rejected even if nested inside `EXPLAIN` queries, subqueries, or CTEs (`WITH ...`).
+  - PRAGMA statements are blocked unless explicitly permitted by an exact allowlist (e.g. `PRAGMA table_info(...)`).
+* **Catalog Table Allowlisting**: Metadata queries are restricted to allowlisted system schema tables (`sqlite_master`, `sqlite_schema`, `information_schema.tables`, `flyway_schema_history`). Wildcard catalog queries are denied.
+* **Transaction Isolation & Poison Discard**:
+  - SQLite connections execute under `PRAGMA query_only = ON;`.
+  - PostgreSQL connections execute within a read-only transaction boundary with guaranteed rollback. If resetting connection isolation fails, the connection is closed and discarded rather than returned to the Agroal pool.
+* **Authorization & Audit**: Queries require `isInternal()` authorization and log `DB_QUERY_EXECUTED` or `DB_QUERY_REJECTED` in the audit log.
+
+---
+
+## Model Arena Security & Token Bounding
+
+The Model Arena (`POST /api/v1/admin/arena/compare`) provides operator-governed model comparisons:
+
+* **Credential Detection**: Evaluates input prompts against `CredentialDetector`, failing closed with HTTP 400 if API keys, bearer tokens, or vault pepper strings are detected.
+* **PII Redaction**: Enforces PII policy before sending prompts to external providers.
+* **Token Budget Ceilings**: Enforces $\le 2,048$ input tokens and $\le 1,024$ output tokens per model slot. Prompts are truncated using script-aware Unicode budgeting (`maxTokens * 4` for ASCII, accounting for CJK and multi-byte scripts).
+* **Zero Tool Capability**: Arena model instances do not expose tool calling, sandbox execution, or shell execution.
+
+---
+
+## Bounded Health Reporting & Non-Disclosure
+
+The system health endpoint (`GET /api/v1/admin/cockpit/health`) sanitizes runtime diagnostic data:
+
+* Returns bounded categorical health states (`UP`, `DEGRADED`, `DOWN`).
+* Strips all JDBC URLs, hostnames, port numbers, passwords, vault paths, and internal stack traces before serializing responses.
+* Maps provider connectivity to normalized boolean states and alias names (`claude-code`, `codex`) without leaking API tokens.
+
+---
+
 ## Related Docs
 
 | Doc | What it covers |

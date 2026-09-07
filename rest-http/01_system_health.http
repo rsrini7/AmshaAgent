@@ -60,6 +60,14 @@ GET {{baseUrl}}/q/health/ready
 
 ###
 
+### [HEALTH-3.1] Cockpit Health - operator diagnostic overview (authenticated)
+# Expect 200: {"status":"UP|DEGRADED|DOWN","healthChecks":{...},"database":{...},"providers":[...],"timestamp":...}
+# Returns sanitized bounded categorical health checks (SmallRye summary), database connection-pool metrics, and provider connectivity.
+GET {{baseUrl}}/api/v1/admin/cockpit/health
+X-Amsha-API-Key: {{validKey}}
+
+###
+
 # ─────────────────────────────────────────────────────────────────
 # APPLICATION INFO (no auth required)
 # ─────────────────────────────────────────────────────────────────

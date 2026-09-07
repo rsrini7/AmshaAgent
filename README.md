@@ -10,7 +10,7 @@
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   ![Java Tests](https://img.shields.io/badge/Tests-5842_passing-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-71.81%25-brightgreen.svg?style=flat)
-  ![UI Tests](https://img.shields.io/badge/UI_Tests-127_passing-brightgreen.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-135_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-44.15%25-yellow.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
@@ -72,7 +72,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 
 ## Key Capabilities
 
-- **ReAct agent loop** across 18 LLM providers, with per-persona model routing and resilient multi-provider fallback
+- **ReAct agent loop** across 22 LLM providers, with per-persona model routing and resilient multi-provider fallback
 - **12 specialist personas** with per-role tool schemas and Qute-rendered system prompts
 - **Realm-based grouped agents** — personas organized into 4 Lokas (Kailasa, Brahmaloka, Vaikunta, Loka-Bahir) with group leads that consult family members
 - **Agent delegation** — any role can delegate via `garuda`; capability-subset enforcement prevents privilege escalation
@@ -102,6 +102,10 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Behavioral self-evolution** — opt-in trace capture, pattern extraction, and reviewed directives that improve future interactions
 - **MCP integration** — both inbound MCP server and outbound MCP client for dynamic tool loading; discovered tools default to the network bulkhead and can be categorized at registration; native bridge retained after safety-gated LangChain4j `1.17.2` protocol-adapter evaluation (P4 `P4-MCP-01` — transports at parity, 5× Amsha superior on isolation/HITL/credentials/`FINISH`/native, see `mcp/README.md` matrix)
 - **Multi-channel** — REST API, CLI REPL, Telegram bot, WebSocket web UI, one-shot `ask` mode
+- **Governed HTTP transport for LLMs** — `GovernedLangChainHttpClient` routes all outbound LLM provider traffic through `GovernedTransportService` with SSRF defense, TLS validation, actor propagation via `ScopedValue`, credential leak prevention, and tamper-evident audit logging (`EGRESS_TRANSPORT_SUCCESS`/`EGRESS_TRANSPORT_BLOCKED`)
+- **Visual Cockpit & System Health Dashboard (`#/health`)** — real-time operator diagnostics (`/api/v1/admin/cockpit/health`) with bounded categorical checks (database connectivity/latency, JVM memory, disk storage, provider reachability with `codex` / `claude-code` OAuth/CLI aliasing), status filtering, and live search
+- **Read-Only Database Console (`#/db-console`)** — operator SQL console with AST parser validation (JSqlParser), read-only transaction guarantees (`PRAGMA query_only = ON;`), schema allowlisting, column truncation tooltips, and Micrometer telemetry
+- **Model Arena (`#/arena`)** — multi-model comparative benchmarking with dynamic CDI provider discovery, categorical slot grouping (`Subscription / CLI OAuth`, `Cloud API`, `Local Runtime`), fail-closed credential detection (400 Bad Request), token bounding, and script-aware truncation
 - **Guided setup and observability** — onboarding wizard, encrypted provider settings, OpenTelemetry tracing (LangChain4j `ChatModelListener` pilot: `off`/`shadow`/`active` with zero payload, `amsha.observability.chat-listener.mode`), SSE status updates, and web management panels
 - **Backend-aware deployment** — JVM backend selection at startup, native backend selection at build time, with PostgreSQL and filesystem runtime profiles
 
@@ -211,6 +215,9 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 ### Tool Governance & Sandbox
 <img src="./docs/assets/amsha_tool_governance.svg" alt="Tool Governance & Sandbox" width="100%">
+
+### Governed Outbound Transport for LLMs & Arena
+<img src="./docs/assets/amsha_governed_transport.svg" alt="Governed LLM Transport" width="100%">
 
 > Detailed flows (HITL approval, memory caching, tool governance, delegation, security layers, data flow) with Mermaid diagrams in [ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 

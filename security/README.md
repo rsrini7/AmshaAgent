@@ -18,6 +18,7 @@ This is an **impl-tier** module: it depends on `amsha-security-api` and on `amsh
 | `GovernedMediaDownloadService` | Implementation of `MediaDownloadPort` with streaming size limits, SSRF, and redirect revalidation |
 | `GovernedTelegramMediaResolver` | Governed resolution of opaque `telegram://file/<file_id>` media references via Bot API with strict path/host validation and token scrubbing |
 | `MediaSecurityValidator` | SSRF/DNS rebinding prevention, IP validation, and MIME allowlist checks |
+| `GovernedTransportMetrics` | Micrometer counter and duration timer instrumentation for outbound governed HTTP calls |
 
 ## Configuration Properties
 
@@ -42,6 +43,15 @@ The governed media download boundary emits payload-free Micrometer metrics under
 | `amsha.media.download.total` | Counter | `source`, `type`, `status` | Total download attempts categorized by status (`success`, `policy_denied`, `hitl_required`, `timeout`, `redirect_denied`, `security_violation`, `oversized`, `unsupported_mime`, `magic_mismatch`, `error`). |
 | `amsha.media.download.duration` | Timer | `source`, `type`, `status` | Latency distribution of media download operations. |
 | `amsha.media.download.bytes` | Counter | `source`, `type` | Cumulative bytes successfully downloaded through the governed boundary. |
+
+## Outbound HTTP Transport Telemetry & Metrics
+
+All outbound HTTP calls routed through `GovernedTransportService` (including LLM reasoning calls and Model Arena comparisons via `GovernedLangChainHttpClient`) emit payload-free Micrometer metrics:
+
+| Metric Name | Type | Tags | Description |
+|---|---|---|---|
+| `amsha.transport.requests.total` | Counter | `purpose`, `status` | Total outbound HTTP requests categorized by purpose (`provider_api_call`, `media_download`) and status (`success`, `ssrf_denied`, `credential_denied`, `policy_denied`, `timeout`, `error`). |
+| `amsha.transport.duration` | Timer | `purpose`, `status` | Latency distribution of outbound HTTP requests. |
 
 ## Downstream Usage
 
