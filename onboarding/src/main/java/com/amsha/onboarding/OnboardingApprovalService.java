@@ -7,10 +7,13 @@ import jakarta.inject.Inject;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -72,6 +75,70 @@ public class OnboardingApprovalService {
     @Inject
     SecretVault vault;
 
+    record ExtractedConnection(
+            String provider,
+            String model,
+            String baseUrl,
+            boolean hasKey,
+            List<String> allowedHosts,
+            Map<String, Object> raw) {}
+
+    record ConnectionApprovalId(int connectionIndex, String suffix) {
+        static final String PREFIX = "approval_conn_";
+
+        static ConnectionApprovalId create(int connectionIndex) {
+            return new ConnectionApprovalId(
+                    connectionIndex, UUID.randomUUID().toString().substring(0, 8));
+        }
+
+        String format() {
+            return PREFIX + connectionIndex + "_" + suffix;
+        }
+
+        static Optional<ConnectionApprovalId> parse(String approvalId) {
+            if (approvalId != null && approvalId.startsWith(PREFIX)) {
+                String remainder = approvalId.substring(PREFIX.length());
+                int underscoreIdx = remainder.indexOf('_');
+                if (underscoreIdx > 0) {
+                    try {
+                        int idx = Integer.parseInt(remainder.substring(0, underscoreIdx));
+                        String suffix = remainder.substring(underscoreIdx + 1);
+                        return Optional.of(new ConnectionApprovalId(idx, suffix));
+                    } catch (NumberFormatException _) {
+                        return Optional.of(new ConnectionApprovalId(0, remainder));
+                    }
+                } else {
+                    try {
+                        return Optional.of(new ConnectionApprovalId(Integer.parseInt(remainder), ""));
+                    } catch (NumberFormatException _) {
+                        return Optional.of(new ConnectionApprovalId(0, remainder));
+                    }
+                }
+            }
+            return Optional.empty();
+        }
+    }
+
+    private ExtractedConnection extractConnection(Map<String, Object> conn) {
+        String provider = String.valueOf(conn.getOrDefault("provider", ""));
+        String model = String.valueOf(conn.getOrDefault("modelId", ""));
+        String baseUrl = String.valueOf(
+                conn.getOrDefault("customBaseUrl", conn.getOrDefault("baseUrl", conn.getOrDefault("targetUrl", ""))));
+        boolean hasKey = conn.containsKey("apiKeyVaultRef")
+                || (conn.get("apiKey") != null
+                        && !String.valueOf(conn.get("apiKey")).isBlank());
+
+        List<String> allowedHosts = List.of();
+        Object egress = conn.get("allowedEgressHosts");
+        if (egress instanceof List<?> list) {
+            allowedHosts = list.stream()
+                    .filter(String.class::isInstance)
+                    .map(String.class::cast)
+                    .toList();
+        }
+        return new ExtractedConnection(provider, model, baseUrl, hasKey, allowedHosts, conn);
+    }
+
     /**
      * Evaluates tiered connection validation. Returns immediate format validation or gates an
      * outbound probe behind an approval request.
@@ -90,34 +157,22 @@ public class OnboardingApprovalService {
             return ConnectionValidationResponseDto.formatError("Invalid connectionIndex: " + connIndex);
         }
 
-        Map<String, Object> targetConnection = connections.get(connIndex);
-        String provider = String.valueOf(targetConnection.getOrDefault("provider", ""));
-        String model = String.valueOf(targetConnection.getOrDefault("modelId", ""));
-        String baseUrl = String.valueOf(targetConnection.getOrDefault(
-                "customBaseUrl",
-                targetConnection.getOrDefault("baseUrl", targetConnection.getOrDefault("targetUrl", ""))));
-        boolean hasKey = targetConnection.containsKey("apiKeyVaultRef")
-                || (targetConnection.get("apiKey") != null
-                        && !String.valueOf(targetConnection.get("apiKey")).isBlank());
-
-        List<String> allowedHosts = List.of();
-        Object egress = targetConnection.get("allowedEgressHosts");
-        if (egress instanceof List<?> list) {
-            allowedHosts = list.stream()
-                    .filter(String.class::isInstance)
-                    .map(String.class::cast)
-                    .toList();
-        }
-
-        if ("generic-openai".equalsIgnoreCase(provider) && baseUrl.isBlank()) {
+        ExtractedConnection target = extractConnection(connections.get(connIndex));
+        if (ModelDefaults.requiresCustomBaseUrl(target.provider())
+                && target.baseUrl().isBlank()) {
             return ConnectionValidationResponseDto.formatError(
-                    "Provider generic-openai requires a targetUrl or baseUrl");
+                    "Provider " + target.provider() + " requires a targetUrl or baseUrl");
         }
 
         if (providerAdapterInstance != null && providerAdapterInstance.isResolvable()) {
             ProviderValidationResult result = providerAdapterInstance
                     .get()
-                    .validate(new ConnectionValidationRequest(provider, model, baseUrl, hasKey, allowedHosts));
+                    .validate(new ConnectionValidationRequest(
+                            target.provider(),
+                            target.model(),
+                            target.baseUrl(),
+                            target.hasKey(),
+                            target.allowedHosts()));
             if (!result.eligible()) {
                 return ConnectionValidationResponseDto.formatError(String.join("; ", result.errors()));
             }
@@ -133,10 +188,9 @@ public class OnboardingApprovalService {
                     "Outbound network probe requires operator approval (requestApproval must be true)");
         }
 
-        String approvalId = "approval_conn_" + connIndex + "_"
-                + UUID.randomUUID().toString().substring(0, 8);
+        String approvalId = ConnectionApprovalId.create(connIndex).format();
         String summary = "Outbound connection validation probe for draft " + draft.draftId() + " [connIndex="
-                + connIndex + " provider=" + provider + "]";
+                + connIndex + " provider=" + target.provider() + "]";
 
         List<String> pending = parseApprovals(draft.pendingApprovalIds());
         if (!pending.contains(approvalId)) {
@@ -202,36 +256,22 @@ public class OnboardingApprovalService {
         String message = "";
 
         if (resolution.approved()) {
-            int connIndex = parseConnIndexFromApprovalId(approvalId);
+            Optional<ConnectionApprovalId> parsedApproval = ConnectionApprovalId.parse(approvalId);
+            int connIndex =
+                    parsedApproval.map(ConnectionApprovalId::connectionIndex).orElse(-1);
             List<Map<String, Object>> connections = extractConnections(draft.selectedNonSecretIds());
             if (connIndex < 0 || connIndex >= connections.size()) {
                 verified = false;
                 message = "Invalid connection index in approval: " + connIndex;
                 safeErrors = message;
             } else {
-                Map<String, Object> conn = connections.get(connIndex);
-                String provider = String.valueOf(conn.getOrDefault("provider", ""));
-                String model = String.valueOf(conn.getOrDefault("modelId", ""));
-                String baseUrl = String.valueOf(conn.getOrDefault(
-                        "customBaseUrl", conn.getOrDefault("baseUrl", conn.getOrDefault("targetUrl", ""))));
-                boolean hasKey = conn.containsKey("apiKeyVaultRef")
-                        || (conn.get("apiKey") != null
-                                && !String.valueOf(conn.get("apiKey")).isBlank());
-
-                List<String> allowedHosts = List.of();
-                Object egress = conn.get("allowedEgressHosts");
-                if (egress instanceof List<?> list) {
-                    allowedHosts = list.stream()
-                            .filter(String.class::isInstance)
-                            .map(String.class::cast)
-                            .toList();
-                }
-
+                ExtractedConnection conn = extractConnection(connections.get(connIndex));
                 boolean adapterValid = true;
                 if (providerAdapterInstance != null && providerAdapterInstance.isResolvable()) {
                     ProviderValidationResult valResult = providerAdapterInstance
                             .get()
-                            .validate(new ConnectionValidationRequest(provider, model, baseUrl, hasKey, allowedHosts));
+                            .validate(new ConnectionValidationRequest(
+                                    conn.provider(), conn.model(), conn.baseUrl(), conn.hasKey(), conn.allowedHosts()));
                     if (!valResult.eligible()) {
                         adapterValid = false;
                         verified = false;
@@ -242,7 +282,13 @@ public class OnboardingApprovalService {
 
                 if (adapterValid) {
                     ProbeExecutionResult probeResult = executeGovernedProbe(
-                            provider, baseUrl, conn, draft.ownerId(), approverUserId, approvalId, draft.draftId());
+                            conn.provider(),
+                            conn.baseUrl(),
+                            conn.raw(),
+                            draft.ownerId(),
+                            approverUserId,
+                            approvalId,
+                            draft.draftId());
                     verified = probeResult.verified();
                     message = probeResult.message();
                     if (probeResult.safeErrors() != null) {
@@ -256,7 +302,7 @@ public class OnboardingApprovalService {
                         "operator",
                         SecurityEventType.APPROVAL_GRANTED,
                         "action=approve_connection_probe draftId=" + draft.draftId() + " approvalId=" + approvalId
-                                + " provider=" + provider + " verified=" + verified);
+                                + " provider=" + conn.provider() + " verified=" + verified);
             }
         } else {
             safeErrors = "Connection probe denied by operator"
@@ -305,7 +351,7 @@ public class OnboardingApprovalService {
             String approverUserId,
             String approvalId,
             String draftId) {
-        String probeUrl = resolveProbeUrl(provider, baseUrl);
+        String probeUrl = ModelDefaults.probeUrlForProvider(provider, baseUrl);
         if (probeUrl.isBlank()) {
             String err = "Unable to resolve valid probe URL for provider: " + provider;
             return new ProbeExecutionResult(false, err, err);
@@ -318,33 +364,12 @@ public class OnboardingApprovalService {
         try {
             transport.validateEgress(probeUrl, OutboundPurpose.CATALOG_PROBE, approverUserId, true);
 
-            String apiKey = null;
-            if (conn.get("apiKey") != null
-                    && !String.valueOf(conn.get("apiKey")).isBlank()) {
-                apiKey = String.valueOf(conn.get("apiKey"));
-            } else if (conn.get("apiKeyVaultRef") != null && vault != null) {
-                String ref = String.valueOf(conn.get("apiKeyVaultRef"));
-                Optional<VaultKey> vkOpt = vault.get(ref, ownerId);
-                if (vkOpt.isPresent()) {
-                    try (VaultKey vk = vkOpt.get()) {
-                        apiKey = new String(vk.get(), StandardCharsets.UTF_8);
-                    }
-                }
-            }
-
             HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(probeUrl))
                     .timeout(Duration.ofSeconds(10))
                     .header("Accept", "application/json");
 
-            if (apiKey != null && !apiKey.isBlank()) {
-                if ("anthropic".equalsIgnoreCase(provider) || "claude-code".equalsIgnoreCase(provider)) {
-                    reqBuilder.header("x-api-key", apiKey);
-                    reqBuilder.header("anthropic-version", "2023-06-01");
-                } else {
-                    reqBuilder.header("Authorization", "Bearer " + apiKey);
-                }
-            }
+            applyAuthHeaders(reqBuilder, provider, conn, ownerId);
 
             HttpRequest httpRequest = reqBuilder.GET().build();
             HttpResponse<String> response = transport.send(
@@ -377,39 +402,32 @@ public class OnboardingApprovalService {
         }
     }
 
-    private String resolveProbeUrl(String provider, String baseUrl) {
-        String effectiveBase = (baseUrl != null && !baseUrl.isBlank())
-                ? baseUrl.trim()
-                : ModelDefaults.defaultBaseUrlForProvider(provider);
-        if (effectiveBase.isBlank()) {
-            return "";
-        }
-        String normalized =
-                effectiveBase.endsWith("/") ? effectiveBase.substring(0, effectiveBase.length() - 1) : effectiveBase;
-        if ("ollama".equalsIgnoreCase(provider)) {
-            return normalized.endsWith("/v1") ? normalized + "/models" : normalized + "/api/tags";
-        }
-        if ("anthropic".equalsIgnoreCase(provider) || "claude-code".equalsIgnoreCase(provider)) {
-            return normalized.endsWith("/v1") ? normalized + "/models" : normalized + "/v1/models";
-        }
-        if (normalized.endsWith("/models")) {
-            return normalized;
-        }
-        return normalized + "/models";
-    }
-
-    private int parseConnIndexFromApprovalId(String approvalId) {
-        if (approvalId != null && approvalId.startsWith("approval_conn_")) {
-            String[] parts = approvalId.split("_");
-            if (parts.length >= 4) {
-                try {
-                    return Integer.parseInt(parts[2]);
-                } catch (NumberFormatException _) {
-                    return 0;
+    private void applyAuthHeaders(
+            HttpRequest.Builder reqBuilder, String provider, Map<String, Object> conn, String ownerId) {
+        if (conn.get("apiKey") != null && !String.valueOf(conn.get("apiKey")).isBlank()) {
+            String key = String.valueOf(conn.get("apiKey"));
+            ModelDefaults.authHeadersForProvider(provider, key).forEach(reqBuilder::header);
+        } else if (conn.get("apiKeyVaultRef") != null && vault != null) {
+            String ref = String.valueOf(conn.get("apiKeyVaultRef"));
+            Optional<VaultKey> vkOpt = vault.get(ref, ownerId);
+            if (vkOpt.isPresent()) {
+                try (VaultKey vk = vkOpt.get()) {
+                    byte[] secretBytes = vk.get();
+                    CharBuffer cb = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(secretBytes));
+                    char[] chars = new char[cb.remaining()];
+                    cb.get(chars);
+                    try {
+                        String keyStr = new String(chars);
+                        ModelDefaults.authHeadersForProvider(provider, keyStr).forEach(reqBuilder::header);
+                    } finally {
+                        Arrays.fill(chars, '\0');
+                        if (cb.hasArray()) {
+                            Arrays.fill(cb.array(), '\0');
+                        }
+                    }
                 }
             }
         }
-        return 0;
     }
 
     @SuppressWarnings("unchecked")

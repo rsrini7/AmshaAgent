@@ -181,6 +181,9 @@ export interface McpServerDraft {
   command?: string;
   args?: string;
   url?: string;
+  category?: string;
+  headers?: Record<string, string>;
+  headerVaultRefs?: Record<string, string>;
   envVars?: Record<string, string>;
   healthCheckIntervalMs?: number;
 }

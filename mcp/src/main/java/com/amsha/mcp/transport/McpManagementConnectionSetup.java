@@ -26,22 +26,17 @@ final class McpManagementConnectionSetup {
     }
 
     McpManagementService.DiscoveryPreview discover(
-            String userId, String name, String endpoint, Map<String, String> headers, boolean preApproved) {
-        return discoverInternal(userId, name, endpoint, headers, preApproved, null);
+            String userId, String name, String endpoint, Map<String, String> headers) {
+        return discoverInternal(userId, name, endpoint, headers, null);
     }
 
     McpManagementService.DiscoveryPreview discoverWithApproval(
             String userId, String name, String endpoint, Map<String, String> headers, String approvalToken) {
-        return discoverInternal(userId, name, endpoint, headers, false, approvalToken);
+        return discoverInternal(userId, name, endpoint, headers, approvalToken);
     }
 
     private McpManagementService.DiscoveryPreview discoverInternal(
-            String userId,
-            String name,
-            String endpoint,
-            Map<String, String> headers,
-            boolean preApproved,
-            String approvalToken) {
+            String userId, String name, String endpoint, Map<String, String> headers, String approvalToken) {
         McpManagementSupport.requireUser(userId);
         McpManagementSupport.requireName(name);
         Map<String, String> safeHeaders = headers == null ? Map.of() : Map.copyOf(headers);
@@ -49,11 +44,8 @@ final class McpManagementConnectionSetup {
         try {
             List<McpClientService.DiscoveredTool> tools = support.runInUserVaultScope(
                     userId,
-                    () -> approvalToken == null
-                            ? clientService.discoverForUser(
-                                    name, userId, endpoint, ToolCategory.NETWORK, safeHeaders, preApproved)
-                            : clientService.discoverForUser(
-                                    name, userId, endpoint, ToolCategory.NETWORK, safeHeaders, approvalToken));
+                    () -> clientService.discoverForUser(
+                            name, userId, endpoint, ToolCategory.NETWORK, safeHeaders, approvalToken));
             support.audit(userId, SecurityEventType.MCP_CONNECTION_REQUESTED, "server=" + name + " operation=discover");
             return new McpManagementService.DiscoveryPreview(
                     name,
@@ -72,13 +64,13 @@ final class McpManagementConnectionSetup {
     }
 
     McpManagementService.ConnectionSnapshot connectNew(
-            String userId, String name, String endpoint, Map<String, String> headers, boolean preApproved) {
-        return connectNewInternal(userId, name, endpoint, headers, ToolCategory.NETWORK, preApproved, null);
+            String userId, String name, String endpoint, Map<String, String> headers) {
+        return connectNewInternal(userId, name, endpoint, headers, ToolCategory.NETWORK, null);
     }
 
     McpManagementService.ConnectionSnapshot connectNewWithApproval(
             String userId, String name, String endpoint, Map<String, String> headers, String approvalToken) {
-        return connectNewInternal(userId, name, endpoint, headers, ToolCategory.NETWORK, false, approvalToken);
+        return connectNewInternal(userId, name, endpoint, headers, ToolCategory.NETWORK, approvalToken);
     }
 
     McpManagementService.ConnectionSnapshot registerFromApprovedCheckpoint(
@@ -88,7 +80,7 @@ final class McpManagementConnectionSetup {
             Map<String, String> headers,
             String approvalToken,
             ToolCategory category) {
-        return connectNewInternal(userId, name, endpoint, headers, category, false, approvalToken);
+        return connectNewInternal(userId, name, endpoint, headers, category, approvalToken);
     }
 
     private McpManagementService.ConnectionSnapshot connectNewInternal(
@@ -97,7 +89,6 @@ final class McpManagementConnectionSetup {
             String endpoint,
             Map<String, String> headers,
             ToolCategory category,
-            boolean preApproved,
             String approvalToken) {
         McpManagementSupport.requireUser(userId);
         McpManagementSupport.requireName(name);
@@ -105,9 +96,7 @@ final class McpManagementConnectionSetup {
         if (approvalToken == null) lifecycleService.validateHttpRegistration(endpoint, safeHeaders);
         List<McpClientService.DiscoveredTool> tools = support.runInUserVaultScope(
                 userId,
-                () -> approvalToken == null
-                        ? clientService.discoverForUser(name, userId, endpoint, category, safeHeaders, preApproved)
-                        : clientService.discoverForUser(name, userId, endpoint, category, safeHeaders, approvalToken));
+                () -> clientService.discoverForUser(name, userId, endpoint, category, safeHeaders, approvalToken));
         McpConnectionLifecycleService.PersistedConnection persisted =
                 lifecycleService.persistSuccessfulHttp(name, endpoint, category, userId, safeHeaders);
         if (persisted.connection() == null) {

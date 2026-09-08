@@ -121,7 +121,7 @@ class McpClientServiceTest {
         assertFalse(service.httpServerUrl("test-server").isPresent());
 
         service.connectForUserWithEnabledTools(
-                "user-server", "usr-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), false, Set.of());
+                "user-server", "usr-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), Set.of());
         service.clearHttpConnectionState("user-server", "usr-1");
     }
 
@@ -287,8 +287,10 @@ class McpClientServiceTest {
     @Test
     void testDiscoverForUserReturnsToolsWithoutRegistering() {
         stubFullConnect("session-disc");
+        when(service.approvalReceiptIssuer.verifyAndConsume(eq("receipt-disc"), any(), any()))
+                .thenReturn(new OutboundApprovalReceipt("user-d", "s1", OutboundPurpose.MCP_CONNECT, "127.0.0.1"));
         var tools = service.discoverForUser(
-                "disc-server", "user-d", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), true);
+                "disc-server", "user-d", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), "receipt-disc");
         assertNotNull(tools);
         assertEquals(1, tools.size());
         assertEquals("external_search", tools.get(0).name());
@@ -303,13 +305,15 @@ class McpClientServiceTest {
     @Test
     void testConnectForUserWithEnabledToolsFiltersTools() {
         stubFullConnect("session-filter");
+        when(service.approvalReceiptIssuer.verifyAndConsume(eq("receipt-filter"), any(), any()))
+                .thenReturn(new OutboundApprovalReceipt("user-f", "s2", OutboundPurpose.MCP_CONNECT, "127.0.0.1"));
         var tools = service.connectForUserWithEnabledTools(
                 "filter-server",
                 "user-f",
                 wireMock.baseUrl(),
                 ToolCategory.NETWORK,
                 Map.of(),
-                true,
+                "receipt-filter",
                 Set.of("non_matching_tool"));
         assertNotNull(tools);
         assertFalse(registry.isRegistered("external_search"));

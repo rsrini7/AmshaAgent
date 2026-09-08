@@ -77,13 +77,12 @@ class McpConnectionLifecycleServiceTest {
         assertEquals(1, reconnected);
         verify(mcpClientService).configureHeaderSecretRefs(connection.name(), connection.userId(), refs);
         verify(mcpClientService)
-                .connectForUserWithEnabledTools(
+                .reconnectDurableForUser(
                         connection.name(),
                         connection.userId(),
                         connection.endpoint(),
                         ToolCategory.NETWORK,
                         Map.of(),
-                        true,
                         Set.of());
         verify(auditService)
                 .recordMandatory(
@@ -121,8 +120,7 @@ class McpConnectionLifecycleServiceTest {
 
         assertEquals(0, reconnected);
         verify(mcpClientService, never())
-                .connectForUserWithEnabledTools(
-                        anyString(), anyString(), anyString(), any(), any(), anyBoolean(), any());
+                .reconnectDurableForUser(anyString(), anyString(), anyString(), any(), any(), any());
         verify(mcpClientService, never()).configureHeaderSecretRefs(anyString(), anyString(), any());
     }
 

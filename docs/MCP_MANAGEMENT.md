@@ -19,11 +19,11 @@ Tools returned by `tools/list` are discovered metadata only. They are disabled u
 
 ## Lifecycle behavior
 
-Discover validates the endpoint, requests `MCP_CONNECT` approval, and performs the remote handshake only after approval. It returns bounded metadata and leaves no durable row, policy, vault secret, or registered tool. Connect performs a new governed handshake, persists the connection, and creates disabled policies.
+Discover validates the endpoint, requests `MCP_CONNECT` approval, and performs the remote handshake only after verifying a single-use `approvalToken` receipt issued by `ApprovalReceiptIssuer` (binding the requesting actor, session ID, purpose `MCP_CONNECT`, and destination host). It returns bounded metadata and leaves no durable row, policy, vault secret, or registered tool. Connect performs a fresh governed handshake consuming a checkpoint-backed `approvalToken` receipt, persists the connection, and creates disabled policies.
 
 Enabling a tool requests `MCP_TOOL_ENABLE` approval, verifies connectivity, and registers only the selected tool. A removed or schema-changed upstream tool is not silently re-enabled. Pause and disconnect stop new invocations, drain accepted work for a bounded interval, deregister tools, and clean up credentials.
 
-Reconfiguration uses `PATCH /api/v1/mcp/connect/{name}`. It stages the new endpoint or headers, requests `MCP_CONNECT` approval before network I/O, and applies the replacement atomically with compensation on failure. Include `If-MCP-Revision` with the card’s current revision; a stale revision returns `409`. Enabled policy is retained only when both tool name and schema hash are unchanged. `rotate-headers` remains as a compatibility alias.
+Reconfiguration uses `PATCH /api/v1/mcp/connect/{name}`. It stages the new endpoint or headers, requires an `MCP_CONNECT` `approvalToken` receipt before network I/O, and applies the replacement atomically with compensation on failure. Include `If-MCP-Revision` with the card’s current revision; a stale revision returns `409`. Enabled policy is retained only when both tool name and schema hash are unchanged. `rotate-headers` remains as a compatibility alias.
 
 On restart, durable enabled connections reconnect with the persisted explicit tool policy. Tools are not automatically re-enabled merely because the remote server advertises them again. Reconnect failures are recorded as connection state/error metadata and cleanup retries are owner-scoped and idempotent.
 
@@ -103,6 +103,8 @@ Legacy read-only inspection remains at `GET /api/v1/mcp/status` and `GET /api/v1
 ## Security and credentials
 
 Header names are validated as HTTP tokens; duplicates and transport-owned/hop-by-hop headers are rejected. Header values are stored only in `SecretVault` under `USER:<userId>` and resolved just in time. Durable records retain only opaque vault references and non-secret header names. Secrets never appear in chat, Telegram, URLs, import previews, API responses, logs, or audit payloads.
+
+Operation authorization is enforced via single-use checkpoint-backed `approvalToken` receipts issued by `ApprovalReceiptIssuer` upon durable approval rather than ambient or boolean approval flags. The receipt cryptographically binds the requesting actor (`userId`), session ID, outbound purpose (`MCP_CONNECT`), and destination host, and is verified and consumed exactly once during handshake initiation.
 
 ## Test the complete flow
 

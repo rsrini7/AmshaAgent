@@ -27,7 +27,6 @@ final class McpManagementConnectionOperations {
     McpManagementService.ConnectionSnapshot connect(
             String userId,
             String name,
-            boolean preApproved,
             String approvalToken,
             OutboundPurpose approvalPurpose,
             Long expectedRevision,
@@ -47,16 +46,6 @@ final class McpManagementConnectionOperations {
         try {
             List<McpClientService.DiscoveredTool> tools = support.runInUserVaultScope(userId, () -> {
                 support.configureStoredHeaders(connection, userId);
-                if (approvalToken == null) {
-                    return clientService.connectForUserWithEnabledTools(
-                            name,
-                            userId,
-                            connection.endpoint(),
-                            ToolCategory.valueOf(connection.category()),
-                            Map.of(),
-                            preApproved,
-                            enabledTools);
-                }
                 return clientService.connectForUserWithEnabledTools(
                         name,
                         userId,
@@ -64,7 +53,7 @@ final class McpManagementConnectionOperations {
                         ToolCategory.valueOf(connection.category()),
                         Map.of(),
                         approvalToken,
-                        approvalPurpose,
+                        approvalPurpose != null ? approvalPurpose : OutboundPurpose.MCP_CONNECT,
                         enabledTools);
             });
             support.replacePolicies(connection.id(), userId, tools);

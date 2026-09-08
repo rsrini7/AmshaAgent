@@ -22,6 +22,7 @@ import com.amsha.onboarding.spi.OnboardingInput;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
 import com.amsha.onboarding.spi.PreparedOnboardingStep;
 import com.amsha.onboarding.spi.ValidatedOnboardingInput;
+import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.OnboardingCommitReceiptDto;
 import com.amsha.persistence.api.OnboardingCommitReceiptStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
@@ -63,6 +64,14 @@ public class OnboardingCommitSaga {
     @Inject
     OnboardingSelectionScrubber scrubber;
 
+    @Inject
+    Instance<LlmProfileStorePort> profileStoreInstance;
+
+    @Inject
+    OnboardingProfileExporter profileExporter;
+
+    LlmProfileStorePort profileStore;
+
     @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
     boolean vaultPriority;
 
@@ -102,6 +111,7 @@ public class OnboardingCommitSaga {
 
         try {
             activateLlmSettings(d);
+            activateProfileStore(d);
             OnboardingDraftDto updated = markCompleted(d);
             if (draftStore.update(updated, d.revision())) {
                 return Optional.of(updated);
@@ -135,8 +145,8 @@ public class OnboardingCommitSaga {
             Object agentLoopRaw = concernRoutesMap.get("agentLoop");
             if (!(agentLoopRaw instanceof List<?> agentLoopList) || agentLoopList.isEmpty()) return;
             Object firstIdx = agentLoopList.get(0);
-            if (!(firstIdx instanceof Number)) return;
-            int activeIdx = ((Number) firstIdx).intValue();
+            if (!(firstIdx instanceof Number number)) return;
+            int activeIdx = number.intValue();
             if (activeIdx < 0 || activeIdx >= connectionsList.size()) return;
             Object activeConnectionRaw = connectionsList.get(activeIdx);
             if (!(activeConnectionRaw instanceof Map<?, ?> activeConnection)) return;
@@ -228,6 +238,43 @@ public class OnboardingCommitSaga {
                         || lower.contains("pass"))
                 && !lower.endsWith("vaultref")
                 && !lower.endsWith("ref");
+    }
+
+    @SuppressWarnings("unchecked")
+    public void activateProfileStore(OnboardingDraftDto d) {
+        LlmProfileStorePort store = getProfileStore();
+        if (store == null || profileExporter == null) {
+            return;
+        }
+        if (d.selectedNonSecretIds() == null || d.selectedNonSecretIds().isEmpty()) {
+            return;
+        }
+        try {
+            String payloadStr = d.selectedNonSecretIds().get(0);
+            Map<String, Object> payload = objectMapper.readValue(payloadStr, Map.class);
+            Object connsRaw = payload.get("connections");
+            if (connsRaw instanceof List<?> connsList && !connsList.isEmpty()) {
+                boolean hasProfilesOrRoutes = payload.containsKey("profiles") || payload.containsKey("routes");
+                boolean hasIdentifiedConnections = connsList.get(0) instanceof Map<?, ?> m && m.containsKey("id");
+                if (hasProfilesOrRoutes || hasIdentifiedConnections) {
+                    profileExporter.importProfiles(d.ownerId(), payload, store, true);
+                }
+            }
+        } catch (Exception e) {
+            log.warnf(
+                    "[ONBOARDING] Failed to activate profile store topology on draft commit: %s",
+                    LogUtil.rootMessage(e));
+        }
+    }
+
+    private LlmProfileStorePort getProfileStore() {
+        if (profileStore != null) {
+            return profileStore;
+        }
+        if (profileStoreInstance != null && profileStoreInstance.isResolvable()) {
+            return profileStoreInstance.get();
+        }
+        return null;
     }
 
     // ---- internal saga helpers ----

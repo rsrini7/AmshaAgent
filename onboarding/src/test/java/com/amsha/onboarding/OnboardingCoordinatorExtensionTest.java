@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.mcp.transport.McpConnectionLifecycleService;
 import com.amsha.onboarding.extension.McpOnboardingExtension;
@@ -21,6 +22,7 @@ import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelProfileDto;
+import com.amsha.persistence.api.ModelRouteAssignmentDto;
 import com.amsha.persistence.api.OnboardingCommitReceiptDto;
 import com.amsha.persistence.api.OnboardingCommitReceiptStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
@@ -62,6 +64,7 @@ class OnboardingCoordinatorExtensionTest {
     InMemoryReceiptStore receiptStore;
     SecretVault vault;
     Instance<OnboardingExtension> exts;
+    ObjectMapper objectMapper;
 
     static final class InMemoryReceiptStore implements OnboardingCommitReceiptStorePort {
         final Map<String, OnboardingCommitReceiptDto> receipts = new LinkedHashMap<>();
@@ -102,7 +105,7 @@ class OnboardingCoordinatorExtensionTest {
 
         vault = mock(SecretVault.class);
         receiptStore = new InMemoryReceiptStore();
-        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper = new ObjectMapper();
 
         scrubber = new OnboardingSelectionScrubber();
         scrubber.vault = vault;
@@ -116,6 +119,8 @@ class OnboardingCoordinatorExtensionTest {
         commitSaga.extensions = exts;
         commitSaga.scrubber = scrubber;
         commitSaga.vaultPriority = true;
+        commitSaga.profileExporter = new OnboardingProfileExporter();
+        commitSaga.profileStore = profileStore;
 
         coordinator = new OnboardingCoordinator();
         coordinator.draftStore = draftStore;
@@ -618,6 +623,148 @@ class OnboardingCoordinatorExtensionTest {
         verify(profileStore).saveModelProfile(any());
     }
 
+    @Test
+    void importProfilesToDraft_stagesSerializedTopologyWithoutWritingProfileStore() {
+        Map<String, Object> data = Map.of(
+                "connections",
+                        List.of(Map.of("id", "c-import", "providerAdapterId", "openai", "displayName", "Imported")),
+                "profiles", List.of(Map.of("id", "p-import", "connectionId", "c-import", "modelId", "gpt-4o")),
+                "routes",
+                        List.of(Map.of(
+                                "id", "r-import", "targetKind", "DEFAULT", "orderedProfileIds", List.of("p-import"))));
+
+        OnboardingDraftDto base = draft("d-import-stage", OnboardingDraftState.DRAFT, List.of());
+        AtomicReference<OnboardingDraftDto> holder = new AtomicReference<>(base);
+        when(draftStore.findActiveByOwner(eq("owner-1"), any())).thenReturn(Optional.of(base));
+        when(draftStore.update(any(), anyInt())).thenAnswer(inv -> {
+            holder.set(inv.getArgument(0));
+            return true;
+        });
+        when(draftStore.findById("d-import-stage")).thenAnswer(inv -> Optional.ofNullable(holder.get()));
+
+        OnboardingDraftDto result = coordinator.importProfilesToDraft("owner-1", data, profileStore);
+
+        // Invariant: profileStore is NOT written during import to draft!
+        verify(profileStore, never()).saveConnection(any());
+        verify(profileStore, never()).saveModelProfile(any());
+        verify(profileStore, never()).saveRouteAssignment(any());
+
+        assertNotNull(result);
+        assertEquals("review", result.currentStepId());
+        assertEquals(OnboardingDraftState.DRAFT, result.state());
+        assertFalse(result.selectedNonSecretIds().isEmpty());
+        String stagedJson = result.selectedNonSecretIds().get(0);
+        assertTrue(stagedJson.contains("c-import"));
+        assertTrue(stagedJson.contains("p-import"));
+        assertTrue(stagedJson.contains("concernRoutes"));
+    }
+
+    @Test
+    void importProfilesToDraft_scrubsCallerSuppliedSecretsIntoVaultReferences() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("apiKey", "attacker-top-level-key");
+        data.put("password", "attacker-top-level-pass");
+        data.put(
+                "connections",
+                List.of(Map.of(
+                        "id", "c-sec",
+                        "providerAdapterId", "openai",
+                        "apiKey", "sk-secret-conn-key",
+                        "password", "conn-secret-pass")));
+        data.put("profiles", List.of(Map.of("id", "p-sec", "connectionId", "c-sec", "modelId", "gpt-4o")));
+        data.put(
+                "routes",
+                List.of(Map.of("id", "r-sec", "targetKind", "DEFAULT", "orderedProfileIds", List.of("p-sec"))));
+        data.put("mcp", Map.of("headers", Map.of("Authorization", "Bearer mcp-secret-token")));
+        data.put("integrations", Map.of("slackToken", "xoxb-secret-slack-token"));
+
+        OnboardingDraftDto base = draft("d-import-secrets", OnboardingDraftState.DRAFT, List.of());
+        AtomicReference<OnboardingDraftDto> holder = new AtomicReference<>(base);
+        when(draftStore.findActiveByOwner(eq("owner-1"), any())).thenReturn(Optional.of(base));
+        when(draftStore.update(any(), anyInt())).thenAnswer(inv -> {
+            holder.set(inv.getArgument(0));
+            return true;
+        });
+        when(draftStore.findById("d-import-secrets")).thenAnswer(inv -> Optional.ofNullable(holder.get()));
+
+        OnboardingDraftDto result = coordinator.importProfilesToDraft("owner-1", data, profileStore);
+
+        assertNotNull(result);
+        assertFalse(result.selectedNonSecretIds().isEmpty());
+        String stagedJson = result.selectedNonSecretIds().get(0);
+
+        // Plaintext secrets MUST NOT appear in the staged draft
+        assertFalse(stagedJson.contains("attacker-top-level-key"));
+        assertFalse(stagedJson.contains("attacker-top-level-pass"));
+        assertFalse(stagedJson.contains("sk-secret-conn-key"));
+        assertFalse(stagedJson.contains("conn-secret-pass"));
+        assertFalse(stagedJson.contains("Bearer mcp-secret-token"));
+        assertFalse(stagedJson.contains("xoxb-secret-slack-token"));
+
+        // Staged draft MUST contain opaque vault references
+        assertTrue(stagedJson.contains("apiKeyVaultRef"));
+        assertTrue(stagedJson.contains("passwordVaultRef"));
+        assertTrue(stagedJson.contains("headerVaultRefs"));
+        assertTrue(stagedJson.contains("slackTokenVaultRef"));
+
+        // Verify secrets were stored in the vault for owner-1
+        verify(vault)
+                .store(
+                        contains("vault-key-"),
+                        eq("sk-secret-conn-key".getBytes(StandardCharsets.UTF_8)),
+                        eq("owner-1"));
+        verify(vault)
+                .store(contains("vault-key-"), eq("conn-secret-pass".getBytes(StandardCharsets.UTF_8)), eq("owner-1"));
+        verify(vault)
+                .store(
+                        contains("mcp-header-"),
+                        eq("Bearer mcp-secret-token".getBytes(StandardCharsets.UTF_8)),
+                        eq("owner-1"));
+        verify(vault)
+                .store(
+                        contains("vault-key-"),
+                        eq("xoxb-secret-slack-token".getBytes(StandardCharsets.UTF_8)),
+                        eq("owner-1"));
+    }
+
+    @Test
+    void commitDraft_withImportedTopology_activatesProfileStoreAndTransitionsToCompleted() {
+        Map<String, Object> data = Map.of(
+                "connections",
+                        List.of(Map.of("id", "c-import", "providerAdapterId", "openai", "displayName", "Imported")),
+                "profiles", List.of(Map.of("id", "p-import", "connectionId", "c-import", "modelId", "gpt-4o")),
+                "routes",
+                        List.of(Map.of(
+                                "id", "r-import", "targetKind", "DEFAULT", "orderedProfileIds", List.of("p-import"))));
+
+        OnboardingDraftDto base = draft("d-import-commit", OnboardingDraftState.DRAFT, List.of());
+        OnboardingDraftDto stagedDraft = OnboardingResourceHelper.buildImportedReviewDraft(base, data, objectMapper);
+
+        when(draftStore.findById("d-import-commit")).thenReturn(Optional.of(stagedDraft));
+        when(draftStore.update(any(), anyInt())).thenReturn(true);
+
+        Optional<OnboardingDraftDto> committed = coordinator.commitDraft("d-import-commit");
+
+        assertTrue(committed.isPresent());
+        assertEquals(OnboardingDraftState.COMPLETED, committed.get().state());
+
+        // Upon review/commit, durable records are activated!
+        ArgumentCaptor<LlmConnectionDto> connCaptor = ArgumentCaptor.forClass(LlmConnectionDto.class);
+        verify(profileStore).saveConnection(connCaptor.capture());
+        assertEquals("c-import", connCaptor.getValue().id());
+        assertEquals("ACTIVE", connCaptor.getValue().state());
+
+        ArgumentCaptor<ModelProfileDto> profCaptor = ArgumentCaptor.forClass(ModelProfileDto.class);
+        verify(profileStore).saveModelProfile(profCaptor.capture());
+        assertEquals("p-import", profCaptor.getValue().id());
+        assertTrue(profCaptor.getValue().enabled());
+
+        ArgumentCaptor<ModelRouteAssignmentDto> routeCaptor = ArgumentCaptor.forClass(ModelRouteAssignmentDto.class);
+        verify(profileStore).saveRouteAssignment(routeCaptor.capture());
+        assertEquals("r-import", routeCaptor.getValue().id());
+        assertTrue(routeCaptor.getValue().enabled());
+    }
+
     // ---- draft revision/conflict ----
 
     @Test
@@ -883,6 +1030,8 @@ class OnboardingCoordinatorExtensionTest {
         restartedSaga.objectMapper = new ObjectMapper();
         restartedSaga.extensions = exts;
         restartedSaga.scrubber = scrubber;
+        restartedSaga.profileExporter = new OnboardingProfileExporter();
+        restartedSaga.profileStore = profileStore;
 
         OnboardingCoordinator restartedCoordinator = new OnboardingCoordinator();
         restartedCoordinator.draftStore = draftStore;

@@ -18,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,6 +75,7 @@ public class McpClientService {
     private static final String TAG_PHASE = "phase";
 
     private final ConcurrentHashMap<String, ReentrantLock> stdioLocks = new ConcurrentHashMap<>();
+    private final Set<String> reconnectingServers = ConcurrentHashMap.newKeySet();
 
     @Inject
     DynamicToolCapabilityRegistry registry;
@@ -146,19 +148,19 @@ public class McpClientService {
                 log.warnf("Health check: MCP STDIO server '%s' process is dead, initiating reconnect", serverName);
                 StdioConfig cfg = stdioConfigs.get(serverName);
                 if (cfg != null) {
-                    // Free the scheduler thread: release the dead process synchronously, then
-                    // perform the blocking subprocess re-spawn on the managed external-tool executor.
-                    ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
-                    lock.lock();
-                    try {
-                        cleanupStdio(serverName);
-                    } finally {
-                        lock.unlock();
+                    if (!reconnectingServers.add(serverName)) {
+                        continue;
                     }
                     getExecutor().execute(() -> {
-                        ReentrantLock reconnectLock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
-                        reconnectLock.lock();
+                        ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+                        lock.lock();
                         try {
+                            cleanupStdio(serverName);
+                            Process current = processes.get(serverName);
+                            if (current != null && current.isAlive()) {
+                                log.infof("Process for '%s' already restored, skipping duplicate connect", serverName);
+                                return;
+                            }
                             connectStdio(
                                     serverName,
                                     cfg.command(),
@@ -169,11 +171,18 @@ public class McpClientService {
                         } catch (Exception e) {
                             log.errorf("Health check reconnect failed for %s: %s", serverName, LogUtil.rootMessage(e));
                         } finally {
-                            reconnectLock.unlock();
+                            lock.unlock();
+                            reconnectingServers.remove(serverName);
                         }
                     });
                 } else {
-                    cleanupStdio(serverName);
+                    ReentrantLock lock = stdioLocks.computeIfAbsent(serverName, k -> new ReentrantLock());
+                    lock.lock();
+                    try {
+                        cleanupStdio(serverName);
+                    } finally {
+                        lock.unlock();
+                    }
                 }
             }
         }
@@ -195,23 +204,14 @@ public class McpClientService {
         connectInternal(serverName, serverName, serverUrl, category, handshakeHeaders, false, currentOwner());
     }
 
-    /** Performs the handshake and returns tool metadata without registering executable tools. */
+    /** Performs the unapproved handshake and returns tool metadata without registering executable tools. */
     public List<DiscoveredTool> discoverForUser(
             String serverName,
             String userId,
             String serverUrl,
             ToolCategory category,
-            Map<String, String> handshakeHeaders,
-            boolean preApproved) {
-        return connectInternal(
-                serverName,
-                runtimeKey(serverName, userId),
-                serverUrl,
-                category,
-                handshakeHeaders,
-                preApproved,
-                userId,
-                Set.of());
+            Map<String, String> handshakeHeaders) {
+        return discoverForUser(serverName, userId, serverUrl, category, handshakeHeaders, (String) null);
     }
 
     /** Performs discovery with a single-use checkpoint approval receipt. */
@@ -233,24 +233,16 @@ public class McpClientService {
                 Set.of());
     }
 
-    /** Performs the handshake and registers only the explicitly enabled tool names. */
+    /** Performs the unapproved handshake and registers only the explicitly enabled tool names. */
     public List<DiscoveredTool> connectForUserWithEnabledTools(
             String serverName,
             String userId,
             String serverUrl,
             ToolCategory category,
             Map<String, String> handshakeHeaders,
-            boolean preApproved,
             Set<String> enabledToolNames) {
-        return connectInternal(
-                serverName,
-                runtimeKey(serverName, userId),
-                serverUrl,
-                category,
-                handshakeHeaders,
-                preApproved,
-                userId,
-                enabledToolNames == null ? Set.of() : Set.copyOf(enabledToolNames));
+        return connectForUserWithEnabledTools(
+                serverName, userId, serverUrl, category, handshakeHeaders, (String) null, enabledToolNames);
     }
 
     /** Performs activation with a single-use checkpoint approval receipt. */
@@ -290,6 +282,29 @@ public class McpClientService {
                 category,
                 handshakeHeaders,
                 verifyApproval(userId, serverUrl, approvalToken, approvalPurpose),
+                userId,
+                enabledToolNames == null ? Set.of() : Set.copyOf(enabledToolNames));
+    }
+
+    /**
+     * Reconnects an already-persisted durable connection on startup. Since the connection was
+     * authorized, committed, and persisted in the durable store prior to restart, it is restored
+     * with {@code preApproved = true} to survive process restarts without redundant HITL prompts.
+     */
+    public List<DiscoveredTool> reconnectDurableForUser(
+            String serverName,
+            String userId,
+            String serverUrl,
+            ToolCategory category,
+            Map<String, String> handshakeHeaders,
+            Set<String> enabledToolNames) {
+        return connectInternal(
+                serverName,
+                runtimeKey(serverName, userId),
+                serverUrl,
+                category,
+                handshakeHeaders,
+                true,
                 userId,
                 enabledToolNames == null ? Set.of() : Set.copyOf(enabledToolNames));
     }
@@ -949,17 +964,11 @@ public class McpClientService {
                 healthCheckExecutor.shutdownNow();
             }
         }
-        processes.forEach((name, process) -> {
-            process.destroy();
-            try {
-                if (!process.waitFor(3, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                }
-            } catch (InterruptedException _) {
-                Thread.currentThread().interrupt();
-                process.destroyForcibly();
-            }
-        });
+        Set<String> allServers = new HashSet<>();
+        allServers.addAll(processes.keySet());
+        allServers.addAll(processWriters.keySet());
+        allServers.addAll(processReaders.keySet());
+        allServers.forEach(this::cleanupStdio);
         processes.clear();
     }
 }

@@ -312,8 +312,10 @@ export class ArcOnboarding extends LitElement {
           if (!parsed.mcpServers && parsed.mcp?.servers) {
             parsed.mcpServers = parsed.mcp.servers.map((server: any) => ({
               name: server.name,
+              category: server.category || 'NETWORK',
               transport: 'sse',
               url: server.endpoint,
+              headerVaultRefs: server.headerVaultRefs || {},
             }));
           }
           this._draftPayload = parsed;
@@ -389,7 +391,31 @@ export class ArcOnboarding extends LitElement {
       });
       
       this._currentStepId = res.currentStepId;
-      this._draftPayload = newPayload;
+      if (res.selectedNonSecretIds && res.selectedNonSecretIds.length > 0) {
+        try {
+          const parsed = JSON.parse(res.selectedNonSecretIds[0]);
+          if (parsed.mcp?.servers) {
+            parsed.mcpServers = parsed.mcp.servers.map((server: any) => ({
+              name: server.name,
+              category: server.category || 'NETWORK',
+              transport: 'sse',
+              url: server.endpoint,
+              headerVaultRefs: server.headerVaultRefs || {},
+            }));
+          }
+          this._draftPayload = parsed;
+        } catch (_) {
+          this._draftPayload = { ...newPayload, mcpServers: this._draftPayload.mcpServers };
+        }
+      } else {
+        this._draftPayload = { ...newPayload, mcpServers: this._draftPayload.mcpServers };
+      }
+      if (this._draftPayload.mcpServers) {
+        this._draftPayload.mcpServers = this._draftPayload.mcpServers.map(s => {
+          const { headers: _, ...rest } = s;
+          return rest;
+        });
+      }
       this.updateComplete.then(() => {
         const target = this.shadowRoot?.querySelector('h2, .step-title, input, button.btn-primary');
         (target as HTMLElement)?.focus?.();
@@ -523,11 +549,24 @@ export class ArcOnboarding extends LitElement {
   private _withMcpExtensionPayload(payload: O1DraftPayload): O1DraftPayload {
     const payloadWithoutUiOnlyMcp = { ...payload };
     delete payloadWithoutUiOnlyMcp.mcpServers;
-    const servers = (payload.mcpServers || []).map(server => ({
-      name: server.name.trim(),
-      endpoint: (server.url || '').trim(),
-      category: 'INTERNAL',
-    }));
+    const servers = (payload.mcpServers || []).map(server => {
+      const s: any = {
+        name: server.name.trim(),
+        endpoint: (server.url || '').trim(),
+        category: server.category || 'NETWORK',
+      };
+      if (server.transport) s.transport = server.transport;
+      if (server.command) s.command = server.command;
+      if (server.args) s.args = [...server.args];
+      if (server.envVars) s.envVars = { ...server.envVars };
+      if (server.headerVaultRefs && Object.keys(server.headerVaultRefs).length > 0) {
+        s.headerVaultRefs = { ...server.headerVaultRefs };
+      }
+      if (server.headers && Object.keys(server.headers).length > 0) {
+        s.headers = { ...server.headers };
+      }
+      return s;
+    });
     return { ...payloadWithoutUiOnlyMcp, mcp: { servers } };
   }
 
@@ -781,8 +820,20 @@ export class ArcOnboarding extends LitElement {
             .connections="${this._draftPayload.connections || []}"
             .catalog="${this._catalog}"
             .concernRoutes="${this._draftPayload.concernRoutes}"
+            .mcpServers="${this._draftPayload.mcpServers || []}"
             @finish="${this._commit}"
           ></arc-onboarding-step-review>
+        `;
+      case 'complete':
+        return html`
+          <div class="step-container" style="text-align: center; padding: var(--space-8) var(--space-4);">
+            <div style="font-size: 48px; margin-bottom: var(--space-4); color: var(--color-success, #10b981);">✓</div>
+            <h2 class="step-title">Configuration Complete</h2>
+            <p class="step-description">Your AI Agent settings have been reviewed and are ready to commit.</p>
+            <div style="margin-top: var(--space-6);">
+              <button class="btn-primary" @click="${this._commit}">Get Started</button>
+            </div>
+          </div>
         `;
       default:
         return html`

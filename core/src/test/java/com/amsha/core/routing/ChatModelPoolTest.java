@@ -138,6 +138,22 @@ class ChatModelPoolTest {
     }
 
     @Test
+    void countByScope_countsOnlyMatchingScopeEntries() {
+        ChatModelPool pool = new ChatModelPool();
+        ChatModel m = mock(ChatModel.class);
+        pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof1", 1, "openai", "gpt-4o", () -> m);
+        pool.getOrCreateTyped("USER", "u1", "conn1", 1, "prof2", 1, "openai", "gpt-4o-mini", () -> m);
+        pool.getOrCreateTyped("USER", "u2", "conn2", 1, "prof3", 1, "openai", "gpt-4o", () -> m);
+        pool.getOrCreate("openai#gpt-4o", () -> m);
+
+        assertEquals(2, pool.countByScope("USER", "u1"));
+        assertEquals(1, pool.countByScope("USER", "u2"));
+        assertEquals(0, pool.countByScope("USER", "u3"));
+        assertEquals(0, pool.countByScope(null, "u1"));
+        assertEquals(0, pool.countByScope("USER", null));
+    }
+
+    @Test
     void typedKey_formatsAllComponents() {
         String key = ChatModelPool.typedKey("USER", "u1", "conn1", 3, "prof1", 2, "openai", "gpt-4o");
         assertEquals("USER#u1#conn1#3#prof1#2#openai#gpt-4o", key);

@@ -11,7 +11,6 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
@@ -24,7 +23,6 @@ import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.routing.ChatModelPool;
-import com.amsha.core.util.HttpConstants;
 import com.amsha.onboarding.dto.ApprovalResolutionRequestDto;
 import com.amsha.onboarding.dto.ConnectionValidationRequestDto;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
@@ -108,7 +106,7 @@ public class OnboardingResource {
         boolean skip = skipOnboarding || configuration.ready();
         boolean unclaimed =
                 bootstrapStateStore.getState().map(state -> state.isUnclaimed()).orElse(true);
-        if (!authed && (!unclaimed || !isLoopbackRequest())) {
+        if (!authed && (!unclaimed || !OnboardingResourceHelper.isLoopbackRequest(request))) {
             log.warnf("Onboarding /status denied: missing or invalid principal");
             return Response.status(401)
                     .header(HttpHeaders.CACHE_CONTROL, "no-store")
@@ -160,37 +158,9 @@ public class OnboardingResource {
         rb.header(HttpHeaders.CACHE_CONTROL, "no-store");
         if (authed && skip) {
             // Mirror main: authenticate the UI for chat via the internal API-key cookie.
-            rb.cookie(buildSkipCookie(internalApiKey));
+            rb.cookie(OnboardingResourceHelper.buildSkipCookie(request, internalApiKey));
         }
         return rb.build();
-    }
-
-    private NewCookie buildSkipCookie(String rawKey) {
-        return new NewCookie.Builder(HttpConstants.COOKIE_AMSHA_API_KEY)
-                .value(rawKey)
-                .path("/")
-                .maxAge(3600 * 24 * 30)
-                .httpOnly(true)
-                .secure(isSecureCookieRequired())
-                .sameSite(NewCookie.SameSite.STRICT)
-                .build();
-    }
-
-    private boolean isSecureCookieRequired() {
-        if (request == null || request.remoteAddress() == null) {
-            return false;
-        }
-        String host = request.remoteAddress().host();
-        boolean loopback = HttpConstants.isLoopbackHost(host);
-        String scheme = request.scheme();
-        return !(loopback && "http".equalsIgnoreCase(scheme));
-    }
-
-    private boolean isLoopbackRequest() {
-        if (request == null || request.remoteAddress() == null) {
-            return false;
-        }
-        return HttpConstants.isLoopbackHost(request.remoteAddress().host());
     }
 
     @GET
@@ -355,11 +325,20 @@ public class OnboardingResource {
                     .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
                     .build();
         }
-        Map<String, Object> health = Map.of(
-                "pooledModelCount", modelPool.size(),
-                "effectivePlan", coordinator.effectivePlan(),
-                "status", "ok");
-        return Response.ok(health).build();
+        boolean internal = isInternal();
+        int count = internal ? modelPool.size() : modelPool.countByScope("USER", ownerId);
+        return Response.ok(Map.of(
+                        "pooledModelCount",
+                        count,
+                        "scopeType",
+                        internal ? "SYSTEM" : "USER",
+                        "scopeId",
+                        internal ? "system" : ownerId,
+                        "effectivePlan",
+                        coordinator.effectivePlan(),
+                        "status",
+                        "ok"))
+                .build();
     }
 
     @GET
@@ -381,7 +360,7 @@ public class OnboardingResource {
     @Path("/import")
     @Operation(
             summary =
-                    "Import non-secret profile records. Connections are saved as STAGED; secrets must be supplied via a follow-up draft.")
+                    "Import non-secret profile records into a reviewed draft. Connections are STAGED; review and commit are required.")
     public Response importProfiles(Map<String, Object> data) {
         String ownerId = requireOwner();
         if (ownerId == null) {
@@ -389,8 +368,28 @@ public class OnboardingResource {
                     .entity(new AmshaErrorResponse("Unauthorized", "Authentication required"))
                     .build();
         }
-        coordinator.importProfiles(ownerId, data, profileStore);
-        return Response.ok(Map.of("imported", true)).build();
+        if (data == null) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("BadRequest", "Import data payload is required"))
+                    .build();
+        }
+        try {
+            OnboardingDraftDto draft = coordinator.importProfilesToDraft(ownerId, data, profileStore);
+            return Response.ok(Map.of(
+                            "imported",
+                            true,
+                            "draftId",
+                            draft.draftId(),
+                            "currentStepId",
+                            draft.currentStepId(),
+                            "status",
+                            "DRAFT_PENDING_REVIEW"))
+                    .build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("BadRequest", e.getMessage()))
+                    .build();
+        }
     }
 
     @POST
@@ -510,12 +509,7 @@ public class OnboardingResource {
     }
 
     private Locale resolveLocale() {
-        if (httpHeaders != null
-                && httpHeaders.getAcceptableLanguages() != null
-                && !httpHeaders.getAcceptableLanguages().isEmpty()) {
-            return httpHeaders.getAcceptableLanguages().get(0);
-        }
-        return Locale.ENGLISH;
+        return OnboardingResourceHelper.resolveLocale(httpHeaders);
     }
 
     private String requireOwner() {
@@ -525,16 +519,6 @@ public class OnboardingResource {
     }
 
     private boolean isInternal() {
-        if (securityContext != null && securityContext.isUserInRole("internal")) {
-            return true;
-        }
-        String auth = request != null ? request.getHeader("Authorization") : null;
-        if (auth == null && request != null) {
-            auth = request.getHeader("X-Amsha-API-Key");
-        }
-        if (auth != null && auth.startsWith("Bearer ")) {
-            auth = auth.substring(7);
-        }
-        return auth != null && !auth.isBlank() && auth.equals(internalApiKey);
+        return OnboardingResourceHelper.isInternal(securityContext, request, internalApiKey);
     }
 }

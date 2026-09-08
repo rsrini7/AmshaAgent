@@ -847,19 +847,21 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       // User triggers Quick Start
       (wizard as any)._handleQuickStart();
       // Allow async save and navigation to complete
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('connections');
+      });
 
       // Proves: Selected Ollama (keyless), seeded routes, navigated to connections
       expect((wizard as any)._draftPayload.connections).toHaveLength(1);
       expect((wizard as any)._draftPayload.connections[0].provider).toBe('ollama');
       expect((wizard as any)._draftPayload.concernRoutes.agentLoop).toEqual([0]);
       expect((wizard as any)._draftPayload.concernRoutes.embedding).toEqual([0]);
-      expect((wizard as any)._currentStepId).toBe('connections');
 
       // In Quick Start mode (!isAdvanced), navigating next jumps directly to review
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('review');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('review');
+      });
 
       // Review step reflects connection and route data in wizard template
       const renderedWizard = flattenLit(wizard.render());
@@ -894,9 +896,10 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
 
       // Enter Advanced Setup
       (wizard as any)._handleAdvancedStart();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._isAdvanced).toBe(true);
-      expect((wizard as any)._currentStepId).toBe('connections');
+      await vi.waitFor(() => {
+        expect((wizard as any)._isAdvanced).toBe(true);
+        expect((wizard as any)._currentStepId).toBe('connections');
+      });
 
       // Step 1 -> Connections: Add Groq + Ollama
       (wizard as any)._handleUpdateConnections(
@@ -923,8 +926,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('routes');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('routes');
+      });
 
       // Step 2 -> Concern Routing: agentLoop on 0, embedding on 1
       (wizard as any)._handleUpdateRoutes(
@@ -940,8 +944,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('persona-routing');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('persona-routing');
+      });
 
       // Step 3 -> Persona Routing: researcher overrides
       (wizard as any)._handleUpdatePersonaRoutes(
@@ -954,8 +959,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('mcp');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('mcp');
+      });
 
       // Step 4 -> MCP: configure server and verify payload transformation
       (wizard as any)._handleUpdateMcp(
@@ -968,8 +974,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('integrations');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('integrations');
+      });
 
       // Step 5 -> Integrations: Playwright enabled
       (wizard as any)._handleUpdateIntegrations(
@@ -984,8 +991,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('advanced-settings');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('advanced-settings');
+      });
 
       // Step 6 -> Advanced Settings: temperature & maxRetries
       (wizard as any)._handleUpdateAdvanced(
@@ -994,8 +1002,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('memory');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('memory');
+      });
 
       // Step 7 -> Memory: tiered memory & self-evolve
       (wizard as any)._handleUpdateMemory(
@@ -1004,8 +1013,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('security');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('security');
+      });
 
       // Step 8 -> Security: rate limits
       (wizard as any)._handleUpdateSecurity(
@@ -1014,8 +1024,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('channels');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('channels');
+      });
 
       // Step 9 -> Channels: webEnabled and telegramEnabled
       (wizard as any)._handleUpdateChannels(
@@ -1031,8 +1042,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('identity');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('identity');
+      });
 
       // Step 10 -> Identity: agent metadata
       (wizard as any)._handleUpdateIdentity(
@@ -1041,8 +1053,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         })
       );
       (wizard as any)._navigateNext();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect((wizard as any)._currentStepId).toBe('review');
+      await vi.waitFor(() => {
+        expect((wizard as any)._currentStepId).toBe('review');
+      });
 
       // Step 11 -> Review and Commit
       const renderedWizard = flattenLit(wizard.render());
@@ -1054,10 +1067,12 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       reviewStep.connections = (wizard as any)._draftPayload.connections;
       reviewStep.catalog = (wizard as any)._catalog;
       reviewStep.concernRoutes = (wizard as any)._draftPayload.concernRoutes;
+      reviewStep.mcpServers = [{ name: 'brave-search', transport: 'sse', url: 'https://mcp.brave.internal' }];
       const renderedReview = flattenLit(reviewStep.render());
       expect(renderedReview).toContain('Review & Finalize Onboarding');
       expect(renderedReview).toContain('Total API Connections');
       expect(renderedReview).toContain('Groq Cloud (llama-3.3-70b-versatile)');
+      expect(renderedReview).toContain('1 configured (brave-search)');
 
       await (wizard as any)._commit();
       expect(getCommitCount()).toBe(1);
@@ -1142,11 +1157,20 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       let rendered = flattenLit(step.render());
       expect(rendered).toContain('No MCP servers added yet');
 
-      // 2. Add MCP server
+      // 2. Add MCP server with category and custom headers (masked in DOM)
+      (step as any)._showAddMcp = true;
+      (step as any)._headerKey = 'Authorization';
+      (step as any)._headerValue = 'Bearer test-mcp-key';
+      (step as any)._addHeader();
+      const formRendered = flattenLit(step.render());
+      expect(formRendered).toContain('••••••••');
+      expect(formRendered).not.toContain('Bearer test-mcp-key');
+
       (step as any)._newMcp = {
         name: 'brave-search',
         transport: 'sse',
         url: 'https://mcp.brave.internal',
+        category: 'NETWORK',
       };
       (step as any)._addMcp();
 
@@ -1155,13 +1179,19 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
         name: 'brave-search',
         transport: 'sse',
         url: 'https://mcp.brave.internal',
+        category: 'NETWORK',
+        headers: {
+          Authorization: 'Bearer test-mcp-key',
+        },
       });
 
       // 3. Render populated list and remove
       step.mcpServers = updatedServers;
       rendered = flattenLit(step.render());
       expect(rendered).toContain('brave-search');
+      expect(rendered).toContain('NETWORK');
       expect(rendered).toContain('sse');
+      expect(rendered).toContain('1 header');
       expect(rendered).toContain('mcp-remove');
 
       (step as any)._removeMcp(0);

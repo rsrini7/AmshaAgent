@@ -665,7 +665,7 @@ class McpManagementServiceTest {
     @Test
     void testConnectNewPersistenceBackendUnavailableThrows() throws Exception {
         when(clientService.discoverForUser(
-                        "server", "user-1", "https://example.test/mcp", ToolCategory.NETWORK, Map.of(), false))
+                        "server", "user-1", "https://example.test/mcp", ToolCategory.NETWORK, Map.of(), (String) null))
                 .thenReturn(List.of(new McpClientService.DiscoveredTool("search", "Search", "{}")));
         when(lifecycleService.persistSuccessfulHttp(
                         "server", "https://example.test/mcp", ToolCategory.NETWORK, "user-1", Map.of()))
@@ -673,7 +673,7 @@ class McpManagementServiceTest {
 
         McpConnectionException ex = assertThrows(
                 McpConnectionException.class,
-                () -> service.connectNew("user-1", "server", "https://example.test/mcp", Map.of(), false));
+                () -> service.connectNew("user-1", "server", "https://example.test/mcp", Map.of()));
         assertTrue(ex.getMessage().contains("MCP persistence backend is unavailable"));
         verify(clientService).clearHttpConnectionState("server", "user-1");
     }
@@ -724,10 +724,11 @@ class McpManagementServiceTest {
                         "https://example.test/mcp",
                         ToolCategory.NETWORK,
                         Map.of(),
-                        false,
+                        (String) null,
+                        OutboundPurpose.MCP_CONNECT,
                         Set.of());
 
-        assertThrows(McpConnectionException.class, () -> service.connect("user-1", "server", false));
+        assertThrows(McpConnectionException.class, () -> service.connect("user-1", "server"));
         verify(lifecycleService)
                 .updateState("id-1", "user-1", McpManagementService.STATE_DEGRADED, true, null, "HANDSHAKE_FAILED");
     }
@@ -745,10 +746,11 @@ class McpManagementServiceTest {
                         "https://example.test/mcp",
                         ToolCategory.NETWORK,
                         Map.of(),
-                        false,
+                        (String) null,
+                        OutboundPurpose.MCP_CONNECT,
                         Set.of());
 
-        assertThrows(IllegalStateException.class, () -> service.connect("user-1", "server", false));
+        assertThrows(IllegalStateException.class, () -> service.connect("user-1", "server"));
         verify(lifecycleService)
                 .updateState("id-1", "user-1", McpManagementService.STATE_DEGRADED, true, null, "MCP_OPERATION_FAILED");
     }
@@ -788,14 +790,15 @@ class McpManagementServiceTest {
                         "https://example.test/mcp",
                         ToolCategory.NETWORK,
                         Map.of(),
-                        false,
+                        (String) null,
+                        OutboundPurpose.MCP_CONNECT,
                         Set.of("calc")))
                 .thenReturn(List.of());
 
-        var snapshot1 = service.enableTool("user-1", "server", "calc", false);
+        var snapshot1 = service.enableTool("user-1", "server", "calc");
         assertNotNull(snapshot1);
 
-        var snapshot2 = service.enableTool("user-1", "server", "calc", false, 0L);
+        var snapshot2 = service.enableTool("user-1", "server", "calc", 0L);
         assertNotNull(snapshot2);
     }
 
@@ -806,8 +809,8 @@ class McpManagementServiceTest {
         when(lifecycleService.setToolEnabled("id-1", "user-1", "nonexistent", true))
                 .thenReturn(0);
 
-        McpConnectionException ex = assertThrows(
-                McpConnectionException.class, () -> service.enableTool("user-1", "server", "nonexistent", false));
+        McpConnectionException ex =
+                assertThrows(McpConnectionException.class, () -> service.enableTool("user-1", "server", "nonexistent"));
         assertTrue(ex.getMessage().contains("MCP tool was not discovered: nonexistent"));
     }
 
@@ -900,15 +903,16 @@ class McpManagementServiceTest {
                         "https://example.test/mcp",
                         ToolCategory.NETWORK,
                         Map.of(),
-                        false,
+                        (String) null,
+                        OutboundPurpose.MCP_CONNECT,
                         Set.of()))
                 .thenReturn(List.of());
 
-        var snapshot = service.rotateHeaders("user-1", "server", Map.of("H", "V"), false);
+        var snapshot = service.rotateHeaders("user-1", "server", Map.of("H", "V"));
         assertNotNull(snapshot);
 
         // With revision
-        var snapshot2 = service.rotateHeaders("user-1", "server", Map.of("H", "V"), false, 0L);
+        var snapshot2 = service.rotateHeaders("user-1", "server", Map.of("H", "V"), 0L);
         assertNotNull(snapshot2);
 
         // Rotate with approval
@@ -1021,20 +1025,21 @@ class McpManagementServiceTest {
                         "https://example.test/mcp",
                         ToolCategory.NETWORK,
                         Map.of(),
-                        false,
+                        (String) null,
+                        OutboundPurpose.MCP_CONNECT,
                         Set.of()))
                 .thenReturn(List.of());
 
-        var resSnapshot = service.resume("user-1", "server", false);
+        var resSnapshot = service.resume("user-1", "server");
         assertNotNull(resSnapshot);
 
-        var resSnapshot2 = service.resume("user-1", "server", false, 0L);
+        var resSnapshot2 = service.resume("user-1", "server", 0L);
         assertNotNull(resSnapshot2);
 
-        var recSnapshot = service.reconnect("user-1", "server", false);
+        var recSnapshot = service.reconnect("user-1", "server");
         assertNotNull(recSnapshot);
 
-        var recSnapshot2 = service.reconnect("user-1", "server", false, 0L);
+        var recSnapshot2 = service.reconnect("user-1", "server", 0L);
         assertNotNull(recSnapshot2);
     }
 
@@ -1086,16 +1091,15 @@ class McpManagementServiceTest {
 
     @Test
     void testRequireUserValidationAcrossOperations() {
-        assertThrows(IllegalArgumentException.class, () -> service.enableTool(null, "server", "t", false));
+        assertThrows(IllegalArgumentException.class, () -> service.enableTool(null, "server", "t"));
         assertThrows(IllegalArgumentException.class, () -> service.disableTool("   ", "server", "t"));
         assertThrows(IllegalArgumentException.class, () -> service.pause("unknown", "server"));
         assertThrows(IllegalArgumentException.class, () -> service.disconnectWithResult(null, "server"));
         assertThrows(
-                IllegalArgumentException.class,
-                () -> service.discover("", "server", "https://example.test", Map.of(), false));
+                IllegalArgumentException.class, () -> service.discover("", "server", "https://example.test", Map.of()));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> service.connectNew("unknown", "server", "https://example.test", Map.of(), false));
+                () -> service.connectNew("unknown", "server", "https://example.test", Map.of()));
     }
 
     // ==================== Models Coverage Tests ====================

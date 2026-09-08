@@ -2235,6 +2235,6 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 
 ### 26.5 Dynamic Provider Discovery Invariant (§26.5 INVARIANT)
 - **No Hardcoded Static Provider Sets**: `ModelArenaHelper` and health resources MUST NOT hardcode static sets of allowed providers or base URL maps in application source code.
-- **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
+- **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`, `requiresCustomBaseUrl()`, `probeUrlForProvider()`, `authHeadersForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
 
 

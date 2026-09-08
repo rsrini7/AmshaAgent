@@ -16,6 +16,7 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -110,6 +111,12 @@ class OnboardingResourceTest {
 
     @Test
     void testDraftLifecycle() {
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .post("/onboarding/drafts/discard")
+                .then()
+                .statusCode(200);
+
         // Create draft with internal key (resolved as owner "internal")
         String draftId = given().header("X-Amsha-API-Key", INTERNAL_KEY)
                 .when()
@@ -371,5 +378,78 @@ class OnboardingResourceTest {
         } finally {
             probeServer.stop(0);
         }
+    }
+
+    @Test
+    void exportProfiles_unauthorizedReturns401_authorizedReturns200() {
+        given().when().get("/onboarding/export").then().statusCode(401);
+
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/export")
+                .then()
+                .statusCode(200)
+                .body("connections", notNullValue())
+                .body("profiles", notNullValue())
+                .body("routes", notNullValue());
+    }
+
+    @Test
+    void importProfiles_unauthorizedReturns401_missingPayloadReturns400_validReturns200() {
+        given().contentType(ContentType.JSON)
+                .body(Map.of("connections", List.of()))
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(401);
+
+        // Missing payload -> 400
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .contentType(ContentType.JSON)
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(400);
+
+        // Valid payload -> 200
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .contentType(ContentType.JSON)
+                .body(Map.of(
+                        "connections", List.of(Map.of("id", "import-c1", "displayName", "Imported")),
+                        "profiles",
+                                List.of(Map.of("id", "import-p1", "connectionId", "import-c1", "modelId", "gpt-4o")),
+                        "routes", List.of()))
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(200)
+                .body("imported", is(true))
+                .body("status", is("DRAFT_PENDING_REVIEW"));
+
+        // Cross-scope rejection -> 400
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .contentType(ContentType.JSON)
+                .body(Map.of("connections", List.of(Map.of("id", "import-c2", "scopeType", "SYSTEM"))))
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(400);
+
+        // Foreign scopeId rejection -> 400
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .contentType(ContentType.JSON)
+                .body(Map.of(
+                        "connections",
+                        List.of(Map.of("id", "import-c3", "scopeType", "USER", "scopeId", "foreign-user"))))
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(400);
+
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .post("/onboarding/drafts/discard")
+                .then()
+                .statusCode(200);
     }
 }

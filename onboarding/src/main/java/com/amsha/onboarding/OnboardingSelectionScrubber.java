@@ -56,6 +56,7 @@ public class OnboardingSelectionScrubber {
                 Map<String, Object> payload = objectMapper.readValue(selection, Map.class);
                 boolean modified = false;
 
+                modified |= scrubMapSecrets(payload, ownerId);
                 modified |= scrubConnectionApiKeys(payload, ownerId);
                 modified |= scrubMcpHeaders(payload, ownerId);
                 modified |= scrubMcpServerHeaders(payload, ownerId);
@@ -83,6 +84,7 @@ public class OnboardingSelectionScrubber {
         for (String sel : draft.selectedNonSecretIds()) {
             try {
                 Map<String, Object> payload = objectMapper.readValue(sel, Map.class);
+                cleanupMapSecrets(payload, draft);
                 cleanupConnectionSecrets(payload, draft);
                 cleanupMcpHeaderSecrets(payload, draft);
                 cleanupMcpServerHeaderSecrets(payload, draft);
@@ -201,6 +203,7 @@ public class OnboardingSelectionScrubber {
                 conn.remove("apiKey");
                 modified = true;
             }
+            modified |= scrubMapSecrets(conn, ownerId);
         }
         return modified;
     }
@@ -239,7 +242,9 @@ public class OnboardingSelectionScrubber {
         boolean modified = false;
         for (Object rawServer : servers) {
             if (rawServer instanceof Map<?, ?> rawServerMap) {
-                modified |= scrubMcpHeaderMap((Map<String, Object>) rawServerMap, ownerId);
+                Map<String, Object> srv = (Map<String, Object>) rawServerMap;
+                modified |= scrubMcpHeaderMap(srv, ownerId);
+                modified |= scrubMapSecrets(srv, ownerId);
             }
         }
         return modified;
@@ -315,15 +320,7 @@ public class OnboardingSelectionScrubber {
         List<Map<String, Object>> connections = (List<Map<String, Object>>) payload.get("connections");
         if (connections == null) return;
         for (Map<String, Object> conn : connections) {
-            String vaultRef = (String) conn.get("apiKeyVaultRef");
-            if (vaultRef != null && vaultRef.startsWith("vault-key-")) {
-                try {
-                    vault.remove(vaultRef, draft.ownerId());
-                    log.debugf("[ONBOARDING] Cleaned staged secret %s for draft %s", vaultRef, draft.draftId());
-                } catch (Exception e) {
-                    log.warnf("[ONBOARDING] Failed to clean staged secret %s: %s", vaultRef, e.getMessage());
-                }
-            }
+            cleanupMapSecrets(conn, draft);
         }
     }
 
@@ -336,7 +333,9 @@ public class OnboardingSelectionScrubber {
         if (!(rawServers instanceof List<?> servers)) return;
         for (Object rawServer : servers) {
             if (rawServer instanceof Map<?, ?> rawServerMap) {
-                cleanupMcpHeaderMap((Map<String, Object>) rawServerMap, draft);
+                Map<String, Object> srv = (Map<String, Object>) rawServerMap;
+                cleanupMcpHeaderMap(srv, draft);
+                cleanupMapSecrets(srv, draft);
             }
         }
     }
@@ -378,26 +377,7 @@ public class OnboardingSelectionScrubber {
         for (String sec : sections) {
             Object raw = payload.get(sec);
             if (raw instanceof Map<?, ?> map) {
-                Map<String, Object> secMap = (Map<String, Object>) map;
-                Map<String, Object> toAdd = new LinkedHashMap<>();
-                List<String> toRemove = new ArrayList<>();
-                for (Map.Entry<String, Object> entry : secMap.entrySet()) {
-                    String k = entry.getKey();
-                    Object v = entry.getValue();
-                    if (v instanceof String str && isSecretKey(k) && !str.isBlank() && !str.startsWith("vault-key-")) {
-                        String ref = "vault-key-"
-                                + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-                        vault.store(ref, str.getBytes(StandardCharsets.UTF_8), ownerId);
-                        String refKey = k.endsWith("VaultRef") ? k : k + "VaultRef";
-                        toAdd.put(refKey, ref);
-                        toRemove.add(k);
-                        modified = true;
-                    }
-                }
-                for (String r : toRemove) {
-                    secMap.remove(r);
-                }
-                secMap.putAll(toAdd);
+                modified |= scrubMapSecrets((Map<String, Object>) map, ownerId);
             }
         }
         return modified;
@@ -409,26 +389,60 @@ public class OnboardingSelectionScrubber {
         for (String sec : sections) {
             Object raw = payload.get(sec);
             if (raw instanceof Map<?, ?> map) {
-                for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    String k = String.valueOf(entry.getKey());
-                    Object v = entry.getValue();
-                    if ((k.endsWith("VaultRef") || k.endsWith("Ref"))
-                            && v instanceof String ref
-                            && ref.startsWith("vault-key-")) {
-                        try {
-                            vault.remove(ref, draft.ownerId());
-                            log.debugf("[ONBOARDING] Cleaned staged optional secret %s draft %s", ref, draft.draftId());
-                        } catch (Exception e) {
-                            log.warnf(
-                                    "[ONBOARDING] Failed to clean staged optional secret %s: %s", ref, e.getMessage());
-                        }
-                    }
+                cleanupMapSecrets((Map<String, Object>) map, draft);
+            }
+        }
+    }
+
+    boolean scrubMapSecrets(Map<String, Object> map, String ownerId) {
+        if (map == null || map.isEmpty()) return false;
+        boolean modified = false;
+        Map<String, Object> toAdd = new LinkedHashMap<>();
+        List<String> toRemove = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String k = entry.getKey();
+            Object v = entry.getValue();
+            if (isSecretKey(k)) {
+                if (v instanceof String str
+                        && !str.isBlank()
+                        && !str.startsWith("vault-key-")
+                        && !str.startsWith("mcp-header-")) {
+                    String ref = "vault-key-"
+                            + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                    vault.store(ref, str.getBytes(StandardCharsets.UTF_8), ownerId);
+                    String refKey = k.endsWith("VaultRef") ? k : k + "VaultRef";
+                    toAdd.put(refKey, ref);
+                }
+                toRemove.add(k);
+                modified = true;
+            }
+        }
+        for (String r : toRemove) {
+            map.remove(r);
+        }
+        map.putAll(toAdd);
+        return modified;
+    }
+
+    private void cleanupMapSecrets(Map<String, Object> map, OnboardingDraftDto draft) {
+        if (map == null || map.isEmpty()) return;
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String k = entry.getKey();
+            Object v = entry.getValue();
+            if ((k.endsWith("VaultRef") || k.endsWith("Ref"))
+                    && v instanceof String ref
+                    && ref.startsWith("vault-key-")) {
+                try {
+                    vault.remove(ref, draft.ownerId());
+                    log.debugf("[ONBOARDING] Cleaned staged secret %s for draft %s", ref, draft.draftId());
+                } catch (Exception e) {
+                    log.warnf("[ONBOARDING] Failed to clean staged secret %s: %s", ref, e.getMessage());
                 }
             }
         }
     }
 
-    private static boolean isSecretKey(String key) {
+    static boolean isSecretKey(String key) {
         if (key == null) return false;
         String lower = key.toLowerCase(Locale.ROOT);
         return (lower.contains("secret")

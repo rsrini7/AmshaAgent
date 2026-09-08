@@ -232,4 +232,53 @@ public final class ModelDefaults {
                 .findFirst()
                 .orElse(PROVIDER_OPENROUTER);
     }
+
+    /**
+     * True when the provider requires an explicit target or base URL (e.g. generic-openai).
+     */
+    public static boolean requiresCustomBaseUrl(String provider) {
+        return provider != null && PROVIDER_GENERIC_OPENAI.equalsIgnoreCase(provider.trim());
+    }
+
+    /**
+     * Resolves the catalog or health probe URL for the given provider and base URL.
+     */
+    public static String probeUrlForProvider(String provider, String baseUrl) {
+        String effectiveBase =
+                (baseUrl != null && !baseUrl.isBlank()) ? baseUrl.trim() : defaultBaseUrlForProvider(provider);
+        if (effectiveBase.isBlank()) {
+            return "";
+        }
+        String normalized =
+                effectiveBase.endsWith("/") ? effectiveBase.substring(0, effectiveBase.length() - 1) : effectiveBase;
+        if (provider != null) {
+            String p = provider.toLowerCase(Locale.ROOT);
+            if (PROVIDER_OLLAMA.equals(p)) {
+                return normalized.endsWith("/v1") ? normalized + "/models" : normalized + "/api/tags";
+            }
+            if (PROVIDER_ANTHROPIC.equals(p) || PROVIDER_CLAUDE_CODE.equals(p)) {
+                return normalized.endsWith("/v1") ? normalized + "/models" : normalized + "/v1/models";
+            }
+        }
+        if (normalized.endsWith("/models")) {
+            return normalized;
+        }
+        return normalized + "/models";
+    }
+
+    /**
+     * Returns standard authentication and version headers for a provider given its API key.
+     */
+    public static Map<String, String> authHeadersForProvider(String provider, String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            return Map.of();
+        }
+        if (provider != null) {
+            String p = provider.toLowerCase(Locale.ROOT);
+            if (PROVIDER_ANTHROPIC.equals(p) || PROVIDER_CLAUDE_CODE.equals(p)) {
+                return Map.of("x-api-key", apiKey, "anthropic-version", "2023-06-01");
+            }
+        }
+        return Map.of("Authorization", "Bearer " + apiKey);
+    }
 }
