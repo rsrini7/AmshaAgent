@@ -354,8 +354,8 @@ public class OnboardingResource {
     @POST
     @Path("/import")
     @Operation(
-            summary =
-                    "Import non-secret profile records into a reviewed draft. Connections are STAGED; review and commit are required.")
+            summary = "Import non-secret profile records as STAGED and stage a reviewed draft. "
+                    + "Review and commit are required for activation.")
     public Response importProfiles(Map<String, Object> data) {
         String ownerId = requireOwner();
         if (ownerId == null) {
@@ -370,6 +370,9 @@ public class OnboardingResource {
         }
         try {
             OnboardingDraftDto draft = coordinator.importProfilesToDraft(ownerId, data, profileStore);
+            // Persist the validated graph as STAGED profile records so GET /export round-trips
+            // the import; activation still requires review + commit.
+            coordinator.importProfiles(ownerId, data, profileStore);
             return Response.ok(Map.of(
                             "imported",
                             true,

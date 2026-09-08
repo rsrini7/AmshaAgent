@@ -452,4 +452,46 @@ class OnboardingResourceTest {
                 .then()
                 .statusCode(200);
     }
+
+    @Test
+    void importProfiles_roundTripsThroughExport() {
+        String suffix = "rt" + System.currentTimeMillis();
+        String connId = "conn_" + suffix;
+        String profileId = "profile_" + suffix;
+        String routeId = "route_" + suffix;
+
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .contentType(ContentType.JSON)
+                .body(Map.of(
+                        "connections",
+                        List.of(Map.of("id", connId, "displayName", "Round trip", "providerAdapterId", "ollama")),
+                        "profiles",
+                        List.of(Map.of("id", profileId, "connectionId", connId, "modelId", "llama3")),
+                        "routes",
+                        List.of(Map.of(
+                                "id",
+                                routeId,
+                                "scopeType",
+                                "USER",
+                                "targetKind",
+                                "AGENT_LOOP",
+                                "orderedProfileIds",
+                                List.of(profileId),
+                                "enabled",
+                                true))))
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(200)
+                .body("imported", is(true));
+
+        given().header("X-Amsha-API-Key", INTERNAL_KEY)
+                .when()
+                .get("/onboarding/export")
+                .then()
+                .statusCode(200)
+                .body("connections.id", hasItem(connId))
+                .body("profiles.id", hasItem(profileId))
+                .body("routes.id", hasItem(routeId));
+    }
 }

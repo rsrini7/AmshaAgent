@@ -192,6 +192,15 @@ three-tuple `(channelType, channelId, userId)`.
   via channel, and call `WorkspaceManager.terminateSession()` without entering 
   the agent loop.
 - `HitlService.resolve()` delegates to `CheckpointApprovalService.approveTool()`/`denyTool()`/`approveAll()`/`denyAll()` followed by `checkpointApprovalService.triggerResume(resolvedCp)`. The decision methods update batch decisions and persist; `triggerResume()` enters the transaction-free zone.
+- REST `approve`/`deny` on an already-resolved checkpoint MUST return HTTP 409
+  (`ALREADY_RESOLVED`), never HTTP 500. A duplicate or overlapping approval arriving
+  after inline resume resolved the checkpoint is a benign client-observable race (same
+  treatment as `HitlService.isResolutionRace`), not a server failure.
+- A parent approve/deny whose own checkpoint carries no undecided tools MUST cascade
+  into awaiting delegate sub-sessions (`parentSessionId + ":delegate:"` prefix) via
+  `DelegateApprovalCascade` instead of failing: delegate pauses (e.g. a delegated
+  researcher's `web_fetch`) are otherwise unreachable from the parent session and the
+  flow stalls until session cleanup.
 
 ### 3.5 Structured retry budget behavior
 - Soft budget warnings may be logged and tolerated for retry behavior.

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
@@ -21,6 +22,7 @@ import java.util.function.Consumer;
 
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
@@ -41,6 +43,7 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.MdcKeys;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.jboss.logging.Logger;
 import org.jboss.logging.MDC;
@@ -262,6 +265,101 @@ class AgentSessionServiceTest {
         assertTrue(sr.isSuccess());
         verify(checkpointApprovalService).denyAll("sess1", "Human denied via REST");
         verify(checkpointApprovalService).triggerResume(cp);
+    }
+
+    @Test
+    void testApprove_alreadyResolvedNoDelegates_returns409Not500() {
+        AgentCheckpoint cp = new AgentCheckpointRecord();
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setChannelPlatformId(TEST_USER);
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
+        when(checkpointApprovalService.approveAll(anyString(), anyString()))
+                .thenThrow(new CheckpointResolutionException(
+                        "Approval decision already resolved for session sess1 tool all", 409));
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL)).thenReturn(List.of());
+
+        ServiceResult<Object> sr = service.approve("sess1", TEST_USER, "coordinator");
+        Assertions.assertFalse(sr.isSuccess());
+        assertEquals("ALREADY_RESOLVED", sr.errorCode());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testApprove_alreadyResolvedWithDelegate_approvesDelegateAndResumes() {
+        AgentCheckpoint parent = new AgentCheckpointRecord();
+        parent.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        parent.setChannelPlatformId(TEST_USER);
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(parent));
+        when(checkpointApprovalService.approveAll(eq("sess1"), anyString()))
+                .thenThrow(new CheckpointResolutionException(
+                        "Approval decision already resolved for session sess1 tool all", 409));
+
+        String delegateId = "sess1" + AgentSentinels.DELEGATE_SESSION_SENTINEL + "saraswati:123";
+        AgentCheckpoint delegate = new AgentCheckpointRecord();
+        delegate.setId(7L);
+        delegate.setSessionId(delegateId);
+        delegate.setAgentRole("researcher");
+        delegate.setChannelPlatformId(TEST_USER);
+        delegate.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL)).thenReturn(List.of(delegate));
+        when(checkpointApprovalService.approveAll(eq(delegateId), anyString())).thenReturn(delegate);
+
+        when(checkpointResumeHandler.resolveResumeGoal(anyString(), anyString()))
+                .thenReturn("goal");
+        AgentResult result = mock(AgentResult.Finished.class);
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(), anyInt(), any()))
+                .thenReturn(result);
+        AgentResponseMapper.MappedResult mapped =
+                new AgentResponseMapper.MappedResult(new AgentResponseMapper.AgentResponse("done", 10, 5), 200);
+        when(responseMapper.mapResult(any(), any(Boolean.class))).thenReturn(mapped);
+
+        ServiceResult<Object> sr = service.approve("sess1", TEST_USER, "coordinator");
+        assertTrue(sr.isSuccess());
+        verify(checkpointApprovalService).approveAll(eq(delegateId), anyString());
+        verify(checkpointApprovalService).triggerResume(delegate);
+    }
+
+    @Test
+    void testDeny_alreadyResolvedNoDelegates_returns409Not500() {
+        AgentCheckpoint cp = new AgentCheckpointRecord();
+        cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        cp.setChannelPlatformId(TEST_USER);
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(cp));
+        when(checkpointApprovalService.denyAll(anyString(), anyString()))
+                .thenThrow(new CheckpointResolutionException(
+                        "Approval decision already resolved for session sess1 tool all", 409));
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL)).thenReturn(List.of());
+
+        ServiceResult<Object> sr = service.deny("sess1", TEST_USER, "coordinator");
+        Assertions.assertFalse(sr.isSuccess());
+        assertEquals("ALREADY_RESOLVED", sr.errorCode());
+    }
+
+    @Test
+    void testDeny_alreadyResolvedWithDelegate_deniesDelegate() {
+        AgentCheckpoint parent = new AgentCheckpointRecord();
+        parent.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        parent.setChannelPlatformId(TEST_USER);
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(parent));
+        when(checkpointApprovalService.denyAll(eq("sess1"), anyString()))
+                .thenThrow(new CheckpointResolutionException(
+                        "Approval decision already resolved for session sess1 tool all", 409));
+
+        String delegateId = "sess1" + AgentSentinels.DELEGATE_SESSION_SENTINEL + "saraswati:123";
+        AgentCheckpoint delegate = new AgentCheckpointRecord();
+        delegate.setId(7L);
+        delegate.setSessionId(delegateId);
+        delegate.setAgentRole("researcher");
+        delegate.setChannelPlatformId(TEST_USER);
+        delegate.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL)).thenReturn(List.of(delegate));
+        when(checkpointApprovalService.denyAll(eq(delegateId), anyString())).thenReturn(delegate);
+
+        ServiceResult<Object> sr = service.deny("sess1", TEST_USER, "coordinator");
+        assertTrue(sr.isSuccess());
+        assertEquals("DENIED", ((Map<?, ?>) sr.value()).get("status"));
+        verify(checkpointApprovalService).denyAll(eq(delegateId), anyString());
+        verify(checkpointApprovalService).triggerResume(delegate);
     }
 
     @Test

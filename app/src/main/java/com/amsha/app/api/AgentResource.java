@@ -273,7 +273,7 @@ public class AgentResource {
                 Response.status(Response.Status.BAD_REQUEST)
                         .entity(new AmshaErrorResponse(result.errorMessage()))
                         .build();
-            case "AWAITING_APPROVAL" ->
+            case "AWAITING_APPROVAL", "ALREADY_RESOLVED" ->
                 Response.status(Response.Status.CONFLICT)
                         .entity(new AmshaErrorResponse(result.errorMessage()))
                         .build();
