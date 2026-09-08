@@ -12,7 +12,7 @@ Cohere exposes an OpenAI-compatible endpoint at `https://api.cohere.ai/compatibi
 1. **Provider Identification**:
    - Provider Name: `cohere`
    - Default Base URL: `https://api.cohere.ai/compatibility/v1`
-   - Default Model: `command-r-plus-08-2024`
+   - Default Model: `command-r-08-2024`
    - API Key Variable: `AMSHA_COHERE_API_KEY`
 2. **Transport Reuse**: Reuse the existing LangChain4j OpenAI-compatible transport (`OpenAiChatModel` via `ChatModelFactory.createOpenAi`) with Bearer token authentication. `RoutingChatModelProvider` configures `applyJsonResponseFormat` for structured JSON output extraction.
 3. **SPI Conformance**: Implement both `AgentChatModelProvider` (CDI factory for agent reasoning) and `RoutingChatModelProvider` (routing factory SPI for dynamic slot execution).

@@ -193,9 +193,9 @@ class InteractiveSetupWizardTest {
         ensure.invoke(null, envFile);
 
         String content = Files.readString(envFile);
-        assertTrue(content.contains("AMSHA_COMPACTION_COHERE_MODEL=command-r-plus-08-2024"));
+        assertTrue(content.contains("AMSHA_COMPACTION_COHERE_MODEL=command-r-08-2024"));
         assertTrue(content.contains("AMSHA_COMPACTION_COHERE_BASE_URL=https://api.cohere.ai/compatibility/v1"));
-        assertTrue(content.contains("AMSHA_CLASSIFIER_COHERE_MODEL=command-r-plus-08-2024"));
+        assertTrue(content.contains("AMSHA_CLASSIFIER_COHERE_MODEL=command-r-08-2024"));
         assertTrue(content.contains("AMSHA_CLASSIFIER_COHERE_BASE_URL=https://api.cohere.ai/compatibility/v1"));
     }
 

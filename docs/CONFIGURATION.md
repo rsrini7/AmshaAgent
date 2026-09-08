@@ -134,7 +134,7 @@ Cloudflare Workers AI provider for serverless model inference. Requires an API t
 | `AMSHA_COMPACTION_CLOUDFLARE_ACCOUNT_ID` | — | Account ID override for compaction slot |
 | `AMSHA_CLASSIFIER_CLOUDFLARE_ACCOUNT_ID` | — | Account ID override for classifier slot |
 | `AMSHA_COHERE_API_KEY` | — | Cohere API key |
-| `AMSHA_COHERE_MODEL` | `command-r-plus-08-2024` | Default chat model |
+| `AMSHA_COHERE_MODEL` | `command-r-08-2024` | Default chat model |
 | `AMSHA_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Base URL for Cohere OpenAI-compatibility endpoint |
 | `AMSHA_CODEX_API_KEY` | — | Optional direct API key / token (defaults to `~/.codex/auth.json` OAuth session) |
 | `AMSHA_CODEX_MODEL` | `gpt-5.6-luna` | Default chat model |

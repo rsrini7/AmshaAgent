@@ -211,7 +211,7 @@ class CohereChatModelLoopbackTest {
                               "id": "cohere-chatcmpl-test-001",
                               "object": "chat.completion",
                               "created": 1740000000,
-                              "model": "command-r-plus-08-2024",
+                              "model": "command-r-08-2024",
                               "choices": [
                                 {
                                   "index": 0,
@@ -245,7 +245,7 @@ class CohereChatModelLoopbackTest {
                               "id": "cohere-chatcmpl-test-002",
                               "object": "chat.completion",
                               "created": 1740000001,
-                              "model": "command-r-plus-08-2024",
+                              "model": "command-r-08-2024",
                               "choices": [
                                 {
                                   "index": 0,

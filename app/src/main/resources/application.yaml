@@ -401,7 +401,7 @@ amsha:
     cohere:
       api-key: "${AMSHA_CLASSIFIER_COHERE_API_KEY:${AMSHA_COHERE_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
-      model: "${AMSHA_CLASSIFIER_COHERE_MODEL:command-r-plus-08-2024}"
+      model: "${AMSHA_CLASSIFIER_COHERE_MODEL:command-r-08-2024}"
     codex:
       api-key: "${AMSHA_CLASSIFIER_CODEX_API_KEY:${AMSHA_CODEX_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
@@ -576,7 +576,7 @@ amsha:
     cohere:
       api-key: "${AMSHA_COHERE_API_KEY:}"
       base-url: "${AMSHA_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
-      model: "${AMSHA_COHERE_MODEL:command-r-plus-08-2024}"
+      model: "${AMSHA_COHERE_MODEL:command-r-08-2024}"
     codex:
       api-key: "${AMSHA_CODEX_API_KEY:}"
       base-url: "${AMSHA_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"
@@ -727,7 +727,7 @@ amsha:
     cohere:
       api-key: "${AMSHA_COMPACTION_COHERE_API_KEY:${AMSHA_COHERE_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_COHERE_BASE_URL:https://api.cohere.ai/compatibility/v1}"
-      model: "${AMSHA_COMPACTION_COHERE_MODEL:command-r-plus-08-2024}"
+      model: "${AMSHA_COMPACTION_COHERE_MODEL:command-r-08-2024}"
     codex:
       api-key: "${AMSHA_COMPACTION_CODEX_API_KEY:${AMSHA_CODEX_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_CODEX_BASE_URL:https://chatgpt.com/backend-api/codex}"

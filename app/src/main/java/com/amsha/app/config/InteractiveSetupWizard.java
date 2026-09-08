@@ -245,9 +245,9 @@ public class InteractiveSetupWizard {
                     "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
         }
         if ("cohere".equalsIgnoreCase(provider)) {
-            patchBaseConfig(envFile, "AMSHA_COMPACTION_COHERE_MODEL", "command-r-plus-08-2024");
+            patchBaseConfig(envFile, "AMSHA_COMPACTION_COHERE_MODEL", "command-r-08-2024");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1");
-            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_MODEL", "command-r-plus-08-2024");
+            patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_MODEL", "command-r-08-2024");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1");
         }
         if ("codex".equalsIgnoreCase(provider)) {

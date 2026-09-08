@@ -84,7 +84,7 @@ public final class ModelDefaults {
     public static final String DEFAULT_HUGGINGFACE_MODEL = "meta-llama/Llama-3.3-70B-Instruct";
     public static final String DEFAULT_MISTRAL_MODEL = "codestral-latest";
     public static final String DEFAULT_CLOUDFLARE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-    public static final String DEFAULT_COHERE_MODEL = "command-r-plus-08-2024";
+    public static final String DEFAULT_COHERE_MODEL = "command-r-08-2024";
     public static final String DEFAULT_CODEX_MODEL = "gpt-5.6-luna";
     public static final String DEFAULT_AGY_MODEL = "gemini-3.1-flash-lite";
     public static final String DEFAULT_KIMCHI_MODEL = "minimax-m3";
