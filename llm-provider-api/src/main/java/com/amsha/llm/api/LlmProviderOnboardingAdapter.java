@@ -36,4 +36,14 @@ public interface LlmProviderOnboardingAdapter {
      * local, non-secret-field validation stage of the onboarding saga (stage 1).
      */
     ProviderValidationResult validate(ConnectionValidationRequest request);
+
+    /**
+     * Discovers models available for the given provider, optionally querying the provider's
+     * live endpoint when credentials or custom base URL are provided.
+     * Falls back to static catalog models if live discovery fails or is unsupported.
+     */
+    default List<ModelEntry> discoverModels(
+            String providerId, String customBaseUrl, String apiKey, String actorUserId) {
+        return descriptor(providerId).map(LlmProviderDescriptor::modelCatalog).orElse(List.of());
+    }
 }

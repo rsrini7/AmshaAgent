@@ -4,6 +4,8 @@ import { ArcOnboardingPlanStepper } from './onboarding/arc-onboarding-plan-stepp
 import { ArcOnboardingDescriptorRenderer } from './onboarding/arc-onboarding-descriptor-renderer';
 import { ArcOnboardingStepWelcome } from './onboarding/arc-onboarding-step-welcome';
 import { ArcOnboardingStepMcp } from './onboarding/arc-onboarding-step-mcp';
+import { ArcOnboardingStepConnections } from './onboarding/arc-onboarding-step-connections';
+import { ArcSettings } from './arc-settings';
 import { ArcClient } from '../api/client';
 import { OnboardingStepDescriptorDto } from '../api/types';
 
@@ -171,5 +173,67 @@ describe('Onboarding Accessibility (A11y) & Schema-Driven Renderer Tests', () =>
     expect(typeof client.getStepDescriptor).toBe('function');
     expect(typeof client.validateDraftConnection).toBe('function');
     expect(typeof client.resolveDraftApproval).toBe('function');
+    expect(typeof client.getConnectionNetworkProfile).toBe('function');
+    expect(typeof client.patchConnectionNetworkProfile).toBe('function');
+  });
+
+  it('renders ArcSettings with accessible network policy controls and form landmarks', () => {
+    const settings = new ArcSettings();
+    (settings as any)._activeTab = 'network';
+    const rendered = flattenLit(settings.render());
+
+    expect(rendered).toContain('Network Policy');
+    expect(rendered).toContain('role="tablist"');
+    expect(rendered).toContain('role="tab"');
+    expect(rendered).toContain('role="form"');
+    expect(rendered).toContain('aria-label="Network Profile & Egress Policy"');
+    expect(rendered).toContain('id="net-egress-mode"');
+    expect(rendered).toContain('for="net-egress-mode"');
+    expect(rendered).toContain('id="net-tls-mode"');
+    expect(rendered).toContain('for="net-tls-mode"');
+    expect(rendered).toContain('aria-describedby="hint-net-egress-mode"');
+    expect(rendered).toContain('id="net-connect-timeout"');
+    expect(rendered).toContain('id="net-read-timeout"');
+    expect(rendered).toContain('id="save-network-policy-btn"');
+    expect(rendered).toContain('Save Network Policy');
+  });
+
+  it('renders ArcOnboardingStepConnections with network profile toggle and accessible inputs', () => {
+    const step = new ArcOnboardingStepConnections();
+    step.catalog = [
+      {
+        id: 'groq',
+        displayName: 'Groq Cloud',
+        i18nKey: 'providers.groq',
+        authScheme: 'API_KEY',
+        defaultBaseUrl: 'https://api.groq.com/openai/v1',
+        requiresApiKey: true,
+        embeddingCapable: false,
+        modelCatalog: [{ id: 'llama3', label: 'Llama 3' }],
+        attributes: {}
+      }
+    ];
+    let rendered = flattenLit(step.render());
+    expect(rendered).toContain('id="toggle-network-profile-btn"');
+    expect(rendered).toContain('aria-expanded="false"');
+    expect(rendered).toContain('aria-controls="network-profile-section"');
+    expect(rendered).toContain('id="model-discovery-status"');
+    expect(rendered).toContain('Advanced Network Profile & Egress Settings');
+
+    // Open network profile section
+    (step as any)._showNetworkProfile = true;
+    rendered = flattenLit(step.render());
+
+    expect(rendered).toContain('aria-expanded="true"');
+    expect(rendered).toContain('id="network-profile-section"');
+    expect(rendered).toContain('id="draft-egress-mode"');
+    expect(rendered).toContain('for="draft-egress-mode"');
+    expect(rendered).toContain('id="draft-tls-mode"');
+    expect(rendered).toContain('for="draft-tls-mode"');
+    expect(rendered).toContain('id="draft-connect-timeout"');
+    expect(rendered).toContain('for="draft-connect-timeout"');
+    expect(rendered).toContain('id="draft-read-timeout"');
+    expect(rendered).toContain('for="draft-read-timeout"');
+    expect(rendered).toContain('id="draft-require-proxy"');
   });
 });

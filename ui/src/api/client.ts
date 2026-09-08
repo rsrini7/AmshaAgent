@@ -1,6 +1,6 @@
 import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
-import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto } from './types';
+import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto, NetworkProfilePolicyDto, ProviderCatalogModel } from './types';
 import { ExecutionRunSummaryDto, ExecutionTraceDto } from '../types/trace';
 
 export class ArcApiError extends Error {
@@ -456,6 +456,24 @@ export class ArcClient {
     return this.request<any>('/onboarding/provider-catalog');
   }
 
+  async getProviderModels(
+    providerId: string,
+    baseUrl?: string,
+    apiKey?: string,
+  ): Promise<ProviderCatalogModel[]> {
+    const params = new URLSearchParams();
+    if (baseUrl) params.set('baseUrl', baseUrl);
+    const qs = params.toString();
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers['X-Provider-API-Key'] = apiKey;
+    }
+    return this.request<ProviderCatalogModel[]>(
+      `/onboarding/provider-catalog/${encodeURIComponent(providerId)}/models${qs ? '?' + qs : ''}`,
+      { headers }
+    );
+  }
+
   async getStepDescriptors(): Promise<any> {
     return this.request<any>('/onboarding/steps/descriptors');
   }
@@ -532,6 +550,23 @@ export class ArcClient {
   async resetOnboarding(): Promise<any> {
     return this.request<any>('/settings/reset', {
       method: 'POST'
+    });
+  }
+
+  async getConnectionNetworkProfile(connectionIndex = -1): Promise<NetworkProfilePolicyDto> {
+    const params = connectionIndex >= 0 ? `?connectionIndex=${connectionIndex}` : '';
+    return this.request<NetworkProfilePolicyDto>(`/settings/connection-network-profile${params}`, {
+      cache: 'no-store'
+    });
+  }
+
+  async patchConnectionNetworkProfile(
+    connectionIndex: number,
+    profile: NetworkProfilePolicyDto
+  ): Promise<{ updated: boolean; draftId?: string }> {
+    return this.request<{ updated: boolean; draftId?: string }>('/settings/connection-network-profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ connectionIndex, profile })
     });
   }
 

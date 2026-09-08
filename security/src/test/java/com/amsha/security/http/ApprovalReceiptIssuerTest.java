@@ -8,6 +8,7 @@ import java.time.Duration;
 
 import com.amsha.security.api.OutboundPurpose;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -83,5 +84,45 @@ class ApprovalReceiptIssuerTest {
         ApprovalReceiptIssuer liveIssuer = new ApprovalReceiptIssuer();
         String token = liveIssuer.issue("user-2", "sess-2", OutboundPurpose.PROVIDER_API_CALL, "api.example.com");
         assertNotNull(liveIssuer.verifyAndConsume(token, OutboundPurpose.PROVIDER_API_CALL, "api.example.com"));
+    }
+
+    @Test
+    void issueForOAuthExchange_bindsContextAndVerifies() {
+        ApprovalReceiptIssuer issuer = new ApprovalReceiptIssuer();
+        String token = issuer.issueForOAuthExchange("admin-1", "sess-123", "codex", "auth0.openai.com");
+        assertNotNull(token);
+
+        OutboundApprovalReceipt receipt =
+                issuer.verifyAndConsume(token, OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, "auth0.openai.com");
+        assertNotNull(receipt);
+        assertEquals("admin-1", receipt.approvedByUserId());
+        assertEquals("oauth-exchange:codex:sess-123", receipt.sessionId());
+        assertEquals(OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, receipt.purpose());
+        assertEquals("auth0.openai.com", receipt.targetHost());
+    }
+
+    @Test
+    void issueForOAuthExchange_rejectsMismatchedHost() {
+        ApprovalReceiptIssuer issuer = new ApprovalReceiptIssuer();
+        String token = issuer.issueForOAuthExchange("admin-1", "sess-123", "codex", "auth0.openai.com");
+        assertNotNull(token);
+
+        assertNull(issuer.verifyAndConsume(token, OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, "evil.com"));
+    }
+
+    @Test
+    void issueForOAuthExchange_rejectsIncompleteContext() {
+        ApprovalReceiptIssuer issuer = new ApprovalReceiptIssuer();
+        Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> issuer.issueForOAuthExchange(null, "sess-1", "codex", "auth0.openai.com"));
+        Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> issuer.issueForOAuthExchange("user-1", null, "codex", "auth0.openai.com"));
+        Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> issuer.issueForOAuthExchange("user-1", "sess-1", null, "auth0.openai.com"));
+        Assertions.assertThrows(
+                IllegalArgumentException.class, () -> issuer.issueForOAuthExchange("user-1", "sess-1", "codex", null));
     }
 }

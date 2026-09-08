@@ -32,6 +32,7 @@ class SecurityEventTypeTest {
         assertTrue(SecurityEventType.SESSION_INSPECTED.isMandatory());
         assertTrue(SecurityEventType.DATABASE_QUERY_FAILED.isMandatory());
         assertTrue(SecurityEventType.PROVIDER_EGRESS_VALIDATED.isMandatory());
+        assertTrue(SecurityEventType.OUTBOUND_EGRESS_DENIED.isMandatory());
 
         // Non-mandatory - fire-and-forget
         assertFalse(SecurityEventType.REFLEX_COMMAND.isMandatory());

@@ -3,6 +3,7 @@ package com.amsha.llm.api;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -34,9 +35,8 @@ class NetworkProfilePolicyUnitTest {
     }
 
     @Test
-    void unparseableJsonDefaultsToAllowAll() {
-        NetworkProfilePolicy p = NetworkProfilePolicy.fromJson("{not json");
-        assertEquals(NetworkProfilePolicy.EgressMode.ALLOW_ALL, p.egressMode());
+    void unparseableJsonFailsClosed() {
+        assertThrows(IllegalArgumentException.class, () -> NetworkProfilePolicy.fromJson("{not json"));
     }
 
     @Test

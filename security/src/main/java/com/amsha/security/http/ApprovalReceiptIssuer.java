@@ -8,9 +8,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
@@ -19,6 +19,8 @@ import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import org.jboss.logging.Logger;
 
@@ -41,7 +43,7 @@ public class ApprovalReceiptIssuer {
     private static final Logger log = Logger.getLogger(ApprovalReceiptIssuer.class);
     private static final int TOKEN_BYTES = 32;
 
-    private final Map<String, ReceiptRecord> receipts = new ConcurrentHashMap<>();
+    private final Cache<String, ReceiptRecord> receipts;
     private final Duration defaultTtl;
 
     @Inject
@@ -59,6 +61,13 @@ public class ApprovalReceiptIssuer {
 
     public ApprovalReceiptIssuer(Duration defaultTtl) {
         this.defaultTtl = defaultTtl;
+        Duration cacheTtl = (defaultTtl == null || defaultTtl.isNegative() || defaultTtl.isZero())
+                ? Duration.ofMinutes(10)
+                : defaultTtl.plusMinutes(5);
+        this.receipts = Caffeine.newBuilder()
+                .maximumSize(10_000)
+                .expireAfterWrite(cacheTtl)
+                .build();
     }
 
     /**
@@ -69,19 +78,21 @@ public class ApprovalReceiptIssuer {
     String issue(String actorUserId, String sessionId, OutboundPurpose purpose, String targetHost) {
         SecureRandom random = new SecureRandom();
         byte[] raw = new byte[TOKEN_BYTES];
-        random.nextBytes(raw);
-        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-        // Zero the raw token bytes immediately; nothing retains them in process memory.
-        Arrays.fill(raw, (byte) 0);
-
-        receipts.put(
-                token,
-                new ReceiptRecord(
-                        actorUserId,
-                        sessionId,
-                        purpose,
-                        targetHost,
-                        Instant.now().plus(defaultTtl)));
+        String token;
+        try {
+            random.nextBytes(raw);
+            token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+            receipts.put(
+                    token,
+                    new ReceiptRecord(
+                            actorUserId,
+                            sessionId,
+                            purpose,
+                            targetHost,
+                            Instant.now().plus(defaultTtl)));
+        } finally {
+            Arrays.fill(raw, (byte) 0);
+        }
 
         if (auditService != null) {
             auditService.record(
@@ -149,6 +160,33 @@ public class ApprovalReceiptIssuer {
         return issue(actorUserId, "mcp-approval:" + operationId, purpose, targetHost);
     }
 
+    /**
+     * Mints a single-use operation grant for provider OAuth token exchange or refresh.
+     * Binds the actor, session, providerId, and target host/authority with bounded expiry.
+     */
+    public String issueForOAuthExchange(String actorUserId, String sessionId, String providerId, String targetHost) {
+        if (actorUserId == null
+                || actorUserId.isBlank()
+                || sessionId == null
+                || sessionId.isBlank()
+                || providerId == null
+                || providerId.isBlank()
+                || targetHost == null
+                || targetHost.isBlank()) {
+            throw new IllegalArgumentException("OAuth operation grant context is incomplete");
+        }
+        return issue(
+                actorUserId,
+                oauthExchangeSessionId(providerId, sessionId),
+                OutboundPurpose.PROVIDER_OAUTH_EXCHANGE,
+                targetHost);
+    }
+
+    /** Returns the canonical receipt session binding used for provider OAuth operations. */
+    public static String oauthExchangeSessionId(String providerId, String sessionId) {
+        return "oauth-exchange:" + providerId.trim().toLowerCase(Locale.ROOT) + ":" + sessionId;
+    }
+
     private boolean hasApprovedDecision(String decisionsJson, String toolName) {
         if (decisionsJson == null || decisionsJson.isBlank()) {
             return false;
@@ -172,7 +210,7 @@ public class ApprovalReceiptIssuer {
         if (token == null || token.isBlank()) {
             return null;
         }
-        ReceiptRecord rec = receipts.remove(token);
+        ReceiptRecord rec = receipts.asMap().remove(token);
         if (rec == null) {
             log.warnf("Approval token unknown or already consumed (purpose=%s host=%s)", purpose, targetHost);
             return null;
@@ -195,12 +233,12 @@ public class ApprovalReceiptIssuer {
     /** Removes expired tokens. Safe to schedule periodically. */
     public void purgeExpired() {
         Instant now = Instant.now();
-        receipts.values().removeIf(r -> r.expiresAt.isBefore(now));
+        receipts.asMap().values().removeIf(r -> r.expiresAt.isBefore(now));
+        receipts.cleanUp();
     }
 
     private static boolean hostMatches(String expected, String actual) {
-        if (expected == null) return true;
-        if (actual == null) return false;
+        if (expected == null || actual == null) return false;
         return expected.equalsIgnoreCase(actual);
     }
 

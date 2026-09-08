@@ -27,8 +27,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *   "customCaVaultRef": "vault-key-..."
  * }
  * </pre>
- * When the JSON is blank or unparseable the policy defaults to {@code ALLOW_ALL} so an unset
- * policy never blocks a previously-working connection. The policy is read-only and never logs
+ * A blank policy (null or empty) defaults to {@code ALLOW_ALL} so an unset policy never blocks a
+ * previously-working connection. An <em>unparseable</em> policy is a corruption signal and fails
+ * closed by throwing rather than silently degrading to {@code ALLOW_ALL} — a corrupt committed
+ * profile must not grant unrestricted egress. The policy is read-only and never logs
  * secret material. Proxy credentials and custom-CA material are opaque vault references; they are
  * never persisted in process memory beyond the short-lived transport build. Certificate-verification
  * bypass is not representable: {@code tlsTrustMode} may be {@code SYSTEM} or an explicit
@@ -89,7 +91,11 @@ public final class NetworkProfilePolicy {
                 EgressMode.ALLOW_ALL, List.of(), false, null, null, List.of(), 0, 0, TlsTrustMode.SYSTEM, null);
     }
 
-    /** Parses a per-connection network policy from its JSON blob; blanks/unparseable → ALLOW_ALL. */
+    /**
+     * Parses a per-connection network policy from its JSON blob. A blank blob (null or empty) defaults
+     * to {@code ALLOW_ALL} (an unset policy); an unparseable blob fails closed by throwing, so a
+     * corrupt stored profile cannot degrade to unrestricted egress.
+     */
     public static NetworkProfilePolicy fromJson(String json) {
         if (json == null || json.isBlank()) {
             return allowAll();
@@ -136,7 +142,7 @@ public final class NetworkProfilePolicy {
             return new NetworkProfilePolicy(
                     mode, hosts, proxy, proxyUrl, proxyCredRef, noProxy, connectMs, readMs, tls, caRef);
         } catch (Exception e) {
-            return allowAll();
+            throw new IllegalArgumentException("Invalid network-profile JSON; refusing to default to ALLOW_ALL", e);
         }
     }
 

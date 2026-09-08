@@ -1,14 +1,17 @@
 package com.amsha.onboarding;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
@@ -17,6 +20,7 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,17 +31,20 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.llm.api.ModelDefaults;
-import com.amsha.llm.api.NetworkProfilePolicy;
+import com.amsha.onboarding.dto.NetworkProfilePolicyDto;
 import com.amsha.onboarding.dto.NetworkProfileUpdateRequest;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
 import com.amsha.onboarding.dto.SettingsDto;
 import com.amsha.onboarding.dto.VoiceSettingsUpdateRequest;
+import com.amsha.persistence.api.LlmConnectionDto;
+import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
 import com.amsha.security.api.VaultKey;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -73,6 +80,12 @@ public class SettingsResource {
 
     @Inject
     UserPreferenceService userPreferenceService;
+
+    @Inject
+    ObjectMapper objectMapper;
+
+    @Inject
+    Instance<LlmProfileStorePort> profileStoreInstance;
 
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "dev")
     String appVersion;
@@ -241,10 +254,45 @@ public class SettingsResource {
                 .build();
     }
 
+    @GET
+    @Path("/connection-network-profile")
+    @Operation(summary = "Get the network profile for a connection in the active draft or committed configuration")
+    public Response getConnectionNetworkProfile(
+            @HeaderParam("X-Amsha-API-Key") String key,
+            @QueryParam("connectionIndex") @DefaultValue("-1") int connectionIndex) {
+        String owner = requireOwner();
+        if (owner == null) {
+            return Response.status(401)
+                    .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
+                    .build();
+        }
+        Optional<OnboardingDraftDto> activeDraft = coordinator.findActive(owner);
+        if (activeDraft.isPresent()) {
+            String profileJson = OnboardingResourceHelper.extractNetworkProfile(
+                    activeDraft.get().selectedNonSecretIds(), connectionIndex, objectMapper);
+            if (profileJson != null && !profileJson.isBlank()) {
+                return Response.ok(NetworkProfilePolicyDto.fromJson(profileJson))
+                        .build();
+            }
+        }
+        if (profileStoreInstance != null && profileStoreInstance.isResolvable()) {
+            List<LlmConnectionDto> conns = profileStoreInstance.get().listConnectionsByCreatedBy(owner);
+            int idx = connectionIndex == -1 ? 0 : connectionIndex;
+            if (conns != null && idx >= 0 && idx < conns.size()) {
+                String profileJson = conns.get(idx).networkProfileJson();
+                if (profileJson != null && !profileJson.isBlank()) {
+                    return Response.ok(NetworkProfilePolicyDto.fromJson(profileJson))
+                            .build();
+                }
+            }
+        }
+        return Response.ok(NetworkProfilePolicyDto.defaultPolicy()).build();
+    }
+
     @PATCH
     @Path("/connection-network-profile")
     @Consumes(MediaType.APPLICATION_JSON)
-    @Operation(summary = "Persist a per-connection networkProfileJson into the owner's active draft")
+    @Operation(summary = "Persist a per-connection network profile into the owner's active draft")
     public Response updateConnectionNetworkProfile(
             @HeaderParam("X-Amsha-API-Key") String key, NetworkProfileUpdateRequest req) {
         String owner = requireOwner();
@@ -253,29 +301,88 @@ public class SettingsResource {
                     .entity(new AmshaErrorResponse("Unauthorized", "Invalid or missing API Key"))
                     .build();
         }
-        if (req == null
-                || req.networkProfileJson() == null
-                || req.networkProfileJson().isBlank()
-                || !NetworkProfilePolicy.isValidJson(req.networkProfileJson())) {
+        if (req == null) {
             return Response.status(400)
-                    .entity(new AmshaErrorResponse("networkProfileJson must be a valid supported network profile"))
+                    .entity(new AmshaErrorResponse("Request body is required"))
                     .build();
         }
-        OnboardingDraftDto draft =
-                coordinator.findActive(owner).orElseGet(() -> coordinator.getOrCreateFirstRunDraft(owner));
-        Optional<OnboardingDraftDto> updated = coordinator.updateConnectionNetworkProfile(
-                draft.draftId(), req.connectionIndex(), req.networkProfileJson());
-        if (updated.isEmpty()) {
+        String profileJson;
+        if (req.profile() != null) {
+            String validationError = req.profile().validate();
+            if (validationError != null) {
+                return Response.status(400)
+                        .entity(new AmshaErrorResponse(validationError))
+                        .build();
+            }
+            profileJson = req.profile().toJson(objectMapper);
+        } else if (req.networkProfileJson() != null && !req.networkProfileJson().isBlank()) {
+            NetworkProfilePolicyDto dto;
+            try {
+                dto = objectMapper.readValue(req.networkProfileJson(), NetworkProfilePolicyDto.class);
+            } catch (Exception e) {
+                return Response.status(400)
+                        .entity(new AmshaErrorResponse("networkProfileJson is malformed: " + e.getMessage()))
+                        .build();
+            }
+            String validationError = dto.validate();
+            if (validationError != null) {
+                return Response.status(400)
+                        .entity(new AmshaErrorResponse(validationError))
+                        .build();
+            }
+            profileJson = dto.toJson(objectMapper);
+        } else {
             return Response.status(400)
-                    .entity(new AmshaErrorResponse("No connections selection found for this draft"))
+                    .entity(new AmshaErrorResponse("Either profile or networkProfileJson must be provided"))
                     .build();
         }
+
+        // Audit-before-mutation (§7.13.4): record mandatory audit before state transition
         auditService.recordMandatory(
                 "settings",
                 owner,
                 "system",
                 SecurityEventType.SETTINGS_CHANGED,
                 "field=network-profile connectionIndex=" + req.connectionIndex());
+
+        OnboardingDraftDto draft =
+                coordinator.findActive(owner).orElseGet(() -> coordinator.getOrCreateFirstRunDraft(owner));
+        Optional<OnboardingDraftDto> updated =
+                coordinator.updateConnectionNetworkProfile(draft.draftId(), req.connectionIndex(), profileJson);
+        boolean storeUpdated = false;
+        if (profileStoreInstance != null && profileStoreInstance.isResolvable()) {
+            List<LlmConnectionDto> conns = profileStoreInstance.get().listConnectionsByCreatedBy(owner);
+            int idx = req.connectionIndex() == -1 ? 0 : req.connectionIndex();
+            if (conns != null && idx >= 0 && idx < conns.size()) {
+                LlmConnectionDto existing = conns.get(idx);
+                LlmConnectionDto updatedConn = new LlmConnectionDto(
+                        existing.id(),
+                        existing.scopeType(),
+                        existing.scopeId(),
+                        existing.createdByUserId(),
+                        existing.displayName(),
+                        existing.providerAdapterId(),
+                        existing.endpointProfileId(),
+                        existing.customBaseUrl(),
+                        existing.authScheme(),
+                        profileJson,
+                        existing.state(),
+                        existing.revision() + 1,
+                        existing.createdAt(),
+                        Instant.now());
+                storeUpdated = profileStoreInstance.get().updateConnection(updatedConn, existing.revision());
+                if (!storeUpdated) {
+                    return Response.status(Response.Status.CONFLICT)
+                            .entity(new AmshaErrorResponse("Conflict", "Connection revision conflict"))
+                            .build();
+                }
+            }
+        }
+        if (updated.isEmpty() && !storeUpdated) {
+            return Response.status(400)
+                    .entity(new AmshaErrorResponse("No connections selection found for this draft or user"))
+                    .build();
+        }
         return Response.ok(Map.of("updated", true, "draftId", draft.draftId())).build();
     }
 

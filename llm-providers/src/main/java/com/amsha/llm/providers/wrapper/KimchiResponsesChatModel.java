@@ -17,12 +17,12 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -53,12 +53,12 @@ public class KimchiResponsesChatModel implements ChatModel {
     public static final String KIMCHI_USER_AGENT = "kimchi/0.1.92";
 
     private final String endpoint;
-    private final char[] token;
+    private char[] token;
     private final String model;
     private final int maxTokens;
     private final Duration timeout;
     private final double temperature;
-    private final ObjectMapper objectMapper;
+    private ObjectMapper objectMapper;
     private final GovernedTransportService governedTransport;
 
     public KimchiResponsesChatModel(
@@ -119,6 +119,9 @@ public class KimchiResponsesChatModel implements ChatModel {
         if (token.length == 0) {
             throw new IllegalStateException("Kimchi provider requires active API credentials (AMSHA_KIMCHI_API_KEY).");
         }
+        if (governedTransport == null) {
+            throw new IllegalStateException("GovernedTransportService is required for Kimchi egress");
+        }
 
         try {
             Map<String, Object> payload = buildPayload(request);
@@ -135,22 +138,16 @@ public class KimchiResponsesChatModel implements ChatModel {
             applyAuthHeaders(httpReqBuilder, token);
 
             HttpRequest httpRequest = httpReqBuilder.build();
-            HttpResponse<InputStream> httpResp;
-            if (governedTransport != null) {
-                httpResp = governedTransport.send(
-                        endpoint,
-                        OutboundPurpose.PROVIDER_API_CALL,
-                        null,
-                        "system",
-                        true,
-                        httpRequest,
-                        HttpResponse.BodyHandlers.ofInputStream());
-            } else {
-                HttpClient client = HttpClient.newHttpClient();
-                httpResp = client.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
-            }
+            HttpResponse<InputStream> httpResp = governedTransport.send(
+                    endpoint,
+                    OutboundPurpose.PROVIDER_API_CALL,
+                    null,
+                    "system",
+                    true,
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofInputStream());
 
-            if (httpResp.statusCode() != 200) {
+            if (httpResp.statusCode() < 200 || httpResp.statusCode() >= 300) {
                 throw new IllegalStateException("Kimchi API request failed with HTTP " + httpResp.statusCode());
             }
 
@@ -165,8 +162,24 @@ public class KimchiResponsesChatModel implements ChatModel {
 
     private static void applyAuthHeaders(HttpRequest.Builder builder, char[] tokenChars) {
         if (tokenChars == null || tokenChars.length == 0) return;
-        String tokenStr = new String(tokenChars).trim();
-        builder.header("Authorization", "Bearer " + tokenStr);
+        // The token is held by the caller as a reusable char[] (this.token) and is intentionally NOT
+        // zeroed here; see clearSecret() for the zeroing lifecycle on disposal. new String(tokenChars)
+        // copies the chars (does not retain the backing array), and no immutable copy is retained by
+        // this method beyond the transient Authorization header value required at the HTTP boundary.
+        builder.header("Authorization", "Bearer " + new String(tokenChars));
+    }
+
+    /**
+     * Zeroes the held API token and releases the JSON mapper. Invoke when this model is no longer used
+     * so the credential does not linger in the heap. After this call, {@link #chat} will refuse to run
+     * (the token length check fails closed).
+     */
+    public void clearSecret() {
+        if (this.token != null && this.token.length > 0) {
+            Arrays.fill(this.token, '\0');
+        }
+        this.token = new char[0];
+        this.objectMapper = null;
     }
 
     private Map<String, Object> buildPayload(ChatRequest request) {

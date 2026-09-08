@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 
+import java.time.Instant;
+
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 
@@ -144,6 +147,13 @@ class OutboundHttpPolicyServiceTest {
     }
 
     @Test
+    void providerOAuthExchange_requiresHitl() {
+        OutboundPolicyDecision d = service.evaluate(
+                "https://api.openai.com/v1/oauth/token", OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, null, "user-1");
+        assertTrue(d.requiresHitl());
+    }
+
+    @Test
     void mcpConnect_requiresHitl() {
         // Use a resolvable domain so DNS succeeds and HITL is reached.
         OutboundPolicyDecision d =
@@ -156,6 +166,14 @@ class OutboundHttpPolicyServiceTest {
         OutboundPolicyDecision d =
                 service.evaluate("https://example.com/image.png", OutboundPurpose.MEDIA_DOWNLOAD, null, "user-1");
         assertTrue(d.requiresHitl());
+    }
+
+    @Test
+    void blocksNonTlsForToolFetch() {
+        OutboundPolicyDecision d =
+                service.evaluate("http://example.com/page", OutboundPurpose.TOOL_FETCH, null, "user-1");
+        assertTrue(d.isDenied());
+        assertEquals("TLS_REQUIRED", d.reason().orElseThrow());
     }
 
     @Test
@@ -172,10 +190,65 @@ class OutboundHttpPolicyServiceTest {
     }
 
     @Test
+    void egressDenialsUseOutboundEgressDeniedAuditClassification() {
+        service.evaluate("http://example.com/page", OutboundPurpose.TOOL_FETCH, null, "user-1");
+
+        verify(auditService)
+                .recordMandatory(
+                        "outbound-policy",
+                        "user-1",
+                        "system",
+                        SecurityEventType.OUTBOUND_EGRESS_DENIED,
+                        "action=outbound_denied purpose=TOOL_FETCH category=TLS_REQUIRED");
+    }
+
+    @Test
     void providerApiCall_doesNotRequireHitl() {
         OutboundPolicyDecision d = service.evaluate(
                 "https://api.openai.com/v1/chat/completions", OutboundPurpose.PROVIDER_API_CALL, null, "user-1");
         assertTrue(d.isAllowed());
+    }
+
+    @Test
+    void webSearch_doesNotRequireHitl_guardOwnsApproval() {
+        // Agent web tools are NETWORK_OUTBOUND: ToolInvocationGuard always pauses for approval
+        // before execution, so the transport stays non-blocking to avoid a double prompt.
+        OutboundPolicyDecision d = service.evaluate(
+                "https://api.search.brave.com/res/v1/web/search?q=quarkus", OutboundPurpose.WEB_SEARCH, null, "user-1");
+        assertTrue(d.isAllowed());
+    }
+
+    @Test
+    void toolFetch_doesNotRequireHitl_guardOwnsApproval() {
+        OutboundPolicyDecision d =
+                service.evaluate("https://example.com/article", OutboundPurpose.TOOL_FETCH, null, "user-1");
+        assertTrue(d.isAllowed());
+    }
+
+    @Test
+    void connectionWithDenyAllProfile_deniesEgress() {
+        // Per-connection network profiles are enforced when a connection is supplied
+        // (e.g. OAuth exchange with a connection). Connection-agnostic callers (web tools)
+        // use the default policy by design.
+        LlmConnectionDto connection = new LlmConnectionDto(
+                "conn-1",
+                "WORKSPACE",
+                "ws-1",
+                "user-1",
+                "Test connection",
+                "openai",
+                "default",
+                null,
+                "api-key",
+                "{\"egressMode\":\"DENY_ALL\"}",
+                "ACTIVE",
+                1,
+                Instant.now(),
+                Instant.now());
+        OutboundPolicyDecision d = service.evaluate(
+                "https://api.openai.com/v1/models", OutboundPurpose.PROVIDER_MODEL_DISCOVERY, connection, "user-1");
+        assertTrue(d.isDenied());
+        assertEquals("CONNECTION_EGRESS_DENIED", d.reason().orElseThrow());
     }
 
     @Test

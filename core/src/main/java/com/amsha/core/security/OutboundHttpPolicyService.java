@@ -88,8 +88,8 @@ public class OutboundHttpPolicyService {
             return deny("TLS_REQUIRED", purpose, actorUserId);
         }
 
-        // Literal addresses can be checked without DNS/network I/O. DNS and redirect-hop
-        // revalidation must be performed by the approved HTTP transport after HITL approval.
+        // 3. Literal address checks: literal addresses can be checked without DNS/network I/O.
+        // DNS and redirect-hop revalidation must be performed by the approved HTTP transport after HITL approval.
         if (!isLocalhost(host) && isBlockedLiteralAddress(host)) {
             return deny("BLOCKED_LITERAL_ADDRESS", purpose, actorUserId);
         }
@@ -141,9 +141,16 @@ public class OutboundHttpPolicyService {
 
     private OutboundPolicyDecision deny(String category, OutboundPurpose purpose, String actorUserId) {
         log.warnf("[OUTBOUND-POLICY] Denied category=%s purpose=%s", category, purpose);
-        SecurityEventType eventType = purpose == OutboundPurpose.MEDIA_DOWNLOAD
-                ? SecurityEventType.MEDIA_DOWNLOAD_DENIED
-                : SecurityEventType.MCP_CONNECTION_VALIDATION_FAILED;
+        SecurityEventType eventType;
+        if (purpose == OutboundPurpose.MEDIA_DOWNLOAD) {
+            eventType = SecurityEventType.MEDIA_DOWNLOAD_DENIED;
+        } else if (purpose == OutboundPurpose.MCP_CONNECT
+                || purpose == OutboundPurpose.MCP_TOOL_ENABLE
+                || purpose == OutboundPurpose.MCP_TOOL_CALL) {
+            eventType = SecurityEventType.MCP_CONNECTION_VALIDATION_FAILED;
+        } else {
+            eventType = SecurityEventType.OUTBOUND_EGRESS_DENIED;
+        }
         auditService.recordMandatory(
                 "outbound-policy",
                 actorUserId != null ? actorUserId : "system",
@@ -155,8 +162,9 @@ public class OutboundHttpPolicyService {
 
     private static boolean requiresHitl(OutboundPurpose purpose) {
         return switch (purpose) {
-            case CATALOG_PROBE, OAUTH_CALLBACK, MCP_CONNECT, MCP_TOOL_ENABLE, MEDIA_DOWNLOAD -> true;
-            case PROVIDER_API_CALL, PROVIDER_MODEL_DISCOVERY, MCP_TOOL_CALL -> false;
+            case CATALOG_PROBE, OAUTH_CALLBACK, PROVIDER_OAUTH_EXCHANGE, MCP_CONNECT, MCP_TOOL_ENABLE, MEDIA_DOWNLOAD ->
+                true;
+            case PROVIDER_API_CALL, PROVIDER_MODEL_DISCOVERY, MCP_TOOL_CALL, WEB_SEARCH, TOOL_FETCH -> false;
         };
     }
 
@@ -167,7 +175,7 @@ public class OutboundHttpPolicyService {
         return normalized.equals("localhost") || normalized.equals("127.0.0.1") || normalized.equals("::1");
     }
 
-    private static boolean isBlockedLiteralAddress(String host) {
+    public static boolean isBlockedLiteralAddress(String host) {
         String normalized = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
         if (!normalized.matches("[0-9a-fA-F:.]+")) return false;
         try {

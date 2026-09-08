@@ -2,31 +2,26 @@ package com.amsha.tools.builtin;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Proxy;
-import java.net.ProxySelector;
-import java.net.SocketAddress;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.security.http.GovernedTransportService;
+import com.amsha.security.http.OutboundHttpException;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
@@ -36,8 +31,10 @@ import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.Unremovable;
-import io.quarkus.runtime.LaunchMode;
 
 /**
  * Lightweight web fetch tool that retrieves URL content as plain text.
@@ -65,7 +62,6 @@ public class SmartWebFetchTool implements AgentTool {
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("[ \t]+");
     private static final Pattern MULTI_NEWLINE_PATTERN = Pattern.compile("\n{3,}");
     private static final Pattern SCRIPT_STYLE_PATTERN = Pattern.compile("(?is)<(script|style|noscript)[^>]*>.*?</\\1>");
-    private static final int MAX_REDIRECTS = 5;
     private static final int MAX_FETCH_RETRIES = 2;
 
     private static final Logger LOG = Logger.getLogger(SmartWebFetchTool.class);
@@ -73,48 +69,25 @@ public class SmartWebFetchTool implements AgentTool {
     @Inject
     AuditService auditService;
 
-    private HttpClient httpClient;
-    private LocalSocksProxy socksProxy;
-    private boolean initializationFailed;
+    @Inject
+    GovernedTransportService governedTransport;
 
-    @PostConstruct
-    void init() {
-        if (LaunchMode.current() == LaunchMode.TEST) {
-            LOG.debug("Skipping SmartWebFetchTool SOCKS proxy initialization in test mode.");
-            return;
+    GovernedTransportService resolveGovernedTransport() {
+        if (governedTransport != null) {
+            return governedTransport;
         }
         try {
-            socksProxy = new LocalSocksProxy();
-            ProxySelector socksSelector = new ProxySelector() {
-                @Override
-                public List<Proxy> select(URI uri) {
-                    return List.of(
-                            new Proxy(Proxy.Type.SOCKS, new InetSocketAddress("127.0.0.1", socksProxy.getPort())));
+            ArcContainer container = Arc.container();
+            if (container != null) {
+                InstanceHandle<GovernedTransportService> handle = container.instance(GovernedTransportService.class);
+                if (handle != null && handle.isAvailable()) {
+                    return handle.get();
                 }
-
-                @Override
-                public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {}
-            };
-            httpClient = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(10))
-                    .followRedirects(HttpClient.Redirect.NEVER)
-                    .proxy(socksSelector)
-                    .build();
-        } catch (IOException e) {
-            initializationFailed = true;
-            LOG.warnf("SmartWebFetchTool disabled because SOCKS proxy initialization failed: %s", e.getMessage());
-        }
-    }
-
-    @PreDestroy
-    void cleanup() {
-        if (socksProxy != null) {
-            try {
-                socksProxy.close();
-            } catch (IOException e) {
-                LOG.error("Failed to stop SOCKS proxy cleanly", e);
             }
+        } catch (Exception _) {
+            // Context not active or standalone test mode
         }
+        throw new IllegalStateException("GovernedTransportService is required for web fetch egress");
     }
 
     @Override
@@ -147,7 +120,7 @@ public class SmartWebFetchTool implements AgentTool {
 
     @Override
     public boolean isEnabled() {
-        return !initializationFailed;
+        return true;
     }
 
     @Override
@@ -163,6 +136,11 @@ public class SmartWebFetchTool implements AgentTool {
 
     @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
+        String userId = (ctx != null) ? ctx.userId() : null;
+        if (userId == null || userId.isBlank()) {
+            return ToolResponse.failure(403, "Forbidden: userId is required for web fetch.");
+        }
+
         String url = (String) params.get("url");
         if (url == null || url.isBlank()) {
             return ToolResponse.failure(400, "Parameter 'url' is required.");
@@ -170,7 +148,7 @@ public class SmartWebFetchTool implements AgentTool {
         url = url.trim();
         if (!SAFE_URL_PATTERN.matcher(url).matches()) {
             return ToolResponse.failure(
-                    400, "Unsupported URL scheme. Only http:// and https:// are allowed. Got: " + url);
+                    400, "Unsupported URL scheme. Only http:// and https:// are allowed. Got: " + sanitizeUrl(url));
         }
 
         String ssrfError = rejectPrivateHost(url);
@@ -190,30 +168,47 @@ public class SmartWebFetchTool implements AgentTool {
         for (int attempt = 0; attempt <= MAX_FETCH_RETRIES; attempt++) {
             if (attempt > 0) {
                 try {
-                    LOG.infof("Retrying web_fetch for %s (attempt %d/%d)", url, attempt + 1, MAX_FETCH_RETRIES + 1);
+                    LOG.infof(
+                            "Retrying web_fetch for %s (attempt %d/%d)",
+                            sanitizeUrl(url), attempt + 1, MAX_FETCH_RETRIES + 1);
                     Thread.sleep(1000L * attempt); // linear backoff: 1s, 2s
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
-                    return ToolResponse.failure(502, "Interrupted while fetching " + url);
+                    return ToolResponse.failure(502, "Interrupted while fetching " + sanitizeUrl(url));
                 }
             }
             try {
-                return fetchWithRedirects(url, maxChars, ctx, 0);
+                return fetchUrl(url, maxChars, ctx);
+            } catch (OutboundHttpException e) {
+                int code =
+                        switch (e.category()) {
+                            case POLICY_DENIED, DNS_REBINDING, REDIRECT_DENIED, TLS_TRUST -> 403;
+                            case HITL_REQUIRED -> 409;
+                            case TIMEOUT -> 504;
+                            default -> 502;
+                        };
+                return ToolResponse.failure(code, "Web fetch blocked: " + e.getMessage());
             } catch (IllegalArgumentException e) {
                 return ToolResponse.failure(400, "Invalid URL: " + e.getMessage());
             } catch (Exception e) {
                 if (e instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
-                    return ToolResponse.failure(502, "Interrupted while fetching " + url);
+                    return ToolResponse.failure(502, "Interrupted while fetching " + sanitizeUrl(url));
                 }
                 lastException = e;
-                LOG.warnf("web_fetch attempt %d failed for %s: %s", attempt + 1, url, e.getMessage());
+                LOG.warnf("web_fetch attempt %d failed for %s: %s", attempt + 1, sanitizeUrl(url), e.getMessage());
             }
         }
         return ToolResponse.failure(
                 502,
-                "Failed to fetch " + url + " after " + (MAX_FETCH_RETRIES + 1) + " attempts: "
-                        + lastException.getMessage());
+                "Failed to fetch " + sanitizeUrl(url) + " after " + (MAX_FETCH_RETRIES + 1) + " attempts: "
+                        + (lastException != null ? lastException.getMessage() : "unknown error"));
+    }
+
+    private static String sanitizeUrl(String url) {
+        if (url == null) return "";
+        int q = url.indexOf('?');
+        return q >= 0 ? url.substring(0, q) + "?[redacted]" : url;
     }
 
     /**
@@ -254,14 +249,9 @@ public class SmartWebFetchTool implements AgentTool {
     }
 
     /**
-     * Fetches a URL with manual redirect following and SSRF re-validation on each hop.
+     * Fetches a URL via GovernedTransportService and processes text content.
      */
-    private ToolResponse fetchWithRedirects(String url, int maxChars, ToolExecutionContext ctx, int depth)
-            throws Exception {
-        if (depth > MAX_REDIRECTS) {
-            return ToolResponse.failure(508, "Too many redirects fetching " + url);
-        }
-
+    private ToolResponse fetchUrl(String url, int maxChars, ToolExecutionContext ctx) throws Exception {
         String ssrfError = rejectPrivateHost(url);
         if (ssrfError != null) {
             return ToolResponse.failure(403, ssrfError);
@@ -275,42 +265,49 @@ public class SmartWebFetchTool implements AgentTool {
                 .GET()
                 .build();
 
-        HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        String userId = ctx.userId();
+        // HITL boundary: ToolInvocationGuard owns approval for NETWORK_OUTBOUND tools and always
+        // pauses before execution, so transport-level preApproved is false. TOOL_FETCH is
+        // intentionally non-HITL at transport to avoid a double prompt. Connection is null by
+        // design: web fetch is connection-agnostic (default SSRF/TLS/DNS-rebinding policy).
+        HttpResponse<InputStream> response = resolveGovernedTransport()
+                .send(
+                        url,
+                        OutboundPurpose.TOOL_FETCH,
+                        null,
+                        userId,
+                        false,
+                        request,
+                        HttpResponse.BodyHandlers.ofInputStream());
 
-        URI responseUri = response.uri();
-        String responseUrl = responseUri.toString();
-        int statusCode = response.statusCode();
-        InputStream bodyStream = response.body();
+        // Wrap the entire post-status handling in try-with-resources over the response body stream so
+        // the InputStream (and its underlying connection) is always closed — including on the
+        // rebind/404/4xx early-return branches that previously returned without consuming it.
+        try (InputStream bodyStream = response.body()) {
+            URI responseUri = response.uri();
+            String responseUrl = responseUri.toString();
+            int statusCode = response.statusCode();
 
-        try {
             // Post-response IP validation: catch DNS rebinding + redirects to internal IPs
             String rebindError = rejectPrivateHost(responseUrl);
             if (rebindError != null) {
                 return ToolResponse.failure(403, rebindError);
             }
 
-            // Manual redirect following with SSRF re-check
-            if (statusCode >= 300 && statusCode < 400) {
-                String location = response.headers().firstValue("location").orElse(null);
-                if (location == null) {
-                    return ToolResponse.failure(
-                            statusCode, "HTTP " + statusCode + " with no Location header fetching " + url);
-                }
-                URI redirectUri = responseUri.resolve(location);
-                return fetchWithRedirects(redirectUri.toString(), maxChars, ctx, depth + 1);
-            }
-
             if (statusCode == 404) {
                 return ToolResponse.failure(
                         404,
-                        "HTTP 404 Not Found fetching " + url
+                        "HTTP 404 Not Found fetching " + sanitizeUrl(url)
                                 + ". The page does not exist. Do NOT guess or hallucinate URLs. Search the web for actual links, or ask the user to provide the direct URL.");
             }
 
             if (statusCode >= 400) {
-                return ToolResponse.failure(statusCode, "HTTP " + statusCode + " fetching " + url);
+                return ToolResponse.failure(statusCode, "HTTP " + statusCode + " fetching " + sanitizeUrl(url));
             }
 
+            if (bodyStream == null) {
+                return ToolResponse.success("The page at " + sanitizeUrl(url) + " returned no readable text content.");
+            }
             byte[] bodyBytes = bodyStream.readNBytes(MAX_BODY_BYTES);
             String contentType = response.headers().firstValue("content-type").orElse("");
             String body = new String(bodyBytes, StandardCharsets.UTF_8);
@@ -323,42 +320,52 @@ public class SmartWebFetchTool implements AgentTool {
             }
 
             if (text.isBlank()) {
-                return ToolResponse.success("The page at " + url + " returned no readable text content.");
+                return ToolResponse.success("The page at " + sanitizeUrl(url) + " returned no readable text content.");
             }
 
             if (text.length() > maxChars) {
                 text = truncateAtSentence(text, maxChars) + "\n[content truncated at " + maxChars + " chars]";
             }
 
-            auditService.record(
-                    ctx.sessionId(),
-                    ctx.userId(),
-                    ctx.agentRole(),
-                    SecurityEventType.TOOL_EXECUTED,
-                    "Web fetch: " + url);
+            if (auditService != null) {
+                auditService.record(
+                        ctx.sessionId(),
+                        ctx.userId(),
+                        ctx.agentRole(),
+                        SecurityEventType.TOOL_EXECUTED,
+                        "Web fetch: " + sanitizeUrl(url));
+            }
 
-            return ToolResponse.success("Content from " + url + ":\n\n" + text);
-        } finally {
-            bodyStream.close();
+            return ToolResponse.success("Content from " + sanitizeUrl(url) + ":\n\n" + text);
         }
     }
 
     /** Returns an error message if the host resolves to a private/internal IP; null otherwise. */
-    private static String rejectPrivateHost(String url) {
+    static String rejectPrivateHost(String url) {
         try {
             URI uri = URI.create(url);
             String host = uri.getHost();
-            if (host == null) return null;
+            if (host == null || host.isBlank()) {
+                return "Invalid URL: missing host";
+            }
+            if (OutboundHttpPolicyService.isBlockedLiteralAddress(host)) {
+                return "Access to private/internal network hosts is not allowed: " + host;
+            }
 
             InetAddress[] addrs = InetAddress.getAllByName(host);
             for (InetAddress addr : addrs) {
-                if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress()) {
+                if (addr.isLoopbackAddress()
+                        || addr.isLinkLocalAddress()
+                        || addr.isSiteLocalAddress()
+                        || addr.isAnyLocalAddress()
+                        || addr.isMulticastAddress()
+                        || OutboundHttpPolicyService.isBlockedLiteralAddress(addr.getHostAddress())) {
                     return "Access to private/internal network hosts is not allowed: " + host;
                 }
             }
         } catch (IllegalArgumentException e) {
             return "Invalid URL: " + e.getMessage();
-        } catch (Exception e) {
+        } catch (Exception _) {
             // DNS failure — the real request will fail anyway
         }
         return null;

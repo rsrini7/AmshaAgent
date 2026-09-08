@@ -3,6 +3,7 @@ package com.amsha.llm.providers.config;
 import com.amsha.llm.providers.ChatModelFactory;
 import com.amsha.llm.providers.audio.OmlxAudioTranscriptionProvider;
 import com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider;
+import com.amsha.llm.providers.catalog.LiveProviderCatalogService;
 import com.amsha.llm.providers.catalog.StaticProviderCatalogAdapter;
 import com.amsha.llm.providers.helper.AgyCliExecutor;
 import com.amsha.llm.providers.helper.AgyTokenResolver;
@@ -11,6 +12,9 @@ import com.amsha.llm.providers.helper.CodexTokenResolver;
 import com.amsha.llm.providers.helper.FoundryCliExecutor;
 import com.amsha.llm.providers.helper.FoundryDiscoveryHelper;
 import com.amsha.llm.providers.helper.KimchiTokenResolver;
+import com.amsha.llm.providers.oauth.ProviderOAuthExchangeService;
+import com.amsha.llm.providers.oauth.ProviderOAuthPkceStore;
+import com.amsha.llm.providers.oauth.ProviderOAuthResult;
 import com.amsha.llm.providers.reasoning.AgyProviderFactory;
 import com.amsha.llm.providers.reasoning.CerebrasProviderFactory;
 import com.amsha.llm.providers.reasoning.ClaudeCodeProviderFactory;
@@ -75,6 +79,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         targets = {
             ChatModelFactory.class,
             StaticProviderCatalogAdapter.class,
+            LiveProviderCatalogService.class,
+            ProviderOAuthExchangeService.class,
+            ProviderOAuthPkceStore.class,
+            ProviderOAuthResult.class,
             AgyCliExecutor.class,
             AgyTokenResolver.class,
             ClaudeCodeTokenResolver.class,

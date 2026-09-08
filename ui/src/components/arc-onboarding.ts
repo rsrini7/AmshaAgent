@@ -25,7 +25,7 @@ import './onboarding/arc-onboarding-step-review';
 
 @customElement('arc-onboarding')
 export class ArcOnboarding extends LitElement {
-  private _client = new ArcClient('/api/v1');
+  @state() private _client = new ArcClient('/api/v1');
 
   @state() private _draftId = '';
   @state() private _currentStepId = 'welcome';
@@ -723,6 +723,7 @@ export class ArcOnboarding extends LitElement {
       case 'connections':
         return html`
           <arc-onboarding-step-connections
+            .client="${this._client}"
             .connections="${this._draftPayload.connections || []}"
             .catalog="${this._catalog}"
             .modelDefaults="${this._modelDefaults}"

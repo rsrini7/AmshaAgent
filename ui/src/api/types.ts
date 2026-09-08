@@ -148,6 +148,21 @@ export interface OnboardingCompleteDto {
   pluginSteps: Array<{stepId:string; title:string; isConfigured:boolean}>;
 }
 
+export type EgressMode = 'ALLOW_ALL' | 'ALLOW_LIST' | 'DENY_ALL';
+
+export interface NetworkProfilePolicyDto {
+  egressMode?: EgressMode;
+  allowedHosts?: string[];
+  requireProxy?: boolean;
+  proxyUrl?: string;
+  proxyCredentialVaultRef?: string;
+  noProxyHosts?: string[];
+  connectTimeoutMs?: number;
+  readTimeoutMs?: number;
+  tlsTrustMode?: 'SYSTEM' | 'CUSTOM_CA' | string;
+  customCaVaultRef?: string;
+}
+
 export interface ConnectionDraft {
   provider: string;
   apiKeyVaultRef?: string;
@@ -161,6 +176,7 @@ export interface ConnectionDraft {
   headroomEnabled?: boolean;
   timeoutMs?: number;
   retries?: number;
+  networkProfileJson?: string;
 }
 
 export interface ConcernRoutes {

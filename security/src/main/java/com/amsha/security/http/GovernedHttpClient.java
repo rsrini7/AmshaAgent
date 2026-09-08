@@ -197,7 +197,10 @@ public final class GovernedHttpClient {
                 || "cookie".equalsIgnoreCase(name)
                 || "cookie2".equalsIgnoreCase(name)
                 || "proxy-authorization".equalsIgnoreCase(name)
-                || "mcp-session-id".equalsIgnoreCase(name);
+                || "mcp-session-id".equalsIgnoreCase(name)
+                || "x-subscription-token".equalsIgnoreCase(name)
+                || "x-api-key".equalsIgnoreCase(name)
+                || "x-goog-api-key".equalsIgnoreCase(name);
     }
 
     private static boolean sameOrigin(URI first, URI second) {

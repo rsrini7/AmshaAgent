@@ -1,6 +1,7 @@
 package com.amsha.llm.providers.catalog;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.io.InputStream;
 import java.net.URI;
@@ -36,6 +37,9 @@ public class StaticProviderCatalogAdapter implements LlmProviderOnboardingAdapte
     private static final Logger log = Logger.getLogger(StaticProviderCatalogAdapter.class);
     private static final String CATALOG_RESOURCE = "provider-catalog.json";
 
+    @Inject
+    LiveProviderCatalogService liveCatalogService;
+
     private final ObjectMapper mapper =
             new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     private volatile List<LlmProviderDescriptor> descriptors;
@@ -46,6 +50,16 @@ public class StaticProviderCatalogAdapter implements LlmProviderOnboardingAdapte
             descriptors = load();
         }
         return descriptors;
+    }
+
+    @Override
+    public List<ModelEntry> discoverModels(String providerId, String customBaseUrl, String apiKey, String actorUserId) {
+        List<ModelEntry> fallback =
+                descriptor(providerId).map(LlmProviderDescriptor::modelCatalog).orElse(List.of());
+        if (liveCatalogService != null) {
+            return liveCatalogService.discoverModels(providerId, customBaseUrl, apiKey, actorUserId, fallback);
+        }
+        return fallback;
     }
 
     private List<LlmProviderDescriptor> load() {

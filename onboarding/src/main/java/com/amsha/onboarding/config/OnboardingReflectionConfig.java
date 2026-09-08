@@ -1,6 +1,7 @@
 package com.amsha.onboarding.config;
 
 import com.amsha.onboarding.BootstrapResource;
+import com.amsha.onboarding.OnboardingApprovalResource;
 import com.amsha.onboarding.OnboardingApprovalService;
 import com.amsha.onboarding.OnboardingCommitSaga;
 import com.amsha.onboarding.OnboardingCoordinator;
@@ -12,6 +13,8 @@ import com.amsha.onboarding.dto.ApprovalResolutionRequestDto;
 import com.amsha.onboarding.dto.ApprovalResolutionResponseDto;
 import com.amsha.onboarding.dto.ConnectionValidationRequestDto;
 import com.amsha.onboarding.dto.ConnectionValidationResponseDto;
+import com.amsha.onboarding.dto.NetworkProfilePolicyDto;
+import com.amsha.onboarding.dto.NetworkProfileUpdateRequest;
 import com.amsha.onboarding.dto.OnboardingFieldDescriptorDto;
 import com.amsha.onboarding.dto.OnboardingStatusDto;
 import com.amsha.onboarding.dto.OnboardingStepDescriptorDto;
@@ -55,11 +58,14 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PromptUpdateRequest.class,
             VoiceSettingsUpdateRequest.class,
             SettingsDto.class,
+            NetworkProfilePolicyDto.class,
+            NetworkProfileUpdateRequest.class,
             OnboardingCoordinator.class,
             OnboardingCommitSaga.class,
             OnboardingProfileExporter.class,
             OnboardingSelectionScrubber.class,
             OnboardingResource.class,
+            OnboardingApprovalResource.class,
             OnboardingContext.class,
             OnboardingExtension.class,
             OnboardingFieldDescriptor.class,

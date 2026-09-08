@@ -57,6 +57,13 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
 
+        <!-- Caffeine cache (used directly by ApprovalReceiptIssuer) — declared explicitly rather than
+             relying on transitive availability from amsha-core, per AGENTS.md "no transitive masking". -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-caffeine</artifactId>
+        </dependency>
+
         <!-- Config + logging + tracing used directly by vault and seeder -->
         <dependency>
             <groupId>org.eclipse.microprofile.config</groupId>

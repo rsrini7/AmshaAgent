@@ -3,11 +3,15 @@ package com.amsha.tools.builtin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.util.Map;
 import java.util.Optional;
@@ -15,7 +19,10 @@ import java.util.Optional;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
+import com.amsha.security.http.GovernedTransportService;
+import com.amsha.security.http.OutboundHttpException;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,7 +40,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class SerperWebSearchToolTest {
 
     @Mock
-    HttpClient httpClient;
+    GovernedTransportService governedTransport;
 
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
@@ -51,13 +58,7 @@ class SerperWebSearchToolTest {
     void setup() {
         tool.configApiKey = "fake-serper-key";
         lenient().when(vault.retrieveSystemKey("AMSHA_TOOLS_SERPER_API_KEY")).thenReturn(Optional.empty());
-        try {
-            var field = SerperWebSearchTool.class.getDeclaredField("httpClient");
-            field.setAccessible(true);
-            field.set(tool, httpClient);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        tool.governedTransport = governedTransport;
     }
 
     @Test
@@ -95,7 +96,8 @@ class SerperWebSearchToolTest {
         HttpResponse<String> mockResp = mock(HttpResponse.class);
         when(mockResp.statusCode()).thenReturn(200);
         when(mockResp.body()).thenReturn(mockBody);
-        when(httpClient.<String>send(any(), any())).thenReturn(mockResp);
+        when(governedTransport.<String>send(any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(mockResp);
 
         Map<String, Object> params = Map.of("query", "ultimate answer");
 
@@ -122,7 +124,8 @@ class SerperWebSearchToolTest {
         HttpResponse<String> mockResp = mock(HttpResponse.class);
         when(mockResp.statusCode()).thenReturn(200);
         when(mockResp.body()).thenReturn(mockBody);
-        when(httpClient.<String>send(any(), any())).thenReturn(mockResp);
+        when(governedTransport.<String>send(any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(mockResp);
 
         Map<String, Object> params = Map.of("query", "quarkus");
 
@@ -140,7 +143,8 @@ class SerperWebSearchToolTest {
         HttpResponse<String> mockResp = mock(HttpResponse.class);
         when(mockResp.statusCode()).thenReturn(401);
         when(mockResp.body()).thenReturn("Unauthorized");
-        when(httpClient.<String>send(any(), any())).thenReturn(mockResp);
+        when(governedTransport.<String>send(any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(mockResp);
 
         Map<String, Object> params = Map.of("query", "test");
 
@@ -157,7 +161,8 @@ class SerperWebSearchToolTest {
         HttpResponse<String> mockResp = mock(HttpResponse.class);
         when(mockResp.statusCode()).thenReturn(200);
         when(mockResp.body()).thenReturn("{\"organic\":[]}");
-        when(httpClient.<String>send(any(), any())).thenReturn(mockResp);
+        when(governedTransport.<String>send(any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(mockResp);
 
         Map<String, Object> params = Map.of("query", "test", "count", 50);
 
@@ -165,6 +170,36 @@ class SerperWebSearchToolTest {
                 "session-1", "user-1", "chat-1", AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
 
         assertTrue(resp.output().contains("No relevant web or news results"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testOutboundHttpExceptionPolicyDenied() throws Exception {
+        when(governedTransport.<String>send(any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenThrow(new OutboundHttpException(OutboundHttpException.Category.POLICY_DENIED, "Policy violation"));
+
+        ToolResponse resp = tool.execute(ctx(), Map.of("query", "test"));
+        assertEquals(403, resp.exitCode());
+        assertTrue(resp.output().contains("Serper search blocked"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testTransportReceivesPreApprovedFalse() throws Exception {
+        HttpResponse<String> mockResp = mock(HttpResponse.class);
+        when(mockResp.statusCode()).thenReturn(200);
+        when(mockResp.body()).thenReturn("{\"organic\":[]}");
+        when(governedTransport.<String>send(any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(mockResp);
+
+        Map<String, Object> params = Map.of("query", "quarkus");
+        WorkspaceContext.run(
+                "session-1", "user-1", "chat-1", AutonomyLevel.FULL, "RESEARCHER", () -> tool.execute(ctx(), params));
+
+        // HITL lives in ToolInvocationGuard; the tool must never claim transport pre-approval.
+        verify(governedTransport)
+                .<String>send(
+                        anyString(), eq(OutboundPurpose.WEB_SEARCH), isNull(), eq("user-1"), eq(false), any(), any());
     }
 
     private ToolExecutionContext ctx() {

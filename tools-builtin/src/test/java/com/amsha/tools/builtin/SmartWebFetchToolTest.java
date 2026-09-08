@@ -35,12 +35,6 @@ class SmartWebFetchToolTest {
     }
 
     @Test
-    void testInitAndCleanupDoesNotThrowInTestMode() {
-        assertDoesNotThrow(() -> tool.init());
-        assertDoesNotThrow(() -> tool.cleanup());
-    }
-
-    @Test
     void testExecuteValidation() {
         ToolExecutionContext ctx = new ToolExecutionContext(
                 "sess-1",

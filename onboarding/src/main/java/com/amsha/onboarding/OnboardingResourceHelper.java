@@ -14,12 +14,15 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.util.HttpConstants;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import org.jboss.logging.Logger;
 
 import io.vertx.core.http.HttpServerRequest;
 
@@ -88,36 +91,63 @@ final class OnboardingResourceHelper {
                 auth.getBytes(StandardCharsets.UTF_8), internalApiKey.getBytes(StandardCharsets.UTF_8));
     }
 
-    static List<String> injectNetworkProfile(
-            List<String> selections, int connectionIndex, String networkProfileJson, ObjectMapper objectMapper) {
+    private static final Logger log = Logger.getLogger(OnboardingResourceHelper.class);
+
+    private record ConnectionSearchResult(int payloadIndex, JsonNode rootNode, ObjectNode connectionNode) {}
+
+    private static ConnectionSearchResult findConnectionNode(
+            List<String> selections, int connectionIndex, ObjectMapper objectMapper) {
         if (selections == null || selections.isEmpty()) {
             return null;
         }
-        String connPayload = selections.stream()
-                .filter(s -> s.contains("\"connections\""))
-                .findFirst()
-                .orElse(null);
-        if (connPayload == null) {
+        for (int i = 0; i < selections.size(); i++) {
+            String s = selections.get(i);
+            try {
+                JsonNode node = objectMapper.readTree(s);
+                if (node.has("connections")) {
+                    JsonNode conns = node.get("connections");
+                    if (conns.isArray() && !conns.isEmpty()) {
+                        int idx = connectionIndex == -1 ? 0 : connectionIndex;
+                        if (idx >= 0 && idx < conns.size() && conns.get(idx) instanceof ObjectNode obj) {
+                            return new ConnectionSearchResult(i, node, obj);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.debugf("Could not parse selection payload as JSON: %s", LogUtil.rootMessage(e));
+            }
+        }
+        return null;
+    }
+
+    static List<String> injectNetworkProfile(
+            List<String> selections, int connectionIndex, String networkProfileJson, ObjectMapper objectMapper) {
+        ConnectionSearchResult result = findConnectionNode(selections, connectionIndex, objectMapper);
+        if (result == null) {
             return null;
         }
         try {
-            JsonNode node = objectMapper.readTree(connPayload);
-            JsonNode conns = node.path("connections");
-            if (!conns.isArray() || conns.isEmpty()) {
-                return null;
-            }
-            int idx = connectionIndex == -1 ? 0 : connectionIndex;
-            if (idx < 0 || idx >= conns.size()) {
-                return null;
-            }
-            ((ObjectNode) conns.get(idx)).put("networkProfileJson", networkProfileJson);
-            String updated = objectMapper.writeValueAsString(node);
+            result.connectionNode().put("networkProfileJson", networkProfileJson);
+            String updated = objectMapper.writeValueAsString(result.rootNode());
             List<String> newSelections = new ArrayList<>(selections);
-            newSelections.set(selections.indexOf(connPayload), updated);
+            newSelections.set(result.payloadIndex(), updated);
             return newSelections;
-        } catch (Exception _) {
+        } catch (Exception e) {
+            log.warnf("Failed to serialize updated network profile selection: %s", LogUtil.rootMessage(e));
             return null;
         }
+    }
+
+    static String extractNetworkProfile(List<String> selections, int connectionIndex, ObjectMapper objectMapper) {
+        ConnectionSearchResult result = findConnectionNode(selections, connectionIndex, objectMapper);
+        if (result == null) {
+            return null;
+        }
+        JsonNode profileNode = result.connectionNode().path("networkProfileJson");
+        if (profileNode.isTextual()) {
+            return profileNode.asText();
+        }
+        return null;
     }
 
     static OnboardingDraftDto buildImportedReviewDraft(OnboardingDraftDto draft, Map<String, Object> data) {

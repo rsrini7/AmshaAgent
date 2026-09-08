@@ -3,7 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { ArcClient } from '../api/client';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
-import { SettingsDto } from '../api/types';
+import { SettingsDto, NetworkProfilePolicyDto, EgressMode } from '../api/types';
 
 @customElement('arc-settings')
 export class ArcSettings extends LitElement {
@@ -18,6 +18,18 @@ export class ArcSettings extends LitElement {
   @state() private _customVoice = '';
   @state() private _speechOutputMode = 'default';
   @state() private _availableVoices: string[] = ['default', 'vivian', 'serena', 'eric', 'ryan', 'alloy', 'onyx'];
+
+  @state() private _egressMode: EgressMode = 'ALLOW_ALL';
+  @state() private _allowedHosts = '';
+  @state() private _requireProxy = false;
+  @state() private _proxyUrl = '';
+  @state() private _proxyCredentialVaultRef = '';
+  @state() private _noProxyHosts = '';
+  @state() private _connectTimeoutMs: number | undefined = undefined;
+  @state() private _readTimeoutMs: number | undefined = undefined;
+  @state() private _tlsTrustMode = 'SYSTEM';
+  @state() private _customCaVaultRef = '';
+  @state() private _networkProfileLoadError = false;
 
   private get _client(): ArcClient {
     return new ArcClient('/api/v1', this._appContext?.apiKey || '');
@@ -120,10 +132,40 @@ export class ArcSettings extends LitElement {
       } catch {
         this._systemPrompt = data.systemPrompt;
       }
+
+      // Load the network profile policy.
+      try {
+        const net = await this._client.getConnectionNetworkProfile();
+        if (net) {
+          this._egressMode = net.egressMode || 'ALLOW_ALL';
+          this._allowedHosts = (net.allowedHosts || []).join(', ');
+          this._requireProxy = !!net.requireProxy;
+          this._proxyUrl = net.proxyUrl || '';
+          this._proxyCredentialVaultRef = net.proxyCredentialVaultRef || '';
+          this._noProxyHosts = (net.noProxyHosts || []).join(', ');
+          this._connectTimeoutMs = net.connectTimeoutMs;
+          this._readTimeoutMs = net.readTimeoutMs;
+          this._tlsTrustMode = net.tlsTrustMode || 'SYSTEM';
+          this._customCaVaultRef = net.customCaVaultRef || '';
+          this._networkProfileLoadError = false;
+        }
+      } catch (e: any) {
+        this._networkProfileLoadError = true;
+        this._error = 'Failed to load network profile policy: ' + (e.message || 'Unknown error');
+      }
     } catch (e: any) {
       this._error = e.message;
     } finally {
       this._loading = false;
+    }
+  }
+
+  private _isHttpUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && !!parsed.host;
+    } catch {
+      return false;
     }
   }
 
@@ -151,6 +193,71 @@ export class ArcSettings extends LitElement {
     }
   }
 
+  private async _saveNetworkProfile() {
+    try {
+      this._loading = true; this._error = ''; this._success = '';
+      if (this._networkProfileLoadError) {
+        throw new Error('Cannot save network profile: existing profile failed to load');
+      }
+      if (this._egressMode === 'DENY_ALL') {
+        if (!confirm('Warning: Setting egress mode to DENY_ALL will block all external network access for this connection. Continue?')) {
+          this._loading = false;
+          return;
+        }
+      }
+      if (this._connectTimeoutMs !== undefined && (!Number.isFinite(this._connectTimeoutMs) || this._connectTimeoutMs < 0 || this._connectTimeoutMs > 300000)) {
+        throw new Error('Connect timeout must be between 0 and 300,000 ms');
+      }
+      if (this._readTimeoutMs !== undefined && (!Number.isFinite(this._readTimeoutMs) || this._readTimeoutMs < 0 || this._readTimeoutMs > 300000)) {
+        throw new Error('Read timeout must be between 0 and 300,000 ms');
+      }
+      if (this._requireProxy) {
+        if (!this._proxyUrl.trim()) {
+          throw new Error('Proxy URL is required when proxy is enabled');
+        }
+        if (!this._isHttpUrl(this._proxyUrl.trim())) {
+          throw new Error('Proxy URL must be an absolute http:// or https:// URL');
+        }
+      }
+      if (this._tlsTrustMode === 'CUSTOM_CA' && !this._customCaVaultRef.trim()) {
+        throw new Error('Custom CA Vault Reference is required for CUSTOM_CA mode');
+      }
+
+      const allowedHostsList = this._allowedHosts
+        .split(',')
+        .map(h => h.trim())
+        .filter(h => h.length > 0);
+      const noProxyHostsList = this._noProxyHosts
+        .split(',')
+        .map(h => h.trim())
+        .filter(h => h.length > 0);
+
+      if (this._egressMode === 'ALLOW_LIST' && allowedHostsList.length === 0) {
+        throw new Error('Allowed hosts list cannot be empty when egress mode is ALLOW_LIST');
+      }
+
+      const profile: NetworkProfilePolicyDto = {
+        egressMode: this._egressMode,
+        allowedHosts: allowedHostsList,
+        requireProxy: this._requireProxy,
+        proxyUrl: this._requireProxy && this._proxyUrl.trim() ? this._proxyUrl.trim() : undefined,
+        proxyCredentialVaultRef: this._requireProxy && this._proxyCredentialVaultRef.trim() ? this._proxyCredentialVaultRef.trim() : undefined,
+        noProxyHosts: noProxyHostsList,
+        connectTimeoutMs: this._connectTimeoutMs && this._connectTimeoutMs > 0 ? Number(this._connectTimeoutMs) : undefined,
+        readTimeoutMs: this._readTimeoutMs && this._readTimeoutMs > 0 ? Number(this._readTimeoutMs) : undefined,
+        tlsTrustMode: this._tlsTrustMode,
+        customCaVaultRef: this._tlsTrustMode === 'CUSTOM_CA' && this._customCaVaultRef.trim() ? this._customCaVaultRef.trim() : undefined
+      };
+
+      await this._client.patchConnectionNetworkProfile(-1, profile);
+      this._success = 'Network profile policy updated successfully.';
+    } catch (e: any) {
+      this._error = e.message;
+    } finally {
+      this._loading = false;
+    }
+  }
+
   private async _reset() {
     if (!confirm('Are you sure you want to reset onboarding?')) return;
     try {
@@ -169,10 +276,11 @@ export class ArcSettings extends LitElement {
     return html`
       <h2>Settings ${this._appVersion ? html`<span style="font-size:0.5em;color:var(--text-muted)">v${this._appVersion}</span>` : ''}</h2>
       
-      <div class="tabs">
-        <div class="tab ${this._activeTab === 'prompt' ? 'active' : ''}" @click="${() => this._activeTab = 'prompt'}">System Prompt</div>
-        <div class="tab ${this._activeTab === 'voice' ? 'active' : ''}" @click="${() => this._activeTab = 'voice'}">Speech & Voice</div>
-        <div class="tab ${this._activeTab === 'danger' ? 'active' : ''}" @click="${() => this._activeTab = 'danger'}">Danger Zone</div>
+      <div class="tabs" role="tablist" aria-label="Settings tabs">
+        <div class="tab ${this._activeTab === 'prompt' ? 'active' : ''}" role="tab" id="tab-prompt" aria-selected="${this._activeTab === 'prompt'}" aria-controls="panel-prompt" tabindex="${this._activeTab === 'prompt' ? '0' : '-1'}" @click="${() => this._activeTab = 'prompt'}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'prompt'; } }}">System Prompt</div>
+        <div class="tab ${this._activeTab === 'voice' ? 'active' : ''}" role="tab" id="tab-voice" aria-selected="${this._activeTab === 'voice'}" aria-controls="panel-voice" tabindex="${this._activeTab === 'voice' ? '0' : '-1'}" @click="${() => this._activeTab = 'voice'}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'voice'; } }}">Speech & Voice</div>
+        <div class="tab ${this._activeTab === 'network' ? 'active' : ''}" role="tab" id="tab-network" aria-selected="${this._activeTab === 'network'}" aria-controls="panel-network" tabindex="${this._activeTab === 'network' ? '0' : '-1'}" @click="${() => this._activeTab = 'network'}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'network'; } }}">Network Policy</div>
+        <div class="tab ${this._activeTab === 'danger' ? 'active' : ''}" role="tab" id="tab-danger" aria-selected="${this._activeTab === 'danger'}" aria-controls="panel-danger" tabindex="${this._activeTab === 'danger' ? '0' : '-1'}" @click="${() => this._activeTab = 'danger'}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'danger'; } }}">Danger Zone</div>
       </div>
 
       ${this._error ? html`<div class="status-msg error">${this._error}</div>` : ''}
@@ -181,6 +289,7 @@ export class ArcSettings extends LitElement {
 
       ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
       ${this._activeTab === 'voice' ? this._renderVoice() : ''}
+      ${this._activeTab === 'network' ? this._renderNetworkPolicy() : ''}
       ${this._activeTab === 'danger' ? this._renderDanger() : ''}
     `;
   }
@@ -265,6 +374,116 @@ export class ArcSettings extends LitElement {
         <p style="color:var(--text-muted);font-size:var(--font-size-sm);line-height:1.5;">Resetting onboarding will clear your session and force you to re-run the wizard. Your existing API keys are not deleted until overwritten.</p>
         <div style="margin-top:var(--space-4)">
           <button class="btn-danger" ?disabled="${this._loading}" @click="${() => this._reset()}">Reset & Re-Onboard</button>
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderNetworkPolicy() {
+    return html`
+      <div class="section" role="form" aria-label="Network Profile & Egress Policy">
+        <div class="field-group">
+          <label class="field-label" for="net-egress-mode">Outbound Egress Mode</label>
+          <span class="field-hint" id="hint-net-egress-mode">Policy enforcement governing outbound network calls for this connection.</span>
+          <select class="field-select" id="net-egress-mode" aria-describedby="hint-net-egress-mode" .value="${this._egressMode}"
+                  @change="${(e: any) => this._egressMode = e.target.value as EgressMode}">
+            <option value="ALLOW_ALL">Allow Outbound (All Hosts)</option>
+            <option value="ALLOW_LIST">Allow List (Permit only specific hostnames)</option>
+            <option value="DENY_ALL">Deny All (Block all external egress)</option>
+          </select>
+        </div>
+
+        ${this._egressMode === 'ALLOW_LIST' ? html`
+          <div class="field-group">
+            <label class="field-label" for="net-allowed-hosts">Allowed Hosts</label>
+            <span class="field-hint" id="hint-net-allowed-hosts">Comma-separated hostnames permitted for outbound egress (e.g. api.openai.com, api.groq.com).</span>
+            <input class="field-input" id="net-allowed-hosts" type="text" aria-describedby="hint-net-allowed-hosts"
+                   placeholder="api.openai.com, api.groq.com"
+                   .value="${this._allowedHosts}"
+                   @input="${(e: any) => this._allowedHosts = e.target.value}" />
+          </div>
+        ` : ''}
+
+        <div class="field-group">
+          <label style="display:flex;align-items:center;gap:var(--space-2);cursor:pointer;">
+            <input type="checkbox" id="net-require-proxy" aria-describedby="hint-net-require-proxy" ?checked="${this._requireProxy}"
+                   @change="${(e: any) => this._requireProxy = e.target.checked}" />
+            <span class="field-label" style="margin:0">Require Egress Proxy</span>
+          </label>
+          <span class="field-hint" id="hint-net-require-proxy">Route outbound requests through a corporate HTTP/HTTPS proxy.</span>
+        </div>
+
+        ${this._requireProxy ? html`
+          <div class="field-group">
+            <label class="field-label" for="net-proxy-url">Proxy URL</label>
+            <input class="field-input" id="net-proxy-url" type="url"
+                   placeholder="http://proxy.internal:3128"
+                   .value="${this._proxyUrl}"
+                   @input="${(e: any) => this._proxyUrl = e.target.value}" />
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="net-proxy-vault-ref">Proxy Credential Vault Reference (Optional)</label>
+            <span class="field-hint" id="hint-net-proxy-vault-ref">Secret reference identifier stored in the secret vault.</span>
+            <input class="field-input" id="net-proxy-vault-ref" type="text" aria-describedby="hint-net-proxy-vault-ref"
+                   placeholder="vault-proxy-credential-ref"
+                   .value="${this._proxyCredentialVaultRef}"
+                   @input="${(e: any) => this._proxyCredentialVaultRef = e.target.value}" />
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="net-no-proxy-hosts">No-Proxy Host Patterns</label>
+            <span class="field-hint" id="hint-net-no-proxy-hosts">Comma-separated list of host patterns that bypass proxy (e.g. localhost, *.internal).</span>
+            <input class="field-input" id="net-no-proxy-hosts" type="text" aria-describedby="hint-net-no-proxy-hosts"
+                   placeholder="localhost, *.internal"
+                   .value="${this._noProxyHosts}"
+                   @input="${(e: any) => this._noProxyHosts = e.target.value}" />
+          </div>
+        ` : ''}
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);max-width:400px;">
+          <div class="field-group">
+            <label class="field-label" for="net-connect-timeout">Connect Timeout (ms)</label>
+            <input class="field-input" id="net-connect-timeout" type="number" min="0" max="300000"
+                   placeholder="Default (e.g. 5000)"
+                   .value="${this._connectTimeoutMs ?? ''}"
+                   @input="${(e: any) => this._connectTimeoutMs = e.target.value ? Number(e.target.value) : undefined}" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="net-read-timeout">Read Timeout (ms)</label>
+            <input class="field-input" id="net-read-timeout" type="number" min="0" max="300000"
+                   placeholder="Default (e.g. 30000)"
+                   .value="${this._readTimeoutMs ?? ''}"
+                   @input="${(e: any) => this._readTimeoutMs = e.target.value ? Number(e.target.value) : undefined}" />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="net-tls-mode">TLS Trust Posture</label>
+          <span class="field-hint" id="hint-net-tls-mode">Enforce production TLS validation using the JVM system store or a custom enterprise CA.</span>
+          <select class="field-select" id="net-tls-mode" aria-describedby="hint-net-tls-mode" .value="${this._tlsTrustMode}"
+                  @change="${(e: any) => this._tlsTrustMode = e.target.value}">
+            <option value="SYSTEM">SYSTEM (Default JVM Trust Store)</option>
+            <option value="CUSTOM_CA">CUSTOM_CA (Enterprise Private CA from Vault)</option>
+          </select>
+        </div>
+
+        ${this._tlsTrustMode === 'CUSTOM_CA' ? html`
+          <div class="field-group">
+            <label class="field-label" for="net-custom-ca-ref">Custom CA Vault Reference</label>
+            <span class="field-hint" id="hint-net-custom-ca-ref">Vault reference identifier pointing to the trusted CA certificate bundle.</span>
+            <input class="field-input" id="net-custom-ca-ref" type="text" aria-describedby="hint-net-custom-ca-ref"
+                   placeholder="vault-ca-cert-ref"
+                   .value="${this._customCaVaultRef}"
+                   @input="${(e: any) => this._customCaVaultRef = e.target.value}" />
+          </div>
+        ` : ''}
+
+        <div style="margin-top:var(--space-4)">
+          <button class="btn-primary" id="save-network-policy-btn" ?disabled="${this._loading || this._networkProfileLoadError}"
+                  @click="${() => this._saveNetworkProfile()}">
+            Save Network Policy
+          </button>
         </div>
       </div>
     `;

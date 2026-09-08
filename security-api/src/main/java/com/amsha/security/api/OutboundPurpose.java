@@ -12,6 +12,8 @@ public enum OutboundPurpose {
     PROVIDER_MODEL_DISCOVERY,
     /** OAuth callback/redirect. */
     OAUTH_CALLBACK,
+    /** Provider OAuth token exchange or refresh. */
+    PROVIDER_OAUTH_EXCHANGE,
     /** MCP server connection (initial handshake). */
     MCP_CONNECT,
     /** Explicit activation of a discovered MCP tool. */
@@ -19,5 +21,9 @@ public enum OutboundPurpose {
     /** MCP tool invocation. */
     MCP_TOOL_CALL,
     /** Governed media attachment download. */
-    MEDIA_DOWNLOAD
+    MEDIA_DOWNLOAD,
+    /** Web search tool invocation (e.g. Brave, Serper). */
+    WEB_SEARCH,
+    /** Web fetch tool invocation (e.g. SmartWebFetchTool). */
+    TOOL_FETCH
 }

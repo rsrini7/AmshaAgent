@@ -131,7 +131,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
                 || path.startsWith("/onboarding/bootstrap/claim")
                 || path.startsWith("/onboarding/bootstrap/local-recovery")
                 || path.startsWith("/onboarding/status")
-                || path.startsWith("/onboarding/provider-catalog");
+                || path.equals("/onboarding/provider-catalog")
+                || path.equals("/onboarding/provider-catalog/");
         return path.startsWith("/info") || bootstrapPublic || isAuthPath(path);
     }
 
