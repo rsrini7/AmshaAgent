@@ -524,10 +524,6 @@ MUST NOT: Use JPA `EntityManager` operations (`em.merge()`, `em.persist()`, `em.
 
 ## 5.9 Transaction-Free Zone: Long-Running Operations
 
----
-
-## 5.9 Transaction-Free Zone: Long-Running Operations
-
 Any operation that performs slow I/O (LLM network calls, external REST, arbitrary sleep,
 full agent loops) MUST NOT run inside an active JTA transaction.
 
@@ -1244,6 +1240,8 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
 - WebSocket session state (`WebSocketSessionStore`) MUST be `@ApplicationScoped` with `ConcurrentHashMap` — no per-session CDI scopes for WebSocket connections.
 - HITL sessions MUST survive WebSocket disconnects — `WebChatEndpoint.onClose()` MUST check for `AWAITING_APPROVAL` before terminating the session.
 - The WebSocket endpoint path is `/ws/chat` (sessionId is in the message or query parameter, not in the URL path).
+
+---
 
 ## §7. Parallel Tool Execution
 
@@ -2231,7 +2229,7 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 - **Mandatory Audit**: Every console query MUST record `DB_QUERY_EXECUTED` or `DB_QUERY_REJECTED` in the audit log.
 
 ### 26.3 Governed LLM Transport & Model Arena (§26.3 INVARIANT)
-- **Byte-Level Governed Egress**: Outbound model HTTP requests MUST route through `GovernedTransportService.validateEgress(...)` via `GovernedLangChainHttpClient`. No provider SDK may bypass this governed client.
+- **Byte-Level Governed Egress**: Outbound HTTP requests MUST route through governed transport enforcing `GovernedTransportService.validateEgress(...)`: LangChain4j providers (OpenAI, Anthropic, Ollama, Gemini, LlamaCpp, etc.) use `GovernedLangChainHttpClient` (delegating to `GovernedTransportService.send(...)` under `OutboundPurpose.LLM_INFERENCE`), custom wrappers (`Kimchi`, `Foundry`) and internal services call `GovernedTransportService.send(...)` directly with typed `OutboundPurpose` contracts, and built-in tools use `GovernedHttpClient`. No provider SDK, custom wrapper, or tool may bypass governed transport via unmediated HTTP clients.
 - **SSRF & Header Sanitization**: Destination addresses MUST be checked against the IP blocklist (blocking loopback, private IPv4/IPv6, and metadata addresses). Restricted and hop-by-hop headers MUST be stripped.
 - **Actor Attenuation**: Outbound requests MUST propagate the caller identity from `ScopedValue` (`USER_ID`) or session context.
 - **Fail-Closed Credential Gating**: Arena comparisons (`/api/v1/admin/arena/compare`) MUST scan input prompts via `CredentialDetector` and fail-closed with HTTP 400 if credentials, vault peppers, or API keys are present.

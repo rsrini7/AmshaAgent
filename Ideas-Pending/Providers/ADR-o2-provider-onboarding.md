@@ -1,10 +1,11 @@
 # ADR: Finish O2 Provider Onboarding
 
-- **Status**: Accepted
+- **Status**: Implemented (2026-09-08; Issues 01–04 verified)
 - **Date**: 2026-09-08
 - **Decision Owners**: Amsha Architecture Committee
-- **Related Invariants**: `docs/Architecture_Invariants.md`
+- **Related Invariants**: `docs/Architecture_Invariants.md` §26.3, §24; `AGENTS.md`
 - **Master ADR**: `Ideas-Pending/ADR-Onboarding-Multi-Agent-Provider-Model.md`
+- **Related ADR**: `Ideas-Pending/Providers/ADR-LLM-Provider-Extraction-and-Modularization.md`
 - **Feature Slug**: `o2-provider-onboarding`
 - **Issue Tracker**: `.scratch/o2-provider-onboarding/`
 
@@ -14,17 +15,17 @@
 
 `ADR-Onboarding-Multi-Agent-Provider-Model.md` establishes the multi-agent provider onboarding architecture. While O1 (durable draft lifecycle, wizard, bootstrap), O4 (MCP extension saga, masked headers, process-restart recovery), and O5 (health cockpit, non-secret draft export/import) are complete, O2 resolves four explicit deliverables:
 
-1. **Eliminating Unmediated Outbound Clients**: Several LLM wrapper implementations (`KimchiResponsesChatModel`, `FoundryResponsesChatModel`) and built-in search tools (`BraveWebSearchTool`, `SerperWebSearchTool`, `SmartWebFetchTool`) previously instantiated direct JDK `HttpClient` instances instead of routing outbound traffic through `GovernedTransportService` and `GovernedHttpClient`. This is aligned with §22.25 ("Byte-Level Governed Egress").
+1. **Eliminating Unmediated Outbound Clients**: Several LLM wrapper implementations (`KimchiResponsesChatModel`, `FoundryResponsesChatModel`) and built-in search tools (`BraveWebSearchTool`, `SerperWebSearchTool`, `SmartWebFetchTool`) previously instantiated direct JDK `HttpClient` instances instead of routing outbound traffic through governed transport (via `GovernedLangChainHttpClient` for LangChain4j providers, direct `GovernedTransportService.send(...)` for custom wrappers, and `GovernedHttpClient` for built-in tools). This is aligned with §26.3 ("Governed LLM Transport & Model Arena" — Byte-Level Governed Egress).
 2. **Live Provider Catalog & Model Discovery**: The onboarding catalog is backed by static definitions in `provider-catalog.json` through `StaticProviderCatalogAdapter`. Active connections need dynamic live model discovery via upstream `/models` endpoints mediated by `GovernedTransportService` under `OutboundPurpose.PROVIDER_MODEL_DISCOVERY` with strict SSRF checks, bounded timeouts, and authenticated header delivery (`X-Provider-API-Key`).
 3. **OAuth Migration & Checkpoint-Backed Grants**: Provider credentials that use OAuth/subscription tokens (e.g. Codex CLI `~/.codex/auth.json`, Claude Code, Agy, Kimchi) require migration away from unmanaged filesystem or environment tokens to checkpoint-backed operation grants (`approvalToken` + typed purpose `PROVIDER_OAUTH_EXCHANGE`) that bind actor, session, exact target authority, and expiry.
-4. **Richer `networkProfileJson` UI & Settings Flow**: `NetworkProfilePolicy` supports TLS trust modes (`SYSTEM`, `CUSTOM_CA`), bounded connect/read timeouts, proxy URLs with vault credential references, and no-proxy patterns. `SettingsResource` and the onboarding wizard provide structured DTOs, fail-closed validation, and accessible forms.
+4. **Richer `networkProfileJson` UI & Settings Flow**: `NetworkProfilePolicyDto` supports TLS trust modes (`SYSTEM`, `CUSTOM_CA`), bounded connect/read timeouts, proxy URLs with vault credential references, and no-proxy patterns. `SettingsResource` and the onboarding wizard provide structured DTOs, fail-closed validation, and accessible forms.
 
 ---
 
 ## 2. Decision and Target Architecture
 
 ### Deliverable 1: Remove Remaining Direct Outbound Clients
-- All outbound HTTP calls in `llm-providers` (`KimchiResponsesChatModel`, `FoundryResponsesChatModel`) inject or receive `GovernedTransportService` and utilize `GovernedHttpClient` / `GovernedLangChainHttpClient`.
+- All outbound HTTP calls in `llm-providers` route through `GovernedTransportService.validateEgress(...)` (via `GovernedLangChainHttpClient` for LangChain4j models, or direct `GovernedTransportService.send(...)` for custom models like `KimchiResponsesChatModel` and `FoundryResponsesChatModel`).
 - Built-in search tools (`SmartWebFetchTool`, `BraveWebSearchTool`, `SerperWebSearchTool`) route outbound requests via `GovernedHttpClient` under typed `OutboundPurpose.WEB_SEARCH` and `OutboundPurpose.TOOL_FETCH`.
 - Outbound responses are processed safely with bounded stream reading (`readNBytes`), immediate stream closing, and category-aware error mapping (`OutboundHttpException`).
 
@@ -42,14 +43,14 @@
 
 ### Deliverable 4: Richer `networkProfileJson` UI and Settings Flow
 - `SettingsResource` exposes structured DTOs (`NetworkProfilePolicyDto`, `NetworkProfileUpdateRequest`) for reading and updating connection network profiles with fail-closed validation.
-- Direct committed connection updates perform mandatory audit-before-mutation (§7.13.4), validate URI schemes and SSRF bounds on proxy URLs, and enforce optimistic locking (returning HTTP 409 on revision conflicts).
+- Direct committed connection updates perform mandatory audit-before-mutation (extending the audit-before-mutation pattern from §7.13.4 / §26.2 to administrative connection mutations per `AGENTS.md`), validate URI schemes and SSRF bounds on proxy URLs, and enforce optimistic locking (returning HTTP 409 on revision conflicts).
 - Lit components in `ui/src/components/` provide accessible form controls (`role="tablist"`, `role="tab"`, `<label for="...">`, `aria-describedby`, `aria-expanded`, `aria-controls`) and live announcer regions for model discovery.
 
 ---
 
 ## 3. Invariants and Compliance
 
-- **Byte-Level Governed Egress**: (§22.25) All outbound HTTP requests must pass through `GovernedTransportService`.
+- **Byte-Level Governed Egress**: (§26.3) All outbound HTTP requests must pass through governed transport enforcing `GovernedTransportService.validateEgress(...)`: LangChain4j providers use `GovernedLangChainHttpClient`, custom wrappers (`Kimchi`, `Foundry`) use `GovernedTransportService.send(...)` directly, and built-in tools use `GovernedHttpClient`.
 - **Fail-Closed Security**: Missing, malformed, or untrusted network profiles or credentials fail closed with HTTP 400. Serialization errors in `NetworkProfilePolicyDto` throw `IllegalStateException` rather than falling open to unrestricted egress.
 - **Mandatory Audit**: Outbound egress denials (`OUTBOUND_EGRESS_DENIED`) and network profile mutations are recorded via mandatory audit before state modification.
 - **PMD Complexity Gate**: NCSS <= 80 statements, cognitive complexity <= 50, classes <= 500 lines.
@@ -59,11 +60,11 @@
 
 ---
 
-## 4. Follow-Up Hardening (Review Findings B5–B8 + Session Binding)
+## 4. Security Hardening and Verification (Findings B5–B8)
 
 ### B5: PKCE Is Production-Enforced, Not Just Generated
 
-`generatePkceParams()` alone was insufficient. The flow is now stateful in
+`generatePkceParams()` alone was insufficient. The flow is stateful in
 `ProviderOAuthPkceStore` (10-minute TTL, fail-closed capacity bound of 10,000 entries,
 synchronized mutation, expired entries purged with their claims, native-registered in
 `LlmProvidersReflectionConfig`):
@@ -91,14 +92,8 @@ Web tools (`BraveWebSearchTool`, `SerperWebSearchTool`, `SmartWebFetchTool`) are
 connection-agnostic by design and pass `connection = null`: they receive the default
 policy (TLS, SSRF literal checks, pre-connect DNS revalidation, per-hop redirect
 validation). Per-connection proxy/allow-list policy is enforced whenever a connection IS
-supplied — `exchangeOrRefreshToken()` now accepts an optional `LlmConnectionDto` that is
+supplied — `exchangeOrRefreshToken()` accepts an optional `LlmConnectionDto` that is
 passed through to the governed transport (verified by the `DENY_ALL` policy test).
-
-True socket-level address pinning is enforced on the egress-proxy leg
-(`validateTrustedProxy` pins the proxy socket address). Direct JDK egress validates DNS
-immediately before connect but resolves via the system resolver; strict direct-socket
-pinning remains deferred — sensitive targets MUST configure `requireProxy=true` on their
-network profile. No ADR claim of direct-socket pinning is made.
 
 ### B7: HITL Boundary Decision
 
@@ -110,29 +105,79 @@ an approval it does not hold. Transport-level HITL remains enforced for
 `CATALOG_PROBE`, `OAUTH_CALLBACK`, `PROVIDER_OAUTH_EXCHANGE`, `MCP_*`, and
 `MEDIA_DOWNLOAD`.
 
-### B8: Consume-Side Wiring (Service-Level Verified)
+### B8: Consume-Side Wiring and Session Binding
 
 The service-level chain is verified end-to-end by `ProviderOAuthGrantFlowTest` with
 production classes: a real single-use `ApprovalReceiptIssuer` grant is consumed by
 `ProviderOAuthExchangeService` through the governed transport (mock HTTP only), the
 credential lands in the vault, and `CodexTokenResolver` constructs the provider credential
-from the vault. Grant reuse and actor-mismatched grants are rejected. A thin REST exchange
-wrapper over this verified flow is deferred pending the PKCE callback UX.
+from the vault. Grant reuse and actor-mismatched grants are rejected.
 
-Every consume-side entry additionally enforces session binding: the four provider token
-resolvers (`Codex/Kimchi/ClaudeCode/AgyTokenResolver.resolveTokenWithGrant`) and
-`ProviderOAuthExchangeService.storeExtractedTokenWithGrant` require a non-blank
-`sessionId` and reject grants whose bound session does not exactly match the presented
-one (`IllegalStateException: session mismatch`, `false` respectively). The presented
-session must match the canonical receipt binding recorded in the consumed grant
-(`oauth-exchange:<providerId>:<sessionId>`, exposed by
-`ApprovalReceiptIssuer.oauthExchangeSessionId(...)`).
+`POST /onboarding/oauth/grant` is implemented and active in `OnboardingApprovalResource`,
+requiring an explicit non-blank `sessionId` (HTTP 400 otherwise). The previous silent
+fallback (`"onboarding-" + ownerId`) is eliminated: grants bind actor, session, provider,
+exact target host, and TTL. Consume-side verification mirrors issuance: every consume-side
+entry enforces session binding (`Codex/Kimchi/ClaudeCode/AgyTokenResolver.resolveTokenWithGrant`
+and `ProviderOAuthExchangeService.storeExtractedTokenWithGrant` reject grants whose bound
+session does not match the canonical receipt binding `oauth-exchange:<providerId>:<sessionId>`
+exposed by `ApprovalReceiptIssuer.oauthExchangeSessionId(...)`).
 
-### Session Binding
+---
 
-`POST /onboarding/oauth/grant` requires an explicit non-blank `sessionId` (HTTP 400
-otherwise). The previous silent fallback (`"onboarding-" + ownerId`) is removed: grants
-bind actor, session, provider, exact target host, and TTL, and session derivation must be
-explicit from the authenticated session context. Consume-side verification mirrors
-issuance (see B8): no grant consumer accepts a missing session or a session that does
-not exactly match the grant receipt.
+## 5. Alternatives Considered
+
+- **Shared-Secret vs. Per-Provider OAuth Checkpoint Grants**: Rejected storing shared unmanaged
+  tokens on the filesystem or in raw environment variables. Checkpoint-backed operation grants
+  (`PROVIDER_OAUTH_EXCHANGE`) with single-use receipts, short TTLs, exact authority bounding,
+  and session binding guarantee auditable, least-privilege token access.
+- **Static-Only Catalog vs. Live Provider Discovery**: Rejected purely static definitions
+  because upstream model IDs and capabilities change rapidly. Dynamic live discovery probes
+  provider `/models` endpoints with bounded Caffeine caching (500 entries, 5-minute TTL,
+  sanitized base URLs) and graceful static catalog fallback, balancing freshness against
+  SSRF exposure and cache flooding.
+- **Universal Proxy-Only Egress vs. Per-Connection Network Policy**: Rejected mandating an
+  external proxy for all deployments, which would hinder standard local development and direct
+  egress environments. Adopted `NetworkProfilePolicyDto` supporting configurable proxy URLs,
+  no-proxy host lists, TLS trust modes, and timeouts with server-side fail-closed validation.
+
+---
+
+## 6. Consequences
+
+- **Positive**: All outbound HTTP traffic in `llm-providers` and `tools-builtin` routes
+  through governed transport with byte-level egress validation (§26.3), SSRF defense, and
+  actor propagation. Dynamic model discovery and PKCE single-flight state handling ensure
+  safe and resilient provider onboarding.
+- **Cost & Accepted Limitations**:
+  - *Socket-level address pinning*: Enforced strictly on the egress-proxy leg
+    (`validateTrustedProxy` pins the proxy socket address). Direct JDK egress validates DNS
+    immediately before connecting but relies on the system resolver for the connection socket.
+    Strict direct-socket pinning remains deferred to a dedicated trusted egress proxy architecture;
+    sensitive targets MUST configure `requireProxy=true` on their network profile. No ADR claim
+    of direct-socket pinning is made.
+  - *PKCE Callback UX*: The backend grant issuance (`POST /onboarding/oauth/grant`) and
+    service-level exchange wiring are fully delivered; a thin browser-redirect callback UX
+    wrapper over this flow remains deferred pending full frontend OAuth UI integration.
+
+---
+
+## 7. Acceptance Criteria
+
+- **Egress Governance**: Outbound HTTP calls in `llm-providers` (`KimchiResponsesChatModel`,
+  `FoundryResponsesChatModel`) and built-in search tools (`BraveWebSearchTool`, `SerperWebSearchTool`,
+  `SmartWebFetchTool`) route exclusively through governed transport enforcing `GovernedTransportService.validateEgress(...)`
+  (via `GovernedLangChainHttpClient` for LangChain4j models, direct `GovernedTransportService.send(...)` for custom wrappers,
+  and `GovernedHttpClient` for tools) under typed `OutboundPurpose` contracts (§26.3).
+- **Dynamic Catalog Discovery**: `LiveProviderCatalogService` probes provider `/models` endpoints
+  under `OutboundPurpose.PROVIDER_MODEL_DISCOVERY` with sanitized Caffeine caching, 10s timeouts,
+  SSRF checking, and static catalog fallback when unconfigured or unreachable.
+- **PKCE State Management**: `ProviderOAuthPkceStore` enforces 10-minute TTL, single-flight
+  claims (`claimForExchange()`), fail-closed capacity limits (10,000 entries), and verifier
+  injection into form payloads with mandatory audit logging.
+- **Session-Bound OAuth Grants**: `POST /onboarding/oauth/grant` and all token resolvers require
+  matching non-blank session IDs, rejecting grant reuse, session mismatch, and actor mismatch.
+- **Network Profile Configuration**: `SettingsResource` exposes `NetworkProfilePolicyDto` with
+  optimistic concurrency, SSRF validation on proxy URIs, and mandatory audit-before-mutation.
+- **Verification Gates**: All unit and integration test suites across Iterations 01–04 under
+  `.scratch/o2-provider-onboarding/` pass, with PMD complexity bounds, Spotless formatting, and
+  GraalVM native reflection registrations verified.
