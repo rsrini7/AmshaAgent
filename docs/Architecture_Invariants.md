@@ -1853,6 +1853,17 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Is `SessionReaper.findAwaitingApprovalIds()` still `NOT_SUPPORTED`? (§5.16)
 - [ ] Is `SessionReaper.markApprovalTimedOut()` still `NOT_SUPPORTED`? (§5.16)
 
+### 19.1 External-data and review gates
+
+The following gates apply to every REST, UI, import, onboarding, provider, and tool boundary that accepts external data:
+
+- [ ] Every accepted JSON object has explicit type checks for required fields; malformed JSON, wrong value types, missing identifiers, duplicate identifiers, and unknown references fail closed. Broad catches must not turn invalid input into a successful or skipped validation result.
+- [ ] Policy validation has one canonical implementation. Network, URI, TLS, proxy, timeout, allow-list, and no-proxy semantics must not diverge between DTO, draft, import, and runtime validators.
+- [ ] Defaults are limited to a named legacy-compatibility path. Explicit current-format records must carry their required identity and routing fields; an importer must not invent a model, provider, scope, or route for malformed explicit data.
+- [ ] Persistent identifiers are generated with collision-resistant values and references are checked across the complete request, including sibling and repeated sections. Removing a parent record must remove or invalidate its derived child records in the same draft state.
+- [ ] Tests cover the production wiring boundary and assert the governed side effect. Tests that only mock the collaborator being reviewed are insufficient; include malformed-input and partial-payload cases.
+- [ ] Logs, error responses, fixtures, review reports, and local agent notes are payload-free with respect to credentials, authorization headers, prompts, provider responses, and secret-bearing malformed input.
+
 ## 20. Routing and Classification Consolidation
 
 ### 20.1 Implementation Proximity and Provider Modularization
@@ -2243,5 +2254,4 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 ### 26.5 Dynamic Provider Discovery Invariant (§26.5 INVARIANT)
 - **No Hardcoded Static Provider Sets**: `ModelArenaHelper` and health resources MUST NOT hardcode static sets of allowed providers or base URL maps in application source code.
 - **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`, `requiresCustomBaseUrl()`, `probeUrlForProvider()`, `authHeadersForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
-
 
