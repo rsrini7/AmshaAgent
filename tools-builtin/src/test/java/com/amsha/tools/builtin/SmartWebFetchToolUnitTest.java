@@ -121,6 +121,20 @@ class SmartWebFetchToolUnitTest {
     }
 
     @Test
+    void testValidateParameters() {
+        SmartWebFetchTool tool = new SmartWebFetchTool();
+
+        assertNotNull(tool.validateParameters(null));
+        assertNotNull(tool.validateParameters(Map.of()));
+        assertNotNull(tool.validateParameters(Map.of("maxChars", 100)));
+        assertNotNull(tool.validateParameters(Map.of("url", "   ")));
+        assertNotNull(tool.validateParameters(Map.of("url", 12345)));
+
+        assertNull(tool.validateParameters(Map.of("url", "https://example.com")));
+        assertNull(tool.validateParameters(Map.of("url", "http://example.com/api", "maxChars", 500)));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void testExecuteWithMockClient() throws Exception {
         SmartWebFetchTool tool = new SmartWebFetchTool();

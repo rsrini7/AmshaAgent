@@ -135,6 +135,18 @@ public class SmartWebFetchTool implements AgentTool {
     }
 
     @Override
+    public String validateParameters(Map<String, Object> params) {
+        if (params == null || !params.containsKey("url")) {
+            return "Parameter 'url' is required for web_fetch.";
+        }
+        Object urlObj = params.get("url");
+        if (!(urlObj instanceof String url) || url.isBlank()) {
+            return "Parameter 'url' is required for web_fetch.";
+        }
+        return null;
+    }
+
+    @Override
     public ToolResponse execute(ToolExecutionContext ctx, Map<String, Object> params) {
         String userId = (ctx != null) ? ctx.userId() : null;
         if (userId == null || userId.isBlank()) {

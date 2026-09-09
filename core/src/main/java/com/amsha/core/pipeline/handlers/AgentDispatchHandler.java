@@ -278,7 +278,7 @@ public class AgentDispatchHandler implements MessageHandler {
                             if (result instanceof AgentResult.AwaitingApproval aa) {
                                 s.send(
                                         context.getUser(),
-                                        List.of(new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+                                        List.of(new ApprovalPrompt(aa.toolName(), aa.displayParamsJson(), sessionId)));
                             } else {
                                 String output = AgentResultFormatter.format(result);
                                 speechDeliveryService.deliver(context, s, context.getUser(), result, output);

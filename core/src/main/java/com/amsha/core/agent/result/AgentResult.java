@@ -8,6 +8,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.governance.ApprovalParameterSanitizer;
 import com.amsha.security.api.RiskLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -70,8 +71,15 @@ public sealed interface AgentResult
             return frame.tool();
         }
 
+        /** Redacted parameters for external responses and approval-channel displays. */
         @JsonIgnore
         public String paramsJson() {
+            return displayParamsJson();
+        }
+
+        /** Raw parameters retained for protected delegation/checkpoint transport only. */
+        @JsonIgnore
+        public String rawParamsJson() {
             try {
                 // Ideally we'd use a shared ObjectMapper, but for this DTO compatibility
                 // we use a fresh one if not provided. In production, this DTO
@@ -81,6 +89,12 @@ public sealed interface AgentResult
                 log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
                 return "{}";
             }
+        }
+
+        /** Redacted parameters suitable for channels, REST responses, and UI rendering. */
+        @JsonIgnore
+        public String displayParamsJson() {
+            return ApprovalParameterSanitizer.toJson(frame.params());
         }
     }
 

@@ -3,8 +3,8 @@ package com.amsha.core.agent.loop;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.ApprovalFrame;
@@ -12,6 +12,8 @@ import com.amsha.core.message.UserMessages;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
@@ -146,16 +148,18 @@ public class ToolResultProcessor {
         return null;
     }
 
-    private static final Pattern PAUSED_TOOL_PATTERN = Pattern.compile("tool '([^']+)' needs human approval");
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static String extractPausedTool(String obs) {
-        if (obs != null) {
-            var matcher = PAUSED_TOOL_PATTERN.matcher(obs);
-            if (matcher.find()) {
-                return matcher.group(1);
-            }
+    private static Map<String, Object> parsePausedParams(String paramsJson) {
+        if (paramsJson == null || paramsJson.isBlank() || "{}".equals(paramsJson.trim())) {
+            return Map.of();
         }
-        return ToolCapability.DELEGATE_TO_AGENT.toolName();
+        try {
+            return MAPPER.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warnf("Failed to parse delegated approval parameters: %s", LogUtil.rootMessage(e));
+            return null;
+        }
     }
 
     private StepDecision handleDelegateOutcome(
@@ -170,8 +174,16 @@ public class ToolResultProcessor {
                         || (!res.success() && obs.contains("paused for human approval")))) {
             String msg = "⏳ " + UserMessages.userSafePortion(obs);
             writer.saveAnswer(ctx.sessionId(), msg);
-            String tool = extractPausedTool(obs);
-            ApprovalFrame frame = new ApprovalFrame(tool, Map.of(), RiskLevel.HIGH);
+            String tool = UserMessages.extractPausedTool(obs);
+            String paramsJson = UserMessages.extractPausedParamsJson(obs);
+            Map<String, Object> params = parsePausedParams(paramsJson);
+            if (paramsJson == null || params == null) {
+                return StepDecision.terminal(AgentResult.failed(
+                        "Delegated approval payload was invalid and was not resumed.",
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history)));
+            }
+            ApprovalFrame frame = new ApprovalFrame(tool, params, RiskLevel.HIGH);
             return StepDecision.terminal(AgentResult.awaitingApproval(frame, ctx.sessionId(), List.copyOf(history)));
         }
         if (res != null

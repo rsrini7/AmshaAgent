@@ -119,7 +119,7 @@ public class DelegationProcessor {
             // here used to mark the parent checkpoint FAILED (TOOL_FAILED) while the child
             // kept waiting — divergent state and a misleading /status. Mirror the depth-limit
             // precedent: return success with a do-not-retry/FINISH instruction.
-            return ToolResponse.success(delegationPaused(display, aa.toolName()));
+            return ToolResponse.success(delegationPaused(display, aa.toolName(), aa.rawParamsJson()));
         }
         if (result instanceof AgentResult.LoopExceeded) {
             return ToolResponse.failure(

@@ -3,8 +3,11 @@ package com.amsha.core.agent.result;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
+import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.security.api.RiskLevel;
 
 import org.junit.jupiter.api.Test;
 
@@ -67,5 +70,21 @@ class AgentResultTest {
         result = AgentResult.finished("null", null);
         assertEquals(0, result.totalInputTokens());
         assertEquals(0, result.totalOutputTokens());
+    }
+
+    @Test
+    void approvalDisplayRedactsSensitiveParametersButRawTransportRetainsThem() {
+        AgentResult result = AgentResult.awaitingApproval(
+                new ApprovalFrame(
+                        "web_fetch",
+                        Map.of("url", "https://example.com", "authorization", "Bearer secret"),
+                        RiskLevel.HIGH),
+                "session-1",
+                List.of());
+
+        AgentResult.AwaitingApproval approval = (AgentResult.AwaitingApproval) result;
+        assertTrue(approval.rawParamsJson().contains("Bearer secret"));
+        assertTrue(approval.displayParamsJson().contains("[REDACTED]"));
+        assertFalse(approval.displayParamsJson().contains("Bearer secret"));
     }
 }

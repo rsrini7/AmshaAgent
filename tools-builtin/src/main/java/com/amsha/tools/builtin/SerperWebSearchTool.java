@@ -167,6 +167,18 @@ public class SerperWebSearchTool implements AgentTool {
                 .build();
     }
 
+    @Override
+    public String validateParameters(Map<String, Object> params) {
+        if (params == null || !params.containsKey(PARAM_QUERY)) {
+            return "Parameter 'query' is required for serper_web_search.";
+        }
+        Object queryObj = params.get(PARAM_QUERY);
+        if (!(queryObj instanceof String q) || q.isBlank()) {
+            return "Parameter 'query' is required for serper_web_search.";
+        }
+        return null;
+    }
+
     private String resolveEndpoint(String type) {
         return TYPE_NEWS.equals(type) ? SERPER_NEWS_URL : SERPER_SEARCH_URL;
     }

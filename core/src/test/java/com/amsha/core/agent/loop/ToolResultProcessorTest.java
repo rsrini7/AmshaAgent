@@ -236,6 +236,27 @@ class ToolResultProcessorTest {
     }
 
     @Test
+    void resolveOutcome_DelegatePausedWithParams_PropagatesParamsToApprovalFrame() {
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
+        String pausedMsg = UserMessages.delegationPaused(
+                "saraswati", "web_fetch", "{\"url\":\"https://spring.io/projects/release-highlights\"}");
+        assertTrue(pausedMsg.contains(UserMessages.DELEGATION_PAUSED_MARKER));
+        var res = ToolResponse.success(pausedMsg);
+
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, pausedMsg, step, List.of(), 0);
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertInstanceOf(AgentResult.AwaitingApproval.class, decision.result());
+        var aa = (AgentResult.AwaitingApproval) decision.result();
+        assertEquals("web_fetch", aa.toolName());
+        assertEquals(
+                "https://spring.io/projects/release-highlights",
+                aa.frame().params().get("url"));
+        assertTrue(aa.paramsJson().contains("https://spring.io/projects/release-highlights"));
+    }
+
+    @Test
     void resolveOutcome_DelegatePausedLegacyFailureShape_TriggersTerminal() {
         // Legacy failure(409) shape must keep terminating as well.
         var ctx = ctx();

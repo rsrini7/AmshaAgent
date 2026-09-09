@@ -364,7 +364,7 @@ public class CheckpointResumeHandler {
             String sessionId,
             MessageContext context) {
         if (result instanceof AgentResult.AwaitingApproval aa) {
-            s.send(user, List.of(new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+            s.send(user, List.of(new ApprovalPrompt(aa.toolName(), aa.displayParamsJson(), sessionId)));
             return;
         }
         if (speechDeliveryService != null) {

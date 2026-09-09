@@ -81,7 +81,7 @@ public class AgentResultFormatter {
                         if (basic) {
                             yield formatBasicHitlMessage(a.toolName(), a.sessionId(), isCron);
                         }
-                        yield formatHitlMessage(a.toolName(), a.paramsJson(), a.sessionId(), isCron);
+                        yield formatHitlMessage(a.toolName(), a.displayParamsJson(), a.sessionId(), isCron);
                     }
                     case AgentResult.LoopExceeded _ -> "⏱ I ran out of steps. Try rephrasing your request.";
                     case AgentResult.AwaitingRetry r ->

@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +57,9 @@ class PendingToolResumeExecutorTest {
     @Mock
     AgentCheckpoint checkpoint;
 
+    @Mock
+    ToolInvocationGuard guard;
+
     private PendingToolResumeExecutor executor;
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -68,7 +73,10 @@ class PendingToolResumeExecutorTest {
                 recoveryService,
                 escalationService,
                 new ToolDelegationResolver(),
-                null);
+                guard);
+        lenient()
+                .when(guard.evaluate(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
     }
 
     @Test
@@ -220,5 +228,75 @@ class PendingToolResumeExecutorTest {
         assertEquals("sandbox_exec", aa.toolName());
         assertEquals("s-cron", aa.sessionId());
         verify(checkpoint, Mockito.never()).setStatus(CheckpointStatus.COMPLETED);
+    }
+
+    @Test
+    void testExecute_delegationPausedWithParamsPropagatesParametersToApprovalFrame() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s-cron",
+                "u1",
+                "c1",
+                "coordinator",
+                "run delegated task",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn("garuda");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        String pausedObs = UserMessages.delegationPaused(
+                "saraswati", "web_fetch", "{\"url\":\"https://spring.io/projects/release-highlights\"}");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.success(pausedObs));
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "TELEGRAM", stateMachineRunner);
+
+        assertNotNull(result);
+        assertInstanceOf(AgentResult.AwaitingApproval.class, result);
+        AgentResult.AwaitingApproval aa = (AgentResult.AwaitingApproval) result;
+        assertEquals("web_fetch", aa.toolName());
+        assertEquals("s-cron", aa.sessionId());
+        assertEquals(
+                "https://spring.io/projects/release-highlights",
+                aa.frame().params().get("url"));
+        assertTrue(aa.paramsJson().contains("https://spring.io/projects/release-highlights"));
+        verify(checkpoint, Mockito.never()).setStatus(CheckpointStatus.COMPLETED);
+    }
+
+    @Test
+    void testExecute_failsClosedWhenMandatoryGuardIsUnavailable() {
+        executor = new PendingToolResumeExecutor(
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                new ToolDelegationResolver(),
+                null);
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s-guard",
+                "u1",
+                "c1",
+                "coordinator",
+                "fetch",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{\"url\":\"https://example.com\"}");
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "CLI", stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        verify(toolRegistry, never()).invokeTool(any(), any(), any());
     }
 }
