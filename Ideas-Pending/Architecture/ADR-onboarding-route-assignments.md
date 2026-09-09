@@ -4,7 +4,7 @@
 - **Date**: 2026-09-09
 - **Decision owners**: Amsha maintainers
 - **Supersedes / Extends**: `Ideas-Pending/ADR-Onboarding-Multi-Agent-Provider-Model.md` (extends O2/O3 multi-agent configuration and supersedes the initial conflated connection/model profile UI draft)
-- **Related**: `Ideas-Pending/ADR-Onboarding-Multi-Agent-Provider-Model.md`, `Ideas-Pending/Architecture/ADR-Onboarding-Configuration-Source-and-Precedence.md`, `Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md` (P7 turn-aware modality routing), `docs/Architecture_Invariants.md`
+- **Related**: `Ideas-Pending/ADR-Onboarding-Multi-Agent-Provider-Model.md`, `Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md`, `Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md` (P7 turn-aware modality routing), `docs/Architecture_Invariants.md`
 - **Feature slug**: `onboarding-route-assignments`
 - **Issue tracker**: `.scratch/onboarding-route-assignments/`
 
