@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.core.routing.ModelProfileValidator;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelProfileDto;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,6 +27,9 @@ class OnboardingProfileExporterTest {
 
     @Mock
     LlmProfileStorePort profileStore;
+
+    @Spy
+    ModelProfileValidator profileValidator = new ModelProfileValidator();
 
     @InjectMocks
     OnboardingProfileExporter exporter;
@@ -182,7 +187,7 @@ class OnboardingProfileExporterTest {
     void testImportProfiles_rejectsUnknownOrderedProfileId() {
         Map<String, Object> data = Map.of(
                 "connections", List.of(Map.of("id", "c1")),
-                "profiles", List.of(Map.of("id", "p1", "connectionId", "c1")),
+                "profiles", List.of(Map.of("id", "p1", "connectionId", "c1", "modelId", "gpt-4o")),
                 "routes",
                         List.of(Map.of(
                                 "id",
@@ -198,6 +203,17 @@ class OnboardingProfileExporterTest {
     }
 
     @Test
+    void testImportProfiles_rejectsExplicitProfileWithoutModelId() {
+        Map<String, Object> data = Map.of(
+                "connections", List.of(Map.of("id", "c1")),
+                "profiles", List.of(Map.of("id", "p1", "connectionId", "c1")));
+
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> exporter.importProfiles("u1", data, profileStore));
+        assertTrue(ex.getMessage().contains("modelId"));
+    }
+
+    @Test
     void testImportProfiles_rejectsCrossScopeConnectionIdWhenConnectionsOmitted() {
         // connections block omitted entirely; profile references foreign/unknown connectionId
         Map<String, Object> data =
@@ -208,5 +224,98 @@ class OnboardingProfileExporterTest {
         IllegalArgumentException ex =
                 assertThrows(IllegalArgumentException.class, () -> exporter.importProfiles("u1", data, profileStore));
         assertTrue(ex.getMessage().contains("unknown connectionId"));
+    }
+
+    @Test
+    void testExportAndImportProfiles_roundTripsCapabilitiesAndLimits_andSupportsNto1() {
+        Instant now = Instant.now();
+        LlmConnectionDto conn = new LlmConnectionDto(
+                "c1",
+                "USER",
+                "u1",
+                "u1",
+                "SharedConn",
+                "openai",
+                null,
+                "https://api.openai.com/v1",
+                "API_KEY",
+                null,
+                "ACTIVE",
+                1,
+                now,
+                now);
+        String capJson =
+                "{\"modalities\":[\"TEXT\",\"IMAGE\"],\"attachments\":[{\"type\":\"IMAGE\",\"mimeTypes\":[\"image/png\"]}]}";
+        String limitsJson = "{\"maxRequestsPerMinute\":60,\"maxTokensPerMinute\":100000}";
+        ModelProfileDto prof1 =
+                new ModelProfileDto("p1", "c1", "gpt-4o", "NATIVE", capJson, limitsJson, true, 1, now, now);
+        ModelProfileDto prof2 = new ModelProfileDto("p2", "c1", "gpt-4o-mini", "NATIVE", null, null, true, 1, now, now);
+
+        when(profileStore.listConnectionsByCreatedBy("u1")).thenReturn(List.of(conn));
+        when(profileStore.listModelProfilesByConnection("c1")).thenReturn(List.of(prof1, prof2));
+        when(profileStore.listRoutesByScope("USER", "u1")).thenReturn(List.of());
+
+        Map<String, Object> exported = exporter.exportProfiles("u1", profileStore);
+        assertNotNull(exported);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> profMaps = (List<Map<String, Object>>) exported.get("profiles");
+        assertEquals(2, profMaps.size());
+        assertEquals("p1", profMaps.get(0).get("id"));
+        assertEquals("c1", profMaps.get(0).get("connectionId"));
+        assertEquals(capJson, profMaps.get(0).get("capabilityJson"));
+        assertEquals(limitsJson, profMaps.get(0).get("safeLimitsJson"));
+        assertEquals("p2", profMaps.get(1).get("id"));
+        assertEquals("c1", profMaps.get(1).get("connectionId"));
+
+        // Now import this exported payload
+        exporter.importProfiles("u1", exported, profileStore);
+        ArgumentCaptor<ModelProfileDto> captor = ArgumentCaptor.forClass(ModelProfileDto.class);
+        verify(profileStore, times(2)).saveModelProfile(captor.capture());
+        List<ModelProfileDto> saved = captor.getAllValues();
+        assertEquals(2, saved.size());
+        assertEquals("p1", saved.get(0).id());
+        assertEquals("c1", saved.get(0).connectionId());
+        assertEquals(capJson, saved.get(0).capabilityJson());
+        assertEquals(limitsJson, saved.get(0).safeLimitsJson());
+        assertEquals("p2", saved.get(1).id());
+        assertEquals("c1", saved.get(1).connectionId());
+    }
+
+    @Test
+    void testImportProfiles_rejectsInvalidProfileDraft() {
+        // Forbidden fallbackOrder in profile draft
+        Map<String, Object> invalidOrder = Map.of(
+                "connections", List.of(Map.of("id", "c1")),
+                "profiles", List.of(Map.of("id", "p1", "connectionId", "c1", "modelId", "m1", "fallbackOrder", 1)));
+
+        IllegalArgumentException ex1 = assertThrows(
+                IllegalArgumentException.class, () -> exporter.importProfiles("u1", invalidOrder, profileStore));
+        assertTrue(ex1.getMessage().contains("fallbackOrder"));
+
+        // Unknown attachment type in capabilityJson
+        Map<String, Object> invalidCap = Map.of(
+                "connections", List.of(Map.of("id", "c1")),
+                "profiles",
+                        List.of(Map.of(
+                                "id", "p1",
+                                "connectionId", "c1",
+                                "modelId", "m1",
+                                "capabilityJson", "{\"attachments\":[{\"type\":\"HOLOGRAPHIC\"}]}")));
+
+        IllegalArgumentException ex2 = assertThrows(
+                IllegalArgumentException.class, () -> exporter.importProfiles("u1", invalidCap, profileStore));
+        assertTrue(ex2.getMessage().contains("HOLOGRAPHIC") || ex2.getMessage().contains("capabilityJson"));
+    }
+
+    @Test
+    void testImportProfiles_synthesizesOnlyWhenProfilesAbsent() {
+        // When profiles is absent, synthesizes default profile from connection
+        Map<String, Object> absentProfiles = Map.of("connections", List.of(Map.of("id", "c1", "modelId", "gpt-4o")));
+        exporter.importProfiles("u1", absentProfiles, profileStore);
+        ArgumentCaptor<ModelProfileDto> captor = ArgumentCaptor.forClass(ModelProfileDto.class);
+        verify(profileStore, times(1)).saveModelProfile(captor.capture());
+        assertEquals("prof-c1", captor.getValue().id());
+        assertEquals("gpt-4o", captor.getValue().modelId());
     }
 }

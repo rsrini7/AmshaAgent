@@ -150,6 +150,8 @@ export interface OnboardingCompleteDto {
 
 export type EgressMode = 'ALLOW_ALL' | 'ALLOW_LIST' | 'DENY_ALL';
 
+export type StructuredOutputMode = 'NATIVE' | 'PROMPT_DIRECTIVE' | 'LENIENT';
+
 export interface NetworkProfilePolicyDto {
   egressMode?: EgressMode;
   allowedHosts?: string[];
@@ -159,24 +161,37 @@ export interface NetworkProfilePolicyDto {
   noProxyHosts?: string[];
   connectTimeoutMs?: number;
   readTimeoutMs?: number;
-  tlsTrustMode?: 'SYSTEM' | 'CUSTOM_CA' | string;
+  tlsTrustMode?: 'SYSTEM' | 'CUSTOM_CA';
   customCaVaultRef?: string;
 }
 
+export interface ModelProfileDraft {
+  id: string;
+  connectionId: string;
+  modelId: string;
+  structuredOutputMode?: StructuredOutputMode;
+  capabilityJson?: string;
+  safeLimitsJson?: string;
+  enabled?: boolean;
+}
+
 export interface ConnectionDraft {
+  id?: string;
+  displayName?: string;
   provider: string;
   apiKeyVaultRef?: string;
   apiKey?: string;
   baseUrl?: string;
   targetUrl?: string; // targetUrl is required specifically for generic-openai
-  modelId: string;
-  contextWindow: number;
-  structuredOutputMode: string;
-  capabilities: string[];
+  modelId?: string;
+  contextWindow?: number;
+  structuredOutputMode?: StructuredOutputMode;
+  capabilities?: string[];
   headroomEnabled?: boolean;
   timeoutMs?: number;
   retries?: number;
   networkProfileJson?: string;
+  profiles?: ModelProfileDraft[];
 }
 
 export interface ConcernRoutes {
@@ -271,6 +286,7 @@ export interface IdentityConfig {
 
 export interface O1DraftPayload {
   connections: ConnectionDraft[];
+  profiles?: ModelProfileDraft[];
   concernRoutes: ConcernRoutes;
   personaRoutes?: Record<string, RouteAssignment>;
   groupRoutes?: Record<string, RouteAssignment>;

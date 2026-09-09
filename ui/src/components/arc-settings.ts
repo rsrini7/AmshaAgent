@@ -27,7 +27,7 @@ export class ArcSettings extends LitElement {
   @state() private _noProxyHosts = '';
   @state() private _connectTimeoutMs: number | undefined = undefined;
   @state() private _readTimeoutMs: number | undefined = undefined;
-  @state() private _tlsTrustMode = 'SYSTEM';
+  @state() private _tlsTrustMode: 'SYSTEM' | 'CUSTOM_CA' = 'SYSTEM';
   @state() private _customCaVaultRef = '';
   @state() private _networkProfileLoadError = false;
 

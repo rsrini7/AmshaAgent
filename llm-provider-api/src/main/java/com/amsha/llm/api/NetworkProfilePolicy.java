@@ -170,10 +170,10 @@ public final class NetworkProfilePolicy {
         }
     }
 
-    private static boolean isAbsoluteHttpUri(Object value) {
+    public static boolean isAbsoluteHttpUri(Object value) {
         if (!(value instanceof String raw) || raw.isBlank()) return false;
         try {
-            URI uri = URI.create(raw);
+            URI uri = URI.create(raw.trim());
             return uri.getHost() != null
                     && ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()));
         } catch (Exception _) {

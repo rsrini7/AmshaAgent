@@ -7,7 +7,7 @@ import {
   persistOwnerApiKey,
   readPersistedOwnerApiKey,
 } from '../api/client';
-import { O1DraftPayload, ConnectionDraft, OnboardingStatusDto, ProviderDescriptor } from '../api/types';
+import { O1DraftPayload, ConnectionDraft, ModelProfileDraft, OnboardingStatusDto, ProviderDescriptor } from '../api/types';
 import { formStyles } from './arc-onboarding-styles';
 import './onboarding/arc-onboarding-plan-stepper';
 import './onboarding/arc-onboarding-step-welcome';
@@ -384,6 +384,9 @@ export class ArcOnboarding extends LitElement {
     this._error = '';
     try {
       const newPayload = this._withMcpExtensionPayload({ ...this._draftPayload, ...payloadUpdates });
+      if (newPayload.connections) {
+        newPayload.profiles = this._harvestProfiles(newPayload.connections);
+      }
       const serialized = JSON.stringify(newPayload);
       
       const res = await this._client.updateDraftStep(this._draftId, targetStepId, {
@@ -402,6 +405,15 @@ export class ArcOnboarding extends LitElement {
               url: server.endpoint,
               headerVaultRefs: server.headerVaultRefs || {},
             }));
+          }
+          if (parsed.connections && parsed.profiles) {
+            for (const conn of parsed.connections) {
+              if (!conn.profiles || conn.profiles.length === 0) {
+                conn.profiles = (parsed.profiles as ModelProfileDraft[]).filter(
+                  (p: ModelProfileDraft) => p.connectionId === conn.id || (conn.provider && p.connectionId === conn.provider)
+                );
+              }
+            }
           }
           this._draftPayload = parsed;
         } catch (_) {
@@ -530,8 +542,48 @@ export class ArcOnboarding extends LitElement {
     this._saveAndNavigate('connections');
   }
 
+  private _safeUUID(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'id-' + Math.random().toString(36).substring(2, 11) + '-' + Date.now().toString(36);
+  }
+
+  private _harvestProfiles(connections: ConnectionDraft[]): ModelProfileDraft[] {
+    const harvested: ModelProfileDraft[] = [];
+    for (const conn of connections) {
+      if (!conn.id) {
+        conn.id = 'conn-' + this._safeUUID();
+      }
+      if (conn.profiles && conn.profiles.length > 0) {
+        for (const p of conn.profiles) {
+          p.connectionId = conn.id;
+          if (!p.id) {
+            p.id = 'prof-' + this._safeUUID();
+          }
+          harvested.push(p);
+        }
+      } else if (conn.modelId) {
+        harvested.push({
+          id: 'prof-' + this._safeUUID(),
+          connectionId: conn.id,
+          modelId: conn.modelId,
+          structuredOutputMode: conn.structuredOutputMode || 'NATIVE',
+          enabled: true
+        });
+      }
+    }
+    return harvested;
+  }
+
   private _handleUpdateConnections(e: CustomEvent) {
-    this._draftPayload = { ...this._draftPayload, connections: e.detail.connections };
+    const connections: ConnectionDraft[] = e.detail.connections || [];
+    const profiles = this._harvestProfiles(connections);
+    this._draftPayload = {
+      ...this._draftPayload,
+      connections,
+      profiles
+    };
   }
 
   private _handleUpdateRoutes(e: CustomEvent) {

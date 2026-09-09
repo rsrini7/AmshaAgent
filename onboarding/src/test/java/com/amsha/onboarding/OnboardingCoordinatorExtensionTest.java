@@ -9,6 +9,7 @@ import jakarta.enterprise.inject.Instance;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -687,6 +688,7 @@ class OnboardingCoordinatorExtensionTest {
         });
         when(draftStore.findById("d-import-secrets")).thenAnswer(inv -> Optional.ofNullable(holder.get()));
 
+        List<Map.Entry<String, String>> storedSecrets = captureStoredSecrets();
         OnboardingDraftDto result = coordinator.importProfilesToDraft("owner-1", data, profileStore);
 
         assertNotNull(result);
@@ -708,23 +710,32 @@ class OnboardingCoordinatorExtensionTest {
         assertTrue(stagedJson.contains("slackTokenVaultRef"));
 
         // Verify secrets were stored in the vault for owner-1
-        verify(vault)
-                .store(
-                        contains("vault-key-"),
-                        eq("sk-secret-conn-key".getBytes(StandardCharsets.UTF_8)),
-                        eq("owner-1"));
-        verify(vault)
-                .store(contains("vault-key-"), eq("conn-secret-pass".getBytes(StandardCharsets.UTF_8)), eq("owner-1"));
-        verify(vault)
-                .store(
-                        contains("mcp-header-"),
-                        eq("Bearer mcp-secret-token".getBytes(StandardCharsets.UTF_8)),
-                        eq("owner-1"));
-        verify(vault)
-                .store(
-                        contains("vault-key-"),
-                        eq("xoxb-secret-slack-token".getBytes(StandardCharsets.UTF_8)),
-                        eq("owner-1"));
+        assertTrue(containsSecret(storedSecrets, "vault-key-", "sk-secret-conn-key"));
+        assertTrue(containsSecret(storedSecrets, "vault-key-", "conn-secret-pass"));
+        assertTrue(containsSecret(storedSecrets, "mcp-header-", "Bearer mcp-secret-token"));
+        assertTrue(containsSecret(storedSecrets, "vault-key-", "xoxb-secret-slack-token"));
+        verify(vault, atLeastOnce()).store(anyString(), any(), eq("owner-1"));
+    }
+
+    /**
+     * Records (reference, plaintext) pairs at invocation time. The scrubber zeroes its plaintext
+     * buffer once the vault has consumed it, so assertions cannot inspect the array afterwards.
+     */
+    private List<Map.Entry<String, String>> captureStoredSecrets() {
+        List<Map.Entry<String, String>> captured = new ArrayList<>();
+        doAnswer(invocation -> {
+                    captured.add(Map.entry(
+                            invocation.getArgument(0),
+                            new String((byte[]) invocation.getArgument(1), StandardCharsets.UTF_8)));
+                    return null;
+                })
+                .when(vault)
+                .store(anyString(), any(), anyString());
+        return captured;
+    }
+
+    private static boolean containsSecret(List<Map.Entry<String, String>> stored, String refPrefix, String secret) {
+        return stored.stream().anyMatch(e -> e.getKey().contains(refPrefix) && secret.equals(e.getValue()));
     }
 
     @Test

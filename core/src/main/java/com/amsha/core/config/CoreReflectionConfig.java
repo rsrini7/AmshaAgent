@@ -68,6 +68,7 @@ import com.amsha.core.routing.ModelRoutingException;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.core.routing.OrderedFailoverChatModel;
 import com.amsha.core.routing.ProfileRouteCandidateBuilder;
+import com.amsha.core.routing.ProfileValidationResult;
 import com.amsha.core.routing.ResolvedCredential;
 import com.amsha.core.routing.ResolvedProfile;
 import com.amsha.core.routing.RouteResolution;
@@ -158,6 +159,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ResolvedCredential.class,
             ModelProfileResolverImpl.class,
             ModelProfileCredentialResolver.class,
+            ProfileValidationResult.class,
             ModelRoutingException.class,
             SystemProfileMigration.class,
             ModalityRouteSeeder.class,

@@ -27,7 +27,14 @@ final class McpConnectionRequestValidator {
             "upgrade");
 
     void validateEndpoint(String url) {
-        URI uri = URI.create(url);
+        URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (IllegalArgumentException e) {
+            // The parser quotes the offending input, and a malformed URL can embed credentials
+            // (user-info or a token query parameter). Preserve the cause, but not its message.
+            throw new IllegalArgumentException("MCP endpoint URL is not a valid URI", e);
+        }
         if (uri.getUserInfo() != null && !uri.getUserInfo().isBlank()) {
             throw new IllegalArgumentException("MCP endpoint URL must not contain user-info credentials");
         }

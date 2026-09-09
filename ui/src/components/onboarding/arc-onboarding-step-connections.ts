@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { ConnectionDraft, ProviderDescriptor, NetworkProfilePolicyDto, EgressMode } from '../../api/types';
+import { ConnectionDraft, ModelProfileDraft, ProviderDescriptor, NetworkProfilePolicyDto, EgressMode, StructuredOutputMode } from '../../api/types';
 import { ArcClient } from '../../api/client';
 import { formStyles } from '../arc-onboarding-styles';
 
@@ -75,7 +75,7 @@ export class ArcOnboardingStepConnections extends LitElement {
   @state() private _targetUrl = '';
   @state() private _modelId = '';
   @state() private _contextWindow = 8192;
-  @state() private _structuredOutputMode = 'NATIVE';
+  @state() private _structuredOutputMode: StructuredOutputMode = 'NATIVE';
   @state() private _capabilities: string[] = ['tool-calling'];
   @state() private _headroomEnabled = false;
   @state() private _discoveredModels: { id: string; label: string }[] = [];
@@ -90,8 +90,10 @@ export class ArcOnboardingStepConnections extends LitElement {
   @state() private _noProxyHosts = '';
   @state() private _connectTimeoutMs: number | undefined = undefined;
   @state() private _readTimeoutMs: number | undefined = undefined;
-  @state() private _tlsTrustMode = 'SYSTEM';
+  @state() private _tlsTrustMode: 'SYSTEM' | 'CUSTOM_CA' = 'SYSTEM';
   @state() private _customCaVaultRef = '';
+  @state() private _addingProfileConnId: string | null = null;
+  @state() private _newProfileModelId = '';
 
   connectedCallback() {
     super.connectedCallback();
@@ -152,8 +154,16 @@ export class ArcOnboardingStepConnections extends LitElement {
     }
   }
 
+  private _safeUUID(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'id-' + Math.random().toString(36).substring(2, 11) + '-' + Date.now().toString(36);
+  }
+
   private _addConnection() {
     const provider = this.catalog.find(p => p.id === this._selectedProviderId);
+    if (!this._modelId.trim()) return;
     if (provider?.requiresApiKey && !this._apiKey.trim()) return;
     if (this._selectedProviderId === 'generic-openai' && !this._isHttpUrl(this._targetUrl)) return;
     if (this._connectionValidationMessage()) return;
@@ -167,11 +177,9 @@ export class ArcOnboardingStepConnections extends LitElement {
       .map(h => h.trim())
       .filter(h => h.length > 0);
 
-    let netProfile: NetworkProfilePolicyDto | undefined;
     let netProfileJson: string | undefined;
-
     if (this._showNetworkProfile) {
-      netProfile = {
+      const activeNetProfile: NetworkProfilePolicyDto = {
         egressMode: this._egressMode,
         allowedHosts: allowedHostsList,
         requireProxy: this._requireProxy,
@@ -185,34 +193,46 @@ export class ArcOnboardingStepConnections extends LitElement {
       };
 
       const netJsonObj: Record<string, any> = {
-        egressMode: netProfile.egressMode || 'ALLOW_ALL',
-        tlsTrustMode: netProfile.tlsTrustMode || 'SYSTEM'
+        egressMode: activeNetProfile.egressMode || 'ALLOW_ALL',
+        tlsTrustMode: activeNetProfile.tlsTrustMode || 'SYSTEM'
       };
       if (allowedHostsList.length > 0) netJsonObj.allowedHosts = allowedHostsList;
-      if (netProfile.requireProxy) {
+      if (activeNetProfile.requireProxy) {
         netJsonObj.requireProxy = true;
-        if (netProfile.proxyUrl) netJsonObj.proxyUrl = netProfile.proxyUrl;
-        if (netProfile.proxyCredentialVaultRef) netJsonObj.proxyCredentialVaultRef = netProfile.proxyCredentialVaultRef;
+        if (activeNetProfile.proxyUrl) netJsonObj.proxyUrl = activeNetProfile.proxyUrl;
+        if (activeNetProfile.proxyCredentialVaultRef) netJsonObj.proxyCredentialVaultRef = activeNetProfile.proxyCredentialVaultRef;
       }
       if (noProxyHostsList.length > 0) netJsonObj.noProxyHosts = noProxyHostsList;
-      if (netProfile.connectTimeoutMs) netJsonObj.connectTimeoutMs = netProfile.connectTimeoutMs;
-      if (netProfile.readTimeoutMs) netJsonObj.readTimeoutMs = netProfile.readTimeoutMs;
-      if (netProfile.customCaVaultRef) netJsonObj.customCaVaultRef = netProfile.customCaVaultRef;
+      if (activeNetProfile.connectTimeoutMs) netJsonObj.connectTimeoutMs = activeNetProfile.connectTimeoutMs;
+      if (activeNetProfile.readTimeoutMs) netJsonObj.readTimeoutMs = activeNetProfile.readTimeoutMs;
+      if (activeNetProfile.customCaVaultRef) netJsonObj.customCaVaultRef = activeNetProfile.customCaVaultRef;
       netProfileJson = JSON.stringify(netJsonObj);
     }
 
+    const connId = 'conn-' + this._safeUUID();
+    const initialProfile: ModelProfileDraft = {
+      id: 'prof-' + this._safeUUID(),
+      connectionId: connId,
+      modelId: this._modelId.trim(),
+      structuredOutputMode: this._structuredOutputMode,
+      enabled: true
+    };
+
     const conn: ConnectionDraft = {
+      id: connId,
+      displayName: provider?.displayName || this._selectedProviderId,
       provider: this._selectedProviderId,
       apiKey: this._apiKey || undefined,
-      apiKeyVaultRef: this._apiKey ? 'staged-ref-' + Math.random().toString(36).substring(7) : undefined,
+      apiKeyVaultRef: this._apiKey ? 'staged-ref-' + this._safeUUID() : undefined,
       baseUrl: this._baseUrl || undefined,
       targetUrl: this._selectedProviderId === 'generic-openai' ? this._targetUrl || undefined : undefined,
-      modelId: this._modelId,
+      modelId: this._modelId.trim(),
       contextWindow: Number(this._contextWindow),
       structuredOutputMode: this._structuredOutputMode,
       capabilities: this._capabilities,
       headroomEnabled: this._headroomEnabled,
-      networkProfileJson: netProfileJson
+      networkProfileJson: netProfileJson,
+      profiles: [initialProfile]
     };
 
     const updated = [...this.connections, conn];
@@ -275,6 +295,74 @@ export class ArcOnboardingStepConnections extends LitElement {
     return '';
   }
 
+  private _startAddProfile(conn: ConnectionDraft) {
+    if (!conn.id) {
+      conn.id = 'conn-' + this._safeUUID();
+    }
+    this._addingProfileConnId = conn.id;
+    this._newProfileModelId = '';
+  }
+
+  private _cancelAddProfile() {
+    this._addingProfileConnId = null;
+    this._newProfileModelId = '';
+  }
+
+  private _commitAddProfile(conn: ConnectionDraft) {
+    const model = this._newProfileModelId.trim();
+    if (!model) return;
+    const connId = conn.id || ('conn-' + this._safeUUID());
+    const newProfile: ModelProfileDraft = {
+      id: 'prof-' + this._safeUUID(),
+      connectionId: connId,
+      modelId: model,
+      structuredOutputMode: 'NATIVE',
+      enabled: true
+    };
+    const currentProfiles = conn.profiles && conn.profiles.length > 0
+      ? conn.profiles
+      : (conn.modelId ? [{
+          id: 'prof-' + this._safeUUID(),
+          connectionId: connId,
+          modelId: conn.modelId,
+          structuredOutputMode: conn.structuredOutputMode || 'NATIVE',
+          enabled: true
+        }] : []);
+    const updated = this.connections.map(c => {
+      if (c === conn || (c.id && c.id === connId)) {
+        return { ...c, id: connId, profiles: [...currentProfiles, newProfile] };
+      }
+      return c;
+    });
+    this._addingProfileConnId = null;
+    this._newProfileModelId = '';
+    this.dispatchEvent(
+      new CustomEvent('update-connections', {
+        detail: { connections: updated },
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+
+  private _removeProfileFromConnection(conn: ConnectionDraft, profileId: string) {
+    if (!conn || !conn.profiles || conn.profiles.length <= 1) return;
+    const updatedProfiles = conn.profiles.filter(p => p.id !== profileId);
+    const updated = this.connections.map(c => {
+      if (c === conn || (c.id && c.id === conn.id)) {
+        return { ...c, profiles: updatedProfiles };
+      }
+      return c;
+    });
+    this.dispatchEvent(
+      new CustomEvent('update-connections', {
+        detail: { connections: updated },
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+
   private _removeConnection(idx: number) {
     const updated = this.connections.filter((_, i) => i !== idx);
     this.dispatchEvent(
@@ -292,7 +380,7 @@ export class ArcOnboardingStepConnections extends LitElement {
 
   render() {
     const activeProvider: Partial<ProviderDescriptor> = this.catalog.find(p => p.id === this._selectedProviderId) || {};
-    const validationMessage = this._connectionValidationMessage();
+    const validationMessage = this._connectionValidationMessage() || (!this._modelId.trim() ? 'A model identifier is required.' : '');
 
     return html`
       <div class="connections-header">
@@ -305,17 +393,43 @@ export class ArcOnboardingStepConnections extends LitElement {
           : this.connections.map((c, idx) => {
           const prov: Partial<ProviderDescriptor> = this.catalog.find(p => p.id === c.provider) || {};
               return html`
-                <div class="connection-row">
-                  <div class="connection-info">
-              <div class="provider-icon" style="background:${prov.attributes?.color || '#888'}22;color:${prov.attributes?.color || '#888'}">
-                ${prov.attributes?.icon || '?'}
+                <div class="connection-row" style="flex-direction:column;align-items:stretch;gap:var(--space-2)">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div class="connection-info">
+                      <div class="provider-icon" style="background:${prov.attributes?.color || '#888'}22;color:${prov.attributes?.color || '#888'}">
+                        ${prov.attributes?.icon || '?'}
+                      </div>
+                      <div>
+                        <div class="provider-name">${c.displayName || prov.displayName || c.provider}</div>
+                        <div class="provider-tag">${c.modelId ? `${c.modelId} (${(c.contextWindow || 8192).toLocaleString()} ctx)` : (c.baseUrl || 'Configured Endpoint')}</div>
+                      </div>
                     </div>
-                    <div>
-                <div class="provider-name">${prov.displayName || c.provider}</div>
-                      <div class="provider-tag">${c.modelId} (${c.contextWindow.toLocaleString()} ctx)</div>
+                    <div style="display:flex;gap:var(--space-2);align-items:center">
+                      <button class="mode-toggle" style="font-size:11px;padding:2px 6px" @click="${() => this._startAddProfile(c)}">+ Add Profile</button>
+                      <button class="mcp-remove" @click="${() => this._removeConnection(idx)}">&times;</button>
                     </div>
                   </div>
-                  <button class="mcp-remove" @click="${() => this._removeConnection(idx)}">&times;</button>
+                  ${c.profiles && c.profiles.length > 1 ? html`
+                    <div style="display:flex;flex-direction:column;gap:4px;margin-left:var(--space-8);padding-left:var(--space-2);border-left:2px solid var(--border)">
+                      ${c.profiles.map(p => html`
+                        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-secondary)">
+                          <span><strong>${p.modelId}</strong> (${p.structuredOutputMode || 'NATIVE'})</span>
+                          <button class="mcp-remove" style="font-size:14px" title="Remove profile" aria-label="Remove profile ${p.modelId}" @click="${() => this._removeProfileFromConnection(c, p.id)}">&times;</button>
+                        </div>
+                      `)}
+                    </div>
+                  ` : ''}
+                  ${this._addingProfileConnId === c.id ? html`
+                    <div style="display:flex;gap:var(--space-2);align-items:center;margin-left:var(--space-8);padding-top:var(--space-1)">
+                      <input class="field-input" style="font-size:12px;padding:4px 8px;flex:1"
+                             placeholder="e.g. gpt-4o-mini"
+                             .value="${this._newProfileModelId}"
+                             @input="${(ev: Event) => this._newProfileModelId = (ev.target as HTMLInputElement).value}"
+                             @keydown="${(ev: KeyboardEvent) => { if (ev.key === 'Enter') this._commitAddProfile(c); if (ev.key === 'Escape') this._cancelAddProfile(); }}" />
+                      <button class="mode-toggle" style="font-size:11px;padding:4px 8px" @click="${() => this._commitAddProfile(c)}">Add</button>
+                      <button class="mode-toggle" style="font-size:11px;padding:4px 8px;opacity:0.7" @click="${() => this._cancelAddProfile()}">Cancel</button>
+                    </div>
+                  ` : ''}
                 </div>
               `;
             })}

@@ -5,16 +5,16 @@ import jakarta.inject.Inject;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
-import com.amsha.llm.api.ConnectionValidationRequest;
-import com.amsha.llm.api.LlmProviderOnboardingAdapter;
-import com.amsha.llm.api.ProviderValidationResult;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultKey;
@@ -23,8 +23,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
 /**
- * Handles secret scrubbing, vault reference resolution, and connection validation for onboarding
- * selections. Extracted from {@link OnboardingCoordinator} to keep that class under the PMD
+ * Handles secret scrubbing and vault reference resolution for onboarding selections.
+ * Extracted from {@link OnboardingCoordinator} to keep that class under the PMD
  * ExcessiveClassLength threshold and reduce the cognitive complexity of {@code processAndScrubSecrets}.
  */
 @ApplicationScoped
@@ -39,7 +39,7 @@ public class OnboardingSelectionScrubber {
     ObjectMapper objectMapper;
 
     @Inject
-    LlmProviderOnboardingAdapter providerAdapter;
+    OnboardingSelectionValidator validator;
 
     /**
      * Scrubs sensitive values (API keys, MCP auth headers) from selection payloads and stores them
@@ -84,11 +84,12 @@ public class OnboardingSelectionScrubber {
         for (String sel : draft.selectedNonSecretIds()) {
             try {
                 Map<String, Object> payload = objectMapper.readValue(sel, Map.class);
-                cleanupMapSecrets(payload, draft);
-                cleanupConnectionSecrets(payload, draft);
-                cleanupMcpHeaderSecrets(payload, draft);
-                cleanupMcpServerHeaderSecrets(payload, draft);
-                cleanupOptionalSecrets(payload, draft);
+                Set<String> cleanedRefs = new HashSet<>();
+                cleanupMapSecrets(payload, draft, cleanedRefs);
+                cleanupConnectionSecrets(payload, draft, cleanedRefs);
+                cleanupMcpHeaderSecrets(payload, draft, cleanedRefs);
+                cleanupMcpServerHeaderSecrets(payload, draft, cleanedRefs);
+                cleanupOptionalSecrets(payload, draft, cleanedRefs);
             } catch (Exception _) {
                 // not a JSON map; skip
             }
@@ -135,49 +136,13 @@ public class OnboardingSelectionScrubber {
     }
 
     /**
-     * Tiered provider validation for the connections step. Extracts connection selections from the
-     * payload and validates each through the provider adapter. Returns a safe error string on
-     * failure, or null when all connections are valid.
+     * Tiered provider validation for the connections step. Delegates to
+     * {@link OnboardingSelectionValidator}.
      */
-    @SuppressWarnings("unchecked")
     public String validateConnections(List<String> selections) {
-        if (providerAdapter == null) return null;
-        List<String> errors = new ArrayList<>();
-        for (String sel : selections) {
-            try {
-                Map<String, Object> payload = objectMapper.readValue(sel, Map.class);
-                List<Map<String, Object>> connections = (List<Map<String, Object>>) payload.get("connections");
-                if (connections == null) continue;
-                for (Map<String, Object> conn : connections) {
-                    String provider = String.valueOf(conn.getOrDefault("provider", ""));
-                    String model = String.valueOf(conn.getOrDefault("modelId", ""));
-                    String baseUrl = String.valueOf(conn.getOrDefault(
-                            "customBaseUrl", conn.getOrDefault("baseUrl", conn.getOrDefault("targetUrl", ""))));
-                    if ("generic-openai".equalsIgnoreCase(provider) && baseUrl.isBlank()) {
-                        errors.add("Provider generic-openai requires a targetUrl or baseUrl");
-                    }
-                    boolean hasKey = conn.containsKey("apiKeyVaultRef")
-                            || (conn.get("apiKey") != null
-                                    && !String.valueOf(conn.get("apiKey")).isBlank());
-                    List<String> allowedHosts = List.of();
-                    Object egress = conn.get("allowedEgressHosts");
-                    if (egress instanceof List<?> list) {
-                        allowedHosts = list.stream()
-                                .filter(String.class::isInstance)
-                                .map(String.class::cast)
-                                .toList();
-                    }
-                    ProviderValidationResult result = providerAdapter.validate(
-                            new ConnectionValidationRequest(provider, model, baseUrl, hasKey, allowedHosts));
-                    if (!result.eligible()) {
-                        errors.addAll(result.errors());
-                    }
-                }
-            } catch (Exception _) {
-                // not a JSON map; skip
-            }
-        }
-        return errors.isEmpty() ? null : String.join("; ", errors);
+        return validator != null
+                ? validator.validateConnections(selections)
+                : "OnboardingSelectionValidator is unavailable";
     }
 
     // ---- internal helpers ----
@@ -188,15 +153,14 @@ public class OnboardingSelectionScrubber {
         if (connections == null) return false;
         boolean modified = false;
         for (Map<String, Object> conn : connections) {
-            String apiKey = (String) conn.get("apiKey");
-            String vaultRef = (String) conn.get("apiKeyVaultRef");
+            String apiKey = conn.get("apiKey") instanceof String s ? s : null;
+            String vaultRef = conn.get("apiKeyVaultRef") instanceof String s ? s : null;
             if (apiKey != null && !apiKey.isBlank()) {
                 if (vaultRef == null || vaultRef.isBlank() || vaultRef.startsWith("staged-ref-")) {
-                    vaultRef = "vault-key-"
-                            + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                    vaultRef = newVaultKeyRef();
                     conn.put("apiKeyVaultRef", vaultRef);
                 }
-                vault.store(vaultRef, apiKey.getBytes(StandardCharsets.UTF_8), ownerId);
+                storeSecret(vaultRef, apiKey, ownerId);
                 conn.remove("apiKey");
                 modified = true;
             } else if (conn.containsKey("apiKey")) {
@@ -218,9 +182,8 @@ public class OnboardingSelectionScrubber {
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             String headerValue = entry.getValue();
             if (headerValue != null && !headerValue.isBlank()) {
-                String ref = "mcp-header-"
-                        + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-                vault.store(ref, headerValue.getBytes(StandardCharsets.UTF_8), ownerId);
+                String ref = newMcpHeaderRef();
+                storeSecret(ref, headerValue, ownerId);
                 headerVaultRefs.put(entry.getKey(), ref);
             }
         }
@@ -266,9 +229,8 @@ public class OnboardingSelectionScrubber {
             if (entry.getKey() instanceof String headerName
                     && entry.getValue() instanceof String headerValue
                     && !headerValue.isBlank()) {
-                String ref = "mcp-header-"
-                        + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-                vault.store(ref, headerValue.getBytes(StandardCharsets.UTF_8), ownerId);
+                String ref = newMcpHeaderRef();
+                storeSecret(ref, headerValue, ownerId);
                 headerVaultRefs.put(headerName, ref);
             }
         }
@@ -316,16 +278,18 @@ public class OnboardingSelectionScrubber {
     }
 
     @SuppressWarnings("unchecked")
-    private void cleanupConnectionSecrets(Map<String, Object> payload, OnboardingDraftDto draft) {
+    private void cleanupConnectionSecrets(
+            Map<String, Object> payload, OnboardingDraftDto draft, Set<String> cleanedRefs) {
         List<Map<String, Object>> connections = (List<Map<String, Object>>) payload.get("connections");
         if (connections == null) return;
         for (Map<String, Object> conn : connections) {
-            cleanupMapSecrets(conn, draft);
+            cleanupMapSecrets(conn, draft, cleanedRefs);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private void cleanupMcpServerHeaderSecrets(Map<String, Object> payload, OnboardingDraftDto draft) {
+    private void cleanupMcpServerHeaderSecrets(
+            Map<String, Object> payload, OnboardingDraftDto draft, Set<String> cleanedRefs) {
         Object rawMcp = payload.get("mcp");
         if (!(rawMcp instanceof Map<?, ?> rawMap)) return;
         Map<String, Object> mcp = (Map<String, Object>) rawMap;
@@ -334,38 +298,43 @@ public class OnboardingSelectionScrubber {
         for (Object rawServer : servers) {
             if (rawServer instanceof Map<?, ?> rawServerMap) {
                 Map<String, Object> srv = (Map<String, Object>) rawServerMap;
-                cleanupMcpHeaderMap(srv, draft);
-                cleanupMapSecrets(srv, draft);
+                cleanupMcpHeaderMap(srv, draft, cleanedRefs);
+                cleanupMapSecrets(srv, draft, cleanedRefs);
             }
         }
     }
 
-    private void cleanupMcpHeaderMap(Map<String, Object> mcp, OnboardingDraftDto draft) {
+    private void cleanupMcpHeaderMap(Map<String, Object> mcp, OnboardingDraftDto draft, Set<String> cleanedRefs) {
         Object rawRefs = mcp.get("headerVaultRefs");
         if (!(rawRefs instanceof Map<?, ?> refs)) return;
         for (Object rawRef : refs.values()) {
             if (!(rawRef instanceof String ref)) continue;
-            try {
-                vault.remove(ref, draft.ownerId());
-                log.debugf("[ONBOARDING] Cleaned staged MCP header %s draft %s", ref, draft.draftId());
-            } catch (Exception e) {
-                log.warnf("[ONBOARDING] Failed clean staged MCP header %s: %s", ref, e.getMessage());
+            if (cleanedRefs == null || cleanedRefs.add(ref)) {
+                try {
+                    vault.remove(ref, draft.ownerId());
+                    log.debugf("[ONBOARDING] Cleaned staged MCP header %s draft %s", ref, draft.draftId());
+                } catch (Exception e) {
+                    log.warnf("[ONBOARDING] Failed clean staged MCP header %s: %s", ref, e.getMessage());
+                }
             }
         }
     }
 
     @SuppressWarnings("unchecked")
-    private void cleanupMcpHeaderSecrets(Map<String, Object> payload, OnboardingDraftDto draft) {
+    private void cleanupMcpHeaderSecrets(
+            Map<String, Object> payload, OnboardingDraftDto draft, Set<String> cleanedRefs) {
         Map<String, Object> mcp = (Map<String, Object>) payload.get("mcp");
         if (mcp == null) return;
         Map<String, String> headerVaultRefs = (Map<String, String>) mcp.get("headerVaultRefs");
         if (headerVaultRefs == null) return;
         for (String ref : headerVaultRefs.values()) {
-            try {
-                vault.remove(ref, draft.ownerId());
-                log.debugf("[ONBOARDING] Cleaned staged MCP header %s for draft %s", ref, draft.draftId());
-            } catch (Exception e) {
-                log.warnf("[ONBOARDING] Failed to clean staged MCP header %s: %s", ref, e.getMessage());
+            if (cleanedRefs == null || cleanedRefs.add(ref)) {
+                try {
+                    vault.remove(ref, draft.ownerId());
+                    log.debugf("[ONBOARDING] Cleaned staged MCP header %s for draft %s", ref, draft.draftId());
+                } catch (Exception e) {
+                    log.warnf("[ONBOARDING] Failed to clean staged MCP header %s: %s", ref, e.getMessage());
+                }
             }
         }
     }
@@ -384,12 +353,13 @@ public class OnboardingSelectionScrubber {
     }
 
     @SuppressWarnings("unchecked")
-    private void cleanupOptionalSecrets(Map<String, Object> payload, OnboardingDraftDto draft) {
+    private void cleanupOptionalSecrets(
+            Map<String, Object> payload, OnboardingDraftDto draft, Set<String> cleanedRefs) {
         String[] sections = {"integrations", "memory", "channels", "security", "advanced"};
         for (String sec : sections) {
             Object raw = payload.get(sec);
             if (raw instanceof Map<?, ?> map) {
-                cleanupMapSecrets((Map<String, Object>) map, draft);
+                cleanupMapSecrets((Map<String, Object>) map, draft, cleanedRefs);
             }
         }
     }
@@ -402,19 +372,28 @@ public class OnboardingSelectionScrubber {
         for (Map.Entry<String, Object> entry : map.entrySet()) {
             String k = entry.getKey();
             Object v = entry.getValue();
-            if (isSecretKey(k)) {
-                if (v instanceof String str
-                        && !str.isBlank()
-                        && !str.startsWith("vault-key-")
-                        && !str.startsWith("mcp-header-")) {
-                    String ref = "vault-key-"
-                            + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-                    vault.store(ref, str.getBytes(StandardCharsets.UTF_8), ownerId);
+            if (isSecretKey(k) && !(v instanceof Map<?, ?>)) {
+                String secretValue = encodeSecretValue(v);
+                if (secretValue != null) {
                     String refKey = k.endsWith("VaultRef") ? k : k + "VaultRef";
+                    String ref = newVaultKeyRef();
+                    storeSecret(ref, secretValue, ownerId);
                     toAdd.put(refKey, ref);
                 }
                 toRemove.add(k);
                 modified = true;
+            } else if (v instanceof Map<?, ?> childMap) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> nested = (Map<String, Object>) childMap;
+                modified |= scrubMapSecrets(nested, ownerId);
+            } else if (v instanceof List<?> childList) {
+                for (Object item : childList) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> nested = (Map<String, Object>) itemMap;
+                        modified |= scrubMapSecrets(nested, ownerId);
+                    }
+                }
             }
         }
         for (String r : toRemove) {
@@ -424,7 +403,51 @@ public class OnboardingSelectionScrubber {
         return modified;
     }
 
-    private void cleanupMapSecrets(Map<String, Object> map, OnboardingDraftDto draft) {
+    /**
+     * Renders a secret-named value as storable text, or null when there is nothing to vault
+     * (null, blank, or already a vault/MCP header reference). Non-String values are JSON-encoded
+     * so material under a secret-named key is preserved in the vault instead of discarded.
+     */
+    private String encodeSecretValue(Object value) {
+        if (value instanceof String str) {
+            if (str.isBlank() || str.startsWith("vault-key-") || str.startsWith("mcp-header-")) {
+                return null;
+            }
+            return str;
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            log.warn("[ONBOARDING] Unable to encode secret value for vaulting; leaving unvaulted", e);
+            return null;
+        }
+    }
+
+    /**
+     * Stores secret material under the given reference. The plaintext bytes are zeroed as soon
+     * as the vault has consumed them.
+     */
+    private void storeSecret(String ref, String value, String ownerId) {
+        byte[] secretBytes = value.getBytes(StandardCharsets.UTF_8);
+        try {
+            vault.store(ref, secretBytes, ownerId);
+        } finally {
+            Arrays.fill(secretBytes, (byte) 0);
+        }
+    }
+
+    private static String newVaultKeyRef() {
+        return "vault-key-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    }
+
+    private static String newMcpHeaderRef() {
+        return "mcp-header-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    }
+
+    private void cleanupMapSecrets(Map<String, Object> map, OnboardingDraftDto draft, Set<String> cleanedRefs) {
         if (map == null || map.isEmpty()) return;
         for (Map.Entry<String, Object> entry : map.entrySet()) {
             String k = entry.getKey();
@@ -432,11 +455,25 @@ public class OnboardingSelectionScrubber {
             if ((k.endsWith("VaultRef") || k.endsWith("Ref"))
                     && v instanceof String ref
                     && ref.startsWith("vault-key-")) {
-                try {
-                    vault.remove(ref, draft.ownerId());
-                    log.debugf("[ONBOARDING] Cleaned staged secret %s for draft %s", ref, draft.draftId());
-                } catch (Exception e) {
-                    log.warnf("[ONBOARDING] Failed to clean staged secret %s: %s", ref, e.getMessage());
+                if (cleanedRefs == null || cleanedRefs.add(ref)) {
+                    try {
+                        vault.remove(ref, draft.ownerId());
+                        log.debugf("[ONBOARDING] Cleaned staged secret %s for draft %s", ref, draft.draftId());
+                    } catch (Exception e) {
+                        log.warnf("[ONBOARDING] Failed to clean staged secret %s: %s", ref, e.getMessage());
+                    }
+                }
+            } else if (v instanceof Map<?, ?> childMap) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> nested = (Map<String, Object>) childMap;
+                cleanupMapSecrets(nested, draft, cleanedRefs);
+            } else if (v instanceof List<?> childList) {
+                for (Object item : childList) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> nested = (Map<String, Object>) itemMap;
+                        cleanupMapSecrets(nested, draft, cleanedRefs);
+                    }
                 }
             }
         }
@@ -450,7 +487,6 @@ public class OnboardingSelectionScrubber {
                         || lower.contains("password")
                         || lower.contains("key")
                         || lower.contains("pass"))
-                && !lower.endsWith("vaultref")
-                && !lower.endsWith("ref");
+                && !lower.endsWith("vaultref");
     }
 }

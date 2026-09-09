@@ -1,15 +1,18 @@
 package com.amsha.onboarding;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.amsha.llm.api.ModelDefaults;
+import com.amsha.core.routing.ModelProfileValidator;
+import com.amsha.core.routing.ProfileValidationResult;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelProfileDto;
@@ -21,60 +24,75 @@ import com.amsha.persistence.api.ModelRouteAssignmentDto;
 @ApplicationScoped
 public class OnboardingProfileExporter {
 
+    @Inject
+    ModelProfileValidator profileValidator;
+
     public Map<String, Object> exportProfiles(String ownerId, LlmProfileStorePort profileStore) {
         List<LlmConnectionDto> connections = profileStore.listConnectionsByCreatedBy(ownerId);
-        List<Map<String, Object>> connMaps = new ArrayList<>();
-        for (LlmConnectionDto c : connections) {
-            connMaps.add(Map.ofEntries(
-                    Map.entry("id", c.id()),
-                    Map.entry("scopeType", c.scopeType()),
-                    Map.entry("scopeId", c.scopeId()),
-                    Map.entry("displayName", c.displayName() == null ? "" : c.displayName()),
-                    Map.entry("providerAdapterId", c.providerAdapterId()),
-                    Map.entry("endpointProfileId", c.endpointProfileId() == null ? "" : c.endpointProfileId()),
-                    Map.entry("customBaseUrl", c.customBaseUrl() == null ? "" : c.customBaseUrl()),
-                    Map.entry("networkProfileJson", c.networkProfileJson() == null ? "" : c.networkProfileJson()),
-                    Map.entry("state", c.state())));
-        }
+        List<Map<String, Object>> connMaps =
+                connections.stream().map(this::toConnectionMap).toList();
         List<Map<String, Object>> profileMaps = new ArrayList<>();
         List<Map<String, Object>> routeMaps = new ArrayList<>();
         Set<String> scopesSeen = new HashSet<>();
         for (LlmConnectionDto c : connections) {
             for (ModelProfileDto p : profileStore.listModelProfilesByConnection(c.id())) {
-                profileMaps.add(Map.of(
-                        "id",
-                        p.id(),
-                        "connectionId",
-                        p.connectionId(),
-                        "modelId",
-                        p.modelId(),
-                        "structuredOutputMode",
-                        p.structuredOutputMode() == null ? "" : p.structuredOutputMode(),
-                        "enabled",
-                        p.enabled()));
+                profileMaps.add(toProfileMap(p));
             }
             String scopeKey = c.scopeType() + ":" + c.scopeId();
             if (scopesSeen.add(scopeKey)) {
                 for (ModelRouteAssignmentDto r : profileStore.listRoutesByScope(c.scopeType(), c.scopeId())) {
-                    routeMaps.add(Map.of(
-                            "id",
-                            r.id(),
-                            "scopeType",
-                            r.scopeType(),
-                            "scopeId",
-                            r.scopeId(),
-                            "targetKind",
-                            r.targetKind(),
-                            "targetId",
-                            r.targetId() == null ? "" : r.targetId(),
-                            "orderedProfileIds",
-                            r.orderedProfileIds(),
-                            "enabled",
-                            r.enabled()));
+                    routeMaps.add(toRouteMap(r));
                 }
             }
         }
         return Map.of("version", 1, "connections", connMaps, "profiles", profileMaps, "routes", routeMaps);
+    }
+
+    private Map<String, Object> toConnectionMap(LlmConnectionDto c) {
+        return Map.ofEntries(
+                Map.entry("id", c.id() == null ? "" : c.id()),
+                Map.entry("scopeType", c.scopeType() == null ? "" : c.scopeType()),
+                Map.entry("scopeId", c.scopeId() == null ? "" : c.scopeId()),
+                Map.entry("displayName", c.displayName() == null ? "" : c.displayName()),
+                Map.entry("providerAdapterId", c.providerAdapterId() == null ? "" : c.providerAdapterId()),
+                Map.entry("endpointProfileId", c.endpointProfileId() == null ? "" : c.endpointProfileId()),
+                Map.entry("customBaseUrl", c.customBaseUrl() == null ? "" : c.customBaseUrl()),
+                Map.entry("networkProfileJson", c.networkProfileJson() == null ? "" : c.networkProfileJson()),
+                Map.entry("state", c.state() == null ? "" : c.state()));
+    }
+
+    private Map<String, Object> toProfileMap(ModelProfileDto p) {
+        Map<String, Object> prof = new LinkedHashMap<>();
+        prof.put("id", p.id() == null ? "" : p.id());
+        prof.put("connectionId", p.connectionId() == null ? "" : p.connectionId());
+        prof.put("modelId", p.modelId() == null ? "" : p.modelId());
+        prof.put("structuredOutputMode", p.structuredOutputMode() == null ? "" : p.structuredOutputMode());
+        if (p.capabilityJson() != null && !p.capabilityJson().isBlank()) {
+            prof.put("capabilityJson", p.capabilityJson());
+        }
+        if (p.safeLimitsJson() != null && !p.safeLimitsJson().isBlank()) {
+            prof.put("safeLimitsJson", p.safeLimitsJson());
+        }
+        prof.put("enabled", p.enabled());
+        return Map.copyOf(prof);
+    }
+
+    private Map<String, Object> toRouteMap(ModelRouteAssignmentDto r) {
+        return Map.of(
+                "id",
+                r.id(),
+                "scopeType",
+                r.scopeType(),
+                "scopeId",
+                r.scopeId(),
+                "targetKind",
+                r.targetKind(),
+                "targetId",
+                r.targetId() == null ? "" : r.targetId(),
+                "orderedProfileIds",
+                r.orderedProfileIds(),
+                "enabled",
+                r.enabled());
     }
 
     private static final Set<String> VALID_ROUTE_TARGET_KINDS = Set.of(
@@ -131,11 +149,12 @@ public class OnboardingProfileExporter {
         return declaredConnectionIds;
     }
 
-    private static Set<String> validateImportProfiles(Object rawProfiles, Set<String> validConnectionIds) {
+    private Set<String> validateImportProfiles(Object rawProfiles, Set<String> validConnectionIds) {
         Set<String> declaredProfileIds = new HashSet<>();
         if (!(rawProfiles instanceof List<?> profiles)) {
             return declaredProfileIds;
         }
+        ModelProfileValidator validator = profileValidator;
         for (Object item : profiles) {
             if (!(item instanceof Map<?, ?> p)) continue;
             Object connId = p.get("connectionId");
@@ -145,6 +164,13 @@ public class OnboardingProfileExporter {
             Object id = p.get("id");
             if (id instanceof String s && !s.isBlank()) {
                 declaredProfileIds.add(s);
+            }
+            if (p.containsKey("id") && p.containsKey("connectionId") && validator != null) {
+                @SuppressWarnings("unchecked")
+                ProfileValidationResult result = validator.validateProfileDraft((Map<String, Object>) p);
+                if (!result.valid()) {
+                    throw new IllegalArgumentException("Imported profile is invalid: " + result.errorSummary());
+                }
             }
         }
         return declaredProfileIds;
@@ -170,9 +196,9 @@ public class OnboardingProfileExporter {
             }
             Object ordered = r.get("orderedProfileIds");
             if (ordered instanceof List<?> orderedList) {
-                for (Object o : orderedList) {
-                    if (o != null && !validProfileIds.contains(String.valueOf(o))) {
-                        throw new IllegalArgumentException("Imported route references unknown profileId: " + o);
+                for (Object pid : orderedList) {
+                    if (pid != null && !validProfileIds.contains(String.valueOf(pid))) {
+                        throw new IllegalArgumentException("Imported route references unknown profileId: " + pid);
                     }
                 }
             }
@@ -191,7 +217,7 @@ public class OnboardingProfileExporter {
         validateImportPayload(ownerId, data, profileStore);
         Instant now = Instant.now();
         importConnections(ownerId, data.get("connections"), profileStore, now, active ? "ACTIVE" : "STAGED");
-        importModelProfiles(data.get("profiles"), profileStore, now, active);
+        importModelProfiles(data.get("profiles"), data.get("connections"), profileStore, now, active);
         importRoutes(ownerId, data.get("routes"), profileStore, now, active);
     }
 
@@ -232,17 +258,62 @@ public class OnboardingProfileExporter {
     }
 
     private static void importModelProfiles(
-            Object rawProfiles, LlmProfileStorePort profileStore, Instant now, boolean enabled) {
-        if (!(rawProfiles instanceof List<?> profiles)) return;
+            Object rawProfiles, Object rawConnections, LlmProfileStorePort profileStore, Instant now, boolean enabled) {
+        boolean hasExplicit = rawProfiles instanceof List<?> profiles && !profiles.isEmpty();
+        if (hasExplicit) {
+            importExplicitModelProfiles((List<?>) rawProfiles, profileStore, now, enabled);
+        } else if (rawConnections instanceof List<?> connections) {
+            synthesizeDefaultProfilesFromConnections(connections, profileStore, now, enabled);
+        }
+    }
+
+    private static void importExplicitModelProfiles(
+            List<?> profiles, LlmProfileStorePort profileStore, Instant now, boolean enabled) {
         for (Object item : profiles) {
             if (!(item instanceof Map<?, ?> p)) continue;
             String profileId = p.get("id") instanceof String s ? s : null;
             String connId = p.get("connectionId") instanceof String s ? s : null;
-            if (profileId == null || connId == null) continue;
-            String modelId = p.get("modelId") instanceof String s ? s : ModelDefaults.DEFAULT_OPENAI_MODEL;
+            String modelId = p.get("modelId") instanceof String s && !s.isBlank() ? s : null;
+            if (profileId == null || connId == null || modelId == null) continue;
             String structuredOutputMode = p.get("structuredOutputMode") instanceof String s ? s : "NATIVE";
+            String capabilityJson = p.get("capabilityJson") instanceof String s && !s.isBlank() ? s : null;
+            String safeLimitsJson = p.get("safeLimitsJson") instanceof String s && !s.isBlank() ? s : null;
             profileStore.saveModelProfile(new ModelProfileDto(
-                    profileId, connId, modelId, structuredOutputMode, null, null, enabled, 1, now, now));
+                    profileId,
+                    connId,
+                    modelId,
+                    structuredOutputMode,
+                    capabilityJson,
+                    safeLimitsJson,
+                    enabled,
+                    1,
+                    now,
+                    now));
+        }
+    }
+
+    private static void synthesizeDefaultProfilesFromConnections(
+            List<?> connections, LlmProfileStorePort profileStore, Instant now, boolean enabled) {
+        for (Object item : connections) {
+            if (!(item instanceof Map<?, ?> c)) continue;
+            String connId = c.get("id") instanceof String s ? s : null;
+            String modelId = c.get("modelId") instanceof String s ? s : null;
+            if (connId == null || modelId == null || modelId.isBlank()) continue;
+            String profileId = "prof-" + connId;
+            String structuredOutputMode = c.get("structuredOutputMode") instanceof String s ? s : "NATIVE";
+            String capabilityJson = c.get("capabilityJson") instanceof String s && !s.isBlank() ? s : null;
+            String safeLimitsJson = c.get("safeLimitsJson") instanceof String s && !s.isBlank() ? s : null;
+            profileStore.saveModelProfile(new ModelProfileDto(
+                    profileId,
+                    connId,
+                    modelId,
+                    structuredOutputMode,
+                    capabilityJson,
+                    safeLimitsJson,
+                    enabled,
+                    1,
+                    now,
+                    now));
         }
     }
 
