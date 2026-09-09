@@ -1,6 +1,7 @@
 package com.amsha.onboarding;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -188,6 +189,9 @@ public class SettingsResourceTest {
 
     @Test
     void testGetConnectionNetworkProfileDefaults() {
+        // Hermetic against execution order: sibling tests stage proxy profiles into the
+        // active draft, which this read prefers over committed rows and defaults.
+        givenAuth().when().post("/settings/reset").then().statusCode(200);
         givenAuth()
                 .when()
                 .get("/settings/connection-network-profile")
@@ -252,8 +256,68 @@ public class SettingsResourceTest {
     }
 
     @Test
-    void testPatchConnectionNetworkProfileValidationFailures() {
-        // Timeout exceeding 300,000 ms
+    void testPatchConnectionNetworkProfileWritesMatchingStoreRowOnly() {
+        // A dedicated owner isolates this test's rows and drafts from the shared suite database:
+        // nothing seeded here may shift positional reads in other tests.
+        String ownerKey = "px-owner-" + System.currentTimeMillis();
+        String suffix = "px" + System.currentTimeMillis();
+        String firstId = "conn_aaa_" + suffix;
+        String targetId = "conn_zzz_" + suffix;
+        importGraph(ownerKey, firstId, "profile_aaa_" + suffix);
+        importGraph(ownerKey, targetId, "profile_zzz_" + suffix);
+
+        // The active draft now stages only the target connection: index 0 must resolve
+        // to the staged id, never to whichever committed row sorts first.
+        NetworkProfilePolicyDto policy = new NetworkProfilePolicyDto(
+                "ALLOW_ALL",
+                List.of(),
+                true,
+                "http://proxy.example.com:3128",
+                null,
+                List.of(),
+                null,
+                null,
+                "SYSTEM",
+                null);
+        given().header("X-Amsha-API-Key", ownerKey)
+                .contentType(ContentType.JSON)
+                .body(new NetworkProfileUpdateRequest(0, null, policy))
+                .when()
+                .patch("/settings/connection-network-profile")
+                .then()
+                .statusCode(200)
+                .body("updated", is(true));
+
+        given().header("X-Amsha-API-Key", ownerKey)
+                .when()
+                .get("/onboarding/export")
+                .then()
+                .statusCode(200)
+                .body(
+                        "connections.find { it.id == '%s' }.networkProfileJson".formatted(targetId),
+                        containsString("proxy.example.com"))
+                .body("connections.find { it.id == '%s' }.networkProfileJson".formatted(firstId), is(""));
+    }
+
+    private void importGraph(String ownerKey, String connId, String profileId) {
+        given().header("X-Amsha-API-Key", ownerKey)
+                .contentType(ContentType.JSON)
+                .body(Map.of(
+                        "connections",
+                        List.of(Map.of("id", connId, "displayName", "Seed", "providerAdapterId", "ollama")),
+                        "profiles",
+                        List.of(Map.of("id", profileId, "connectionId", connId, "modelId", "llama3")),
+                        "routes",
+                        List.of()))
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(200)
+                .body("imported", is(true));
+    }
+
+    @Test
+    void testPatchConnectionNetworkProfileValidationFailures() { // Timeout exceeding 300,000 ms
         NetworkProfilePolicyDto badTimeout = new NetworkProfilePolicyDto(
                 "ALLOW_ALL", List.of(), false, null, null, List.of(), 300001, null, "SYSTEM", null);
         givenAuth()

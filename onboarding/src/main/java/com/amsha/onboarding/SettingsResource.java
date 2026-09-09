@@ -349,41 +349,77 @@ public class SettingsResource {
                 coordinator.findActive(owner).orElseGet(() -> coordinator.getOrCreateFirstRunDraft(owner));
         Optional<OnboardingDraftDto> updated =
                 coordinator.updateConnectionNetworkProfile(draft.draftId(), req.connectionIndex(), profileJson);
-        boolean storeUpdated = false;
-        if (profileStoreInstance != null && profileStoreInstance.isResolvable()) {
-            List<LlmConnectionDto> conns = profileStoreInstance.get().listConnectionsByCreatedBy(owner);
-            int idx = req.connectionIndex() == -1 ? 0 : req.connectionIndex();
-            if (conns != null && idx >= 0 && idx < conns.size()) {
-                LlmConnectionDto existing = conns.get(idx);
-                LlmConnectionDto updatedConn = new LlmConnectionDto(
-                        existing.id(),
-                        existing.scopeType(),
-                        existing.scopeId(),
-                        existing.createdByUserId(),
-                        existing.displayName(),
-                        existing.providerAdapterId(),
-                        existing.endpointProfileId(),
-                        existing.customBaseUrl(),
-                        existing.authScheme(),
-                        profileJson,
-                        existing.state(),
-                        existing.revision() + 1,
-                        existing.createdAt(),
-                        Instant.now());
-                storeUpdated = profileStoreInstance.get().updateConnection(updatedConn, existing.revision());
-                if (!storeUpdated) {
-                    return Response.status(Response.Status.CONFLICT)
-                            .entity(new AmshaErrorResponse("Conflict", "Connection revision conflict"))
-                            .build();
-                }
-            }
+        StoreWrite storeWrite = updateCommittedConnectionProfile(owner, updated, req, profileJson);
+        if (storeWrite == StoreWrite.CONFLICT) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new AmshaErrorResponse("Conflict", "Connection revision conflict"))
+                    .build();
         }
-        if (updated.isEmpty() && !storeUpdated) {
+        if (updated.isEmpty() && storeWrite != StoreWrite.UPDATED) {
             return Response.status(400)
                     .entity(new AmshaErrorResponse("No connections selection found for this draft or user"))
                     .build();
         }
         return Response.ok(Map.of("updated", true, "draftId", draft.draftId())).build();
+    }
+
+    /** Outcome of mirroring a draft profile edit onto the committed profile store. */
+    private enum StoreWrite {
+        UPDATED,
+        SKIPPED,
+        CONFLICT
+    }
+
+    /**
+     * Mirrors a draft-scoped network-profile edit onto its committed profile-store row. The row is
+     * located by the staged connection's explicit {@code id} and must be owned by the caller.
+     * Wizard-staged connections carry no id and have no committed row, so they are draft-only;
+     * there is deliberately no positional fallback (an index into the committed list cannot
+     * identify the staged connection and rewrote unrelated rows once imports made stores
+     * multi-row).
+     *
+     * @return how the committed-store mirror resolved
+     */
+    private StoreWrite updateCommittedConnectionProfile(
+            String owner, Optional<OnboardingDraftDto> updated, NetworkProfileUpdateRequest req, String profileJson) {
+        if (profileStoreInstance == null || !profileStoreInstance.isResolvable()) {
+            return StoreWrite.SKIPPED;
+        }
+        String stagedId = updated.map(u -> OnboardingResourceHelper.extractConnectionId(
+                        u.selectedNonSecretIds(), req.connectionIndex(), objectMapper))
+                .orElse(null);
+        if (stagedId == null) {
+            return StoreWrite.SKIPPED;
+        }
+        Optional<LlmConnectionDto> match = profileStoreInstance.get().findConnection(stagedId);
+        if (match.isEmpty() || !owner.equals(match.get().createdByUserId())) {
+            return StoreWrite.SKIPPED;
+        }
+        return writeConnectionProfile(match.get(), profileJson) ? StoreWrite.UPDATED : StoreWrite.CONFLICT;
+    }
+
+    /**
+     * Replaces a committed connection's network profile, preserving optimistic locking.
+     * Returns false instead of throwing when the row lost a revision race; the caller maps
+     * that to HTTP 409.
+     */
+    private boolean writeConnectionProfile(LlmConnectionDto existing, String profileJson) {
+        LlmConnectionDto updatedConn = new LlmConnectionDto(
+                existing.id(),
+                existing.scopeType(),
+                existing.scopeId(),
+                existing.createdByUserId(),
+                existing.displayName(),
+                existing.providerAdapterId(),
+                existing.endpointProfileId(),
+                existing.customBaseUrl(),
+                existing.authScheme(),
+                profileJson,
+                existing.state(),
+                existing.revision() + 1,
+                existing.createdAt(),
+                Instant.now());
+        return profileStoreInstance.get().updateConnection(updatedConn, existing.revision());
     }
 
     @PATCH

@@ -150,6 +150,23 @@ final class OnboardingResourceHelper {
         return null;
     }
 
+    /**
+     * Returns the staged connection's explicit {@code id} at the given index, or null when the
+     * staged entry carries none (wizard-staged connections are identified by provider/model only).
+     * Used to correlate a draft-scoped edit with its committed profile-store row.
+     */
+    static String extractConnectionId(List<String> selections, int connectionIndex, ObjectMapper objectMapper) {
+        ConnectionSearchResult result = findConnectionNode(selections, connectionIndex, objectMapper);
+        if (result == null) {
+            return null;
+        }
+        JsonNode idNode = result.connectionNode().path("id");
+        if (idNode.isTextual() && !idNode.asText().isBlank()) {
+            return idNode.asText();
+        }
+        return null;
+    }
+
     static OnboardingDraftDto buildImportedReviewDraft(OnboardingDraftDto draft, Map<String, Object> data) {
         return buildImportedReviewDraft(draft, data, new ObjectMapper(), null);
     }
