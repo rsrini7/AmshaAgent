@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,6 +25,7 @@ import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -298,5 +301,33 @@ class PendingToolResumeExecutorTest {
 
         assertInstanceOf(AgentResult.Failed.class, result);
         verify(toolRegistry, never()).invokeTool(any(), any(), any());
+    }
+
+    @Test
+    void testExecutePendingToolBrowserFailureFallsBackToWebFetch() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "sess-browser",
+                "u1",
+                "c1",
+                "researcher",
+                "browse page",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn(ToolCapability.BROWSER_NAVIGATE.toolName());
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{\"url\":\"https://example.com\"}");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.failure(502, "browser timeout"));
+        when(stateMachineRunner.run(any(), any(), any()))
+                .thenReturn(AgentResult.finished("Fetched by fallback", List.of()));
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "CLI", stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        verify(stateMachineRunner).run(any(AgentExecutionContext.class), eq(reasoningEngine), anyList());
     }
 }

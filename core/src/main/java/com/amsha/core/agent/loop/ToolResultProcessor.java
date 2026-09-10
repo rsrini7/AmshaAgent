@@ -214,19 +214,16 @@ public class ToolResultProcessor {
             String obs,
             List<ReasoningStep> history) {
         if (res != null && !res.success()) {
-            String url = String.valueOf(params.getOrDefault("url", ""));
+            String url = WebRetrievalFallbackPolicy.urlFrom(params);
             if (!url.isBlank()) {
-                log.infof("[TOOL-STEP] browser_navigate failed for %s - triggering fallback to serper_web_search", url);
-
-                String fallbackGoal = "The browser was unable to visit " + url + " directly. "
-                        + "Please use serper_web_search to find information about this page or its content.";
-
+                log.infof("[TOOL-STEP] browser_navigate failed for %s - triggering fallback to web_fetch", url);
+                String fallbackGoal = WebRetrievalFallbackPolicy.browserToFetchGoal(url, obs);
                 ReasoningStep fallbackStep = ReasoningStep.observeStep(
                         ToolCapability.BROWSER_NAVIGATE.toolName(),
-                        "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
-                        "Browser navigation failed, falling back to search.");
+                        WebRetrievalFallbackPolicy.browserFailureMarker(url) + ". Tool execution failed: " + obs
+                                + ". Fallback: " + fallbackGoal,
+                        "Browser navigation failed, falling back to web_fetch.");
                 history.add(fallbackStep);
-
                 return StepDecision.retryEngine(fallbackGoal, 0);
             }
         }
@@ -240,19 +237,21 @@ public class ToolResultProcessor {
             String obs,
             List<ReasoningStep> history) {
         if (res != null && !res.success()) {
-            String url = String.valueOf(params.getOrDefault("url", ""));
+            String url = WebRetrievalFallbackPolicy.urlFrom(params);
             if (!url.isBlank()) {
-                log.infof("[TOOL-STEP] web_fetch failed for %s - triggering fallback to browser_navigate", url);
-
-                String fallbackGoal = "The web_fetch tool was unable to retrieve " + url + " (error: " + obs + "). "
-                        + "Please try browser_navigate to visit this URL instead.";
-
+                boolean browserFailed = WebRetrievalFallbackPolicy.browserAttemptFailed(history, url);
+                String nextTool = browserFailed ? "search" : ToolCapability.BROWSER_NAVIGATE.toolName();
+                log.infof("[TOOL-STEP] web_fetch failed for %s - triggering fallback to %s", url, nextTool);
+                String fallbackGoal = browserFailed
+                        ? WebRetrievalFallbackPolicy.fetchToSearchGoal(url, obs)
+                        : WebRetrievalFallbackPolicy.fetchToBrowserGoal(url, obs);
                 ReasoningStep fallbackStep = ReasoningStep.observeStep(
                         ToolCapability.WEB_FETCH.toolName(),
                         "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
-                        "web_fetch failed, falling back to browser_navigate.");
+                        browserFailed
+                                ? "Browser and web_fetch failed, falling back to one search."
+                                : "web_fetch failed, falling back to browser_navigate.");
                 history.add(fallbackStep);
-
                 return StepDecision.retryEngine(fallbackGoal, 0);
             }
         }

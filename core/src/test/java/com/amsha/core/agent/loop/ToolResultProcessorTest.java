@@ -301,7 +301,54 @@ class ToolResultProcessorTest {
                 0);
         assertEquals(DecisionType.CONTINUE, decision.type());
         assertNotNull(decision.transientError());
+        assertTrue(decision.transientError().contains(ToolCapability.WEB_FETCH.toolName()));
+        assertFalse(decision.transientError().contains(ToolCapability.WEB_SEARCH_SERPER.toolName()));
+    }
+
+    @Test
+    void resolveOutcome_WebFetchFailureWithoutBrowserAttempt_UsesBrowserFirst() {
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", ToolCapability.WEB_FETCH.toolName(), Map.of());
+        var res = ToolResponse.failure(404, "HTTP 404 Not Found");
+        var decision = processor.resolveOutcome(
+                ctx,
+                ToolCapability.WEB_FETCH.toolName(),
+                Map.of("url", "https://example.com/missing"),
+                res,
+                processor.buildObservation(res),
+                step,
+                new ArrayList<>(),
+                0);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
+        assertTrue(decision.transientError().contains(ToolCapability.BROWSER_NAVIGATE.toolName()));
+    }
+
+    @Test
+    void resolveOutcome_WebFetchFailureAfterBrowserFailure_UsesOneSearchFallback() {
+        var ctx = ctx();
+        String url = "https://example.com/missing";
+        var step = ReasoningStep.pending("", ToolCapability.WEB_FETCH.toolName(), Map.of());
+        var history = new ArrayList<ReasoningStep>();
+        history.add(ReasoningStep.observeStep(
+                ToolCapability.BROWSER_NAVIGATE.toolName(),
+                WebRetrievalFallbackPolicy.browserFailureMarker(url) + ". timeout",
+                "browser failed"));
+        var res = ToolResponse.failure(404, "HTTP 404 Not Found");
+
+        var decision = processor.resolveOutcome(
+                ctx,
+                ToolCapability.WEB_FETCH.toolName(),
+                Map.of("url", url),
+                res,
+                processor.buildObservation(res),
+                step,
+                history,
+                0);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
         assertTrue(decision.transientError().contains(ToolCapability.WEB_SEARCH_SERPER.toolName()));
+        assertTrue(decision.transientError().contains("Do not guess"));
     }
 
     @Test

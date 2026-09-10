@@ -631,6 +631,8 @@ graph TD
 | Register MCP Server | `register_mcp_server` | `NETWORK_OUTBOUND` | coder, debugger |
 | MCP dynamic tools | (varies) | (varies) | all roles with MCP |
 
+Web retrieval follows a bounded order. Open-ended requests search first. For each exact URL from search results or the user, `browser_navigate` is attempted first when available; a browser failure permits one governed `web_fetch` attempt on that same URL. If both fail, the agent may perform one alternative natural-language search. It must not construct URL variants after a 404.
+
 ### Governance by Autonomy Level
 
 The `AutonomyPolicy` defines which operations are auto-allowed at each level. Operations not auto-allowed pass through `ToolGovernanceGuard` for role trust pre-flight and potential HITL approval.

@@ -183,7 +183,22 @@ public class CheckpointResumeHandler {
 
                             String toolInfo = buildToolInfoPart(checkpoint);
                             AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
-                            if (result != null) {
+                            var handoff =
+                                    new DelegatedCompletionHandoff(agentStore, objectMapper).capture(sessionId, result);
+                            if (handoff.isPresent()) {
+                                DelegatedCompletionHandoff.ParentResume parent = handoff.get();
+                                if (parent.ready()) {
+                                    log.infof(
+                                            "[DELEGATION] Resuming parent %s after child %s completed",
+                                            parent.sessionId(), sessionId);
+                                    resumeAfterBatchDecision(
+                                            parent.sessionId(),
+                                            parent.agentRole(),
+                                            parent.userId(),
+                                            parent.chatId(),
+                                            parent.channelType());
+                                }
+                            } else if (result != null) {
                                 dispatchResumeResult(context, result, cType, user, sessionId, toolInfo);
                             }
                         }
@@ -262,11 +277,6 @@ public class CheckpointResumeHandler {
             int budget = calculateResumeBudget(cp);
             log.infof("Resuming session=%s budget=%d", cp.getSessionId(), budget);
 
-            // §F9 fix: resume with the checkpoint's OWN autonomy level — NOT FULL.
-            // Wrapping the whole resumed loop in runWithFullAutonomy let a single approval
-            // elevate every subsequent tool call in the session (HITL silently disabled).
-            // The one approved tool still gets its elevation via the tightly-scoped
-            // runWithFullAutonomy inside PendingToolResumeExecutor/ParallelBatchResumeHandler.
             return WorkspaceContext.run(
                     cp.getSessionId(),
                     context.getUser().platformId(),

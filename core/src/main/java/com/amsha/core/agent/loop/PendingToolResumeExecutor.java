@@ -249,26 +249,45 @@ final class PendingToolResumeExecutor {
     }
 
     private AgentResult handleFailure(PendingToolRequest request, ToolResponse response) {
-        if (ToolCapability.WEB_FETCH.toolName().equals(request.toolName())) {
-            String url = extractUrlFromParams(request.paramsJson());
-            if (url != null && !url.isBlank()) {
-                String fallbackGoal = "The web_fetch tool was unable to retrieve "
-                        + url
-                        + " (error: "
-                        + response.output()
-                        + "). Please try browser_navigate to visit this URL instead.";
-                log.infof("[ResumeStrategy] web_fetch failed for %s - falling back to browser_navigate", url);
+        String url = extractUrlFromParams(request.paramsJson());
+        if (response != null && !response.success() && url != null && !url.isBlank()) {
+            String fallbackGoal = null;
+            String fallbackMessage = null;
+            if (WebRetrievalFallbackPolicy.isBrowser(request.toolName())) {
+                fallbackGoal = WebRetrievalFallbackPolicy.browserToFetchGoal(url, response.output());
+                fallbackMessage = "Browser navigation failed, falling back to web_fetch.";
+                request.history()
+                        .add(ReasoningStep.observeStep(
+                                ToolCapability.BROWSER_NAVIGATE.toolName(),
+                                WebRetrievalFallbackPolicy.browserFailureMarker(url)
+                                        + ". Tool execution failed: "
+                                        + response.output()
+                                        + ". Fallback: "
+                                        + fallbackGoal,
+                                fallbackMessage));
+            } else if (WebRetrievalFallbackPolicy.isWebFetch(request.toolName())) {
+                boolean browserFailed = WebRetrievalFallbackPolicy.browserAttemptFailed(request.history(), url);
+                fallbackGoal = browserFailed
+                        ? WebRetrievalFallbackPolicy.fetchToSearchGoal(url, response.output())
+                        : WebRetrievalFallbackPolicy.fetchToBrowserGoal(url, response.output());
+                fallbackMessage = browserFailed
+                        ? "Browser and web_fetch failed, falling back to one search."
+                        : "web_fetch failed, falling back to browser_navigate.";
                 request.history()
                         .add(ReasoningStep.observeStep(
                                 ToolCapability.WEB_FETCH.toolName(),
                                 "Tool execution failed: " + response.output() + ". Fallback: " + fallbackGoal,
-                                "web_fetch failed, falling back to browser_navigate."));
+                                fallbackMessage));
+            }
+            if (fallbackGoal != null) {
+                log.infof(
+                        "[ResumeStrategy] %s failed for %s - falling back with bounded retrieval policy",
+                        request.toolName(), url);
                 completeInProgressCheckpoint(request.checkpoint());
                 return request.stateMachineRunner()
                         .run(request.context().withGoal(fallbackGoal), reasoningEngine, request.history());
             }
         }
-
         AgentResult healResult = failureHandler.tryAutoHeal(request, response);
         if (healResult != null) {
             return healResult;

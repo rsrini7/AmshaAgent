@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
@@ -11,15 +12,19 @@ import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
+import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -75,11 +80,11 @@ class ParallelBatchResumeHandler {
             }
         }
 
-        Map<String, String> preExecuted = Map.of();
+        Map<String, JsonNode> preExecuted = Map.of();
         if (checkpoint.hasPreExecutedResults()) {
             try {
                 preExecuted = objectMapper.readValue(
-                        checkpoint.getPreExecutedResults(), new TypeReference<Map<String, String>>() {});
+                        checkpoint.getPreExecutedResults(), new TypeReference<Map<String, JsonNode>>() {});
             } catch (Exception e) {
                 log.debugf("Pre-executed result parse fallback (non-fatal): %s", LogUtil.rootMessage(e));
             }
@@ -87,9 +92,13 @@ class ParallelBatchResumeHandler {
 
         List<ParallelToolCall> completed = new ArrayList<>();
         for (ParallelToolCall call : calls) {
-            if (preExecuted.containsKey(call.toolName())) {
+            String preExecutedKey = preExecuted.containsKey(call.callId()) ? call.callId() : call.toolName();
+            if (preExecuted.containsKey(preExecutedKey)) {
                 try {
-                    ToolResponse stored = objectMapper.readValue(preExecuted.get(call.toolName()), ToolResponse.class);
+                    var storedNode = preExecuted.get(preExecutedKey);
+                    ToolResponse stored = storedNode.isTextual()
+                            ? objectMapper.readValue(storedNode.asText(), ToolResponse.class)
+                            : objectMapper.treeToValue(storedNode, ToolResponse.class);
                     completed.add(
                             switch (stored) {
                                 case ToolResponse.ToolSuccess success -> call.withResult(success.output(), true);
@@ -175,6 +184,20 @@ class ParallelBatchResumeHandler {
             }
         }
 
+        Optional<DelegatedPause> delegatedPause = findDelegatedPause(completed);
+        if (delegatedPause.isPresent()) {
+            // A delegated child can pause after the parent batch itself was
+            // approved. Do not turn that pause into a successful `garuda→OK`
+            // result: doing so finalizes the parent while the child is still
+            // waiting and loses the eventual research result.
+            checkpoint.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+            agentStore.save(checkpoint);
+            DelegatedPause pause = delegatedPause.get();
+            return AgentResult.awaitingApproval(
+                    new ApprovalFrame(pause.toolName(), pause.params(), RiskLevel.HIGH),
+                    sessionId,
+                    List.copyOf(history));
+        }
         try {
             String completedJson = objectMapper.writeValueAsString(completed);
             String summary = completed.stream()
@@ -188,6 +211,32 @@ class ParallelBatchResumeHandler {
             return handleCorruptBatch(checkpoint, history);
         }
     }
+
+    private Optional<DelegatedPause> findDelegatedPause(List<ParallelToolCall> completed) {
+        for (ParallelToolCall call : completed) {
+            if (!call.success()
+                    || call.observation() == null
+                    || !call.observation().contains(UserMessages.DELEGATION_PAUSED_MARKER)) {
+                continue;
+            }
+            String toolName = UserMessages.extractPausedTool(call.observation());
+            String paramsJson = UserMessages.extractPausedParamsJson(call.observation());
+            if (toolName == null || toolName.isBlank() || paramsJson == null) {
+                return Optional.empty();
+            }
+            try {
+                Map<String, Object> params =
+                        objectMapper.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
+                return Optional.of(new DelegatedPause(toolName, params));
+            } catch (Exception e) {
+                log.warnf("[ResumeStrategy] Invalid delegated pause payload: %s", LogUtil.rootMessage(e));
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
+    }
+
+    private record DelegatedPause(String toolName, Map<String, Object> params) {}
 
     private String buildDelegationParams(String toolName, String paramsJson, String owner) {
         Map<String, Object> params = Map.of();

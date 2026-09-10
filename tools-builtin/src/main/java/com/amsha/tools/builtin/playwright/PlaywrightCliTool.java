@@ -53,7 +53,7 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @ToolMetadata(
         capabilityId = "browser_navigate",
-        description = "Headless browser navigation via @playwright/cli daemon",
+        description = "Primary browser navigation for exact URLs via @playwright/cli daemon",
         defaultRoles = {"researcher", "synthesizer"})
 public class PlaywrightCliTool implements AgentTool {
 

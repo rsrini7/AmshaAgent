@@ -46,6 +46,9 @@ class ResumeStrategyDispatcherTest {
     AgentStateMachineRunner stateMachineRunner;
 
     @Mock
+    ToolInvocationGuard guard;
+
+    @Mock
     MessageContext messageContext;
 
     @Mock
@@ -57,7 +60,14 @@ class ResumeStrategyDispatcherTest {
     @BeforeEach
     void setUp() {
         dispatcher = new ResumeStrategyDispatcher(
-                agentStore, toolRegistry, objectMapper, reasoningEngine, recoveryService, escalationService);
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                new ToolDelegationResolver(),
+                guard);
     }
 
     @Test

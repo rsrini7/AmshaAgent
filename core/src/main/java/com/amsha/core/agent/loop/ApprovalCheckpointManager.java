@@ -28,6 +28,7 @@ import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolResponse;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -278,7 +279,7 @@ public class ApprovalCheckpointManager {
         // This prevents ResumeStrategyDispatcher from attempting to re-execute already-completed tools.
         String compositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX
                 + allCalls.stream()
-                        .filter(call -> !results.containsKey(call.toolName()))
+                        .filter(call -> !results.containsKey(resultKey(call)))
                         .map(ParallelToolCall::toolName)
                         .distinct()
                         .reduce((a, b) -> a + "|" + b)
@@ -290,9 +291,12 @@ public class ApprovalCheckpointManager {
 
         try {
             originalBatchJson = objectMapper.writeValueAsString(allCalls);
-            preExecutedJson = objectMapper.writeValueAsString(results);
+            preExecutedJson = objectMapper
+                    .writerFor(new TypeReference<Map<String, ToolResponse>>() {})
+                    .writeValueAsString(results);
             for (ParallelToolCall call : allCalls) {
-                if (!results.containsKey(call.toolName())) {
+                String key = resultKey(call);
+                if (!results.containsKey(key)) {
                     decisions.put(call.toolName(), ToolDecision.PENDING);
                 } else if (!decisions.containsKey(call.toolName())) {
                     decisions.put(call.toolName(), ToolDecision.APPROVED);
@@ -350,6 +354,10 @@ public class ApprovalCheckpointManager {
         ApprovalFrame frame =
                 new ApprovalFrame(compositeName, Map.of(ToolCallJsonKeys.BATCH, originalBatchJson), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
+    }
+
+    private static String resultKey(ParallelToolCall call) {
+        return call.callId() == null || call.callId().isBlank() ? call.toolName() : call.callId();
     }
 
     private void populateContextData(AgentCheckpoint cp, AgentExecutionContext context) {

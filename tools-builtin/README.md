@@ -20,6 +20,10 @@ This module provides the 15 standard built-in `AgentTool` implementations, Lucen
 14. `core_memory_replace` (`CoreMemoryReplaceTool`)
 15. `recall_memory_search` (`RecallMemorySearchTool`)
 
+## Web Retrieval Order
+
+Open-ended research starts with `brave_web_search` or `serper_web_search`. For each exact URL returned by search or supplied by the user, `browser_navigate` is the primary retrieval path when it is available. If browser navigation fails, the coordinator retries the same URL with governed `web_fetch`. Only after both retrieval paths fail may the agent run one alternative natural-language search; it must never construct or guess a replacement URL. A 404 is treated as a bad candidate, not as permission to try guessed URL variants.
+
 ## Configuration Properties
 
 | Property | Default | Description |

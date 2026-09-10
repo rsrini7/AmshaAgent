@@ -49,9 +49,9 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 @ToolMetadata(
         capabilityId = "web_fetch",
-        description = "Fetch a URL and return its content as plain text. "
-                + "Use for reading articles, documentation, and static pages. "
-                + "For JavaScript-heavy sites, use browser_navigate instead.",
+        description = "Last-resort governed fetch for an exact URL after browser_navigate fails. "
+                + "Use for articles, documentation, and static pages. "
+                + "For JavaScript-heavy sites, use browser_navigate first.",
         defaultRoles = {"researcher", "synthesizer", "coordinator"})
 public class SmartWebFetchTool implements AgentTool {
 

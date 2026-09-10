@@ -1,0 +1,184 @@
+package com.amsha.core.agent.loop;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.reasoning.ParallelToolCall;
+import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolResponse;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.jboss.logging.Logger;
+
+/** Bridges a completed delegated child back into the awaiting parent batch. */
+final class DelegatedCompletionHandoff {
+
+    private static final Logger log = Logger.getLogger(DelegatedCompletionHandoff.class);
+
+    private final StatefulAgentStore agentStore;
+    private final ObjectMapper objectMapper;
+
+    DelegatedCompletionHandoff(StatefulAgentStore agentStore, ObjectMapper objectMapper) {
+        this.agentStore = agentStore;
+        this.objectMapper = objectMapper;
+    }
+
+    Optional<ParentResume> capture(String childSessionId, AgentResult result) {
+        if (!isTerminal(result) || childSessionId == null) {
+            return Optional.empty();
+        }
+        int marker = childSessionId.indexOf(AgentSentinels.DELEGATE_SESSION_SENTINEL);
+        if (marker <= 0) {
+            return Optional.empty();
+        }
+
+        String parentSessionId = childSessionId.substring(0, marker);
+        Optional<AgentCheckpoint> parentOpt = agentStore.findLatestAwaitingApproval(parentSessionId);
+        if (parentOpt.isEmpty() || !parentOpt.get().isParallelBatch()) {
+            return Optional.empty();
+        }
+
+        AgentCheckpoint parent = parentOpt.get();
+        List<ParallelToolCall> calls = readCalls(parent.getPendingToolParametersJson());
+        ParallelToolCall childCall = findChildCall(calls, childSessionId, parent.getPreExecutedResults());
+        if (childCall == null) {
+            log.warnf("[DELEGATION] No parent batch call matched child session %s", childSessionId);
+            return Optional.empty();
+        }
+
+        Map<String, JsonNode> results = readResults(parent.getPreExecutedResults());
+        String callKey = callKey(childCall);
+        if (results.containsKey(callKey) || results.containsKey(childCall.toolName())) {
+            return Optional.empty();
+        }
+        try {
+            String responseJson = objectMapper.writerFor(ToolResponse.class).writeValueAsString(toToolResponse(result));
+            results.put(callKey, objectMapper.readTree(responseJson));
+            parent.setPreExecutedResults(objectMapper.writeValueAsString(results));
+            agentStore.save(parent);
+            boolean ready = !hasActiveDescendants(parentSessionId);
+            return Optional.of(new ParentResume(
+                    parentSessionId,
+                    parent.getAgentRole(),
+                    parent.getChannelPlatformId(),
+                    parent.getChannelPlatformId(),
+                    parent.getChannelType(),
+                    ready));
+        } catch (Exception e) {
+            log.warnf(
+                    "[DELEGATION] Could not persist child result for parent %s: %s",
+                    parentSessionId, LogUtil.rootMessage(e));
+            return Optional.empty();
+        }
+    }
+
+    private List<ParallelToolCall> readCalls(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<ParallelToolCall>>() {});
+        } catch (Exception e) {
+            log.warnf("[DELEGATION] Invalid parent batch payload: %s", LogUtil.rootMessage(e));
+            return List.of();
+        }
+    }
+
+    private Map<String, JsonNode> readResults(String json) {
+        if (json == null || json.isBlank()) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            Map<String, JsonNode> parsed = objectMapper.readValue(json, new TypeReference<>() {});
+            return parsed == null ? new LinkedHashMap<>() : new LinkedHashMap<>(parsed);
+        } catch (Exception e) {
+            log.warnf("[DELEGATION] Invalid parent pre-executed results: %s", LogUtil.rootMessage(e));
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private ParallelToolCall findChildCall(List<ParallelToolCall> calls, String childSessionId, String resultsJson) {
+        String childAgent = childAgent(childSessionId);
+        Map<String, JsonNode> results = readResults(resultsJson);
+        for (ParallelToolCall call : calls) {
+            if (!results.containsKey(callKey(call))
+                    && !results.containsKey(call.toolName())
+                    && callTargetsAgent(call, childAgent)) {
+                return call;
+            }
+        }
+        if (calls.size() == 1) {
+            ParallelToolCall only = calls.getFirst();
+            return results.containsKey(callKey(only)) || results.containsKey(only.toolName()) ? null : only;
+        }
+        return null;
+    }
+
+    private boolean hasActiveDescendants(String parentSessionId) {
+        String prefix = parentSessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL;
+        for (var status :
+                List.of(CheckpointStatus.AWAITING_APPROVAL, CheckpointStatus.RESUMING, CheckpointStatus.IN_PROGRESS)) {
+            if (agentStore.findByStatus(status).stream()
+                    .anyMatch(cp -> cp != null
+                            && cp.getSessionId() != null
+                            && cp.getSessionId().startsWith(prefix))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean callTargetsAgent(ParallelToolCall call, String childAgent) {
+        if (childAgent == null || call.params() == null) {
+            return false;
+        }
+        for (String key : List.of("agent", "persona", "target")) {
+            Object value = call.params().get(key);
+            if (value != null && childAgent.equalsIgnoreCase(String.valueOf(value))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String childAgent(String childSessionId) {
+        int marker = childSessionId.indexOf(AgentSentinels.DELEGATE_SESSION_SENTINEL);
+        if (marker < 0) {
+            return null;
+        }
+        String suffix = childSessionId.substring(marker + AgentSentinels.DELEGATE_SESSION_SENTINEL.length());
+        int end = suffix.indexOf(':');
+        return end < 0 ? suffix : suffix.substring(0, end);
+    }
+
+    private static String callKey(ParallelToolCall call) {
+        return call.callId() == null || call.callId().isBlank() ? call.toolName() : call.callId();
+    }
+
+    private static boolean isTerminal(AgentResult result) {
+        return result instanceof AgentResult.Finished
+                || result instanceof AgentResult.StructuredFinished
+                || result instanceof AgentResult.Failed;
+    }
+
+    private static ToolResponse toToolResponse(AgentResult result) {
+        return switch (result) {
+            case AgentResult.Finished finished -> ToolResponse.success(finished.answer());
+            case AgentResult.StructuredFinished finished -> ToolResponse.success(finished.answer());
+            case AgentResult.Failed failed -> ToolResponse.failure(1, "Sub-agent failed: " + failed.reason());
+            default -> throw new IllegalArgumentException("Non-terminal delegated result");
+        };
+    }
+
+    record ParentResume(
+            String sessionId, String agentRole, String userId, String chatId, String channelType, boolean ready) {}
+}
