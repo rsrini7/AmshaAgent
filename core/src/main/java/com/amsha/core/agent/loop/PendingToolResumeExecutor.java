@@ -16,6 +16,7 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
@@ -203,9 +204,15 @@ final class PendingToolResumeExecutor {
                 String pausedTool = UserMessages.extractPausedTool(success.output());
                 String pausedParamsJson = UserMessages.extractPausedParamsJson(success.output());
                 Map<String, Object> pausedParams = parsePausedParams(pausedParamsJson);
-                if (pausedParamsJson == null || pausedParams == null) {
+                if (pausedTool == null || pausedTool.isBlank() || pausedParamsJson == null || pausedParams == null) {
                     return AgentResult.failed(
                             "Delegated approval payload was invalid and was not resumed.",
+                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                            List.copyOf(request.history()));
+                }
+                if (!persistDelegatedWait(request)) {
+                    return AgentResult.failed(
+                            "Could not persist delegated wait state.",
                             AgentResult.FailureCategory.SYSTEM_ERROR,
                             List.copyOf(request.history()));
                 }
@@ -227,6 +234,34 @@ final class PendingToolResumeExecutor {
             return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
         }
         return handleFailure(request, response);
+    }
+
+    /**
+     * Keep the sequential parent alive while its child owns the approval.
+     * The parent delegation was already approved; storing it as IN_PROGRESS
+     * prevents stale-approval cleanup and a second parent approval from
+     * launching a duplicate child. The child checkpoint remains the source of
+     * truth for the pending tool approval.
+     */
+    private boolean persistDelegatedWait(PendingToolRequest request) {
+        AgentCheckpoint checkpoint = request.checkpoint();
+        agentStore.clearBatchResuming(request.sessionId());
+        checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+        checkpoint.setPendingToolName(request.originalToolName());
+        checkpoint.setPendingToolRole(request.effectiveRole());
+        checkpoint.setPendingToolParametersJson(request.paramsJson());
+        checkpoint.setPreExecutedResults(null);
+        try {
+            checkpoint.setBatchToolDecisions(
+                    objectMapper.writeValueAsString(Map.of(request.originalToolName(), ToolDecision.APPROVED)));
+            agentStore.saveWithSteps(checkpoint, request.history());
+            return true;
+        } catch (Exception e) {
+            log.warnf(
+                    "[DELEGATION] Could not persist parent delegated wait for %s: %s",
+                    request.sessionId(), LogUtil.rootMessage(e));
+            return false;
+        }
     }
 
     private Map<String, Object> parsePausedParams(String paramsJson) {

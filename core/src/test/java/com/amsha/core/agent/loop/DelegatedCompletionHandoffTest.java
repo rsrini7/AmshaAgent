@@ -1,6 +1,7 @@
 package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.ParallelToolCall;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
@@ -52,6 +54,34 @@ class DelegatedCompletionHandoffTest {
         assertTrue(saved.containsKey("call-1"));
         assertEquals("research complete", saved.get("call-1").path("output").asText());
         verify(store).save(any(AgentCheckpoint.class));
+    }
+
+    @Test
+    void capturesChildResultForSequentialParentAndClearsPendingDelegation() {
+        ObjectMapper mapper = new ObjectMapper();
+        StatefulAgentStore store = mock(StatefulAgentStore.class);
+        AgentCheckpoint parent = new AgentCheckpointRecord();
+        parent.setSessionId("parent");
+        parent.setAgentRole("coordinator");
+        parent.setStatus(CheckpointStatus.IN_PROGRESS);
+        parent.setPendingToolName("garuda");
+        parent.setPendingToolParametersJson("{\"agent\":\"saraswati\"}");
+        parent.setChannelPlatformId("operator");
+        parent.setChannelType("TELEGRAM");
+
+        when(store.findLatestAwaitingApproval("parent")).thenReturn(Optional.empty());
+        when(store.findLatestCheckpoint("parent")).thenReturn(Optional.of(parent));
+        when(store.deserializeSteps(parent)).thenReturn(List.of(ReasoningStep.systemMessage("delegation paused")));
+
+        Optional<DelegatedCompletionHandoff.ParentResume> handoff = new DelegatedCompletionHandoff(store, mapper)
+                .capture("parent:delegate:saraswati:123", AgentResult.finished("research result", List.of()));
+
+        assertTrue(handoff.isPresent());
+        assertTrue(handoff.get().ready());
+        assertNull(parent.getPendingToolName());
+        assertNull(parent.getPendingToolParametersJson());
+        assertEquals(CheckpointStatus.AWAITING_APPROVAL, parent.getStatus());
+        verify(store).saveWithSteps(any(AgentCheckpoint.class), any());
     }
 
     @Test

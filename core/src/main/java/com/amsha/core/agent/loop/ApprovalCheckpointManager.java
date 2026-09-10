@@ -155,6 +155,42 @@ public class ApprovalCheckpointManager {
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
 
+    /**
+     * Keeps a sequential parent in progress while its delegated child owns
+     * the pending approval. The child checkpoint remains the HITL source of
+     * truth; the parent must not be left awaiting or stale, or it may relaunch
+     * the already approved delegation.
+     */
+    public boolean persistDelegatedWait(
+            AgentExecutionContext context,
+            String delegationTool,
+            Map<String, Object> params,
+            List<ReasoningStep> history) {
+        try {
+            AgentCheckpoint checkpoint = loadActiveOrCreate(context.sessionId(), context.agentRole());
+            agentStore.clearBatchResuming(context.sessionId());
+            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+            checkpoint.setPendingToolName(delegationTool);
+            checkpoint.setPendingToolRole(context.agentRole());
+            checkpoint.setPendingToolParametersJson(objectMapper.writeValueAsString(params));
+            checkpoint.setPreExecutedResults(null);
+            checkpoint.setBatchToolDecisions(
+                    objectMapper.writeValueAsString(Map.of(delegationTool, ToolDecision.APPROVED)));
+            checkpoint.setMaxIterations(context.maxIterations());
+            checkpoint.setOriginalGoal(context.goal());
+            checkpoint.setSystemNote(context.systemNote());
+            checkpoint.setUpdatedAt(Instant.now());
+            populateContextData(checkpoint, context);
+            agentStore.saveWithSteps(checkpoint, history);
+            return true;
+        } catch (Exception e) {
+            log.warnf(
+                    "[DELEGATION] Could not persist parent delegated wait for %s: %s",
+                    context.sessionId(), LogUtil.rootMessage(e));
+            return false;
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public AgentResult persist(
             AgentExecutionContext context,
@@ -279,7 +315,7 @@ public class ApprovalCheckpointManager {
         // This prevents ResumeStrategyDispatcher from attempting to re-execute already-completed tools.
         String compositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX
                 + allCalls.stream()
-                        .filter(call -> !results.containsKey(resultKey(call)))
+                        .filter(call -> !containsResult(results, call))
                         .map(ParallelToolCall::toolName)
                         .distinct()
                         .reduce((a, b) -> a + "|" + b)
@@ -295,8 +331,7 @@ public class ApprovalCheckpointManager {
                     .writerFor(new TypeReference<Map<String, ToolResponse>>() {})
                     .writeValueAsString(results);
             for (ParallelToolCall call : allCalls) {
-                String key = resultKey(call);
-                if (!results.containsKey(key)) {
+                if (!containsResult(results, call)) {
                     decisions.put(call.toolName(), ToolDecision.PENDING);
                 } else if (!decisions.containsKey(call.toolName())) {
                     decisions.put(call.toolName(), ToolDecision.APPROVED);
@@ -358,6 +393,10 @@ public class ApprovalCheckpointManager {
 
     private static String resultKey(ParallelToolCall call) {
         return call.callId() == null || call.callId().isBlank() ? call.toolName() : call.callId();
+    }
+
+    private static boolean containsResult(Map<String, ToolResponse> results, ParallelToolCall call) {
+        return results.containsKey(resultKey(call)) || results.containsKey(call.toolName());
     }
 
     private void populateContextData(AgentCheckpoint cp, AgentExecutionContext context) {

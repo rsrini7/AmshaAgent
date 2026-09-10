@@ -31,6 +31,8 @@ import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.core.util.TimeContextInjector;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.tool.api.ToolCapability;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -212,6 +214,15 @@ public class AgentDispatchHandler implements MessageHandler {
             int maxIterations,
             String chatId)
             throws Exception {
+        if (hasDelegatedWait(sessionId)) {
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(
+                            context.getUser(),
+                            "I’m still waiting for the delegated researcher to finish. Please wait for its result."));
+            throw new RuntimeException("Busy session");
+        }
         if (!agentStore.markResuming(sessionId)) {
             log.warnf(
                     "[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal.",
@@ -242,6 +253,15 @@ public class AgentDispatchHandler implements MessageHandler {
         } finally {
             agentStore.clearResuming(sessionId);
         }
+    }
+
+    private boolean hasDelegatedWait(String sessionId) {
+        return agentStore
+                .findLatestNonArchivedCheckpoint(sessionId)
+                .filter(cp -> cp.getStatus() == CheckpointStatus.IN_PROGRESS)
+                .filter(cp -> ToolCapability.DELEGATE_TO_AGENT.toolName().equals(cp.getPendingToolName()))
+                .map(_ -> true)
+                .orElse(false);
     }
 
     private HandleResult handleRunException(MessageContext context, String goal, Exception e) {

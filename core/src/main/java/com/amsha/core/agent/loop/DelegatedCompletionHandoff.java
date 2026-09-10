@@ -1,5 +1,6 @@
 package com.amsha.core.agent.loop;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -7,11 +8,13 @@ import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.tool.api.AgentSentinels;
+import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -42,12 +45,16 @@ final class DelegatedCompletionHandoff {
         }
 
         String parentSessionId = childSessionId.substring(0, marker);
-        Optional<AgentCheckpoint> parentOpt = agentStore.findLatestAwaitingApproval(parentSessionId);
-        if (parentOpt.isEmpty() || !parentOpt.get().isParallelBatch()) {
+        Optional<AgentCheckpoint> parentOpt = findActiveParent(parentSessionId);
+        if (parentOpt.isEmpty()) {
             return Optional.empty();
         }
 
         AgentCheckpoint parent = parentOpt.get();
+        if (!parent.isParallelBatch()) {
+            return captureSequential(parent, childSessionId, result);
+        }
+
         List<ParallelToolCall> calls = readCalls(parent.getPendingToolParametersJson());
         ParallelToolCall childCall = findChildCall(calls, childSessionId, parent.getPreExecutedResults());
         if (childCall == null) {
@@ -79,6 +86,65 @@ final class DelegatedCompletionHandoff {
                     parentSessionId, LogUtil.rootMessage(e));
             return Optional.empty();
         }
+    }
+
+    /**
+     * Completes a single delegated call for a sequential parent.  Sequential
+     * delegation does not have a parallel result map, so the parent must be
+     * given the child observation and its pending delegation cleared before it
+     * is resumed for terminal synthesis.
+     */
+    private Optional<ParentResume> captureSequential(
+            AgentCheckpoint parent, String childSessionId, AgentResult result) {
+        if (!ToolCapability.DELEGATE_TO_AGENT.toolName().equals(parent.getPendingToolName())) {
+            return Optional.empty();
+        }
+
+        List<ReasoningStep> history = agentStore.deserializeSteps(parent);
+        if (history == null) {
+            history = new ArrayList<>();
+        } else {
+            history = new ArrayList<>(history);
+        }
+        ToolResponse response = toToolResponse(result);
+        history.add(ReasoningStep.observeStep(
+                ToolCapability.DELEGATE_TO_AGENT.toolName(),
+                response.output(),
+                "Delegated agent completed; synthesize the result."));
+
+        parent.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        parent.setPendingToolName(null);
+        parent.setPendingToolRole(null);
+        parent.setPendingToolParametersJson(null);
+        parent.setBatchToolDecisions(null);
+        parent.setPreExecutedResults(null);
+        agentStore.saveWithSteps(parent, history);
+
+        log.infof(
+                "[DELEGATION] Captured sequential child %s for parent %s; parent is ready to synthesize",
+                childSessionId, parent.getSessionId());
+        return Optional.of(parentResume(parent, true));
+    }
+
+    private Optional<AgentCheckpoint> findActiveParent(String parentSessionId) {
+        Optional<AgentCheckpoint> awaiting = agentStore.findLatestAwaitingApproval(parentSessionId);
+        if (awaiting.isPresent()) {
+            return awaiting;
+        }
+        return agentStore
+                .findLatestCheckpoint(parentSessionId)
+                .filter(cp ->
+                        cp.getStatus() == CheckpointStatus.RESUMING || cp.getStatus() == CheckpointStatus.IN_PROGRESS);
+    }
+
+    private static ParentResume parentResume(AgentCheckpoint parent, boolean ready) {
+        return new ParentResume(
+                parent.getSessionId(),
+                parent.getAgentRole(),
+                parent.getChannelPlatformId(),
+                parent.getChannelPlatformId(),
+                parent.getChannelType(),
+                ready);
     }
 
     private List<ParallelToolCall> readCalls(String json) {

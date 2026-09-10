@@ -231,6 +231,9 @@ class PendingToolResumeExecutorTest {
         assertEquals("sandbox_exec", aa.toolName());
         assertEquals("s-cron", aa.sessionId());
         verify(checkpoint, Mockito.never()).setStatus(CheckpointStatus.COMPLETED);
+        verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
+        verify(agentStore).clearBatchResuming("s-cron");
+        verify(agentStore).saveWithSteps(eq(checkpoint), anyList());
     }
 
     @Test
