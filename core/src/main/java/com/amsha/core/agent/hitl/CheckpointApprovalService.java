@@ -300,8 +300,17 @@ public class CheckpointApprovalService {
             List<String> matches = new ArrayList<>();
             for (int i = 0; i < calls.size(); i++) {
                 ParallelToolCall call = calls.get(i);
-                if (requested.equalsIgnoreCase(call.toolName())) {
-                    matches.add(BatchDecisionUtil.decisionKey(call, i + 1, calls));
+                if (requested.equalsIgnoreCase(call.toolName()) || requested.equalsIgnoreCase(call.callId())) {
+                    String key = BatchDecisionUtil.decisionKey(call, i + 1, calls);
+                    if (decisions.containsKey(key)) {
+                        matches.add(key);
+                    } else if (call.callId() != null && decisions.containsKey(call.callId())) {
+                        // Checkpoints written before the tool-name key format
+                        // correction used call IDs for every invocation.
+                        matches.add(call.callId());
+                    } else if (decisions.containsKey(call.toolName())) {
+                        matches.add(call.toolName());
+                    }
                 }
             }
             if (matches.size() > 1) {

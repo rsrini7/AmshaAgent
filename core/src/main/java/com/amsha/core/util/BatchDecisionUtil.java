@@ -46,12 +46,17 @@ public final class BatchDecisionUtil {
     /** Matches checkpoint keying when a provider omitted call IDs. */
     public static String decisionKey(ParallelToolCall call, int index, List<ParallelToolCall> calls) {
         if (call == null) return null;
-        if (call.callId() != null && !call.callId().isBlank()) return call.callId();
         long sameName = calls == null
                 ? 1
                 : calls.stream()
                         .filter(candidate -> candidate != null && Objects.equals(candidate.toolName(), call.toolName()))
                         .count();
+        // Keep the persisted format user-facing for the normal case. A call ID
+        // is needed only when the same tool occurs more than once in a batch;
+        // otherwise a tool-name key is both backwards-compatible and what the
+        // approval commands expose to users.
+        if (sameName == 1) return call.toolName();
+        if (call.callId() != null && !call.callId().isBlank()) return call.callId();
         return sameName > 1 ? call.toolName() + "_" + index : call.toolName();
     }
 

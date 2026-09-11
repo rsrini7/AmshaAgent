@@ -114,8 +114,14 @@ class ParallelBatchResumeHandler {
             }
 
             String decisionKey = BatchDecisionUtil.decisionKey(call, i + 1, calls);
-            if (decisions.getOrDefault(decisionKey, decisions.getOrDefault(call.toolName(), ToolDecision.PENDING))
-                    == ToolDecision.DENIED) {
+            ToolDecision toolDecision = decisions.get(decisionKey);
+            if (toolDecision == null && call.callId() != null) {
+                toolDecision = decisions.get(call.callId());
+            }
+            if (toolDecision == null) {
+                toolDecision = decisions.getOrDefault(call.toolName(), ToolDecision.PENDING);
+            }
+            if (toolDecision == ToolDecision.DENIED) {
                 completed.add(call.withResult("User denied this tool execution.", false));
                 continue;
             }
