@@ -32,6 +32,7 @@ import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -349,8 +350,11 @@ public class CheckpointResumeHandler {
             return;
         }
 
-        if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
-            log.debugf("CheckpointResumeHandler: skipping async CLI notification for session %s", sessionId);
+        boolean isCli = (cType != null && ChannelType.CLI.id().equalsIgnoreCase(cType.id()))
+                || (sessionId != null && sessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX));
+        if (isCli) {
+            log.debugf("CheckpointResumeHandler: delivering async CLI result via bridge for session %s", sessionId);
+            cliResultBridge.complete(sessionId, result);
             return;
         }
 
@@ -389,8 +393,10 @@ public class CheckpointResumeHandler {
     }
 
     private void fallbackResultDispatch(String sessionId, AgentResult result, ChannelType cType) {
-        log.debugf("CheckpointResumeHandler: no sender for type %s", cType.id());
-        if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
+        log.debugf("CheckpointResumeHandler: no sender for type %s", cType != null ? cType.id() : "null");
+        boolean isCli = (cType != null && ChannelType.CLI.id().equalsIgnoreCase(cType.id()))
+                || (sessionId != null && sessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX));
+        if (isCli) {
             cliResultBridge.complete(sessionId, result);
         }
     }

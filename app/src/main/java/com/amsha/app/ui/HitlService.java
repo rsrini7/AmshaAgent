@@ -7,6 +7,7 @@ import jakarta.transaction.Transactional.TxType;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -19,6 +20,7 @@ import com.amsha.core.domain.model.CheckpointRecord;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
+import com.amsha.core.state.SessionTree;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -126,7 +128,46 @@ public class HitlService {
         List<String> visible = new ArrayList<>(heartbeatTracker.getSessionIdsByOwner(userId));
         visible.addAll(heartbeatTracker.getUnownedSessionIds());
         visible.removeIf(HitlService::isCronSession);
-        return visible.stream().distinct().toList();
+
+        for (CheckpointDto cp : checkpointStorePort.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name())) {
+            if (cp == null || cp.sessionId() == null || isCronSession(cp.sessionId())) {
+                continue;
+            }
+            String rootId = SessionTree.parentOf(cp.sessionId()).orElse(cp.sessionId());
+            Optional<String> owner = heartbeatTracker.getOwner(rootId);
+            if (owner != null && owner.isPresent()) {
+                if (owner.get().equals(userId) || "internal".equalsIgnoreCase(userId)) {
+                    visible.add(cp.sessionId());
+                    visible.add(rootId);
+                }
+            } else if ("internal".equalsIgnoreCase(userId)
+                    || heartbeatTracker.getUnownedSessionIds().contains(rootId)
+                    || rootId.startsWith(AgentSentinels.CLI_SESSION_PREFIX)
+                    || cp.sessionId().startsWith(AgentSentinels.CLI_SESSION_PREFIX)
+                    || owner == null
+                    || owner.isEmpty()) {
+                visible.add(cp.sessionId());
+                visible.add(rootId);
+            }
+        }
+
+        return expandWithActiveChildren(visible.stream().distinct().toList());
+    }
+
+    private List<String> expandWithActiveChildren(List<String> rootSessionIds) {
+        if (rootSessionIds == null || rootSessionIds.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> allSessionIds = new LinkedHashSet<>(rootSessionIds);
+        for (String rootId : rootSessionIds) {
+            List<CheckpointDto> treeCheckpoints = checkpointStorePort.findActiveBySessionTree(rootId);
+            for (CheckpointDto cp : treeCheckpoints) {
+                if (cp != null && cp.sessionId() != null) {
+                    allSessionIds.add(cp.sessionId());
+                }
+            }
+        }
+        return List.copyOf(allSessionIds);
     }
 
     private static boolean isCronSession(String sessionId) {
@@ -183,14 +224,29 @@ public class HitlService {
         if (requesterId == null || requesterId.isBlank() || "anonymous".equals(requesterId)) {
             throw new SecurityException("Authenticated user identity is required");
         }
-        Optional<String> owner = heartbeatTracker.getOwner(cp.getSessionId());
+        String rootSessionId = SessionTree.parentOf(cp.getSessionId()).orElse(cp.getSessionId());
+        if ("internal".equalsIgnoreCase(requesterId)) {
+            return;
+        }
+        Optional<String> owner = heartbeatTracker.getOwner(rootSessionId);
         if (owner != null && owner.isPresent()) {
             if (!requesterId.equals(owner.get())) {
                 throw new SecurityException("Approval does not belong to the authenticated user");
             }
             return;
         }
-        if (!heartbeatTracker.tryBindOwner(cp.getSessionId(), requesterId)) {
+        if (rootSessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX)
+                || cp.getSessionId().startsWith(AgentSentinels.CLI_SESSION_PREFIX)) {
+            heartbeatTracker.recordHeartbeat(rootSessionId);
+            heartbeatTracker.tryBindOwner(rootSessionId, requesterId);
+            return;
+        }
+        if (!heartbeatTracker.tryBindOwner(rootSessionId, requesterId)) {
+            if (checkpointStorePort.findLatestAwaitingApproval(rootSessionId).isPresent()) {
+                heartbeatTracker.recordHeartbeat(rootSessionId);
+                heartbeatTracker.tryBindOwner(rootSessionId, requesterId);
+                return;
+            }
             throw new SecurityException("Approval session is no longer active");
         }
     }

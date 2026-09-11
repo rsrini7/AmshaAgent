@@ -34,7 +34,6 @@ import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.MdcCleaner;
 import com.amsha.core.util.MdcKeys;
 import com.amsha.core.util.PreExecutionFilter;
-import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolCategory;
 import com.amsha.tool.api.ToolResponse;
@@ -386,10 +385,20 @@ public class ParallelToolStepExecutor {
             List<ParallelToolCall> calls) {
 
         Set<String> safeTools = preExecutableTools.map(HashSet::new).orElse(new HashSet<>());
-
-        AutonomyLevel autonomy = context.autonomyLevel();
-
-        PreExecutionFilter.SplitResult split = PreExecutionFilter.split(calls, autonomy, safeTools);
+        PreExecutionFilter.SplitResult split = PreExecutionFilter.split(
+                calls,
+                context.autonomyLevel(),
+                safeTools,
+                call -> guard.evaluate(
+                                context.sessionId(),
+                                context.agentRole(),
+                                context.autonomyLevel(),
+                                call.toolName(),
+                                call.params(),
+                                history,
+                                context.goal(),
+                                List.of())
+                        instanceof ToolInvocationGuard.GuardDecision.PauseForApproval);
 
         if (split.preExecutable().isEmpty()) {
             List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
@@ -420,7 +429,10 @@ public class ParallelToolStepExecutor {
         if (split.hitlPending().isEmpty()) {
             List<ParallelToolCall> completed = new ArrayList<>();
             for (ParallelToolCall call : calls) {
-                ToolResponse resp = preResults.get(call.toolName());
+                ToolResponse resp = preResults.get(resultKey(call));
+                if (resp == null) {
+                    resp = preResults.get(call.toolName());
+                }
                 if (resp != null) {
                     completed.add(call.withResult(resp.output(), resp.success()));
                 } else {

@@ -50,4 +50,17 @@ class PreExecutionFilterTest {
         assertTrue(result.preExecutable().isEmpty());
         assertTrue(result.hitlPending().isEmpty());
     }
+
+    @Test
+    void fullAutonomyWithMandatoryHitl_RequiresApproval() {
+        var calls = List.of(
+                new ParallelToolCall("c1", "serper_web_search", Map.of(), "{}", null, true),
+                new ParallelToolCall("c2", "safe_read", Map.of(), "{}", null, true));
+        var result = PreExecutionFilter.split(
+                calls, AutonomyLevel.FULL, Set.of("safe_read"), call -> "serper_web_search".equals(call.toolName()));
+        assertEquals(1, result.preExecutable().size());
+        assertEquals("safe_read", result.preExecutable().getFirst().toolName());
+        assertEquals(1, result.hitlPending().size());
+        assertEquals("serper_web_search", result.hitlPending().getFirst().toolName());
+    }
 }

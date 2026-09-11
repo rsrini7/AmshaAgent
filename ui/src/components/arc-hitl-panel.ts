@@ -23,12 +23,40 @@ export class ArcHitlPanel extends LitElement {
   @state() private _error: Record<string, string> = {};
   @state() private _statusUnknown = new Set<string>();
 
+  private _pollTimer?: number;
   private readonly _idempotencyKeys = new Map<string, string>();
   private readonly _lastActions = new Map<string, 'approved' | 'rejected'>();
+
+  override connectedCallback() {
+    super.connectedCallback();
+    this._pollTimer = window.setInterval(() => {
+      this.dispatchEvent(new CustomEvent('request-approvals-refresh', { bubbles: true, composed: true }));
+    }, 4000);
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._pollTimer) {
+      window.clearInterval(this._pollTimer);
+      this._pollTimer = undefined;
+    }
+  }
+
+  private _manualRefresh() {
+    this.dispatchEvent(new CustomEvent('request-approvals-refresh', { bubbles: true, composed: true }));
+  }
 
   static styles = css`
     :host { display: block; padding: var(--space-8); box-sizing: border-box; background: var(--bg-base); }
     h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-6); }
+    .header-row h2 { margin: 0; }
+    .btn-refresh {
+      background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-primary);
+      border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: var(--transition); display: flex; align-items: center; gap: 6px;
+    }
+    .btn-refresh:hover { border-color: var(--accent-secondary); color: var(--accent-secondary); }
     .empty { color: var(--text-muted); font-style: italic; font-size: 14px; }
     
     .card {
@@ -267,7 +295,10 @@ export class ArcHitlPanel extends LitElement {
   render() {
     return html`
       <div style="max-width: 1200px; margin: 0 auto;">
-        <h2>Pending Approvals (${this.approvals.length})</h2>
+        <div class="header-row">
+          <h2>Pending Approvals (${this.approvals.length})</h2>
+          <button class="btn-refresh" @click="${this._manualRefresh}" title="Refresh pending approvals">↻ Refresh</button>
+        </div>
         
         ${this.approvals.length === 0
           ? html`<p class="empty">✓ No pending approvals. All agents running autonomously.</p>`

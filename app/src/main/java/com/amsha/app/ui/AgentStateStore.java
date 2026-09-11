@@ -19,6 +19,9 @@ public class AgentStateStore {
     private final Map<String, AgentState> currentStates = new ConcurrentHashMap<>();
 
     public void onAgentStateChanged(@Observes AgentStateChangedEvent event) {
+        if (event.agentName() == null || "system".equalsIgnoreCase(event.agentName())) {
+            return;
+        }
         String key = event.sessionId() + ":" + event.agentName();
         currentStates.put(
                 key, new AgentState(event.agentName(), event.newStatus(), event.currentTask(), event.sessionId()));

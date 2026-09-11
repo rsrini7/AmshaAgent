@@ -371,6 +371,16 @@ export class ArcChatInterface extends LitElement {
       border-color: color-mix(in srgb, var(--accent-secondary) 55%, var(--border));
       background: color-mix(in srgb, var(--accent-secondary) 18%, var(--bg-base));
     }
+    .new-session-btn.stop-turn-btn {
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.12);
+      color: #ef4444;
+    }
+    .new-session-btn.stop-turn-btn:hover {
+      border-color: rgba(239, 68, 68, 0.6);
+      background: rgba(239, 68, 68, 0.22);
+    }
+
     @keyframes progress-bar-move {
       0% { transform: translateX(-120%); }
       100% { transform: translateX(260%); }
@@ -1795,7 +1805,7 @@ export class ArcChatInterface extends LitElement {
   }
 
   private _sendStop() {
-    if (!this._isTyping && !this._awaitingApproval) return;
+    if (!this._isTyping && !this._awaitingApproval && !this._turnStalled) return;
     this._ws?.send({ type: 'message', text: '/stop' });
     this._clearTurnWatchdog();
     this._isTyping = false;
@@ -1848,12 +1858,12 @@ export class ArcChatInterface extends LitElement {
      return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  public reconnect(): Promise<void> {
-    if (this._reconnectPromise) {
+  public reconnect(force = false): Promise<void> {
+    if (this._reconnectPromise && !force) {
       return this._reconnectPromise;
     }
 
-    const promise = this._reconnectInternal();
+    const promise = this._reconnectInternal(force);
     this._reconnectPromise = promise;
     promise.then(
       () => {
@@ -1870,13 +1880,13 @@ export class ArcChatInterface extends LitElement {
     return promise;
   }
 
-  private async _reconnectInternal(): Promise<void> {
-    if (this._connectPromise) {
+  private async _reconnectInternal(force = false): Promise<void> {
+    if (this._connectPromise && !force) {
       await this._connectPromise;
       return;
     }
 
-    if (this._ws && (this._connecting || this._wsStatus === 'connecting' || this._wsStatus === 'open')) {
+    if (!force && this._ws && (this._connecting || this._wsStatus === 'connecting' || this._wsStatus === 'open')) {
       return;
     }
 
@@ -1887,9 +1897,11 @@ export class ArcChatInterface extends LitElement {
     this._reconnectAttempts = 0;
     this._intentionalClose = false;
     this._isReconnecting = true;
+    this._turnStalled = false;
 
     const oldManager = this._ws;
     this._ws = null;
+    this._connecting = false;
     if (oldManager) {
       try {
         oldManager.disconnect();
@@ -1945,7 +1957,7 @@ export class ArcChatInterface extends LitElement {
                   <div class="progress-kicker">Live progress</div>
                   <div class="progress-phase">${phaseLabel}</div>
                 </div>
-                ${!this._sessionHalted && !this._turnStalled ? html`
+                ${!this._sessionHalted ? html`
                   <button class="progress-stop-btn" @click=${this._sendStop} title="Stop execution (/stop)">■ Stop</button>
                 ` : nothing}
               </div>
@@ -1967,12 +1979,13 @@ export class ArcChatInterface extends LitElement {
               ` : nothing}
               ${this._turnStalled ? html`
                 <div class="halt-actions" style="margin-top: 12px;">
-                  <button class="new-session-btn" @click=${() => this.reconnect()}>Reconnect</button>
+                  <button class="new-session-btn" @click=${() => this.reconnect(true)}>Reconnect</button>
                   <button
                     class="new-session-btn"
                     ?disabled=${this._statusChecking}
                     @click=${() => this._checkStalledTurn()}
                   >${this._statusChecking ? 'Checking…' : 'Check status'}</button>
+                  <button class="new-session-btn stop-turn-btn" @click=${this._sendStop}>■ Stop</button>
                 </div>
               ` : nothing}
             </div>

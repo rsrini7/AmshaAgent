@@ -8,6 +8,7 @@ import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.event.EventTypeCatalog;
+import com.amsha.core.state.SessionTree;
 import com.amsha.tool.api.AgentSentinels;
 
 import org.jboss.logging.Logger;
@@ -72,20 +73,26 @@ public class LoopExitPublisher {
     // -------------------------------------------------------------------------
 
     private void fireStateEvent(String sessionId, String agentRole, String goal, AgentResult result) {
-        // Delegate sub-sessions have no UI observer - skip silently.
+        String effectiveSessionId = sessionId;
         if (sessionId != null && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
-            return;
+            if (result instanceof AgentResult.AwaitingApproval) {
+                effectiveSessionId = SessionTree.parentOf(sessionId).orElse(sessionId);
+            } else {
+                // Delegate sub-sessions have no UI observer - skip silently.
+                return;
+            }
         }
 
         String status = toWireStatus(result);
         try {
             eventBus.publish(
                     EventTypeCatalog.AGENT_STATE_CHANGED,
-                    new AgentStateChangedEvent(sessionId, agentRole, status, goal));
+                    new AgentStateChangedEvent(effectiveSessionId, agentRole, status, goal));
         } catch (Exception e) {
             // CDI observer failures must never corrupt the result pipeline.
             log.warnf(
-                    "LoopExitPublisher: stateChangedEvent fire failed for session %s - %s", sessionId, e.getMessage());
+                    "LoopExitPublisher: stateChangedEvent fire failed for session %s - %s",
+                    effectiveSessionId, e.getMessage());
         }
     }
 
@@ -96,18 +103,18 @@ public class LoopExitPublisher {
         // Approval pauses are handled by the HITL path, not the CLI bridge. Mark the
         // session as awaiting approval so a later completion is allowed to buffer/signal
         // the bridge (and stale normal-turn results are not replayed).
+        boolean isCli = (context.channelType() != null && ChannelType.CLI.id().equalsIgnoreCase(context.channelType()))
+                || (context.sessionId() != null && context.sessionId().startsWith(AgentSentinels.CLI_SESSION_PREFIX));
+        if (!isCli) return;
+
         if (result instanceof AgentResult.AwaitingApproval) {
             // The bridge is CLI-only; only mark a pending approval for CLI sessions.
             // Web/Telegram deliver the approval and its result through their own senders.
-            if (ChannelType.CLI.id().equalsIgnoreCase(context.channelType())) {
-                cliResultBridge.markAwaitingApproval(context.sessionId());
-            }
+            cliResultBridge.markAwaitingApproval(context.sessionId());
             return;
         }
 
-        if (ChannelType.CLI.id().equalsIgnoreCase(context.channelType())) {
-            cliResultBridge.complete(context.sessionId(), result);
-        }
+        cliResultBridge.complete(context.sessionId(), result);
     }
 
     /**

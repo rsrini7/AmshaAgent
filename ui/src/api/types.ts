@@ -1,5 +1,6 @@
 export interface PendingApprovalDto {
   taskId: string;
+  sessionId?: string;
   toolName: string;
   params: Record<string, unknown>;
   requestedAt: string;

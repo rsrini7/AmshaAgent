@@ -1,6 +1,7 @@
 package com.amsha.core.agent.loop;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.time.Instant;
@@ -9,7 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.channel.api.AttachmentType;
+import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
@@ -20,13 +23,17 @@ import com.amsha.core.agent.trace.TracePublisher;
 import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
+import com.amsha.core.event.DomainEventBus;
+import com.amsha.core.event.EventTypeCatalog;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.pipeline.TurnDispatchService;
+import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.llm.api.ToolCallJsonKeys;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.RiskLevel;
+import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,23 +53,26 @@ public class ApprovalCheckpointManager {
     private final ObjectMapper objectMapper;
     private final AgentSseService agentSseService;
     private final TracePublisher tracePublisher;
+    private final Instance<DomainEventBus> eventBusInstance;
 
     @Inject
     public ApprovalCheckpointManager(
             StatefulAgentStore agentStore,
             AgentSseService agentSseService,
             ObjectMapper objectMapper,
-            TracePublisher tracePublisher) {
+            TracePublisher tracePublisher,
+            Instance<DomainEventBus> eventBusInstance) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.objectMapper = objectMapper;
         this.tracePublisher = tracePublisher;
+        this.eventBusInstance = eventBusInstance;
     }
 
-    /** Visible for tests that do not require trace publishing. */
+    /** Visible for tests that do not require trace publishing or event bus. */
     public ApprovalCheckpointManager(
             StatefulAgentStore agentStore, AgentSseService agentSseService, ObjectMapper objectMapper) {
-        this(agentStore, agentSseService, objectMapper, null);
+        this(agentStore, agentSseService, objectMapper, null, null);
     }
 
     public void save(AgentCheckpoint cp) {
@@ -124,10 +134,7 @@ public class ApprovalCheckpointManager {
         cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(Instant.now());
 
-        if (context.hasChannelInfo()) {
-            cp.setChannelType(context.channelType());
-            cp.setChannelPlatformId(context.channelPlatformId());
-        }
+        stampChannelInfo(cp, context, channelType, channelPlatformId);
         populateContextData(cp, context);
 
         // Save checkpoint metadata and reasoning steps in one atomic store write.
@@ -138,9 +145,10 @@ public class ApprovalCheckpointManager {
                         + "(channel=%s platformId=%s, risk=%s)",
                 sessionId, toolName, channelType, channelPlatformId, frame.riskLevel());
 
-        // SSE HitlEvent is always sent for UI/Web tracking
-        agentSseService.publish(
+        // SSE HitlEvent is always sent for UI/Web tracking (published to session and parent session tree)
+        publishHitlEvent(
                 sessionId,
+                agentRole,
                 new AgentSseService.HitlEvent(
                         sessionId,
                         HitlEventType.AWAITING_APPROVAL.wireValue(),
@@ -266,10 +274,7 @@ public class ApprovalCheckpointManager {
         cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(Instant.now());
 
-        if (context.hasChannelInfo()) {
-            cp.setChannelType(context.channelType());
-            cp.setChannelPlatformId(context.channelPlatformId());
-        }
+        stampChannelInfo(cp, context, channelType, channelPlatformId);
         populateContextData(cp, context);
 
         // 3. Save
@@ -277,9 +282,10 @@ public class ApprovalCheckpointManager {
 
         log.infof("STATE-MACHINE Pausing session %s for parallel batch approval: %s", sessionId, compositeName);
 
-        // 4. Notify UI via SSE
-        agentSseService.publish(
+        // 4. Notify UI via SSE (published to session and parent session tree)
+        publishHitlEvent(
                 sessionId,
+                agentRole,
                 new AgentSseService.HitlEvent(
                         sessionId,
                         HitlEventType.AWAITING_APPROVAL.wireValue(),
@@ -361,10 +367,7 @@ public class ApprovalCheckpointManager {
         cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(Instant.now());
 
-        if (context.hasChannelInfo()) {
-            cp.setChannelType(context.channelType());
-            cp.setChannelPlatformId(context.channelPlatformId());
-        }
+        stampChannelInfo(cp, context, channelType, channelPlatformId);
         populateContextData(cp, context);
 
         agentStore.saveWithSteps(cp, history);
@@ -373,8 +376,9 @@ public class ApprovalCheckpointManager {
                 "STATE-MACHINE Pausing session %s for parallel batch approval (with %d pre-executed): %s",
                 sessionId, results.size(), compositeName);
 
-        agentSseService.publish(
+        publishHitlEvent(
                 sessionId,
+                agentRole,
                 new AgentSseService.HitlEvent(
                         sessionId,
                         HitlEventType.AWAITING_APPROVAL.wireValue(),
@@ -433,5 +437,48 @@ public class ApprovalCheckpointManager {
                 .withStatus("HITL_REQUIRED")
                 .withDetail(toolName)
                 .withRiskLevel(riskLevel));
+    }
+
+    private void stampChannelInfo(
+            AgentCheckpoint cp, AgentExecutionContext context, String channelType, String channelPlatformId) {
+        String type = (context != null
+                        && context.channelType() != null
+                        && !context.channelType().isBlank())
+                ? context.channelType()
+                : channelType;
+        String platformId = (context != null
+                        && context.channelPlatformId() != null
+                        && !context.channelPlatformId().isBlank())
+                ? context.channelPlatformId()
+                : channelPlatformId;
+
+        if (type == null
+                && cp.getSessionId() != null
+                && cp.getSessionId().startsWith(AgentSentinels.CLI_SESSION_PREFIX)) {
+            type = ChannelType.CLI.id();
+        }
+        if (platformId == null && ChannelType.CLI.id().equalsIgnoreCase(type)) {
+            platformId = "cli";
+        }
+
+        if (type != null && !type.isBlank()) {
+            cp.setChannelType(type);
+        }
+        if (platformId != null && !platformId.isBlank()) {
+            cp.setChannelPlatformId(platformId);
+        }
+    }
+
+    private void publishHitlEvent(String sessionId, String agentRole, AgentSseService.HitlEvent event) {
+        agentSseService.publish(sessionId, event);
+        SessionTree.parentOf(sessionId).ifPresent(parent -> agentSseService.publish(parent, event));
+        if (eventBusInstance != null && eventBusInstance.isResolvable()) {
+            String role = (agentRole != null && !agentRole.isBlank()) ? agentRole : "coordinator";
+            eventBusInstance
+                    .get()
+                    .publish(
+                            EventTypeCatalog.AGENT_STATE_CHANGED,
+                            new AgentStateChangedEvent(sessionId, role, "waiting-approval", event.toolName()));
+        }
     }
 }

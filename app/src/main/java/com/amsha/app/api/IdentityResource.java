@@ -78,6 +78,12 @@ public class IdentityResource {
 
         Optional<IdentityUserDto> userOpt = identityStore.findUserById(userId);
         if (userOpt.isEmpty()) {
+            if ("internal".equalsIgnoreCase(userId)
+                    || (securityContext != null && securityContext.isUserInRole("internal"))) {
+                Instant epoch = Instant.EPOCH;
+                IdentityUserDto internalUser = new IdentityUserDto(userId, "System Operator", "ACTIVE", epoch, epoch);
+                return Response.ok(new MeResponse(internalUser, List.of())).build();
+            }
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(new ErrorResponse("USER_NOT_FOUND", "User profile not found."))
                     .build();

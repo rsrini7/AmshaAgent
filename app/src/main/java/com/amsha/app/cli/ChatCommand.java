@@ -43,6 +43,7 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.fusesource.jansi.AnsiConsole;
@@ -149,7 +150,10 @@ public class ChatCommand implements Runnable {
                     .orElseGet(() -> sessionCatalogService.createSession(cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID));
         } else {
             sessionId = sessionCatalogService.registerOrResumeSession(
-                    "cli-" + UUID.randomUUID(), cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID);
+                    AgentSentinels.CLI_SESSION_PREFIX + UUID.randomUUID(),
+                    cliUserId,
+                    ChannelType.CLI.id(),
+                    CLI_CHAT_ID);
         }
         this.currentCliSessionId = sessionId;
 
@@ -378,6 +382,7 @@ public class ChatCommand implements Runnable {
                     AutonomyLevel.SUPERVISED,
                     canonicalRole(role),
                     ChannelType.CLI.id(),
+                    CLI_CHAT_ID,
                     () -> turnDispatchService.dispatch(new TurnRequest(
                             message,
                             CLI_CHAT_ID,
@@ -388,6 +393,7 @@ public class ChatCommand implements Runnable {
                     .map(AgentResult.AwaitingApproval.class::isInstance)
                     .orElse(false);
             if (hitlPending) {
+                cliResultBridge.markAwaitingApproval(sessionId);
                 waitForHitlResult(sessionId, cliResultBridge.register(sessionId));
             }
             if (input.startsWith("/approve") || input.startsWith("/deny")) {

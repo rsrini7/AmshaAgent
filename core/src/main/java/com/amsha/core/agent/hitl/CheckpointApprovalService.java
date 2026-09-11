@@ -7,10 +7,13 @@ import jakarta.transaction.Transactional;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.agent.sse.AgentSseService;
@@ -19,11 +22,14 @@ import com.amsha.core.agent.trace.StationCode;
 import com.amsha.core.agent.trace.TracePublisher;
 import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.event.DomainEventBus;
+import com.amsha.core.event.EventTypeCatalog;
 import com.amsha.core.hitl.ApprovalLeaseStore;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -50,6 +56,7 @@ public class CheckpointApprovalService {
     private final ObjectMapper objectMapper;
     private final Instance<CheckpointResumeHandler> resumeHandlerInstance;
     private final TracePublisher tracePublisher;
+    private final Instance<DomainEventBus> eventBusInstance;
 
     @Inject
     ApprovalLeaseStore approvalLeaseStore;
@@ -60,21 +67,33 @@ public class CheckpointApprovalService {
             AgentSseService agentSseService,
             ObjectMapper objectMapper,
             Instance<CheckpointResumeHandler> resumeHandlerInstance,
-            TracePublisher tracePublisher) {
+            TracePublisher tracePublisher,
+            Instance<DomainEventBus> eventBusInstance) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.objectMapper = objectMapper;
         this.resumeHandlerInstance = resumeHandlerInstance;
         this.tracePublisher = tracePublisher;
+        this.eventBusInstance = eventBusInstance;
     }
 
-    /** Visible for tests that do not require trace publishing. */
+    /** Visible for tests that do not require trace publishing or event bus. */
     public CheckpointApprovalService(
             StatefulAgentStore agentStore,
             AgentSseService agentSseService,
             ObjectMapper objectMapper,
             Instance<CheckpointResumeHandler> resumeHandlerInstance) {
-        this(agentStore, agentSseService, objectMapper, resumeHandlerInstance, null);
+        this(agentStore, agentSseService, objectMapper, resumeHandlerInstance, null, null);
+    }
+
+    /** Visible for tests that do not require event bus. */
+    public CheckpointApprovalService(
+            StatefulAgentStore agentStore,
+            AgentSseService agentSseService,
+            ObjectMapper objectMapper,
+            Instance<CheckpointResumeHandler> resumeHandlerInstance,
+            TracePublisher tracePublisher) {
+        this(agentStore, agentSseService, objectMapper, resumeHandlerInstance, tracePublisher, null);
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
@@ -194,12 +213,19 @@ public class CheckpointApprovalService {
 
     private Map<String, ToolDecision> readDecisions(AgentCheckpoint cp, String operation) {
         String json = cp.getBatchToolDecisions();
-        if (json == null || json.isBlank()) {
-            Map<String, ToolDecision> fallback = new LinkedHashMap<>();
-            if (cp.getPendingToolName() != null && !cp.getPendingToolName().isBlank()) {
-                fallback.put(cp.getPendingToolName(), ToolDecision.PENDING);
+        if (json != null && json.isBlank()) {
+            throw new CheckpointResolutionException("Approval state cannot be resolved safely", 409);
+        }
+        if (json == null) {
+            if (operation != null && operation.contains("ALL")) {
+                throw new CheckpointResolutionException("Approval state cannot be resolved safely", 409);
             }
-            return fallback;
+            if (cp.getPendingToolName() != null && !cp.getPendingToolName().isBlank()) {
+                Map<String, ToolDecision> fallback = new LinkedHashMap<>();
+                fallback.put(cp.getPendingToolName(), ToolDecision.PENDING);
+                return fallback;
+            }
+            return new LinkedHashMap<>();
         }
         try {
             Map<String, ToolDecision> parsed = objectMapper.readValue(json, new TypeReference<>() {});
@@ -289,6 +315,18 @@ public class CheckpointApprovalService {
                         reason,
                         Instant.now()));
 
+        if (eventBusInstance != null && eventBusInstance.isResolvable()) {
+            eventBusInstance
+                    .get()
+                    .publish(
+                            EventTypeCatalog.AGENT_STATE_CHANGED,
+                            new AgentStateChangedEvent(
+                                    cp.getSessionId(),
+                                    cp.getAgentRole(),
+                                    type.wireValue().toLowerCase(Locale.ROOT),
+                                    toolName != null ? toolName : cp.getPendingToolName()));
+        }
+
         if (tracePublisher != null) {
             String resolvedToolName = toolName != null ? toolName : cp.getPendingToolName();
             tracePublisher.publish(TracePublisher.newEvent(cp.getSessionId(), TraceStage.HITL_RESOLVED)
@@ -335,12 +373,18 @@ public class CheckpointApprovalService {
         try {
             if (resumeHandlerInstance.isResolvable()) {
                 CheckpointResumeHandler handler = resumeHandlerInstance.get();
+                String effectiveChannelType = latest.getChannelType();
+                if ((effectiveChannelType == null || effectiveChannelType.isBlank())
+                        && latest.getSessionId() != null
+                        && latest.getSessionId().startsWith(AgentSentinels.CLI_SESSION_PREFIX)) {
+                    effectiveChannelType = ChannelType.CLI.id();
+                }
                 accepted = handler.resumeAfterBatchDecision(
                         latest.getSessionId(),
                         latest.getAgentRole(),
                         latest.getChannelPlatformId() != null ? latest.getChannelPlatformId() : "unknown",
                         latest.getChannelPlatformId() != null ? latest.getChannelPlatformId() : latest.getSessionId(),
-                        latest.getChannelType() != null ? latest.getChannelType() : "websocket");
+                        effectiveChannelType != null ? effectiveChannelType : "websocket");
             } else {
                 log.warnf(
                         "HITL-RESUME: no CheckpointResumeHandler is resolvable for session %s", latest.getSessionId());
@@ -362,6 +406,14 @@ public class CheckpointApprovalService {
                         null,
                         null,
                         Instant.now()));
+
+        if (eventBusInstance != null && eventBusInstance.isResolvable()) {
+            eventBusInstance
+                    .get()
+                    .publish(
+                            EventTypeCatalog.AGENT_STATE_CHANGED,
+                            new AgentStateChangedEvent(latest.getSessionId(), latest.getAgentRole(), "resumed", ""));
+        }
         return true;
     }
 }
