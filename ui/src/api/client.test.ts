@@ -115,6 +115,26 @@ describe('bounded HITL requests', () => {
     expect(request.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it('sends toolName in approval request body when specified', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: 'approved', taskId: 'task-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new ArcClient('/api/v1').approveHitl('task-1', 'approve', {
+      toolName: 'browser_navigate',
+    });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(request.body as string)).toEqual({
+      reason: 'approve',
+      toolName: 'browser_navigate',
+    });
+  });
+
   it('aborts a stalled approval request instead of waiting indefinitely', async () => {
     vi.useFakeTimers();
     let requestSignal: AbortSignal | null | undefined;

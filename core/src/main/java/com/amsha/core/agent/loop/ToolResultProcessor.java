@@ -4,15 +4,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.message.UserMessages;
+import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -151,15 +150,10 @@ public class ToolResultProcessor {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static Map<String, Object> parsePausedParams(String paramsJson) {
-        if (paramsJson == null || paramsJson.isBlank() || "{}".equals(paramsJson.trim())) {
-            return Map.of();
-        }
-        try {
-            return MAPPER.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            log.warnf("Failed to parse delegated approval parameters: %s", LogUtil.rootMessage(e));
+        if (!BatchDecisionUtil.isValidBatchParamsJson(paramsJson, MAPPER)) {
             return null;
         }
+        return BatchDecisionUtil.parseBatchDisplayParams(paramsJson, MAPPER);
     }
 
     private StepDecision handleDelegateOutcome(

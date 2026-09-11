@@ -9,8 +9,8 @@ import java.util.Optional;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.message.UserMessages;
+import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.tool.api.ToolResponse;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -34,7 +34,10 @@ final class DelegatedParallelPauseSupport {
                 continue;
             }
             try {
-                Map<String, Object> params = objectMapper.readValue(paramsJson, new TypeReference<>() {});
+                if (!BatchDecisionUtil.isValidBatchParamsJson(paramsJson, objectMapper)) {
+                    continue;
+                }
+                Map<String, Object> params = BatchDecisionUtil.parseBatchDisplayParams(paramsJson, objectMapper);
                 return Optional.of(new Pause(call, toolName, params));
             } catch (Exception e) {
                 log.warnf("[PARALLEL] Invalid delegated pause payload: %s", LogUtil.rootMessage(e));

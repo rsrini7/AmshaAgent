@@ -151,6 +151,7 @@ export interface McpApprovalExecution<T = McpConnection | McpDiscoveryPreview> {
 
 export interface HitlRequestOptions {
   idempotencyKey?: string;
+  toolName?: string;
   signal?: AbortSignal;
 }
 
@@ -289,13 +290,17 @@ export class ArcClient {
     options?: HitlRequestOptions | string,
   ): Promise<ApprovalResultDto> {
     const requestOptions = ArcClient.hitlOptions(options);
+    const body: Record<string, unknown> = { reason };
+    if (requestOptions.toolName) {
+      body.toolName = requestOptions.toolName;
+    }
     return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/approve`, {
       method: 'POST',
       headers: requestOptions.idempotencyKey
         ? { 'X-Idempotency-Key': requestOptions.idempotencyKey }
         : {},
       signal: requestOptions.signal,
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(body),
     }, ArcClient.HITL_REQUEST_TIMEOUT_MS);
   }
 
@@ -305,13 +310,17 @@ export class ArcClient {
     options?: HitlRequestOptions | string,
   ): Promise<ApprovalResultDto> {
     const requestOptions = ArcClient.hitlOptions(options);
+    const body: Record<string, unknown> = { reason: reason || 'Rejected by user' };
+    if (requestOptions.toolName) {
+      body.toolName = requestOptions.toolName;
+    }
     return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/reject`, {
       method: 'POST',
       headers: requestOptions.idempotencyKey
         ? { 'X-Idempotency-Key': requestOptions.idempotencyKey }
         : {},
       signal: requestOptions.signal,
-      body: JSON.stringify({ reason: reason || 'Rejected by user' }),
+      body: JSON.stringify(body),
     }, ArcClient.HITL_REQUEST_TIMEOUT_MS);
   }
 

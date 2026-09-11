@@ -9,6 +9,8 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.event.EventTypeCatalog;
 import com.amsha.core.state.SessionTree;
+import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.tool.api.AgentSentinels;
 
 import org.jboss.logging.Logger;
@@ -43,6 +45,9 @@ public class LoopExitPublisher {
     @Inject
     CliResultBridge cliResultBridge;
 
+    @Inject
+    StatefulAgentStore agentStore;
+
     /**
      * Publish the initial loop start signal.
      * Called by {@link AgentStateMachineRunner} exactly once per {@code run()} invocation.
@@ -75,15 +80,15 @@ public class LoopExitPublisher {
     private void fireStateEvent(String sessionId, String agentRole, String goal, AgentResult result) {
         String effectiveSessionId = sessionId;
         if (sessionId != null && sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)) {
-            if (result instanceof AgentResult.AwaitingApproval) {
+            // Approval pauses belong to the child so the UI can show exactly which
+            // delegated worker is blocked. Once the child finishes, retain the
+            // historical parent-session terminal event used by the coordinator UI.
+            if (!(result instanceof AgentResult.AwaitingApproval)) {
                 effectiveSessionId = SessionTree.parentOf(sessionId).orElse(sessionId);
-            } else {
-                // Delegate sub-sessions have no UI observer - skip silently.
-                return;
             }
         }
 
-        String status = toWireStatus(result);
+        String status = delegatedChildWaiting(sessionId, result) ? "waiting-delegate" : toWireStatus(result);
         try {
             eventBus.publish(
                     EventTypeCatalog.AGENT_STATE_CHANGED,
@@ -94,6 +99,18 @@ public class LoopExitPublisher {
                     "LoopExitPublisher: stateChangedEvent fire failed for session %s - %s",
                     effectiveSessionId, e.getMessage());
         }
+    }
+
+    private boolean delegatedChildWaiting(String sessionId, AgentResult result) {
+        if (!(result instanceof AgentResult.AwaitingApproval)
+                || sessionId == null
+                || sessionId.contains(AgentSentinels.DELEGATE_SESSION_SENTINEL)
+                || agentStore == null) return false;
+        return agentStore.findActiveCheckpointsInSessionTree(sessionId).stream()
+                .anyMatch(cp -> cp != null
+                        && cp.getSessionId() != null
+                        && SessionTree.isDelegatedChild(sessionId, cp.getSessionId())
+                        && cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL);
     }
 
     private void signalBridgeIfCli(AgentExecutionContext context, AgentResult result) {

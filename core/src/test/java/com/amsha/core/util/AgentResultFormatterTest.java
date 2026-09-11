@@ -91,4 +91,31 @@ class AgentResultFormatterTest {
         String formatted = AgentResultFormatter.format(finished);
         assertEquals("[HTML artifact generated - open the browser preview to view it.]", formatted);
     }
+
+    @Test
+    void testFormatAwaitingApproval_pipeDelimitedBatch() {
+        AgentResult awaiting =
+                AgentResult.awaitingApproval("parallel|web_fetch|serper_web_search", "{}", "sess-1", List.of());
+        String formatted = AgentResultFormatter.format(awaiting);
+        assertTrue(formatted.contains("• web_fetch"));
+        assertTrue(formatted.contains("• serper_web_search"));
+        assertTrue(!formatted.contains("• web_fetch|serper_web_search"));
+    }
+
+    @Test
+    void testFormatAwaitingApproval_commaDelimitedBatch() {
+        AgentResult awaiting =
+                AgentResult.awaitingApproval("parallel|web_fetch,serper_web_search", "{}", "sess-1", List.of());
+        String formatted = AgentResultFormatter.format(awaiting);
+        assertTrue(formatted.contains("• web_fetch"));
+        assertTrue(formatted.contains("• serper_web_search"));
+        assertTrue(!formatted.contains("• web_fetch,serper_web_search"));
+    }
+
+    @Test
+    void testFormatHitlPrompt() {
+        String prompt = AgentResultFormatter.formatHitlPrompt("parallel|browser_navigate", null, "sess-1", false);
+        assertTrue(prompt.contains("• browser_navigate"));
+        assertTrue(prompt.contains("/approve <toolName>"));
+    }
 }

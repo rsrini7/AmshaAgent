@@ -7,10 +7,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -240,11 +242,24 @@ public class ParallelToolCallCollapser {
             int inputTokens,
             int outputTokens) {
         List<ParallelToolCall> calls = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
         for (int i = 0; i < requests.size(); i++) {
             ToolExecutionRequest req = requests.get(i);
             String name = ReasoningStepParserUtils.sanitizeToolName(req.name());
             String callId = req.id() != null ? req.id() : name + "-" + UUID.randomUUID();
             Map<String, Object> params = deserializeParams(sessionId, name, req.arguments());
+            // Collapse the LLM's habitual double-emit of a web tool: two parallel calls of the
+            // same tool with the same target identity (e.g. an identical search query or URL) are
+            // redundant and become one call, while distinct targets are preserved. Tools without a
+            // known identity key fall back to full-parameter equality (prior behaviour).
+            String target = identityKeyOf(name, params);
+            String signature = name + "\u0000" + target;
+            if (!seen.add(signature)) {
+                log.warnf(
+                        "[PARALLEL-TOOLS] session=%s: dropping duplicate parallel tool call '%s' (target=%s)",
+                        sessionId, name, target);
+                continue;
+            }
             String paramsJson = "{}";
             try {
                 paramsJson = objectMapper.writeValueAsString(params);
@@ -252,6 +267,12 @@ public class ParallelToolCallCollapser {
                 log.warnf("Failed to serialize params for tool %s: %s", name, LogUtil.rootMessage(e));
             }
             calls.add(ParallelToolCall.pending(callId, name, params, paramsJson));
+        }
+
+        if (calls.size() == 1) {
+            ParallelToolCall single = calls.getFirst();
+            return ReasoningStep.pending(
+                    aiMessage.text(), single.toolName(), single.params(), inputTokens, outputTokens);
         }
 
         Map<String, Object> batchPayload;
@@ -267,6 +288,32 @@ public class ParallelToolCallCollapser {
         }
 
         return ReasoningStep.parallelBatch(aiMessage.text(), batchPayload, inputTokens, outputTokens);
+    }
+
+    /**
+     * The parameter that uniquely identifies the work a tool performs. Two parallel calls of the
+     * same tool sharing this value are redundant (LLM double-emit); calls with distinct values are
+     * distinct work. Unknown tools fall back to full-parameter equality.
+     */
+    private static final Map<String, List<String>> IDENTITY_KEYS = Map.of(
+            "serper_web_search", List.of("query", "q"),
+            "brave_web_search", List.of("query", "q"),
+            "web_fetch", List.of("url", "link", "uri"),
+            "browser_navigate", List.of("url", "targetUrl", "uri", "link"));
+
+    private String identityKeyOf(String toolName, Map<String, Object> params) {
+        for (String candidate : IDENTITY_KEYS.getOrDefault(toolName, List.of())) {
+            Object value = params.get(candidate);
+            if (value != null) {
+                return String.valueOf(value);
+            }
+        }
+        // Fallback: full-parameter equality (preserves prior behaviour for all other tools).
+        try {
+            return objectMapper.writeValueAsString(params);
+        } catch (Exception e) {
+            return String.valueOf(params.hashCode());
+        }
     }
 
     private boolean isSelfEvolveStatusAction(String sessionId, ToolExecutionRequest request) {

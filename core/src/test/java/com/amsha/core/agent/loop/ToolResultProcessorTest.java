@@ -257,6 +257,31 @@ class ToolResultProcessorTest {
     }
 
     @Test
+    void resolveOutcome_DelegatePausedWithBatchArrayParams_PropagatesParamsToApprovalFrame() {
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
+        String batchJson = """
+                [
+                  {"toolName":"serper_web_search","params":{"query":"spring boot lts"}},
+                  {"toolName":"serper_web_search","params":{"query":"quarkus lts"}}
+                ]
+                """;
+        String pausedMsg =
+                UserMessages.delegationPaused("saraswati", "parallel|serper_web_search,serper_web_search", batchJson);
+        assertTrue(pausedMsg.contains(UserMessages.DELEGATION_PAUSED_MARKER));
+        var res = ToolResponse.success(pausedMsg);
+
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, pausedMsg, step, List.of(), 0);
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertInstanceOf(AgentResult.AwaitingApproval.class, decision.result());
+        var aa = (AgentResult.AwaitingApproval) decision.result();
+        assertEquals("parallel|serper_web_search,serper_web_search", aa.toolName());
+        assertNotNull(aa.frame().params().get("1. serper_web_search"));
+        assertNotNull(aa.frame().params().get("2. serper_web_search"));
+    }
+
+    @Test
     void resolveOutcome_DelegatePausedLegacyFailureShape_TriggersTerminal() {
         // Legacy failure(409) shape must keep terminating as well.
         var ctx = ctx();

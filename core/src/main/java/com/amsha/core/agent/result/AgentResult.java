@@ -1,6 +1,5 @@
 package com.amsha.core.agent.result;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -9,9 +8,9 @@ import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.governance.ApprovalParameterSanitizer;
+import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.security.api.RiskLevel;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -81,10 +80,7 @@ public sealed interface AgentResult
         @JsonIgnore
         public String rawParamsJson() {
             try {
-                // Ideally we'd use a shared ObjectMapper, but for this DTO compatibility
-                // we use a fresh one if not provided. In production, this DTO
-                // should be refactored to NOT expose paramsJson.
-                return new ObjectMapper().writeValueAsString(frame.params());
+                return MAPPER.writeValueAsString(frame.params());
             } catch (Exception e) {
                 log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
                 return "{}";
@@ -126,14 +122,11 @@ public sealed interface AgentResult
         return new StructuredFinished(answer, structured, steps, sumIn(steps), sumOut(steps));
     }
 
+    ObjectMapper MAPPER = new ObjectMapper();
+
     static AgentResult awaitingApproval(
             String toolName, String paramsJson, String sessionId, List<ReasoningStep> steps) {
-        Map<String, Object> params = Collections.emptyMap();
-        try {
-            params = new ObjectMapper().readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
-        }
+        Map<String, Object> params = BatchDecisionUtil.parseBatchDisplayParams(paramsJson, MAPPER);
         return awaitingApproval(new ApprovalFrame(toolName, params, RiskLevel.MEDIUM), sessionId, steps);
     }
 

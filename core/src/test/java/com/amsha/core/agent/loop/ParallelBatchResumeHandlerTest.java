@@ -56,8 +56,10 @@ class ParallelBatchResumeHandlerTest {
         when(guard.evaluate(anyString(), anyString(), any(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
-                .thenReturn(ToolResponse.success(
-                        UserMessages.delegationPaused("saraswati", "web_fetch", "{\"url\":\"https://example.com\"}")));
+                .thenReturn(ToolResponse.success(UserMessages.delegationPaused(
+                        "saraswati",
+                        "web_fetch",
+                        "[{\"toolName\":\"web_fetch\",\"params\":{\"url\":\"https://example.com\"}}]")));
 
         ParallelBatchResumeHandler handler =
                 new ParallelBatchResumeHandler(agentStore, toolRegistry, mapper, delegationResolver, guard);

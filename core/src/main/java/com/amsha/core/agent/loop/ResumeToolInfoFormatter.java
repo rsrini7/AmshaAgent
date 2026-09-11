@@ -29,10 +29,12 @@ public final class ResumeToolInfoFormatter {
 
         if (checkpoint.isParallelBatch()) {
             String[] tools = toolName.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
-                    .split(",", -1);
+                    .split("[|,]", -1);
             Map<String, Integer> counts = new LinkedHashMap<>();
             for (String t : tools) {
-                counts.put(t, counts.getOrDefault(t, 0) + 1);
+                if (!t.isBlank()) {
+                    counts.put(t, counts.getOrDefault(t, 0) + 1);
+                }
             }
             boolean first = true;
             for (Map.Entry<String, Integer> e : counts.entrySet()) {

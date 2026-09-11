@@ -42,6 +42,14 @@ class ChannelCommandParseTest {
     }
 
     @Test
+    void parseApproveAll() {
+        ChannelCommand cmd = ChannelCommand.parse("/approve all");
+        assertInstanceOf(ChannelCommand.Approve.class, cmd);
+        assertTrue(((ChannelCommand.Approve) cmd).targetId().isEmpty());
+        assertTrue(((ChannelCommand.Approve) cmd).toolName().isEmpty());
+    }
+
+    @Test
     void parseDenyWithNoCronId() {
         ChannelCommand cmd = ChannelCommand.parse("/deny");
         assertInstanceOf(ChannelCommand.Deny.class, cmd);
@@ -63,6 +71,14 @@ class ChannelCommandParseTest {
         assertInstanceOf(ChannelCommand.Deny.class, cmd);
         assertTrue(((ChannelCommand.Deny) cmd).targetId().isEmpty());
         assertEquals(Optional.of("manage_schedule"), ((ChannelCommand.Deny) cmd).toolName());
+    }
+
+    @Test
+    void parseDenyAll() {
+        ChannelCommand cmd = ChannelCommand.parse("/deny all");
+        assertInstanceOf(ChannelCommand.Deny.class, cmd);
+        assertTrue(((ChannelCommand.Deny) cmd).targetId().isEmpty());
+        assertTrue(((ChannelCommand.Deny) cmd).toolName().isEmpty());
     }
 
     @Test

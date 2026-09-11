@@ -6,7 +6,9 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -16,6 +18,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
+import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.agent.sse.HitlEventType;
 import com.amsha.core.agent.trace.StationCode;
@@ -132,7 +135,15 @@ public class CheckpointApprovalService {
         AgentCheckpoint cp = cpOpt.get();
         Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-APPROVE-ALL");
         int updated = applyAllPending(cp, decisions, ToolDecision.APPROVED);
-        if (updated == 0) throw alreadyDecided(sessionId, "all");
+        if (updated == 0) {
+            // A double-click or retry can arrive after another request has
+            // already approved every call while the checkpoint is still marked
+            // AWAITING_APPROVAL. Treat that state as an idempotent success.
+            if (decisions.values().stream().allMatch(ToolDecision.APPROVED::equals)) {
+                return cp;
+            }
+            throw alreadyDecided(sessionId, "all");
+        }
 
         setLocalDecisions(cp, decisions, "HITL-APPROVE-ALL");
         publishDecision(cp, HitlEventType.APPROVED, null, null);
@@ -177,6 +188,10 @@ public class CheckpointApprovalService {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint approveTool(String sessionId, String toolName, String reason) {
+        String cleanTool = BatchDecisionUtil.normalizeToolName(toolName);
+        if (cleanTool == null || "all".equalsIgnoreCase(cleanTool)) {
+            return approveAll(sessionId, reason);
+        }
         Optional<AgentCheckpoint> cpOpt = agentStore
                 .findLatestAwaitingApproval(sessionId)
                 .or(() -> agentStore.findLatestAwaitingApprovalBySessionContaining(sessionId));
@@ -185,16 +200,24 @@ public class CheckpointApprovalService {
 
         AgentCheckpoint cp = cpOpt.get();
         Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-APPROVE-TOOL");
-        if (!applyDecision(cp, decisions, toolName, ToolDecision.APPROVED)) {
-            throw alreadyDecided(sessionId, toolName);
+        if (!applyDecision(cp, decisions, cleanTool, ToolDecision.APPROVED)) {
+            String decisionKey = resolveDecisionKey(cp, decisions, cleanTool);
+            if (decisionKey != null && ToolDecision.APPROVED == decisions.get(decisionKey)) {
+                return cp;
+            }
+            throw alreadyDecided(sessionId, cleanTool);
         }
         setLocalDecisions(cp, decisions, "HITL-APPROVE-TOOL");
-        publishDecision(cp, HitlEventType.APPROVED, null, toolName);
+        publishDecision(cp, HitlEventType.APPROVED, null, cleanTool);
         return cp;
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint denyTool(String sessionId, String toolName, String reason) {
+        String cleanTool = BatchDecisionUtil.normalizeToolName(toolName);
+        if (cleanTool == null || "all".equalsIgnoreCase(cleanTool)) {
+            return denyAll(sessionId, reason);
+        }
         Optional<AgentCheckpoint> cpOpt = agentStore
                 .findLatestAwaitingApproval(sessionId)
                 .or(() -> agentStore.findLatestAwaitingApprovalBySessionContaining(sessionId));
@@ -203,11 +226,15 @@ public class CheckpointApprovalService {
 
         AgentCheckpoint cp = cpOpt.get();
         Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-DENY-TOOL");
-        if (!applyDecision(cp, decisions, toolName, ToolDecision.DENIED)) {
-            throw alreadyDecided(sessionId, toolName);
+        if (!applyDecision(cp, decisions, cleanTool, ToolDecision.DENIED)) {
+            String decisionKey = resolveDecisionKey(cp, decisions, cleanTool);
+            if (decisionKey != null && ToolDecision.DENIED == decisions.get(decisionKey)) {
+                return cp;
+            }
+            throw alreadyDecided(sessionId, cleanTool);
         }
         setLocalDecisions(cp, decisions, "HITL-DENY-TOOL");
-        publishDecision(cp, HitlEventType.DENIED, reason, toolName);
+        publishDecision(cp, HitlEventType.DENIED, reason, cleanTool);
         return cp;
     }
 
@@ -246,18 +273,45 @@ public class CheckpointApprovalService {
 
     private boolean applyDecision(
             AgentCheckpoint cp, Map<String, ToolDecision> decisions, String toolName, ToolDecision target) {
-        if (!isFinalDecision(target) || toolName == null || !ToolDecision.PENDING.equals(decisions.get(toolName))) {
+        String cleanTool = BatchDecisionUtil.normalizeToolName(toolName);
+        String decisionKey = resolveDecisionKey(cp, decisions, cleanTool);
+        if (!isFinalDecision(target)
+                || decisionKey == null
+                || !ToolDecision.PENDING.equals(decisions.get(decisionKey))) {
             return false;
         }
         boolean updated =
-                agentStore.updateBatchToolDecision(cp.getSessionId(), cp.getAgentRole(), toolName, target.name());
+                agentStore.updateBatchToolDecision(cp.getSessionId(), cp.getAgentRole(), decisionKey, target.name());
         if (updated) {
-            decisions.put(toolName, target);
+            decisions.put(decisionKey, target);
             if (target == ToolDecision.APPROVED) {
-                grantLease(cp.getSessionId(), cp, toolName);
+                grantLease(cp.getSessionId(), cp, decisionKey);
             }
         }
         return updated;
+    }
+
+    private String resolveDecisionKey(AgentCheckpoint cp, Map<String, ToolDecision> decisions, String requested) {
+        if (requested == null || requested.isBlank() || "all".equalsIgnoreCase(requested)) return requested;
+        if (decisions.containsKey(requested)) return requested;
+        try {
+            List<ParallelToolCall> calls = objectMapper.readValue(
+                    cp.getPendingToolParametersJson(), new TypeReference<List<ParallelToolCall>>() {});
+            List<String> matches = new ArrayList<>();
+            for (int i = 0; i < calls.size(); i++) {
+                ParallelToolCall call = calls.get(i);
+                if (requested.equalsIgnoreCase(call.toolName())) {
+                    matches.add(BatchDecisionUtil.decisionKey(call, i + 1, calls));
+                }
+            }
+            if (matches.size() > 1) {
+                throw new CheckpointResolutionException(
+                        "Tool name is ambiguous; approve the specific parallel call ID", 409);
+            }
+            return matches.isEmpty() ? requested : matches.getFirst();
+        } catch (JsonProcessingException e) {
+            return requested;
+        }
     }
 
     private void grantLease(String sessionId, AgentCheckpoint cp, String toolName) {
@@ -272,11 +326,13 @@ public class CheckpointApprovalService {
             JsonNode root = objectMapper.readTree(paramsJson);
             if (root.isArray()) {
                 for (JsonNode element : root) {
-                    if (toolName.equals(element.path("toolName").asText(null))) {
+                    if (toolName.equals(element.path("toolName").asText(null))
+                            || toolName.equals(element.path("callId").asText(null))) {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> extracted = objectMapper.convertValue(element.path("params"), Map.class);
                         if (extracted != null) {
-                            approvalLeaseStore.grant(sessionId, toolName, extracted);
+                            approvalLeaseStore.grant(
+                                    sessionId, element.path("toolName").asText(toolName), extracted);
                         }
                     }
                 }

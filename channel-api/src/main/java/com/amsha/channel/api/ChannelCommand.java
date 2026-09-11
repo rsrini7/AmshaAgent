@@ -146,6 +146,7 @@ public interface ChannelCommand {
                 && !arg.contains(":")
                 && !arg.matches("\\d+")
                 && !(arg.length() >= 4 && arg.matches("[0-9a-fA-F]+"))
+                && !"all".equalsIgnoreCase(arg)
                 && !arg.isBlank());
     }
 

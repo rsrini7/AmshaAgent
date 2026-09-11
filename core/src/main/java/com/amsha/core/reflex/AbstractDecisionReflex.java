@@ -13,6 +13,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
 import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
@@ -22,6 +23,7 @@ import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.tool.api.AgentSentinels;
@@ -272,7 +274,7 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
     }
 
     private String handlePerToolDecision(
-            String toolName, String sessionId, String _userId, String _chatId, String reason, MessageContext _context)
+            String toolName, String sessionId, String userId, String chatId, String reason, MessageContext context)
             throws Exception {
         Optional<AgentCheckpoint> latestPending = statefulAgentStore
                 .findLatestAwaitingApproval(sessionId)
@@ -287,8 +289,23 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         try {
             AgentCheckpoint cp = applyDecisionToTool(targetSessionId, toolName, reason);
             if (cp == null) return getNoPendingMessage();
-            if (!BatchDecisionUtil.hasPendingToolNames(cp, objectMapper)) checkpointApprovalService.triggerResume(cp);
-            return getPerToolSuccessResponse(toolName);
+            if (!BatchDecisionUtil.hasPendingToolNames(cp, objectMapper)) {
+                if (ChannelType.CLI
+                        .id()
+                        .equalsIgnoreCase(context.getUser().channel().id())) {
+                    return resumeResultHelper.runSync(targetSessionId, activeRole, userId, chatId);
+                } else {
+                    checkpointApprovalService.triggerResume(cp);
+                    return getPerToolSuccessResponse(toolName);
+                }
+            }
+            String ack = getPerToolSuccessResponse(toolName);
+            List<String> remaining = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
+            if (remaining.isEmpty()) return ack;
+            String composite = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX + String.join(",", remaining);
+            boolean isCron = targetSessionId != null && targetSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX);
+            String prompt = AgentResultFormatter.formatHitlPrompt(composite, null, targetSessionId, isCron);
+            return ack.isBlank() ? prompt : ack + "\n\n" + prompt;
         } catch (CheckpointResolutionException e) {
             return getNoPendingMessage();
         }

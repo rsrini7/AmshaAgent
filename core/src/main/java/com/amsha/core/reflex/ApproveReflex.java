@@ -82,7 +82,7 @@ public class ApproveReflex extends AbstractDecisionReflex {
 
     @Override
     public String getPerToolSuccessResponse(String toolName) {
-        return "";
+        return toolApproved(toolName);
     }
 
     @Override

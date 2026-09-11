@@ -26,7 +26,7 @@ public class CliJobNotifier implements ChannelJobNotifier {
         terminalPrinter = printer;
     }
 
-    private static void printOutput(String text) {
+    static void printOutput(String text) {
         Consumer<String> printer = terminalPrinter;
         if (printer != null) {
             printer.accept(text);

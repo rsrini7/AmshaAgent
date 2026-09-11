@@ -29,6 +29,7 @@ import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.llm.api.ToolCallJsonKeys;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
@@ -248,8 +249,9 @@ public class ApprovalCheckpointManager {
         Map<String, ToolDecision> decisions = new LinkedHashMap<>();
         try {
             originalBatchJson = objectMapper.writeValueAsString(calls);
-            for (ParallelToolCall call : calls) {
-                decisions.put(call.toolName(), ToolDecision.PENDING);
+            for (int i = 0; i < calls.size(); i++) {
+                ParallelToolCall call = calls.get(i);
+                decisions.put(decisionKey(call, i + 1, calls), ToolDecision.PENDING);
             }
         } catch (Exception e) {
             log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
@@ -298,7 +300,7 @@ public class ApprovalCheckpointManager {
         publishHitlRequested(sessionId, compositeName, RiskLevel.MEDIUM.name());
 
         // Create a synthetic frame for the result
-        ApprovalFrame frame = new ApprovalFrame(compositeName, Map.of("batch", originalBatchJson), RiskLevel.MEDIUM);
+        ApprovalFrame frame = new ApprovalFrame(compositeName, BatchDecisionUtil.toDisplayMap(calls), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
 
@@ -336,11 +338,13 @@ public class ApprovalCheckpointManager {
             preExecutedJson = objectMapper
                     .writerFor(new TypeReference<Map<String, ToolResponse>>() {})
                     .writeValueAsString(results);
-            for (ParallelToolCall call : allCalls) {
+            for (int i = 0; i < allCalls.size(); i++) {
+                ParallelToolCall call = allCalls.get(i);
+                String key = decisionKey(call, i + 1, allCalls);
                 if (!containsResult(results, call)) {
-                    decisions.put(call.toolName(), ToolDecision.PENDING);
-                } else if (!decisions.containsKey(call.toolName())) {
-                    decisions.put(call.toolName(), ToolDecision.APPROVED);
+                    decisions.put(key, ToolDecision.PENDING);
+                } else if (!decisions.containsKey(key)) {
+                    decisions.put(key, ToolDecision.APPROVED);
                 }
             }
         } catch (Exception e) {
@@ -391,7 +395,7 @@ public class ApprovalCheckpointManager {
         publishHitlRequested(sessionId, compositeName, RiskLevel.MEDIUM.name());
 
         ApprovalFrame frame =
-                new ApprovalFrame(compositeName, Map.of(ToolCallJsonKeys.BATCH, originalBatchJson), RiskLevel.MEDIUM);
+                new ApprovalFrame(compositeName, BatchDecisionUtil.toDisplayMap(allCalls), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
 
@@ -403,10 +407,20 @@ public class ApprovalCheckpointManager {
         return results.containsKey(resultKey(call)) || results.containsKey(call.toolName());
     }
 
+    static String decisionKey(ParallelToolCall call, int index, List<ParallelToolCall> all) {
+        return BatchDecisionUtil.decisionKey(call, index, all);
+    }
+
     private void populateContextData(AgentCheckpoint cp, AgentExecutionContext context) {
         Map<String, Object> contextData = new LinkedHashMap<>();
         if (context.data() != null) {
             contextData.putAll(context.data());
+        }
+        if (context.userId() != null) {
+            contextData.put("userId", context.userId());
+        }
+        if (context.chatId() != null) {
+            contextData.put("chatId", context.chatId());
         }
         if (context.mediaAttachments() != null && !context.mediaAttachments().isEmpty()) {
             boolean hasAudio =

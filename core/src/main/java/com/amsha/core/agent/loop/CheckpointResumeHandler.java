@@ -24,6 +24,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.speech.SpeechDeliveryService;
+import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
@@ -353,8 +354,17 @@ public class CheckpointResumeHandler {
         boolean isCli = (cType != null && ChannelType.CLI.id().equalsIgnoreCase(cType.id()))
                 || (sessionId != null && sessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX));
         if (isCli) {
-            log.debugf("CheckpointResumeHandler: delivering async CLI result via bridge for session %s", sessionId);
-            cliResultBridge.complete(sessionId, result);
+            String bridgeSid = SessionTree.rootOf(sessionId);
+            log.debugf(
+                    "CheckpointResumeHandler: delivering async CLI result via bridge for session %s (bridge: %s)",
+                    sessionId, bridgeSid);
+            if (result instanceof AgentResult.AwaitingApproval) {
+                // Wake the CLI waiter with the new approval frame. Re-arming the
+                // pending flag alone leaves it blocked on the previous future.
+                cliResultBridge.complete(bridgeSid, result);
+                return;
+            }
+            cliResultBridge.complete(bridgeSid, result);
             return;
         }
 
@@ -397,7 +407,12 @@ public class CheckpointResumeHandler {
         boolean isCli = (cType != null && ChannelType.CLI.id().equalsIgnoreCase(cType.id()))
                 || (sessionId != null && sessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX));
         if (isCli) {
-            cliResultBridge.complete(sessionId, result);
+            String bridgeSid = SessionTree.rootOf(sessionId);
+            if (result instanceof AgentResult.AwaitingApproval) {
+                cliResultBridge.complete(bridgeSid, result);
+                return;
+            }
+            cliResultBridge.complete(bridgeSid, result);
         }
     }
 
@@ -457,7 +472,7 @@ public class CheckpointResumeHandler {
             log.infof("Synchronously resuming session=%s budget=%d", sessionId, budget);
 
             // §F9 fix: same rule as runResumeLoop — resume at the checkpoint's own autonomy.
-            return WorkspaceContext.run(
+            AgentResult result = WorkspaceContext.run(
                     sessionId,
                     userId,
                     chatId,
@@ -473,6 +488,24 @@ public class CheckpointResumeHandler {
                             reasoningEngine,
                             budget,
                             context));
+
+            var handoff = new DelegatedCompletionHandoff(agentStore, objectMapper).capture(sessionId, result);
+            if (handoff.isPresent()) {
+                DelegatedCompletionHandoff.ParentResume parent = handoff.get();
+                if (parent.ready()) {
+                    log.infof(
+                            "[DELEGATION-SYNC] Resuming parent %s after child %s completed",
+                            parent.sessionId(), sessionId);
+                    releaseResumeClaimSafely(sessionId, agentRole);
+                    return resumeAfterBatchDecisionSync(
+                            parent.sessionId(),
+                            parent.agentRole(),
+                            parent.userId(),
+                            parent.chatId(),
+                            parent.channelType() != null ? parent.channelType() : channelType);
+                }
+            }
+            return result;
 
         } finally {
             releaseResumeClaimSafely(sessionId, agentRole);

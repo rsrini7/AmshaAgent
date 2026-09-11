@@ -178,6 +178,7 @@ public final class UserMessages {
     public static final String TOKEN_LIMIT_SIMPLE_FORMAT = "⚠️ Daily token limit reached. Please try again in %s.";
 
     // Success / Informational
+    public static final String TOOL_APPROVED_FORMAT = "✅ Tool '%s' approved.";
     public static final String TOOL_DENIED_FORMAT = "🚫 Tool '%s' denied.";
     public static final String CRON_DELETED_FORMAT = "✅ Cron job %s deleted.";
     public static final String CRON_NOT_FOUND_ID_FORMAT = "❌ Cron job not found: %s. Use /crons to see valid IDs.";
@@ -194,6 +195,13 @@ public final class UserMessages {
      */
     public static String approvalNeeded(String toolName) {
         return String.format(APPROVAL_NEEDED, toolName);
+    }
+
+    /**
+     * Formats a tool approved message.
+     */
+    public static String toolApproved(String toolName) {
+        return String.format(TOOL_APPROVED_FORMAT, toolName);
     }
 
     /**

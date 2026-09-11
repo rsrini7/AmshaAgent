@@ -34,7 +34,6 @@ public class CliChannelSender implements ChannelSender {
     @Override
     public void sendRaw(ChannelUser recipient, String text) {
         if (text == null || text.isBlank()) return;
-        System.err.println(text);
-        System.err.flush();
+        CliJobNotifier.printOutput(text);
     }
 }

@@ -4,8 +4,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 
 import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.amsha.core.agent.event.AgentStateChangedEvent;
 
@@ -16,20 +20,47 @@ import com.amsha.core.agent.event.AgentStateChangedEvent;
 @ApplicationScoped
 public class AgentStateStore {
 
-    private final Map<String, AgentState> currentStates = new ConcurrentHashMap<>();
+    private final Map<String, StateEntry> currentStates = new ConcurrentHashMap<>();
+    private final AtomicLong changeSequence = new AtomicLong();
 
     public void onAgentStateChanged(@Observes AgentStateChangedEvent event) {
         if (event.agentName() == null || "system".equalsIgnoreCase(event.agentName())) {
             return;
         }
-        String key = event.sessionId() + ":" + event.agentName();
+        String normalizedAgent = event.agentName().contains(":")
+                ? event.agentName().substring(event.agentName().lastIndexOf(':') + 1)
+                : event.agentName();
+        String role = normalizedAgent.toLowerCase(Locale.ROOT);
+        String key = (event.sessionId() != null ? event.sessionId() : "") + "|" + role;
         currentStates.put(
-                key, new AgentState(event.agentName(), event.newStatus(), event.currentTask(), event.sessionId()));
+                key,
+                new StateEntry(
+                        new AgentState(normalizedAgent, event.newStatus(), event.currentTask(), event.sessionId()),
+                        changeSequence.incrementAndGet()));
     }
 
     public Collection<AgentState> getAll() {
-        return currentStates.values();
+        Map<String, StateEntry> byRole = new LinkedHashMap<>();
+        for (StateEntry entry : currentStates.values()) {
+            String role = entry.state().name().toLowerCase(Locale.ROOT);
+            StateEntry previous = byRole.get(role);
+            if (previous == null || entry.sequence() > previous.sequence()) {
+                byRole.put(role, entry);
+            }
+        }
+        return byRole.values().stream().map(StateEntry::state).toList();
     }
+
+    public Collection<AgentState> getBySession(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) return List.of();
+        return currentStates.entrySet().stream()
+                .filter(e -> e.getKey().startsWith(sessionId + "|"))
+                .map(Map.Entry::getValue)
+                .map(StateEntry::state)
+                .toList();
+    }
+
+    private record StateEntry(AgentState state, long sequence) {}
 
     public record AgentState(String name, String status, String currentTask, String sessionId) {}
 }

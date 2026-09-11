@@ -3,10 +3,14 @@ package com.amsha.core.reflex;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Inject;
 
+import java.util.List;
+
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.agent.loop.CliResultBridge;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.persistence.api.CheckpointStatus;
 
@@ -23,29 +27,42 @@ public class ResumeResultHelper {
     StatefulAgentStore statefulAgentStore;
 
     public String runSync(String sessionId, String activeRole, String userId, String chatId) {
-        // A CLI /approve or /deny renders the synchronous reflex response itself.
-        // Cancel the interactive waiter's future before resuming so LoopExitPublisher
-        // cannot wake it and print the same terminal result a second time.
-        cliResultBridge.cancel(sessionId);
+        // A CLI /approve or /deny drives the resume synchronously and renders the reflex
+        // response itself. Keep the originally-parked CLI command's waiter alive and the
+        // HITL flag armed so the terminal result produced by this resume (or by
+        // LoopExitPublisher during it) is delivered to it — otherwise the CLI command
+        // spins "Still working" forever and never surfaces the answer.
+        String rootSid = SessionTree.rootOf(sessionId);
+        cliResultBridge.markAwaitingApproval(rootSid);
         try {
             AgentResult result =
                     checkpointResumeHandler.resumeAfterBatchDecisionSync(sessionId, activeRole, userId, chatId, "cli");
-            if (result == null) result = cliResultBridge.waitForResult(sessionId, 10000);
+            if (result == null) result = cliResultBridge.waitForResult(rootSid, 60000);
+            if (result != null && !(result instanceof AgentResult.AwaitingApproval)) {
+                // Terminal completion (possibly reached via DelegatedCompletionHandoff resuming
+                // the parent coordinator): deliver to the parked CLI command so it unblocks.
+                // complete() dedups via `signaled`, so a concurrent LoopExitPublisher signal is ignored.
+                cliResultBridge.complete(rootSid, result);
+            }
             return result != null ? AgentResultFormatter.format(result) : "⏱ Timed out waiting for session.";
         } catch (Exception e) {
-            return "❌ Resume failed: " + e.getMessage();
-        } finally {
-            cliResultBridge.cancel(sessionId);
+            // Do not leave the parked CLI waiter spinning when the synchronous
+            // resume fails before LoopExitPublisher can deliver a terminal result.
+            cliResultBridge.complete(
+                    rootSid,
+                    AgentResult.failed(
+                            AgentErrorMessageUtil.safeMessage(e), AgentResult.FailureCategory.SYSTEM_ERROR, List.of()));
+            return "❌ Resume failed: " + AgentErrorMessageUtil.safeMessage(e);
         }
     }
 
     public String pollBridge(String sessionId) {
-        var _ = cliResultBridge.register(sessionId);
+        String rootSid = SessionTree.rootOf(sessionId);
         try {
-            AgentResult bridgeResult = cliResultBridge.waitForResult(sessionId, 200);
+            AgentResult bridgeResult = cliResultBridge.waitForResult(rootSid, 200);
             return bridgeResult != null ? AgentResultFormatter.format(bridgeResult) : null;
-        } finally {
-            cliResultBridge.cancel(sessionId);
+        } catch (Exception _) {
+            return null;
         }
     }
 

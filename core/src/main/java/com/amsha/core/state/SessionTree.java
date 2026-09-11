@@ -44,4 +44,9 @@ public final class SessionTree {
         int idx = sessionId.indexOf(AgentSentinels.DELEGATE_SESSION_SENTINEL);
         return idx > 0 ? Optional.of(sessionId.substring(0, idx)) : Optional.empty();
     }
+
+    /** The root session of a delegated child or the session itself if already root. */
+    public static String rootOf(String sessionId) {
+        return parentOf(sessionId).orElse(sessionId);
+    }
 }

@@ -108,13 +108,8 @@ public class HitlService {
     }
 
     private PendingApproval mapToPending(AgentCheckpoint cp) {
-        Map<String, Object> params;
-        try {
-            params = objectMapper.readValue(
-                    cp.getPendingToolParametersJson(), new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            params = Map.of();
-        }
+        Map<String, Object> params =
+                BatchDecisionUtil.parseBatchDisplayParams(cp.getPendingToolParametersJson(), objectMapper);
         return new PendingApproval(
                 cp.getId().toString(),
                 cp.getSessionId(),
@@ -266,6 +261,11 @@ public class HitlService {
             dto = checkpointStorePort.findLatestAwaitingApproval(taskId).orElse(null);
         }
         if (dto == null) {
+            dto = checkpointStorePort
+                    .findLatestAwaitingApprovalBySessionContaining(taskId)
+                    .orElse(null);
+        }
+        if (dto == null) {
             dto = checkpointStorePort.findLatestBySession(taskId).orElse(null);
         }
         return dto;
@@ -305,16 +305,17 @@ public class HitlService {
         if (!cp.hasBatchToolDecisions()) {
             return false;
         }
+        String normalizedTool = BatchDecisionUtil.normalizeToolName(toolName);
         Map<String, ToolDecision> decisions = readBatchDecisions(cp, taskId);
         ToolDecision requested = approved ? ToolDecision.APPROVED : ToolDecision.DENIED;
         ToolDecision opposite = approved ? ToolDecision.DENIED : ToolDecision.APPROVED;
-        if (toolName == null || toolName.isBlank()) {
+        if (normalizedTool == null || normalizedTool.isBlank() || "all".equalsIgnoreCase(normalizedTool)) {
             if (decisions.values().stream().anyMatch(opposite::equals)) {
                 throw contradictoryDecision(taskId, approved);
             }
             return decisions.values().stream().allMatch(requested::equals);
         }
-        ToolDecision existing = decisions.get(toolName);
+        ToolDecision existing = decisions.get(normalizedTool);
         if (existing == null) {
             throw unsafeApprovalState(taskId, "requested tool is not in the checkpoint");
         }
@@ -409,9 +410,10 @@ public class HitlService {
 
     private AgentCheckpoint executeResolveDecision(
             AgentCheckpoint cp, boolean approved, String toolName, String reason) {
+        String normalizedTool = BatchDecisionUtil.normalizeToolName(toolName);
         if (approved) {
-            if (toolName != null && !toolName.isBlank()) {
-                return checkpointApprovalService.approveTool(cp.getSessionId(), toolName, reason);
+            if (normalizedTool != null && !normalizedTool.isBlank() && !"all".equalsIgnoreCase(normalizedTool)) {
+                return checkpointApprovalService.approveTool(cp.getSessionId(), normalizedTool, reason);
             }
             List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
             if (pending.size() == 1) {
@@ -419,8 +421,8 @@ public class HitlService {
             }
             return checkpointApprovalService.approveAll(cp.getSessionId(), reason);
         } else {
-            if (toolName != null && !toolName.isBlank()) {
-                return checkpointApprovalService.denyTool(cp.getSessionId(), toolName, reason);
+            if (normalizedTool != null && !normalizedTool.isBlank() && !"all".equalsIgnoreCase(normalizedTool)) {
+                return checkpointApprovalService.denyTool(cp.getSessionId(), normalizedTool, reason);
             }
             List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
             if (pending.size() == 1) {

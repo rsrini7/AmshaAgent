@@ -53,6 +53,21 @@ class AgentResultTest {
     }
 
     @Test
+    void testAwaitingApprovalFactoryWithBatchArrayParams() {
+        String batchJson = """
+                [
+                  {"toolName":"serper_web_search","params":{"query":"spring boot lts"}}
+                ]
+                """;
+        AgentResult result = AgentResult.awaitingApproval("parallel|serper_web_search", batchJson, "sid", List.of());
+
+        assertInstanceOf(AgentResult.AwaitingApproval.class, result);
+        AgentResult.AwaitingApproval a = (AgentResult.AwaitingApproval) result;
+        assertEquals("parallel|serper_web_search", a.toolName());
+        assertNotNull(a.frame().params().get("1. serper_web_search"));
+    }
+
+    @Test
     void testLoopExceededFactory() {
         AgentResult result = AgentResult.loopExceeded(5, List.of());
 

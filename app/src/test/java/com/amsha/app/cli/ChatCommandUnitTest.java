@@ -4,11 +4,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Optional;
 
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.domain.model.AgentCheckpointRecord;
+import com.amsha.core.state.StatefulAgentStore;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class ChatCommandUnitTest {
 
@@ -70,5 +74,25 @@ class ChatCommandUnitTest {
     @Test
     void testOnShutdownCleanWhenNoSession() {
         assertDoesNotThrow(() -> chatCommand.onShutdown(null));
+    }
+
+    @Test
+    void testIsSessionAwaitingApproval() {
+        assertFalse(chatCommand.isSessionAwaitingApproval("sess-1"));
+
+        StatefulAgentStore mockStore = Mockito.mock(StatefulAgentStore.class);
+        chatCommand.agentStore = mockStore;
+
+        Mockito.when(mockStore.hasPendingApproval("sess-1")).thenReturn(true);
+        assertTrue(chatCommand.isSessionAwaitingApproval("sess-1"));
+
+        Mockito.when(mockStore.hasPendingApproval("sess-1")).thenReturn(false);
+        Mockito.when(mockStore.findLatestAwaitingApprovalBySessionContaining("sess-1"))
+                .thenReturn(Optional.empty());
+        assertFalse(chatCommand.isSessionAwaitingApproval("sess-1"));
+
+        Mockito.when(mockStore.findLatestAwaitingApprovalBySessionContaining("sess-1"))
+                .thenReturn(Optional.of(new AgentCheckpointRecord()));
+        assertTrue(chatCommand.isSessionAwaitingApproval("sess-1"));
     }
 }

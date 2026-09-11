@@ -73,13 +73,7 @@ final class DelegatedCompletionHandoff {
             parent.setPreExecutedResults(objectMapper.writeValueAsString(results));
             agentStore.save(parent);
             boolean ready = !hasActiveDescendants(parentSessionId);
-            return Optional.of(new ParentResume(
-                    parentSessionId,
-                    parent.getAgentRole(),
-                    parent.getChannelPlatformId(),
-                    parent.getChannelPlatformId(),
-                    parent.getChannelType(),
-                    ready));
+            return Optional.of(parentResume(parent, ready));
         } catch (Exception e) {
             log.warnf(
                     "[DELEGATION] Could not persist child result for parent %s: %s",
@@ -137,14 +131,27 @@ final class DelegatedCompletionHandoff {
                         cp.getStatus() == CheckpointStatus.RESUMING || cp.getStatus() == CheckpointStatus.IN_PROGRESS);
     }
 
-    private static ParentResume parentResume(AgentCheckpoint parent, boolean ready) {
+    private ParentResume parentResume(AgentCheckpoint parent, boolean ready) {
+        String userId = parent.getChannelPlatformId();
+        String chatId = parent.getChannelPlatformId();
+        if (parent.getContextDataJson() != null && !parent.getContextDataJson().isBlank()) {
+            try {
+                Map<String, Object> data =
+                        objectMapper.readValue(parent.getContextDataJson(), new TypeReference<>() {});
+                if (data != null) {
+                    if (data.get("userId") instanceof String u && !u.isBlank()) {
+                        userId = u;
+                    }
+                    if (data.get("chatId") instanceof String c && !c.isBlank()) {
+                        chatId = c;
+                    }
+                }
+            } catch (Exception e) {
+                log.debugf("Failed to read userId/chatId from parent context data: %s", LogUtil.rootMessage(e));
+            }
+        }
         return new ParentResume(
-                parent.getSessionId(),
-                parent.getAgentRole(),
-                parent.getChannelPlatformId(),
-                parent.getChannelPlatformId(),
-                parent.getChannelType(),
-                ready);
+                parent.getSessionId(), parent.getAgentRole(), userId, chatId, parent.getChannelType(), ready);
     }
 
     private List<ParallelToolCall> readCalls(String json) {

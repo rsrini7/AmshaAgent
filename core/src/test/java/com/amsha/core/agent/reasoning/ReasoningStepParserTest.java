@@ -1,6 +1,7 @@
 package com.amsha.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -452,5 +453,50 @@ class ReasoningStepParserTest {
 
         assertEquals(ToolCapability.DELEGATE_TO_AGENT.toolName(), step.action());
         assertEquals("saraswati", step.actionInput().get("agent"));
+    }
+
+    @Test
+    void testParse_deduplicatesIdenticalParallelToolCalls() {
+        ToolExecutionRequest req1 = ToolExecutionRequest.builder()
+                .id("call_1")
+                .name("serper_web_search")
+                .arguments("{\"query\":\"spring boot LTS version\"}")
+                .build();
+        ToolExecutionRequest req2 = ToolExecutionRequest.builder()
+                .id("call_2")
+                .name("serper_web_search")
+                .arguments("{\"query\":\"spring boot LTS version\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("Searching", List.of(req1, req2));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = parser.parse("s1", "researcher", response);
+
+        // Deduplicated from 2 identical calls down to 1, collapsing to single pending step
+        assertFalse(step.isParallelBatch());
+        assertEquals("serper_web_search", step.action());
+        assertEquals("spring boot LTS version", step.actionInput().get("query"));
+    }
+
+    @Test
+    void testParse_preservesDistinctParallelToolCalls() {
+        ToolExecutionRequest req1 = ToolExecutionRequest.builder()
+                .id("call_1")
+                .name("serper_web_search")
+                .arguments("{\"query\":\"spring boot LTS version\"}")
+                .build();
+        ToolExecutionRequest req2 = ToolExecutionRequest.builder()
+                .id("call_2")
+                .name("serper_web_search")
+                .arguments("{\"query\":\"quarkus LTS version\"}")
+                .build();
+        AiMessage aiMessage = AiMessage.aiMessage("Searching", List.of(req1, req2));
+        ChatResponse response = ChatResponse.builder().aiMessage(aiMessage).build();
+
+        ReasoningStep step = parser.parse("s1", "researcher", response);
+
+        // Different queries -> preserved as parallel batch of 2
+        assertTrue(step.isParallelBatch());
+        assertTrue(step.actionInput().containsKey("batch"));
     }
 }

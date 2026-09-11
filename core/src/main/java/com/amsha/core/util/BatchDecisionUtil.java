@@ -1,12 +1,18 @@
 package com.amsha.core.util;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
+import com.amsha.core.agent.reasoning.ParallelToolCall;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -16,6 +22,120 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class BatchDecisionUtil {
 
     private BatchDecisionUtil() {}
+
+    /**
+     * Converts a list of parallel tool calls into a structured, readable map for approval display.
+     */
+    public static Map<String, Object> toDisplayMap(List<ParallelToolCall> calls) {
+        if (calls == null || calls.isEmpty()) return Map.of();
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < calls.size(); i++) {
+            ParallelToolCall call = calls.get(i);
+            String label = (i + 1) + ". " + call.toolName();
+            map.put(label, call.params() != null ? call.params() : Map.of());
+        }
+        return Collections.unmodifiableMap(map);
+    }
+
+    /** Stable key for one parallel invocation's approval decision. */
+    public static String decisionKey(ParallelToolCall call) {
+        if (call == null) return null;
+        return call.callId() == null || call.callId().isBlank() ? call.toolName() : call.callId();
+    }
+
+    /** Matches checkpoint keying when a provider omitted call IDs. */
+    public static String decisionKey(ParallelToolCall call, int index, List<ParallelToolCall> calls) {
+        if (call == null) return null;
+        if (call.callId() != null && !call.callId().isBlank()) return call.callId();
+        long sameName = calls == null
+                ? 1
+                : calls.stream()
+                        .filter(candidate -> candidate != null && Objects.equals(candidate.toolName(), call.toolName()))
+                        .count();
+        return sameName > 1 ? call.toolName() + "_" + index : call.toolName();
+    }
+
+    /** Looks up a decision by call id, retaining compatibility with old tool-name maps. */
+    public static ToolDecision decisionFor(Map<String, ToolDecision> decisions, ParallelToolCall call) {
+        if (decisions == null || call == null) return ToolDecision.PENDING;
+        String key = decisionKey(call);
+        ToolDecision decision = key == null ? null : decisions.get(key);
+        return decision != null ? decision : decisions.getOrDefault(call.toolName(), ToolDecision.PENDING);
+    }
+
+    /**
+     * Parses pending tool parameters JSON (either single-tool map, batch array, or batch envelope) into a structured display map.
+     */
+    public static Map<String, Object> parseBatchDisplayParams(String rawJson, ObjectMapper objectMapper) {
+        if (rawJson == null || rawJson.isBlank() || "{}".equals(rawJson.trim()) || "[]".equals(rawJson.trim())) {
+            return Map.of();
+        }
+        if (objectMapper == null) return Map.of("batch", rawJson);
+        try {
+            JsonNode root = objectMapper.readTree(rawJson);
+            if (root.isArray()) {
+                Map<String, Object> map = new LinkedHashMap<>();
+                int idx = 1;
+                for (JsonNode node : root) {
+                    String toolName = node.has("toolName")
+                            ? node.get("toolName").asText()
+                            : (node.has("tool") ? node.get("tool").asText() : "tool_" + idx);
+                    JsonNode paramsNode = node.get("params");
+                    Object paramsObj = paramsNode != null
+                            ? objectMapper.convertValue(paramsNode, new TypeReference<Map<String, Object>>() {})
+                            : Map.of();
+                    map.put(idx + ". " + toolName, paramsObj);
+                    idx++;
+                }
+                return Collections.unmodifiableMap(map);
+            }
+            if (root.isObject()) {
+                if (root.has("batch") && root.get("batch").isArray()) {
+                    return parseBatchDisplayParams(root.get("batch").toString(), objectMapper);
+                }
+                return objectMapper.convertValue(root, new TypeReference<Map<String, Object>>() {});
+            }
+            return Map.of("batch", rawJson);
+        } catch (Exception _) {
+            return Map.of("batch", rawJson);
+        }
+    }
+
+    /** Strict validation for payloads that control an approval/resume transition. */
+    public static boolean isValidBatchParamsJson(String rawJson, ObjectMapper objectMapper) {
+        if (rawJson == null || rawJson.isBlank() || objectMapper == null) return false;
+        try {
+            JsonNode root = objectMapper.readTree(rawJson);
+            if (root == null || !(root.isObject() || root.isArray())) return false;
+            if (root.isArray()) {
+                for (JsonNode element : root) {
+                    if (element == null || !element.isObject()) return false;
+                    JsonNode params = element.get("params");
+                    if (params != null && !params.isObject()) return false;
+                }
+            }
+            return true;
+        } catch (Exception _) {
+            return false;
+        }
+    }
+
+    /**
+     * Normalizes a tool name argument from HITL approval requests.
+     * Strips "parallel|" sentinel prefix and maps "all" or multi-tool composite names to "all".
+     */
+    public static String normalizeToolName(String toolName) {
+        if (toolName == null) return null;
+        String trimmed = toolName.trim();
+        if (trimmed.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX)) {
+            trimmed = trimmed.substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
+                    .trim();
+        }
+        if ("all".equalsIgnoreCase(trimmed) || trimmed.contains(",") || trimmed.contains("|")) {
+            return "all";
+        }
+        return trimmed;
+    }
 
     /**
      * Returns tool names whose decision is still PENDING. §7.20
