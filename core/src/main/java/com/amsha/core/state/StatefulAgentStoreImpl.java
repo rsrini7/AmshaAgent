@@ -267,14 +267,78 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
                 "[Store] claimForResume(session=%s, role=%s, hasBrowser=%s) -> claimed=%s",
                 sessionId, agentRole, hasBrowserTool, claimed);
         if (claimed) {
-            resumeGuard.markResuming(sessionId, hasBrowserTool);
+            String goal = load(sessionId, agentRole)
+                    .map(AgentCheckpoint::getOriginalGoal)
+                    .orElse(null);
+            resumeGuard.markResuming(sessionId, hasBrowserTool, goal, ActivityPhase.RUNNING);
         }
         return claimed;
     }
 
     @Override
     public boolean markResuming(String sessionId) {
-        return resumeGuard.markResuming(sessionId, false);
+        return markResuming(sessionId, null);
+    }
+
+    @Override
+    public boolean markResuming(String sessionId, String goal) {
+        return resumeGuard.markResuming(sessionId, false, goal, ActivityPhase.RUNNING);
+    }
+
+    @Override
+    public boolean markResuming(String sessionId, String goal, String phase) {
+        return resumeGuard.markResuming(sessionId, false, goal, phase);
+    }
+
+    @Override
+    public void refreshResuming(String sessionId) {
+        resumeGuard.touch(sessionId);
+    }
+
+    @Override
+    public void refreshResuming(String sessionId, String phase) {
+        resumeGuard.touch(sessionId, phase);
+    }
+
+    @Override
+    public Optional<ActiveWork> getActiveWork(String sessionId) {
+        // 1. The session's own in-memory resume mark is the freshest signal.
+        Optional<ActiveWork> live = resumeGuard.getActiveWork(sessionId);
+        if (live.isPresent()) {
+            ActiveWork work = live.get();
+            return work.goal() == null || work.goal().isBlank()
+                    ? Optional.of(work.withGoal(activeCheckpointGoal(sessionId).orElse(null)))
+                    : live;
+        }
+
+        // 2. Delegated children outlive the parent turn: they are the only signal
+        //    that the conversation is still working once the parent row is terminal.
+        Optional<AgentCheckpoint> delegated = findLatestActiveDelegatedCheckpoint(sessionId);
+        if (delegated.isPresent()) {
+            AgentCheckpoint child = delegated.get();
+            Optional<ActiveWork> childWork = resumeGuard.getActiveWork(child.getSessionId());
+            if (childWork.isPresent()) {
+                return childWork;
+            }
+            String childGoal = child.getOriginalGoal();
+            return childGoal == null || childGoal.isBlank()
+                    ? Optional.empty()
+                    : Optional.of(ActiveWork.of(childGoal, null));
+        }
+
+        // 3. Fall back to a still-active persisted checkpoint for this session.
+        return activeCheckpointGoal(sessionId).map(goal -> ActiveWork.of(goal, null));
+    }
+
+    private Optional<String> activeCheckpointGoal(String sessionId) {
+        return findLatestNonArchivedCheckpoint(sessionId)
+                .filter(this::isActiveCheckpoint)
+                .map(AgentCheckpoint::getOriginalGoal)
+                .filter(goal -> goal != null && !goal.isBlank());
+    }
+
+    private boolean isActiveCheckpoint(AgentCheckpoint checkpoint) {
+        return checkpoint != null && StatefulAgentStore.isActiveStatus(checkpoint.getStatus());
     }
 
     @Override
@@ -412,6 +476,16 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     @Override
     public List<AgentCheckpoint> findByStatus(CheckpointStatus status) {
         return storeAdapter.findByStatus(status.toString()).stream()
+                .<AgentCheckpoint>map(CheckpointRecord::fromDto)
+                .toList();
+    }
+
+    @Override
+    public List<AgentCheckpoint> findActiveCheckpointsInSessionTree(String rootSessionId) {
+        if (rootSessionId == null) {
+            return List.of();
+        }
+        return storeAdapter.findActiveBySessionTree(rootSessionId).stream()
                 .<AgentCheckpoint>map(CheckpointRecord::fromDto)
                 .toList();
     }

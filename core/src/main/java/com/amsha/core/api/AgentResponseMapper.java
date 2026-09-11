@@ -54,7 +54,7 @@ public class AgentResponseMapper {
                 yield new MappedResult(entity, isAsync ? 202 : 200);
             }
             case AgentResult.AwaitingApproval a ->
-                new MappedResult(new ApprovalRequiredResponse(a.toolName(), a.paramsJson(), a.sessionId()), 202);
+                new MappedResult(new ApprovalRequiredResponse(a.toolName(), a.displayParamsJson(), a.sessionId()), 202);
             case AgentResult.AwaitingRetry r ->
                 new MappedResult(new RateLimitRetryResponse(r.retryAfterMs(), r.sessionId()), 202);
             case AgentResult.LoopExceeded l ->

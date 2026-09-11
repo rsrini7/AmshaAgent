@@ -194,4 +194,25 @@ public class ObservabilityManager {
             }
         });
     }
+
+    /**
+     * Broadcasts {@link AgentObserver#onStepStart} to every registered
+     * observer.
+     *
+     * <p>Swallows per-observer exceptions to keep the loop running.
+     *
+     * @param sessionId workspace session identifier
+     * @param agentRole canonical agent role
+     */
+    public void notifyStepStart(String sessionId, String agentRole) {
+        observers.forEach(o -> {
+            try {
+                o.onStepStart(sessionId, agentRole);
+            } catch (Exception e) {
+                log.warnf(
+                        "ObservabilityManager: observer %s threw on onStepStart for session %s: %s",
+                        ClassUtils.getCleanName(o), sessionId, AgentErrorMessageUtil.safeMessage(e));
+            }
+        });
+    }
 }

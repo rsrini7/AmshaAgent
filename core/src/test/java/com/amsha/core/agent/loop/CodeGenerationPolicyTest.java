@@ -53,4 +53,55 @@ class CodeGenerationPolicyTest {
 
         assertFalse(policy.isGeneratedCodeBlock(answer, "researcher"));
     }
+
+    @Test
+    void coordinatorXmlMavenCoordinatesBlockIsNotTreatedAsCodeGeneration() {
+        String answer = """
+                Here are the latest LTS versions and coordinates:
+
+                ```xml
+                <dependencyManagement>
+                    <dependencies>
+                        <dependency>
+                            <groupId>io.quarkus.platform</groupId>
+                            <artifactId>quarkus-bom</artifactId>
+                            <version>3.15.3</version>
+                            <type>pom</type>
+                            <scope>import</scope>
+                        </dependency>
+                    </dependencies>
+                </dependencyManagement>
+                ```
+                """;
+
+        assertFalse(policy.isGeneratedCodeBlock(answer, "coordinator"));
+    }
+
+    @Test
+    void coordinatorUntaggedXmlBlockIsNotTreatedAsCodeGeneration() {
+        String answer = """
+                ```
+                <dependency>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-web</artifactId>
+                    <version>3.4.3</version>
+                </dependency>
+                ```
+                """;
+
+        assertFalse(policy.isGeneratedCodeBlock(answer, "coordinator"));
+    }
+
+    @Test
+    void researcherJavaCodeInsideXmlFenceIsStillTreatedAsCodeGeneration() {
+        String answer = """
+                ```xml
+                public class FakeXml {
+                    public static void main(String[] args) {}
+                }
+                ```
+                """;
+
+        assertTrue(policy.isGeneratedCodeBlock(answer, "researcher"));
+    }
 }

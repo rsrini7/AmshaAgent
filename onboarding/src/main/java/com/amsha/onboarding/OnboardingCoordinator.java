@@ -27,13 +27,12 @@ import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftPurpose;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingDraftStorePort;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.jboss.logging.Logger;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.quarkus.scheduler.Scheduled;
 
 /**
  * Coordinator owning the durable onboarding draft lifecycle. It is the single source of truth: the
@@ -352,47 +351,25 @@ public class OnboardingCoordinator {
             return existing;
         }
         OnboardingDraftDto d = existing.get();
-        List<String> selections = d.selectedNonSecretIds();
-        if (selections == null || selections.isEmpty()) {
+        List<String> newSelections = OnboardingResourceHelper.injectNetworkProfile(
+                d.selectedNonSecretIds(), connectionIndex, networkProfileJson, objectMapper);
+        if (newSelections == null) {
             return Optional.empty();
         }
-        String connPayload = selections.stream()
-                .filter(s -> s.contains("\"connections\""))
-                .findFirst()
-                .orElse(null);
-        if (connPayload == null) {
-            return Optional.empty();
-        }
-        try {
-            JsonNode node = objectMapper.readTree(connPayload);
-            JsonNode conns = node.path("connections");
-            if (!conns.isArray() || conns.isEmpty()) {
-                return Optional.empty();
-            }
-            int idx = connectionIndex == -1 ? 0 : connectionIndex;
-            if (idx < 0) {
-                return Optional.empty();
-            }
-            if (idx >= conns.size()) {
-                return Optional.empty();
-            }
-            ((ObjectNode) conns.get(idx)).put("networkProfileJson", networkProfileJson);
-            String updated = objectMapper.writeValueAsString(node);
-            List<String> newSelections = new ArrayList<>(selections);
-            newSelections.set(selections.indexOf(connPayload), updated);
-            Optional<OnboardingDraftDto> result = updateSelections(draftId, newSelections);
-            incrementCounter("amsha.onboarding.connection.network-profile.updated");
-            return result;
-        } catch (Exception e) {
-            log.errorf("Failed to update connection network profile for draft %s: %s", draftId, e.getMessage());
-            return Optional.empty();
-        }
+        Optional<OnboardingDraftDto> result = updateSelections(draftId, newSelections);
+        incrementCounter("amsha.onboarding.connection.network-profile.updated");
+        return result;
     }
 
     private void incrementCounter(String name) {
         if (meterRegistry != null) {
             meterRegistry.counter(name).increment();
         }
+    }
+
+    @Scheduled(every = "1h", identity = "onboarding-draft-cleanup")
+    void scheduledDraftCleanup() {
+        cleanupExpiredDrafts();
     }
 
     public int cleanupExpiredDrafts() {
@@ -508,6 +485,19 @@ public class OnboardingCoordinator {
 
     public void importProfiles(String ownerId, Map<String, Object> data, LlmProfileStorePort profileStore) {
         profileExporter.importProfiles(ownerId, data, profileStore);
+    }
+
+    public OnboardingDraftDto importProfilesToDraft(
+            String ownerId, Map<String, Object> data, LlmProfileStorePort profileStore) {
+        profileExporter.validateImportPayload(ownerId, data, profileStore);
+        OnboardingDraftDto draft =
+                draftStore.findActiveByOwner(ownerId, Instant.now()).orElseGet(() -> getOrCreateFirstRunDraft(ownerId));
+        OnboardingDraftDto updated =
+                OnboardingResourceHelper.buildImportedReviewDraft(draft, data, objectMapper, scrubber);
+        if (draftStore.update(updated, draft.revision())) {
+            return draftStore.findById(draft.draftId()).orElse(updated);
+        }
+        return updated;
     }
 
     private void confirmBootstrapIfNeeded(String ownerId) {

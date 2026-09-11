@@ -101,6 +101,13 @@ public class GovernedTransportService {
      * @throws OutboundHttpException if egress is denied by policy or destination is invalid
      */
     public void validateEgress(String url, OutboundPurpose purpose, String actorUserId) {
+        validateEgress(url, purpose, actorUserId, false);
+    }
+
+    /**
+     * Validates an outbound destination against security policies with optional pre-approval state.
+     */
+    public void validateEgress(String url, OutboundPurpose purpose, String actorUserId, boolean preApproved) {
         if (url == null || url.isBlank()) {
             throw OutboundHttpException.policy("Egress URL must not be null or blank");
         }
@@ -113,7 +120,7 @@ public class GovernedTransportService {
         } catch (Exception _) {
             throw OutboundHttpException.policy("Invalid egress URL: " + url);
         }
-        var decision = policyService.evaluate(url, purpose, null, actorUserId, false);
+        var decision = policyService.evaluate(url, purpose, null, actorUserId, preApproved);
         if (decision.isDenied()) {
             throw OutboundHttpException.policy(
                     "Egress denied to " + url + ": " + decision.reason().orElse("policy denial"));

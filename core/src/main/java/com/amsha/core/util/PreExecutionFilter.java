@@ -3,6 +3,7 @@ package com.amsha.core.util;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.security.api.AutonomyLevel;
@@ -24,6 +25,18 @@ public final class PreExecutionFilter {
      */
     public static SplitResult split(
             List<ParallelToolCall> calls, AutonomyLevel sessionAutonomy, Set<String> configuredSafeTools) {
+        return split(calls, sessionAutonomy, configuredSafeTools, _ -> false);
+    }
+
+    /**
+     * Splits calls into pre-executable vs HITL-pending, respecting mandatory HITL requirements.
+     * §7.30, §7.31
+     */
+    public static SplitResult split(
+            List<ParallelToolCall> calls,
+            AutonomyLevel sessionAutonomy,
+            Set<String> configuredSafeTools,
+            Predicate<ParallelToolCall> requiresApproval) {
 
         List<ParallelToolCall> pre = new ArrayList<>();
         List<ParallelToolCall> hitl = new ArrayList<>();
@@ -33,7 +46,9 @@ public final class PreExecutionFilter {
         }
 
         for (ParallelToolCall call : calls) {
-            if (sessionAutonomy == AutonomyLevel.FULL || configuredSafeTools.contains(call.toolName())) {
+            boolean hitlRequired = requiresApproval != null && requiresApproval.test(call);
+            if (!hitlRequired
+                    && (sessionAutonomy == AutonomyLevel.FULL || configuredSafeTools.contains(call.toolName()))) {
                 pre.add(call);
             } else {
                 hitl.add(call);

@@ -57,6 +57,19 @@ class CronSessionStatusSyncTest {
     }
 
     @Test
+    void syncRunningRenewsLeaseWhenAlreadyRunning() {
+        CronStorePort store = mock(CronStorePort.class);
+        String deliveryId = "4612feff-431b-4939-a91e-af7ac7d5156c";
+        String sessionId = "cron-" + JOB_ID + "-" + deliveryId;
+        Mockito.when(store.claimForResume(JOB_ID, deliveryId)).thenReturn(false);
+        Mockito.when(store.renewLease(JOB_ID, deliveryId)).thenReturn(true);
+
+        Assertions.assertTrue(CronSessionStatusSync.syncRunning(sessionId, store));
+        Mockito.verify(store).claimForResume(JOB_ID, deliveryId);
+        Mockito.verify(store).renewLease(JOB_ID, deliveryId);
+    }
+
+    @Test
     void syncTerminalExtractsOwnerTokenFromDelegatedSessionId() {
         CronStorePort store = mock(CronStorePort.class);
         String deliveryId = "4612feff-431b-4939-a91e-af7ac7d5156c";

@@ -19,12 +19,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.amsha.core.audit.AuditService;
 import com.amsha.core.routing.LlmModelFactory;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.RoutingChatModelProvider;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultKey;
+import com.amsha.security.http.ApprovalReceiptIssuer;
 import com.amsha.security.http.GovernedTransportService;
 
 import io.quarkus.test.Mock;
@@ -34,6 +36,13 @@ import io.quarkus.test.Mock;
  */
 @ApplicationScoped
 public class TestBeanProducer {
+
+    @Produces
+    @Mock
+    @ApplicationScoped
+    public AuditService auditService() {
+        return mock(AuditService.class);
+    }
 
     @Produces
     @Mock
@@ -90,7 +99,32 @@ public class TestBeanProducer {
                     }
                 });
 
+        when(service.send(
+                        anyString(),
+                        any(),
+                        any(),
+                        anyString(),
+                        anyBoolean(),
+                        anyString(),
+                        any(HttpRequest.class),
+                        any(HttpResponse.BodyHandler.class)))
+                .thenAnswer(inv -> {
+                    HttpRequest req = inv.getArgument(6);
+                    HttpResponse.BodyHandler<Object> handler = inv.getArgument(7);
+                    try {
+                        return client.send(req, handler);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
         return service;
+    }
+
+    @Produces
+    @ApplicationScoped
+    public ApprovalReceiptIssuer approvalReceiptIssuer() {
+        return new ApprovalReceiptIssuer();
     }
 
     @Produces

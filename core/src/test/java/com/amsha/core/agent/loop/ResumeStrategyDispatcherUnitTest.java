@@ -56,12 +56,22 @@ class ResumeStrategyDispatcherUnitTest {
     @Mock
     AgentStateMachineRunner stateMachineRunner;
 
+    @Mock
+    ToolInvocationGuard guard;
+
     ResumeStrategyDispatcher dispatcher;
 
     @BeforeEach
     void setUp() {
         dispatcher = new ResumeStrategyDispatcher(
-                agentStore, toolRegistry, objectMapper, reasoningEngine, recoveryService, escalationService);
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                new ToolDelegationResolver(),
+                guard);
     }
 
     @Test

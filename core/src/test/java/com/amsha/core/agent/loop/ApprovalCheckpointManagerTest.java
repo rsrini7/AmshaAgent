@@ -20,6 +20,7 @@ import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.RiskLevel;
+import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -155,6 +156,26 @@ class ApprovalCheckpointManagerTest {
         @SuppressWarnings("unchecked")
         Map<String, String> map = objectMapper.readValue(decisions, Map.class);
         assertEquals(ToolDecision.PENDING.name(), map.get("search_tool"));
+    }
+
+    @Test
+    void persistDelegatedWait_KeepsParentInProgressWithApprovedDelegation() throws Exception {
+        var context = ctx();
+        when(agentStore.load("sess-1", "coordinator")).thenReturn(Optional.empty());
+        when(agentStore.saveWithSteps(any(), anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        String delegationTool = ToolCapability.DELEGATE_TO_AGENT.toolName();
+        assertTrue(manager.persistDelegatedWait(context, delegationTool, Map.of("agent", "saraswati"), List.of()));
+
+        verify(agentStore).saveWithSteps(cpCaptor.capture(), anyList());
+        AgentCheckpoint saved = cpCaptor.getValue();
+        assertEquals(CheckpointStatus.IN_PROGRESS, saved.getStatus());
+        assertEquals(delegationTool, saved.getPendingToolName());
+        assertEquals("coordinator", saved.getPendingToolRole());
+        assertEquals("{\"agent\":\"saraswati\"}", saved.getPendingToolParametersJson());
+        @SuppressWarnings("unchecked")
+        Map<String, String> decisions = objectMapper.readValue(saved.getBatchToolDecisions(), Map.class);
+        assertEquals(ToolDecision.APPROVED.name(), decisions.get(delegationTool));
     }
 
     // ── persist(string overload) ────────────────────────────────

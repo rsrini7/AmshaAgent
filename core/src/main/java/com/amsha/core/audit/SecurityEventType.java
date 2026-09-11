@@ -122,7 +122,8 @@ public enum SecurityEventType {
 
     // DB Console & Model Arena
     DATABASE_QUERY_FAILED, // DB console query execution error or database unavailable
-    PROVIDER_EGRESS_VALIDATED; // Model Arena governed provider egress validation succeeded
+    PROVIDER_EGRESS_VALIDATED, // Model Arena governed provider egress validation succeeded
+    OUTBOUND_EGRESS_DENIED; // Governed outbound HTTP egress rejected by policy
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -166,6 +167,7 @@ public enum SecurityEventType {
                     MCP_TOOL_POLICY_ENABLED,
                     MCP_CONNECTION_VALIDATION_FAILED,
                     MEDIA_DOWNLOAD_DENIED,
+                    OUTBOUND_EGRESS_DENIED,
                     MCP_CREDENTIAL_CONFIGURED,
                     MCP_CREDENTIAL_ROTATED,
                     MCP_CREDENTIAL_REMOVED,

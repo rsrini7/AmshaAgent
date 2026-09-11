@@ -236,6 +236,52 @@ class ToolResultProcessorTest {
     }
 
     @Test
+    void resolveOutcome_DelegatePausedWithParams_PropagatesParamsToApprovalFrame() {
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
+        String pausedMsg = UserMessages.delegationPaused(
+                "saraswati", "web_fetch", "{\"url\":\"https://spring.io/projects/release-highlights\"}");
+        assertTrue(pausedMsg.contains(UserMessages.DELEGATION_PAUSED_MARKER));
+        var res = ToolResponse.success(pausedMsg);
+
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, pausedMsg, step, List.of(), 0);
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertInstanceOf(AgentResult.AwaitingApproval.class, decision.result());
+        var aa = (AgentResult.AwaitingApproval) decision.result();
+        assertEquals("web_fetch", aa.toolName());
+        assertEquals(
+                "https://spring.io/projects/release-highlights",
+                aa.frame().params().get("url"));
+        assertTrue(aa.paramsJson().contains("https://spring.io/projects/release-highlights"));
+    }
+
+    @Test
+    void resolveOutcome_DelegatePausedWithBatchArrayParams_PropagatesParamsToApprovalFrame() {
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of());
+        String batchJson = """
+                [
+                  {"toolName":"serper_web_search","params":{"query":"spring boot lts"}},
+                  {"toolName":"serper_web_search","params":{"query":"quarkus lts"}}
+                ]
+                """;
+        String pausedMsg =
+                UserMessages.delegationPaused("saraswati", "parallel|serper_web_search,serper_web_search", batchJson);
+        assertTrue(pausedMsg.contains(UserMessages.DELEGATION_PAUSED_MARKER));
+        var res = ToolResponse.success(pausedMsg);
+
+        StepDecision decision = processor.resolveOutcome(
+                ctx, ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of(), res, pausedMsg, step, List.of(), 0);
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertInstanceOf(AgentResult.AwaitingApproval.class, decision.result());
+        var aa = (AgentResult.AwaitingApproval) decision.result();
+        assertEquals("parallel|serper_web_search,serper_web_search", aa.toolName());
+        assertNotNull(aa.frame().params().get("1. serper_web_search"));
+        assertNotNull(aa.frame().params().get("2. serper_web_search"));
+    }
+
+    @Test
     void resolveOutcome_DelegatePausedLegacyFailureShape_TriggersTerminal() {
         // Legacy failure(409) shape must keep terminating as well.
         var ctx = ctx();
@@ -280,7 +326,54 @@ class ToolResultProcessorTest {
                 0);
         assertEquals(DecisionType.CONTINUE, decision.type());
         assertNotNull(decision.transientError());
+        assertTrue(decision.transientError().contains(ToolCapability.WEB_FETCH.toolName()));
+        assertFalse(decision.transientError().contains(ToolCapability.WEB_SEARCH_SERPER.toolName()));
+    }
+
+    @Test
+    void resolveOutcome_WebFetchFailureWithoutBrowserAttempt_UsesBrowserFirst() {
+        var ctx = ctx();
+        var step = ReasoningStep.pending("", ToolCapability.WEB_FETCH.toolName(), Map.of());
+        var res = ToolResponse.failure(404, "HTTP 404 Not Found");
+        var decision = processor.resolveOutcome(
+                ctx,
+                ToolCapability.WEB_FETCH.toolName(),
+                Map.of("url", "https://example.com/missing"),
+                res,
+                processor.buildObservation(res),
+                step,
+                new ArrayList<>(),
+                0);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
+        assertTrue(decision.transientError().contains(ToolCapability.BROWSER_NAVIGATE.toolName()));
+    }
+
+    @Test
+    void resolveOutcome_WebFetchFailureAfterBrowserFailure_UsesOneSearchFallback() {
+        var ctx = ctx();
+        String url = "https://example.com/missing";
+        var step = ReasoningStep.pending("", ToolCapability.WEB_FETCH.toolName(), Map.of());
+        var history = new ArrayList<ReasoningStep>();
+        history.add(ReasoningStep.observeStep(
+                ToolCapability.BROWSER_NAVIGATE.toolName(),
+                WebRetrievalFallbackPolicy.browserFailureMarker(url) + ". timeout",
+                "browser failed"));
+        var res = ToolResponse.failure(404, "HTTP 404 Not Found");
+
+        var decision = processor.resolveOutcome(
+                ctx,
+                ToolCapability.WEB_FETCH.toolName(),
+                Map.of("url", url),
+                res,
+                processor.buildObservation(res),
+                step,
+                history,
+                0);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
         assertTrue(decision.transientError().contains(ToolCapability.WEB_SEARCH_SERPER.toolName()));
+        assertTrue(decision.transientError().contains("Do not guess"));
     }
 
     @Test

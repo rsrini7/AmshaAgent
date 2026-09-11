@@ -1,12 +1,18 @@
 package com.amsha.onboarding;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+import java.util.Map;
+
 import com.amsha.core.llm.LlmValidationGateway;
+import com.amsha.onboarding.dto.NetworkProfilePolicyDto;
+import com.amsha.onboarding.dto.NetworkProfileUpdateRequest;
 import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
 import com.amsha.onboarding.dto.VoiceSettingsUpdateRequest;
@@ -179,5 +185,178 @@ public class SettingsResourceTest {
     @Test
     void testPostReset() {
         givenAuth().when().post("/settings/reset").then().statusCode(200).body("reset", is(true));
+    }
+
+    @Test
+    void testGetConnectionNetworkProfileDefaults() {
+        // Hermetic against execution order: sibling tests stage proxy profiles into the
+        // active draft, which this read prefers over committed rows and defaults.
+        givenAuth().when().post("/settings/reset").then().statusCode(200);
+        givenAuth()
+                .when()
+                .get("/settings/connection-network-profile")
+                .then()
+                .statusCode(200)
+                .body("egressMode", is("ALLOW_ALL"))
+                .body("tlsTrustMode", is("SYSTEM"))
+                .body("requireProxy", is(false));
+    }
+
+    @Test
+    void testPatchConnectionNetworkProfileStructuredAndGet() {
+        String draftId = givenAuth()
+                .when()
+                .post("/onboarding/drafts")
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("draftId");
+
+        String connectionPayload =
+                "{\"connections\":[{\"provider\":\"groq\",\"modelId\":\"llama-3-8b\",\"contextWindow\":8192,\"structuredOutputMode\":\"NATIVE\",\"capabilities\":[\"tool-calling\"]}],\"concernRoutes\":{\"agentLoop\":[0]}}";
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(Map.of("selectedNonSecretIds", List.of(connectionPayload)))
+                .when()
+                .put("/onboarding/drafts/" + draftId + "/steps/connections")
+                .then()
+                .statusCode(200);
+
+        NetworkProfilePolicyDto policy = new NetworkProfilePolicyDto(
+                "ALLOW_ALL",
+                List.of(),
+                true,
+                "http://proxy.example.com:3128",
+                "vault-ref-proxy",
+                List.of("*.internal"),
+                4500,
+                25000,
+                "SYSTEM",
+                null);
+        NetworkProfileUpdateRequest req = new NetworkProfileUpdateRequest(0, null, policy);
+
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(req)
+                .when()
+                .patch("/settings/connection-network-profile")
+                .then()
+                .statusCode(200)
+                .body("updated", is(true));
+
+        givenAuth()
+                .when()
+                .get("/settings/connection-network-profile")
+                .then()
+                .statusCode(200)
+                .body("requireProxy", is(true))
+                .body("proxyUrl", is("http://proxy.example.com:3128"))
+                .body("connectTimeoutMs", is(4500))
+                .body("readTimeoutMs", is(25000));
+    }
+
+    @Test
+    void testPatchConnectionNetworkProfileWritesMatchingStoreRowOnly() {
+        // A dedicated owner isolates this test's rows and drafts from the shared suite database:
+        // nothing seeded here may shift positional reads in other tests.
+        String ownerKey = "px-owner-" + System.currentTimeMillis();
+        String suffix = "px" + System.currentTimeMillis();
+        String firstId = "conn_aaa_" + suffix;
+        String targetId = "conn_zzz_" + suffix;
+        importGraph(ownerKey, firstId, "profile_aaa_" + suffix);
+        importGraph(ownerKey, targetId, "profile_zzz_" + suffix);
+
+        // The active draft now stages only the target connection: index 0 must resolve
+        // to the staged id, never to whichever committed row sorts first.
+        NetworkProfilePolicyDto policy = new NetworkProfilePolicyDto(
+                "ALLOW_ALL",
+                List.of(),
+                true,
+                "http://proxy.example.com:3128",
+                null,
+                List.of(),
+                null,
+                null,
+                "SYSTEM",
+                null);
+        given().header("X-Amsha-API-Key", ownerKey)
+                .contentType(ContentType.JSON)
+                .body(new NetworkProfileUpdateRequest(0, null, policy))
+                .when()
+                .patch("/settings/connection-network-profile")
+                .then()
+                .statusCode(200)
+                .body("updated", is(true));
+
+        given().header("X-Amsha-API-Key", ownerKey)
+                .when()
+                .get("/onboarding/export")
+                .then()
+                .statusCode(200)
+                .body(
+                        "connections.find { it.id == '%s' }.networkProfileJson".formatted(targetId),
+                        containsString("proxy.example.com"))
+                .body("connections.find { it.id == '%s' }.networkProfileJson".formatted(firstId), is(""));
+    }
+
+    private void importGraph(String ownerKey, String connId, String profileId) {
+        given().header("X-Amsha-API-Key", ownerKey)
+                .contentType(ContentType.JSON)
+                .body(Map.of(
+                        "connections",
+                        List.of(Map.of("id", connId, "displayName", "Seed", "providerAdapterId", "ollama")),
+                        "profiles",
+                        List.of(Map.of("id", profileId, "connectionId", connId, "modelId", "llama3")),
+                        "routes",
+                        List.of()))
+                .when()
+                .post("/onboarding/import")
+                .then()
+                .statusCode(200)
+                .body("imported", is(true));
+    }
+
+    @Test
+    void testPatchConnectionNetworkProfileValidationFailures() { // Timeout exceeding 300,000 ms
+        NetworkProfilePolicyDto badTimeout = new NetworkProfilePolicyDto(
+                "ALLOW_ALL", List.of(), false, null, null, List.of(), 300001, null, "SYSTEM", null);
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(new NetworkProfileUpdateRequest(0, null, badTimeout))
+                .when()
+                .patch("/settings/connection-network-profile")
+                .then()
+                .statusCode(400);
+
+        // CUSTOM_CA missing vault ref
+        NetworkProfilePolicyDto badCa = new NetworkProfilePolicyDto(
+                "ALLOW_ALL", List.of(), false, null, null, List.of(), null, null, "CUSTOM_CA", "");
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(new NetworkProfileUpdateRequest(0, null, badCa))
+                .when()
+                .patch("/settings/connection-network-profile")
+                .then()
+                .statusCode(400);
+
+        // requireProxy without URL
+        NetworkProfilePolicyDto badProxy = new NetworkProfilePolicyDto(
+                "ALLOW_ALL", List.of(), true, null, null, List.of(), null, null, "SYSTEM", null);
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(new NetworkProfileUpdateRequest(0, null, badProxy))
+                .when()
+                .patch("/settings/connection-network-profile")
+                .then()
+                .statusCode(400);
+
+        // Malformed raw string
+        givenAuth()
+                .contentType(ContentType.JSON)
+                .body(new NetworkProfileUpdateRequest(0, "not-json", null))
+                .when()
+                .patch("/settings/connection-network-profile")
+                .then()
+                .statusCode(400);
     }
 }

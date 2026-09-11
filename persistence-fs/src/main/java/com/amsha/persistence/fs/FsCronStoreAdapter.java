@@ -72,10 +72,8 @@ public class FsCronStoreAdapter implements CronStorePort {
     @Override
     public synchronized boolean claimForFire(String id, String deliveryId) {
         if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
-        Optional<AgentCronDto> opt = findById(id);
-        if (opt.isEmpty()) return false;
-        AgentCronDto dto = opt.get();
-        if (!CronStatus.ACTIVE.name().equals(dto.status())) return false;
+        AgentCronDto dto = findById(id).orElse(null);
+        if (dto == null || !CronStatus.ACTIVE.name().equals(dto.status())) return false;
         store.write(
                 List.of(DOMAIN, BY_ID, id + ".json"),
                 withStatusAndDelivery(dto, CronStatus.RUNNING.name(), deliveryId));
@@ -85,11 +83,13 @@ public class FsCronStoreAdapter implements CronStorePort {
     @Override
     public synchronized boolean claimForResume(String id, String deliveryId) {
         if (id == null || id.isBlank() || deliveryId == null || deliveryId.isBlank()) return false;
-        Optional<AgentCronDto> opt = findById(id);
-        if (opt.isEmpty()) return false;
-        AgentCronDto dto = opt.get();
+        AgentCronDto dto = findById(id).orElse(null);
+        if (dto == null) return false;
+        boolean runningOwner =
+                CronStatus.RUNNING.name().equals(dto.status()) && deliveryId.equals(dto.lastDeliveryId());
         if (!CronStatus.AWAITING_APPROVAL.name().equals(dto.status())
-                && !CronStatus.AWAITING_RETRY.name().equals(dto.status())) return false;
+                && !CronStatus.AWAITING_RETRY.name().equals(dto.status())
+                && !runningOwner) return false;
         store.write(
                 List.of(DOMAIN, BY_ID, id + ".json"),
                 withStatusAndDelivery(dto, CronStatus.RUNNING.name(), deliveryId));

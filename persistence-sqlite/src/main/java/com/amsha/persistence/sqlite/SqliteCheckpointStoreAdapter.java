@@ -227,6 +227,14 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findActiveBySessionTree(String rootSessionId) {
+        if (rootSessionId == null) return List.of();
+        String prefixPattern = rootSessionId + ":delegate:%";
+        return jdbi.withExtension(
+                CheckpointJdbiDao.class, dao -> dao.findActiveBySessionTree(rootSessionId, prefixPattern));
+    }
+
+    @Override
     public List<CheckpointDto> findByStatusAndSessionIds(
             String status, List<String> sessionIds, int limit, int offset) {
         return jdbi.withExtension(

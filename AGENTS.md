@@ -182,6 +182,25 @@ and the memory section in `docs/Architecture_Invariants.md`.
 
 ## Focused verification
 
+### Change-review protocol
+
+For a staged or work-in-progress change, review the exact diff before relying on tests or a generated report. Capture `git diff --cached --stat`, `git diff --cached --check`, and the changed-file list without changing the index. Read the originating ADR, specification, and relevant architecture invariants, then classify each finding as introduced, pre-existing, or uncertain by comparing it with `HEAD`.
+
+Review the complete production path, including wiring, persistence, native reflection, and runtime configuration. A unit test that mocks the collaborator under review does not prove production wiring; add or run one test through the real boundary and assert the security-relevant side effect. Exercise malformed JSON, wrong value types, missing identifiers, duplicate identifiers, unknown references, and partial or legacy payloads whenever a change accepts external data. These cases must fail closed rather than being skipped, coerced, or reported as success.
+
+Keep one canonical validator for policy semantics. Do not create a second parser with subtly different timeout, URI, TLS, proxy, or allow-list rules. Defaults belong only on an explicitly identified compatibility path; complete records from the current API must be rejected when required fields are absent. Generated persistent identifiers must be collision-resistant and references must be validated across the full submitted payload, not only the first section encountered.
+
+Review output, exception messages, logs, test fixtures, and local notes must not contain credentials, authorization headers, raw provider payloads, or secret-bearing malformed input. Redact before recording evidence. Treat ignored working-memory files and previous review reports as hypotheses: verify their claims against the current source, index, tests, and runtime before acting on them.
+
+Use `scripts/review_staged.sh --fast` for a read-only structural review and
+`scripts/review_staged.sh --full` when affected-module test suites are needed.
+Use `--native` for changes that affect native-image-sensitive code. The wrapper
+records the commit and staged-diff hash, discards command output, and fails if
+the Git index or tracked worktree changes during verification.
+
+Validate changes to the wrapper itself with `bash -n scripts/review_staged.sh`
+and `python3 scripts/test_review_staged.py`.
+
 | Change | Minimum check |
 | --- | --- |
 | Prompt/escalation | `./mvnw test -pl core -Dtest="SystemPromptBuilderTest,PersonaEscalationServiceTest,EscalationPatternsTest"` |

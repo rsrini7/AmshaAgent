@@ -2,13 +2,11 @@ package com.amsha.tools.builtin;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +15,11 @@ import java.util.Map;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.security.http.GovernedTransportService;
+import com.amsha.security.http.OutboundHttpException;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
@@ -30,6 +31,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -68,12 +72,25 @@ public class BraveWebSearchTool implements AgentTool {
 
     private static final String BRAVE_API_URL = "https://api.search.brave.com/res/v1/web/search";
 
-    private HttpClient httpClient; // Promoted to field (Fix I6)
+    @Inject
+    GovernedTransportService governedTransport;
 
-    @PostConstruct
-    void init() {
-        httpClient =
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    GovernedTransportService resolveGovernedTransport() {
+        if (governedTransport != null) {
+            return governedTransport;
+        }
+        try {
+            ArcContainer container = Arc.container();
+            if (container != null) {
+                InstanceHandle<GovernedTransportService> handle = container.instance(GovernedTransportService.class);
+                if (handle != null && handle.isAvailable()) {
+                    return handle.get();
+                }
+            }
+        } catch (Exception _) {
+            // Context not active or standalone test mode
+        }
+        throw new IllegalStateException("GovernedTransportService is required for Brave search egress");
     }
 
     @Override
@@ -153,12 +170,27 @@ public class BraveWebSearchTool implements AgentTool {
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(uri)
+                    .timeout(Duration.ofSeconds(15))
                     .header("Accept", "application/json")
                     .header("X-Subscription-Token", getApiKey())
                     .GET()
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            // HITL boundary: ToolInvocationGuard owns approval for NETWORK_OUTBOUND tools and always
+            // pauses before execution, so transport-level preApproved is false. WEB_SEARCH is
+            // intentionally non-HITL at transport (OutboundHttpPolicyService) to avoid a double prompt;
+            // the tool must never claim pre-approval. Connection is null by design: web search is
+            // connection-agnostic and uses the default policy (SSRF/TLS/DNS-rebinding validation).
+            // Per-connection proxy/pinning applies only when a connection is supplied.
+            HttpResponse<String> response = resolveGovernedTransport()
+                    .send(
+                            uri.toString(),
+                            OutboundPurpose.WEB_SEARCH,
+                            null,
+                            userId,
+                            false,
+                            request,
+                            HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
                 return ToolResponse.failure(response.statusCode(), "Brave Search API failed: " + response.body());
@@ -202,6 +234,15 @@ public class BraveWebSearchTool implements AgentTool {
 
             return ToolResponse.success(fullResult);
 
+        } catch (OutboundHttpException e) {
+            int code =
+                    switch (e.category()) {
+                        case POLICY_DENIED, DNS_REBINDING, REDIRECT_DENIED, TLS_TRUST -> 403;
+                        case HITL_REQUIRED -> 409;
+                        case TIMEOUT -> 504;
+                        default -> 502;
+                    };
+            return ToolResponse.failure(code, "Web search blocked: " + e.getMessage());
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             return ToolResponse.failure(502, "Web search request failed: " + e.getMessage());

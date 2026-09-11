@@ -1,9 +1,12 @@
 package com.amsha.core.state;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import com.amsha.channel.api.hitl.PendingApprovalChecker;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -18,6 +21,68 @@ import com.amsha.security.api.AutonomyLevel;
  * to/from the {@link AgentCheckpoint#getStateJson()} field.
  */
 public interface StatefulAgentStore extends PendingApprovalChecker {
+
+    /** Checkpoint statuses that mean work is still in flight for a session. */
+    Set<CheckpointStatus> ACTIVE_STATUSES = Set.of(
+            CheckpointStatus.IN_PROGRESS,
+            CheckpointStatus.RESUMING,
+            CheckpointStatus.AWAITING_APPROVAL,
+            CheckpointStatus.AWAITING_RETRY);
+
+    /** Returns true if the status represents an in-flight active state. */
+    static boolean isActiveStatus(CheckpointStatus status) {
+        return status != null && ACTIVE_STATUSES.contains(status);
+    }
+
+    /**
+     * Returns {@code true} if the checkpoint represents active work that has exceeded
+     * its staleness threshold (5 minutes for RESUMING, 15 minutes for IN_PROGRESS).
+     * Returns {@code false} if the checkpoint is null, has no update timestamp, or
+     * is within the valid active window.
+     */
+    static boolean isStaleActiveCheckpoint(AgentCheckpoint checkpoint) {
+        if (checkpoint == null || checkpoint.getUpdatedAt() == null) {
+            return false;
+        }
+        CheckpointStatus s = checkpoint.getStatus();
+        Duration age = Duration.between(checkpoint.getUpdatedAt(), Instant.now());
+        if (s == CheckpointStatus.RESUMING) {
+            return age.toMinutes() > 5;
+        }
+        if (s == CheckpointStatus.IN_PROGRESS) {
+            return age.toMinutes() > 15;
+        }
+        return false;
+    }
+
+    /**
+     * Returns every in-flight checkpoint belonging to the session tree rooted at
+     * {@code rootSessionId}: the root session itself plus any delegated
+     * {@code <root>:delegate:<agent>:<n>} child sessions, in any order.
+     *
+     * <p>Encapsulated here so /status, the busy message and the REST status
+     * endpoint all agree on what "part of this conversation" means instead of
+     * each re-running the same four {@link #findByStatus} scans.
+     */
+    default List<AgentCheckpoint> findActiveCheckpointsInSessionTree(String rootSessionId) {
+        return ACTIVE_STATUSES.stream()
+                .flatMap(status -> findByStatus(status).stream())
+                .filter(cp -> SessionTree.contains(rootSessionId, cp.getSessionId()))
+                .toList();
+    }
+
+    /**
+     * Returns the most recently updated in-flight checkpoint owned by a delegated
+     * child of {@code rootSessionId}, if any. Delegated children outlive the
+     * parent turn's own resume mark, so they are the only reliable signal that a
+     * conversation is still working once the parent row has gone terminal.
+     */
+    default Optional<AgentCheckpoint> findLatestActiveDelegatedCheckpoint(String rootSessionId) {
+        return findActiveCheckpointsInSessionTree(rootSessionId).stream()
+                .filter(cp -> SessionTree.isDelegatedChild(rootSessionId, cp.getSessionId()))
+                .max(Comparator.comparing(
+                        AgentCheckpoint::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
+    }
 
     AgentCheckpoint save(
             String sessionId,
@@ -208,6 +273,52 @@ public interface StatefulAgentStore extends PendingApprovalChecker {
      * @return true if successfully claimed
      */
     boolean markResuming(String sessionId);
+
+    /**
+     * Atomically marks the session as RESUMING with the active goal.
+     * @return true if successfully claimed
+     */
+    boolean markResuming(String sessionId, String goal);
+
+    /**
+     * Atomically marks the session as RESUMING with the active goal and a coarse
+     * activity phase label (e.g. "RUNNING", "TOOL:read_file"). The phase is
+     * surfaced in the busy message and /status so the user can see what the agent
+     * is doing, not just that it is busy.
+     * @return true if successfully claimed
+     */
+    boolean markResuming(String sessionId, String goal, String phase);
+
+    /**
+     * Refreshes the in-memory resume mark's activity timestamp (and optionally its
+     * phase) so it does not expire while the agent is genuinely making progress.
+     * No-op if the session is not currently resuming.
+     */
+    void refreshResuming(String sessionId);
+
+    /**
+     * Refreshes the resume mark's activity timestamp and updates its phase label.
+     */
+    void refreshResuming(String sessionId, String phase);
+
+    /**
+     * Returns the goal and coarse activity phase of the running/resuming session, if any.
+     */
+    Optional<ActiveWork> getActiveWork(String sessionId);
+
+    /**
+     * Returns the coarse activity phase of the running/resuming session, if any.
+     */
+    default Optional<String> getActivePhase(String sessionId) {
+        return getActiveWork(sessionId).map(ActiveWork::phase);
+    }
+
+    /**
+     * Returns the active goal for this session if currently running/resuming.
+     */
+    default Optional<String> getActiveGoal(String sessionId) {
+        return getActiveWork(sessionId).map(ActiveWork::goal);
+    }
 
     /**
      * Atomically claims a checkpoint for retry by transitioning its status

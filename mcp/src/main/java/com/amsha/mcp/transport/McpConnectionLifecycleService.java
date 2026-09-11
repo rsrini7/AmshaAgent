@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
@@ -29,6 +30,7 @@ import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
 import com.amsha.persistence.api.McpConnectionToolPolicyDto;
+import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -194,13 +196,12 @@ public class McpConnectionLifecycleService {
                         store.get().listHeaderSecretRefs(connection.id(), connection.userId());
                 runInUserVaultScope(connection.userId(), () -> {
                     mcpClientService.configureHeaderSecretRefs(connection.name(), connection.userId(), refs);
-                    mcpClientService.connectForUserWithEnabledTools(
+                    mcpClientService.reconnectDurableForUser(
                             connection.name(),
                             connection.userId(),
                             connection.endpoint(),
                             ToolCategory.valueOf(connection.category()),
                             Map.of(),
-                            true,
                             enabledToolNames);
                 });
                 McpConnectionStartupSupport.reconcileToolPolicies(
@@ -551,16 +552,22 @@ public class McpConnectionLifecycleService {
     }
 
     /**
-     * Runs vault operations inside an active workspace scope.
+     * Runs vault and connection operations inside an active user workspace and context scope.
      *
      * <p>{@link SecretVault} derives and caches per-user keys through the {@code @WorkspaceScoped}
-     * {@link com.amsha.security.VaultKeyCache}. REST/admin entry points and the startup
-     * reconnect path execute outside any workspace context, so the scope must be activated
-     * explicitly. The vault key is derived from the stable per-user scope id, keeping secrets
-     * decryptable across restarts and requests.
+     * {@link com.amsha.security.VaultKeyCache}, while outbound governed transport resolves actor identity
+     * via {@link WorkspaceContext#getUserIdOrUnknown()}. REST/admin entry points and the startup
+     * reconnect path execute outside any workspace context, so both scopes must be activated
+     * explicitly.
      */
     void runInUserVaultScope(String userId, Runnable action) {
-        WorkspaceScopeHolder.run(VaultConstants.USER_VAULT_SCOPE_PREFIX + userId, userId, null, action);
+        WorkspaceContext.run(
+                AgentSentinels.SYSTEM_SESSION,
+                userId,
+                null,
+                AutonomyLevel.FULL,
+                AgentSentinels.SYSTEM_ROLE,
+                () -> WorkspaceScopeHolder.run(VaultConstants.USER_VAULT_SCOPE_PREFIX + userId, userId, null, action));
     }
 
     public record PersistedConnection(

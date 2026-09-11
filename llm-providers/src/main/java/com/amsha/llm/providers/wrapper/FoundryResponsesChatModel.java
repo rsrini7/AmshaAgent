@@ -20,7 +20,6 @@ import java.net.ConnectException;
 import java.net.SocketException;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.net.http.HttpClient;
 import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -159,6 +158,9 @@ public class FoundryResponsesChatModel implements ChatModel {
     }
 
     private ChatResponse chatViaHttp(ChatRequest request) {
+        if (governedTransport == null) {
+            throw new IllegalStateException("GovernedTransportService is required for Foundry egress");
+        }
         try {
             Map<String, Object> payload = buildPayload(request);
             byte[] bodyBytes = objectMapper.writeValueAsBytes(payload);
@@ -172,23 +174,14 @@ public class FoundryResponsesChatModel implements ChatModel {
 
             HttpRequest httpRequest = httpReqBuilder.build();
 
-            HttpResponse<InputStream> response;
-            if (governedTransport != null) {
-                response = governedTransport.send(
-                        endpoint,
-                        OutboundPurpose.PROVIDER_API_CALL,
-                        null,
-                        "system",
-                        true,
-                        httpRequest,
-                        HttpResponse.BodyHandlers.ofInputStream());
-            } else {
-                try (HttpClient client = HttpClient.newBuilder()
-                        .connectTimeout(Duration.ofSeconds(10))
-                        .build()) {
-                    response = client.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
-                }
-            }
+            HttpResponse<InputStream> response = governedTransport.send(
+                    endpoint,
+                    OutboundPurpose.PROVIDER_API_CALL,
+                    null,
+                    "system",
+                    true,
+                    httpRequest,
+                    HttpResponse.BodyHandlers.ofInputStream());
 
             int statusCode = response.statusCode();
             if (statusCode < 200 || statusCode >= 300) {

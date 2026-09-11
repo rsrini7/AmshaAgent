@@ -28,7 +28,7 @@ const ARENA_PROVIDERS: ArenaProvider[] = [
   { id: 'anthropic', name: 'Anthropic Claude', category: 'Frontier APIs', defaultModel: 'claude-haiku-4-5' },
   { id: 'mistral', name: 'Mistral AI', category: 'Frontier APIs', defaultModel: 'codestral-latest' },
   { id: 'nvidia', name: 'NVIDIA NIM', category: 'Frontier APIs', defaultModel: 'meta/llama-3.2-11b-vision-instruct' },
-  { id: 'cohere', name: 'Cohere Command', category: 'Frontier APIs', defaultModel: 'command-r-plus-08-2024' },
+  { id: 'cohere', name: 'Cohere Command', category: 'Frontier APIs', defaultModel: 'command-r-08-2024' },
 
   // Subscription / CLI OAuth
   { id: 'codex', name: 'Codex CLI (ChatGPT Plus)', category: 'Subscription / CLI OAuth', defaultModel: 'gpt-5.6-luna' },

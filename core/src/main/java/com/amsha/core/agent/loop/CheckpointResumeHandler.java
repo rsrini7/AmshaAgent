@@ -24,6 +24,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.speech.SpeechDeliveryService;
+import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
@@ -32,6 +33,7 @@ import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -57,16 +59,10 @@ public class CheckpointResumeHandler {
     private final CronStorePort cronStore;
     private final ObjectMapper objectMapper;
     private final ResumeStrategyDispatcher strategyDispatcher;
+    ResumeCronNotificationDispatcher cronNotificationDispatcher;
 
     protected CheckpointResumeHandler() {
-        this.agentStore = null;
-        this.agentLoop = null;
-        this.reasoningEngine = null;
-        this.channelPluginRegistry = null;
-        this.cliResultBridge = null;
-        this.cronStore = null;
-        this.objectMapper = null;
-        this.strategyDispatcher = null;
+        this(null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public CheckpointResumeHandler(
@@ -92,6 +88,7 @@ public class CheckpointResumeHandler {
                 recoveryService,
                 escalationService,
                 new ToolDelegationResolver(),
+                null,
                 null);
     }
 
@@ -108,7 +105,8 @@ public class CheckpointResumeHandler {
             ExecutionFailureRecoveryService recoveryService,
             PersonaEscalationService escalationService,
             ToolDelegationResolver delegationResolver,
-            ToolInvocationGuard guard) {
+            ToolInvocationGuard guard,
+            ResumeCronNotificationDispatcher cronNotificationDispatcher) {
         this.agentStore = agentStore;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
@@ -116,15 +114,22 @@ public class CheckpointResumeHandler {
         this.cliResultBridge = cliResultBridge;
         this.cronStore = cronStore;
         this.objectMapper = objectMapper;
-        this.strategyDispatcher = new ResumeStrategyDispatcher(
-                agentStore,
-                toolRegistry,
-                objectMapper,
-                reasoningEngine,
-                recoveryService,
-                escalationService,
-                delegationResolver,
-                guard);
+        this.cronNotificationDispatcher = cronNotificationDispatcher != null
+                ? cronNotificationDispatcher
+                : (cronStore == null
+                        ? null
+                        : new ResumeCronNotificationDispatcher(cronStore, channelPluginRegistry, null));
+        this.strategyDispatcher = (agentStore == null || toolRegistry == null)
+                ? null
+                : new ResumeStrategyDispatcher(
+                        agentStore,
+                        toolRegistry,
+                        objectMapper,
+                        reasoningEngine,
+                        recoveryService,
+                        escalationService,
+                        delegationResolver,
+                        guard);
     }
 
     @Inject
@@ -159,7 +164,7 @@ public class CheckpointResumeHandler {
         }
 
         try {
-            if (!syncCronStatus(sessionId)) {
+            if (!CronSessionStatusSync.syncRunning(sessionId, cronStore)) {
                 agentStore.releaseResumeClaim(sessionId, agentRole);
                 agentStore.clearBatchResuming(sessionId);
                 return false;
@@ -181,9 +186,24 @@ public class CheckpointResumeHandler {
                             ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
                             context = prepareResumeMessageContext(chatId, user, cType, resumeGoal, checkpoint);
 
-                            String toolInfo = buildToolInfoPart(checkpoint);
+                            String toolInfo = ResumeToolInfoFormatter.format(checkpoint, objectMapper);
                             AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
-                            if (result != null) {
+                            var handoff =
+                                    new DelegatedCompletionHandoff(agentStore, objectMapper).capture(sessionId, result);
+                            if (handoff.isPresent()) {
+                                DelegatedCompletionHandoff.ParentResume parent = handoff.get();
+                                if (parent.ready()) {
+                                    log.infof(
+                                            "[DELEGATION] Resuming parent %s after child %s completed",
+                                            parent.sessionId(), sessionId);
+                                    resumeAfterBatchDecision(
+                                            parent.sessionId(),
+                                            parent.agentRole(),
+                                            parent.userId(),
+                                            parent.chatId(),
+                                            parent.channelType());
+                                }
+                            } else if (result != null) {
                                 dispatchResumeResult(context, result, cType, user, sessionId, toolInfo);
                             }
                         }
@@ -262,11 +282,6 @@ public class CheckpointResumeHandler {
             int budget = calculateResumeBudget(cp);
             log.infof("Resuming session=%s budget=%d", cp.getSessionId(), budget);
 
-            // §F9 fix: resume with the checkpoint's OWN autonomy level — NOT FULL.
-            // Wrapping the whole resumed loop in runWithFullAutonomy let a single approval
-            // elevate every subsequent tool call in the session (HITL silently disabled).
-            // The one approved tool still gets its elevation via the tightly-scoped
-            // runWithFullAutonomy inside PendingToolResumeExecutor/ParallelBatchResumeHandler.
             return WorkspaceContext.run(
                     cp.getSessionId(),
                     context.getUser().platformId(),
@@ -295,14 +310,9 @@ public class CheckpointResumeHandler {
     }
 
     private int calculateResumeBudget(AgentCheckpoint cp) {
-        int defaultResumeIterations = 5;
-        int original = cp.getMaxIterations() != null ? cp.getMaxIterations() : defaultResumeIterations;
-        int used = cp.getIterationsUsed();
-        int remaining = Math.max(0, original - used);
-        // Use the original max as the per-resume cap — not a hardcoded 5.
-        // Skills with higher maxIterations (e.g. 15) need bigger resume budgets.
-        int perResumeCap = Math.max(defaultResumeIterations, original);
-        return Math.max(3, Math.min(remaining, perResumeCap));
+        int original = cp.getMaxIterations() != null ? cp.getMaxIterations() : 5;
+        int remaining = Math.max(0, original - cp.getIterationsUsed());
+        return Math.max(3, Math.min(remaining, Math.max(5, original)));
     }
 
     private void handleResumeFailure(String sessionId, MessageContext context, Exception e) {
@@ -329,25 +339,43 @@ public class CheckpointResumeHandler {
             ChannelUser user,
             String sessionId,
             String toolInfo) {
-        if (!syncCronTerminalStatus(sessionId, result)) {
+        if (!CronSessionStatusSync.syncTerminal(sessionId, result, cronStore)) {
             log.warnf("Skipping resume notification for session %s because cron ownership was lost", sessionId);
             return;
         }
 
-        if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
-            log.debugf("CheckpointResumeHandler: skipping async CLI notification for session %s", sessionId);
+        if (ResumeCronNotificationDispatcher.isCronSession(sessionId)) {
+            if (cronNotificationDispatcher != null) {
+                cronNotificationDispatcher.dispatch(sessionId, result);
+            }
+            return;
+        }
+
+        boolean isCli = (cType != null && ChannelType.CLI.id().equalsIgnoreCase(cType.id()))
+                || (sessionId != null && sessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX));
+        if (isCli) {
+            String bridgeSid = SessionTree.rootOf(sessionId);
+            log.debugf(
+                    "CheckpointResumeHandler: delivering async CLI result via bridge for session %s (bridge: %s)",
+                    sessionId, bridgeSid);
+            if (result instanceof AgentResult.AwaitingApproval) {
+                // Wake the CLI waiter with the new approval frame. Re-arming the
+                // pending flag alone leaves it blocked on the previous future.
+                cliResultBridge.complete(bridgeSid, result);
+                return;
+            }
+            cliResultBridge.complete(bridgeSid, result);
             return;
         }
 
         String baseOutput = AgentResultFormatter.format(result);
-        String finalOutput;
-        if (toolInfo != null && !toolInfo.isBlank()) {
-            boolean wasDenied = baseOutput.contains("denied") || baseOutput.contains("cancelled");
-            String header = "---\n" + (wasDenied ? "❌ Denied" : "✅ Approved") + " — " + toolInfo + "\n---";
-            finalOutput = header + "\n\n" + baseOutput;
-        } else {
-            finalOutput = baseOutput;
-        }
+        String finalOutput = (toolInfo != null && !toolInfo.isBlank())
+                ? "---\n"
+                        + (baseOutput.contains("denied") || baseOutput.contains("cancelled")
+                                ? "❌ Denied"
+                                : "✅ Approved")
+                        + " — " + toolInfo + "\n---\n\n" + baseOutput
+                : baseOutput;
         channelPluginRegistry
                 .find(cType.id())
                 .map(ChannelPlugin::sender)
@@ -364,7 +392,7 @@ public class CheckpointResumeHandler {
             String sessionId,
             MessageContext context) {
         if (result instanceof AgentResult.AwaitingApproval aa) {
-            s.send(user, List.of(new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+            s.send(user, List.of(new ApprovalPrompt(aa.toolName(), aa.displayParamsJson(), sessionId)));
             return;
         }
         if (speechDeliveryService != null) {
@@ -375,21 +403,28 @@ public class CheckpointResumeHandler {
     }
 
     private void fallbackResultDispatch(String sessionId, AgentResult result, ChannelType cType) {
-        log.debugf("CheckpointResumeHandler: no sender for type %s", cType.id());
-        if (ChannelType.CLI.id().equalsIgnoreCase(cType.id())) {
-            cliResultBridge.complete(sessionId, result);
+        log.debugf("CheckpointResumeHandler: no sender for type %s", cType != null ? cType.id() : "null");
+        boolean isCli = (cType != null && ChannelType.CLI.id().equalsIgnoreCase(cType.id()))
+                || (sessionId != null && sessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX));
+        if (isCli) {
+            String bridgeSid = SessionTree.rootOf(sessionId);
+            if (result instanceof AgentResult.AwaitingApproval) {
+                cliResultBridge.complete(bridgeSid, result);
+                return;
+            }
+            cliResultBridge.complete(bridgeSid, result);
         }
     }
 
-    private String buildToolInfoPart(AgentCheckpoint checkpoint) {
+    String buildToolInfoPart(AgentCheckpoint checkpoint) {
         return ResumeToolInfoFormatter.format(checkpoint, objectMapper);
     }
 
-    private boolean syncCronStatus(String sessionId) {
+    boolean syncCronStatus(String sessionId) {
         return CronSessionStatusSync.syncRunning(sessionId, cronStore);
     }
 
-    private boolean syncCronTerminalStatus(String sessionId, AgentResult result) {
+    boolean syncCronTerminalStatus(String sessionId, AgentResult result) {
         return CronSessionStatusSync.syncTerminal(sessionId, result, cronStore);
     }
 
@@ -402,7 +437,7 @@ public class CheckpointResumeHandler {
             return null;
         }
 
-        if (!syncCronStatus(sessionId)) {
+        if (!CronSessionStatusSync.syncRunning(sessionId, cronStore)) {
             agentStore.releaseResumeClaim(sessionId, agentRole);
             return null;
         }
@@ -413,7 +448,6 @@ public class CheckpointResumeHandler {
                 log.warnf(
                         "resumeAfterBatchDecisionSync: no checkpoint found for session %s role %s",
                         sessionId, agentRole);
-                agentStore.releaseResumeClaim(sessionId, agentRole);
                 return null;
             }
 
@@ -422,7 +456,6 @@ public class CheckpointResumeHandler {
                 log.warnf(
                         "resumeAfterBatchDecisionSync: no resume goal found for session %s role %s",
                         sessionId, agentRole);
-                agentStore.releaseResumeClaim(sessionId, agentRole);
                 return null;
             }
 
@@ -439,7 +472,7 @@ public class CheckpointResumeHandler {
             log.infof("Synchronously resuming session=%s budget=%d", sessionId, budget);
 
             // §F9 fix: same rule as runResumeLoop — resume at the checkpoint's own autonomy.
-            return WorkspaceContext.run(
+            AgentResult result = WorkspaceContext.run(
                     sessionId,
                     userId,
                     chatId,
@@ -456,8 +489,26 @@ public class CheckpointResumeHandler {
                             budget,
                             context));
 
+            var handoff = new DelegatedCompletionHandoff(agentStore, objectMapper).capture(sessionId, result);
+            if (handoff.isPresent()) {
+                DelegatedCompletionHandoff.ParentResume parent = handoff.get();
+                if (parent.ready()) {
+                    log.infof(
+                            "[DELEGATION-SYNC] Resuming parent %s after child %s completed",
+                            parent.sessionId(), sessionId);
+                    releaseResumeClaimSafely(sessionId, agentRole);
+                    return resumeAfterBatchDecisionSync(
+                            parent.sessionId(),
+                            parent.agentRole(),
+                            parent.userId(),
+                            parent.chatId(),
+                            parent.channelType() != null ? parent.channelType() : channelType);
+                }
+            }
+            return result;
+
         } finally {
-            agentStore.clearBatchResuming(sessionId);
+            releaseResumeClaimSafely(sessionId, agentRole);
         }
     }
 

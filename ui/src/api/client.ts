@@ -1,7 +1,22 @@
 import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
-import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto } from './types';
+import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto, NetworkProfilePolicyDto, ProviderCatalogModel } from './types';
 import { ExecutionRunSummaryDto, ExecutionTraceDto } from '../types/trace';
+
+/**
+ * Status snapshot returned by GET /sessions/{id}/status/{role}.
+ * `activeGoal` / `activePhase` are only present while the agent loop is actually
+ * executing in memory, so the UI can show what the agent is working on instead of
+ * a stale terminal status.
+ */
+export interface SessionStatusResponse {
+  sessionId: string;
+  status: string;
+  steps?: unknown[];
+  failReason?: string | null;
+  activeGoal?: string | null;
+  activePhase?: string | null;
+}
 
 export class ArcApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -136,6 +151,7 @@ export interface McpApprovalExecution<T = McpConnection | McpDiscoveryPreview> {
 
 export interface HitlRequestOptions {
   idempotencyKey?: string;
+  toolName?: string;
   signal?: AbortSignal;
 }
 
@@ -248,8 +264,8 @@ export class ArcClient {
   async getSessionStatus(
     sessionId: string,
     role = 'coordinator',
-  ): Promise<{ sessionId: string; status: string; steps?: unknown[]; failReason?: string | null }> {
-    return this.request<{ sessionId: string; status: string; steps?: unknown[]; failReason?: string | null }>(
+  ): Promise<SessionStatusResponse> {
+    return this.request<SessionStatusResponse>(
       `/sessions/${encodeURIComponent(sessionId)}/status/${encodeURIComponent(role)}`,
       {},
       ArcClient.HITL_REQUEST_TIMEOUT_MS,
@@ -274,13 +290,17 @@ export class ArcClient {
     options?: HitlRequestOptions | string,
   ): Promise<ApprovalResultDto> {
     const requestOptions = ArcClient.hitlOptions(options);
+    const body: Record<string, unknown> = { reason };
+    if (requestOptions.toolName) {
+      body.toolName = requestOptions.toolName;
+    }
     return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/approve`, {
       method: 'POST',
       headers: requestOptions.idempotencyKey
         ? { 'X-Idempotency-Key': requestOptions.idempotencyKey }
         : {},
       signal: requestOptions.signal,
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(body),
     }, ArcClient.HITL_REQUEST_TIMEOUT_MS);
   }
 
@@ -290,13 +310,17 @@ export class ArcClient {
     options?: HitlRequestOptions | string,
   ): Promise<ApprovalResultDto> {
     const requestOptions = ArcClient.hitlOptions(options);
+    const body: Record<string, unknown> = { reason: reason || 'Rejected by user' };
+    if (requestOptions.toolName) {
+      body.toolName = requestOptions.toolName;
+    }
     return this.request<ApprovalResultDto>(`/hitl/${encodeURIComponent(taskId)}/reject`, {
       method: 'POST',
       headers: requestOptions.idempotencyKey
         ? { 'X-Idempotency-Key': requestOptions.idempotencyKey }
         : {},
       signal: requestOptions.signal,
-      body: JSON.stringify({ reason: reason || 'Rejected by user' }),
+      body: JSON.stringify(body),
     }, ArcClient.HITL_REQUEST_TIMEOUT_MS);
   }
 
@@ -456,6 +480,54 @@ export class ArcClient {
     return this.request<any>('/onboarding/provider-catalog');
   }
 
+  async getProviderModels(
+    providerId: string,
+    baseUrl?: string,
+    apiKey?: string,
+  ): Promise<ProviderCatalogModel[]> {
+    const params = new URLSearchParams();
+    if (baseUrl) params.set('baseUrl', baseUrl);
+    const qs = params.toString();
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers['X-Provider-API-Key'] = apiKey;
+    }
+    return this.request<ProviderCatalogModel[]>(
+      `/onboarding/provider-catalog/${encodeURIComponent(providerId)}/models${qs ? '?' + qs : ''}`,
+      { headers }
+    );
+  }
+
+  async getStepDescriptors(): Promise<any> {
+    return this.request<any>('/onboarding/steps/descriptors');
+  }
+
+  async getStepDescriptor(stepId: string): Promise<any> {
+    return this.request<any>(`/onboarding/steps/${stepId}/descriptor`);
+  }
+
+  async validateDraftConnection(
+    draftId: string,
+    options?: { connectionIndex?: number; probeNetwork?: boolean; requestApproval?: boolean }
+  ): Promise<any> {
+    return this.request<any>(`/onboarding/drafts/${draftId}/validate-connection`, {
+      method: 'POST',
+      body: JSON.stringify(options || {})
+    });
+  }
+
+  async resolveDraftApproval(
+    draftId: string,
+    approvalId: string,
+    approved: boolean,
+    reason?: string
+  ): Promise<any> {
+    return this.request<any>(`/onboarding/drafts/${draftId}/approvals/${approvalId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ approved, reason })
+    });
+  }
+
   async getModelDefaults(): Promise<Record<string, { defaultModel: string; defaultBaseUrl?: string }>> {
     return this.request<Record<string, { defaultModel: string; defaultBaseUrl?: string }>>('/model-defaults');
   }
@@ -502,6 +574,23 @@ export class ArcClient {
   async resetOnboarding(): Promise<any> {
     return this.request<any>('/settings/reset', {
       method: 'POST'
+    });
+  }
+
+  async getConnectionNetworkProfile(connectionIndex = -1): Promise<NetworkProfilePolicyDto> {
+    const params = connectionIndex >= 0 ? `?connectionIndex=${connectionIndex}` : '';
+    return this.request<NetworkProfilePolicyDto>(`/settings/connection-network-profile${params}`, {
+      cache: 'no-store'
+    });
+  }
+
+  async patchConnectionNetworkProfile(
+    connectionIndex: number,
+    profile: NetworkProfilePolicyDto
+  ): Promise<{ updated: boolean; draftId?: string }> {
+    return this.request<{ updated: boolean; draftId?: string }>('/settings/connection-network-profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ connectionIndex, profile })
     });
   }
 

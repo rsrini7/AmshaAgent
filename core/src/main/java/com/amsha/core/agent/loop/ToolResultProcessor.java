@@ -3,15 +3,16 @@ package com.amsha.core.agent.loop;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.message.UserMessages;
+import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
@@ -146,16 +147,13 @@ public class ToolResultProcessor {
         return null;
     }
 
-    private static final Pattern PAUSED_TOOL_PATTERN = Pattern.compile("tool '([^']+)' needs human approval");
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static String extractPausedTool(String obs) {
-        if (obs != null) {
-            var matcher = PAUSED_TOOL_PATTERN.matcher(obs);
-            if (matcher.find()) {
-                return matcher.group(1);
-            }
+    private static Map<String, Object> parsePausedParams(String paramsJson) {
+        if (!BatchDecisionUtil.isValidBatchParamsJson(paramsJson, MAPPER)) {
+            return null;
         }
-        return ToolCapability.DELEGATE_TO_AGENT.toolName();
+        return BatchDecisionUtil.parseBatchDisplayParams(paramsJson, MAPPER);
     }
 
     private StepDecision handleDelegateOutcome(
@@ -170,8 +168,16 @@ public class ToolResultProcessor {
                         || (!res.success() && obs.contains("paused for human approval")))) {
             String msg = "⏳ " + UserMessages.userSafePortion(obs);
             writer.saveAnswer(ctx.sessionId(), msg);
-            String tool = extractPausedTool(obs);
-            ApprovalFrame frame = new ApprovalFrame(tool, Map.of(), RiskLevel.HIGH);
+            String tool = UserMessages.extractPausedTool(obs);
+            String paramsJson = UserMessages.extractPausedParamsJson(obs);
+            Map<String, Object> params = parsePausedParams(paramsJson);
+            if (paramsJson == null || params == null) {
+                return StepDecision.terminal(AgentResult.failed(
+                        "Delegated approval payload was invalid and was not resumed.",
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history)));
+            }
+            ApprovalFrame frame = new ApprovalFrame(tool, params, RiskLevel.HIGH);
             return StepDecision.terminal(AgentResult.awaitingApproval(frame, ctx.sessionId(), List.copyOf(history)));
         }
         if (res != null
@@ -202,19 +208,16 @@ public class ToolResultProcessor {
             String obs,
             List<ReasoningStep> history) {
         if (res != null && !res.success()) {
-            String url = String.valueOf(params.getOrDefault("url", ""));
+            String url = WebRetrievalFallbackPolicy.urlFrom(params);
             if (!url.isBlank()) {
-                log.infof("[TOOL-STEP] browser_navigate failed for %s - triggering fallback to serper_web_search", url);
-
-                String fallbackGoal = "The browser was unable to visit " + url + " directly. "
-                        + "Please use serper_web_search to find information about this page or its content.";
-
+                log.infof("[TOOL-STEP] browser_navigate failed for %s - triggering fallback to web_fetch", url);
+                String fallbackGoal = WebRetrievalFallbackPolicy.browserToFetchGoal(url, obs);
                 ReasoningStep fallbackStep = ReasoningStep.observeStep(
                         ToolCapability.BROWSER_NAVIGATE.toolName(),
-                        "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
-                        "Browser navigation failed, falling back to search.");
+                        WebRetrievalFallbackPolicy.browserFailureMarker(url) + ". Tool execution failed: " + obs
+                                + ". Fallback: " + fallbackGoal,
+                        "Browser navigation failed, falling back to web_fetch.");
                 history.add(fallbackStep);
-
                 return StepDecision.retryEngine(fallbackGoal, 0);
             }
         }
@@ -228,19 +231,21 @@ public class ToolResultProcessor {
             String obs,
             List<ReasoningStep> history) {
         if (res != null && !res.success()) {
-            String url = String.valueOf(params.getOrDefault("url", ""));
+            String url = WebRetrievalFallbackPolicy.urlFrom(params);
             if (!url.isBlank()) {
-                log.infof("[TOOL-STEP] web_fetch failed for %s - triggering fallback to browser_navigate", url);
-
-                String fallbackGoal = "The web_fetch tool was unable to retrieve " + url + " (error: " + obs + "). "
-                        + "Please try browser_navigate to visit this URL instead.";
-
+                boolean browserFailed = WebRetrievalFallbackPolicy.browserAttemptFailed(history, url);
+                String nextTool = browserFailed ? "search" : ToolCapability.BROWSER_NAVIGATE.toolName();
+                log.infof("[TOOL-STEP] web_fetch failed for %s - triggering fallback to %s", url, nextTool);
+                String fallbackGoal = browserFailed
+                        ? WebRetrievalFallbackPolicy.fetchToSearchGoal(url, obs)
+                        : WebRetrievalFallbackPolicy.fetchToBrowserGoal(url, obs);
                 ReasoningStep fallbackStep = ReasoningStep.observeStep(
                         ToolCapability.WEB_FETCH.toolName(),
                         "Tool execution failed: " + obs + ". Fallback: " + fallbackGoal,
-                        "web_fetch failed, falling back to browser_navigate.");
+                        browserFailed
+                                ? "Browser and web_fetch failed, falling back to one search."
+                                : "web_fetch failed, falling back to browser_navigate.");
                 history.add(fallbackStep);
-
                 return StepDecision.retryEngine(fallbackGoal, 0);
             }
         }

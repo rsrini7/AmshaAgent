@@ -7,7 +7,7 @@ import {
   persistOwnerApiKey,
   readPersistedOwnerApiKey,
 } from '../api/client';
-import { O1DraftPayload, ConnectionDraft, OnboardingStatusDto, ProviderDescriptor } from '../api/types';
+import { O1DraftPayload, ConnectionDraft, ModelProfileDraft, OnboardingStatusDto, ProviderDescriptor } from '../api/types';
 import { formStyles } from './arc-onboarding-styles';
 import './onboarding/arc-onboarding-plan-stepper';
 import './onboarding/arc-onboarding-step-welcome';
@@ -25,7 +25,7 @@ import './onboarding/arc-onboarding-step-review';
 
 @customElement('arc-onboarding')
 export class ArcOnboarding extends LitElement {
-  private _client = new ArcClient('/api/v1');
+  @state() private _client = new ArcClient('/api/v1');
 
   @state() private _draftId = '';
   @state() private _currentStepId = 'welcome';
@@ -199,6 +199,18 @@ export class ArcOnboarding extends LitElement {
         flex-wrap: wrap;
         gap: var(--space-3);
       }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
     `
   ];
 
@@ -300,8 +312,10 @@ export class ArcOnboarding extends LitElement {
           if (!parsed.mcpServers && parsed.mcp?.servers) {
             parsed.mcpServers = parsed.mcp.servers.map((server: any) => ({
               name: server.name,
+              category: server.category || 'NETWORK',
               transport: 'sse',
               url: server.endpoint,
+              headerVaultRefs: server.headerVaultRefs || {},
             }));
           }
           this._draftPayload = parsed;
@@ -370,6 +384,9 @@ export class ArcOnboarding extends LitElement {
     this._error = '';
     try {
       const newPayload = this._withMcpExtensionPayload({ ...this._draftPayload, ...payloadUpdates });
+      if (newPayload.connections) {
+        newPayload.profiles = this._harvestProfiles(newPayload.connections);
+      }
       const serialized = JSON.stringify(newPayload);
       
       const res = await this._client.updateDraftStep(this._draftId, targetStepId, {
@@ -377,7 +394,44 @@ export class ArcOnboarding extends LitElement {
       });
       
       this._currentStepId = res.currentStepId;
-      this._draftPayload = newPayload;
+      if (res.selectedNonSecretIds && res.selectedNonSecretIds.length > 0) {
+        try {
+          const parsed = JSON.parse(res.selectedNonSecretIds[0]);
+          if (parsed.mcp?.servers) {
+            parsed.mcpServers = parsed.mcp.servers.map((server: any) => ({
+              name: server.name,
+              category: server.category || 'NETWORK',
+              transport: 'sse',
+              url: server.endpoint,
+              headerVaultRefs: server.headerVaultRefs || {},
+            }));
+          }
+          if (parsed.connections && parsed.profiles) {
+            for (const conn of parsed.connections) {
+              if (!conn.profiles || conn.profiles.length === 0) {
+                conn.profiles = (parsed.profiles as ModelProfileDraft[]).filter(
+                  (p: ModelProfileDraft) => p.connectionId === conn.id || (conn.provider && p.connectionId === conn.provider)
+                );
+              }
+            }
+          }
+          this._draftPayload = parsed;
+        } catch (_) {
+          this._draftPayload = { ...newPayload, mcpServers: this._draftPayload.mcpServers };
+        }
+      } else {
+        this._draftPayload = { ...newPayload, mcpServers: this._draftPayload.mcpServers };
+      }
+      if (this._draftPayload.mcpServers) {
+        this._draftPayload.mcpServers = this._draftPayload.mcpServers.map(s => {
+          const { headers: _, ...rest } = s;
+          return rest;
+        });
+      }
+      this.updateComplete.then(() => {
+        const target = this.shadowRoot?.querySelector('h2, .step-title, input, button.btn-primary');
+        (target as HTMLElement)?.focus?.();
+      });
     } catch (e: any) {
       this._error = e.message;
     } finally {
@@ -488,8 +542,48 @@ export class ArcOnboarding extends LitElement {
     this._saveAndNavigate('connections');
   }
 
+  private _safeUUID(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'id-' + Math.random().toString(36).substring(2, 11) + '-' + Date.now().toString(36);
+  }
+
+  private _harvestProfiles(connections: ConnectionDraft[]): ModelProfileDraft[] {
+    const harvested: ModelProfileDraft[] = [];
+    for (const conn of connections) {
+      if (!conn.id) {
+        conn.id = 'conn-' + this._safeUUID();
+      }
+      if (conn.profiles && conn.profiles.length > 0) {
+        for (const p of conn.profiles) {
+          p.connectionId = conn.id;
+          if (!p.id) {
+            p.id = 'prof-' + this._safeUUID();
+          }
+          harvested.push(p);
+        }
+      } else if (conn.modelId) {
+        harvested.push({
+          id: 'prof-' + this._safeUUID(),
+          connectionId: conn.id,
+          modelId: conn.modelId,
+          structuredOutputMode: conn.structuredOutputMode || 'NATIVE',
+          enabled: true
+        });
+      }
+    }
+    return harvested;
+  }
+
   private _handleUpdateConnections(e: CustomEvent) {
-    this._draftPayload = { ...this._draftPayload, connections: e.detail.connections };
+    const connections: ConnectionDraft[] = e.detail.connections || [];
+    const profiles = this._harvestProfiles(connections);
+    this._draftPayload = {
+      ...this._draftPayload,
+      connections,
+      profiles
+    };
   }
 
   private _handleUpdateRoutes(e: CustomEvent) {
@@ -507,11 +601,24 @@ export class ArcOnboarding extends LitElement {
   private _withMcpExtensionPayload(payload: O1DraftPayload): O1DraftPayload {
     const payloadWithoutUiOnlyMcp = { ...payload };
     delete payloadWithoutUiOnlyMcp.mcpServers;
-    const servers = (payload.mcpServers || []).map(server => ({
-      name: server.name.trim(),
-      endpoint: (server.url || '').trim(),
-      category: 'INTERNAL',
-    }));
+    const servers = (payload.mcpServers || []).map(server => {
+      const s: any = {
+        name: server.name.trim(),
+        endpoint: (server.url || '').trim(),
+        category: server.category || 'NETWORK',
+      };
+      if (server.transport) s.transport = server.transport;
+      if (server.command) s.command = server.command;
+      if (server.args) s.args = [...server.args];
+      if (server.envVars) s.envVars = { ...server.envVars };
+      if (server.headerVaultRefs && Object.keys(server.headerVaultRefs).length > 0) {
+        s.headerVaultRefs = { ...server.headerVaultRefs };
+      }
+      if (server.headers && Object.keys(server.headers).length > 0) {
+        s.headers = { ...server.headers };
+      }
+      return s;
+    });
     return { ...payloadWithoutUiOnlyMcp, mcp: { servers } };
   }
 
@@ -544,7 +651,8 @@ export class ArcOnboarding extends LitElement {
     const draftReady = Boolean(this._draftId);
 
     return html`
-      <div class="wizard-card ${isWide ? 'wide' : ''}">
+      <main class="wizard-card ${isWide ? 'wide' : ''}" role="main" aria-label="Amsha Agent Infrastructure Onboarding">
+        <div class="sr-only" aria-live="polite" id="step-announcer">Step: ${this._currentStepId}</div>
         <div class="wizard-header">
           <div class="brand-mark">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -651,7 +759,7 @@ export class ArcOnboarding extends LitElement {
               </div>
             `
           : ''}
-      </div>
+      </main>
     `;
   }
 
@@ -667,6 +775,7 @@ export class ArcOnboarding extends LitElement {
       case 'connections':
         return html`
           <arc-onboarding-step-connections
+            .client="${this._client}"
             .connections="${this._draftPayload.connections || []}"
             .catalog="${this._catalog}"
             .modelDefaults="${this._modelDefaults}"
@@ -764,8 +873,20 @@ export class ArcOnboarding extends LitElement {
             .connections="${this._draftPayload.connections || []}"
             .catalog="${this._catalog}"
             .concernRoutes="${this._draftPayload.concernRoutes}"
+            .mcpServers="${this._draftPayload.mcpServers || []}"
             @finish="${this._commit}"
           ></arc-onboarding-step-review>
+        `;
+      case 'complete':
+        return html`
+          <div class="step-container" style="text-align: center; padding: var(--space-8) var(--space-4);">
+            <div style="font-size: 48px; margin-bottom: var(--space-4); color: var(--color-success, #10b981);">✓</div>
+            <h2 class="step-title">Configuration Complete</h2>
+            <p class="step-description">Your AI Agent settings have been reviewed and are ready to commit.</p>
+            <div style="margin-top: var(--space-6);">
+              <button class="btn-primary" @click="${this._commit}">Get Started</button>
+            </div>
+          </div>
         `;
       default:
         return html`

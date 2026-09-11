@@ -73,7 +73,7 @@ public class PromptSectionBuilder {
             "EXECUTION BOUNDARY: You cannot run code directly. If you are a skill role, use your permitted execution tool; otherwise hand off to the appropriate specialist execution role.\n";
 
     private static final String COMPACT_BROWSER_RETRY_RULE =
-            "BROWSER EXTRACTION RETRY RULE: If `browser_navigate` extraction returns too little text, retry once with a broader selector.\n";
+            "BROWSER RETRIEVAL RULE: Use `browser_navigate` before `web_fetch` for exact URLs; use `web_fetch` only after browser failure.\n";
 
     public String buildExecutionBoundaryRule(AgentRoleEnum roleEnum, boolean isCompact) {
         boolean hasHost = capabilityRegistry.hasCapability(roleEnum.id(), ToolCapability.HOST_EXEC.toolName());
@@ -97,10 +97,10 @@ public class PromptSectionBuilder {
         if (isCompact) return COMPACT_BROWSER_RETRY_RULE;
 
         return """
-                BROWSER EXTRACTION RETRY RULE:
-                - If a browser extraction (`browser_navigate` with action=extract_text) returns fewer
-                  than 300 characters, the CSS selector likely failed or targeted a shell element.
-                - Attempt a second call with a broader selector (e.g. "h3", "article", or "body").
+                BROWSER RETRIEVAL RULE:
+                - Use `browser_navigate` before `web_fetch` for every exact URL.
+                - If browser navigation fails, use `web_fetch` on the same URL.
+                - Use one alternative natural-language search only after both retrieval paths fail.
                 """;
     }
 

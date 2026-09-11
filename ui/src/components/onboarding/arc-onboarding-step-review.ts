@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ConcernRoutes, ConnectionDraft, ProviderDescriptor } from '../../api/types';
+import { ConcernRoutes, ConnectionDraft, McpServerDraft, ProviderDescriptor } from '../../api/types';
 import { formStyles } from '../arc-onboarding-styles';
 
 @customElement('arc-onboarding-step-review')
@@ -57,6 +57,7 @@ export class ArcOnboardingStepReview extends LitElement {
 
   @property({ type: Array }) connections: ConnectionDraft[] = [];
   @property({ type: Array }) catalog: ProviderDescriptor[] = [];
+  @property({ type: Array }) mcpServers: McpServerDraft[] = [];
   @property({ type: Object }) concernRoutes: ConcernRoutes = {
     agentLoop: [],
     compaction: [],
@@ -103,6 +104,10 @@ export class ArcOnboardingStepReview extends LitElement {
         <div class="summary-item">
           <span class="label">Embedding Route</span>
           <span class="value">${this._getConnName(this.concernRoutes.embedding[0])}</span>
+        </div>
+        <div class="summary-item">
+          <span class="label">MCP Servers</span>
+          <span class="value">${this.mcpServers.length ? `${this.mcpServers.length} configured (${this.mcpServers.map(s => s.name).join(', ')})` : 'None'}</span>
         </div>
       </div>
 

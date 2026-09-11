@@ -38,7 +38,8 @@ public final class CronSessionStatusSync {
                 return false;
             }
             try {
-                boolean resumed = cronStore.claimForResume(jobId, executionId);
+                boolean resumed =
+                        cronStore.claimForResume(jobId, executionId) || cronStore.renewLease(jobId, executionId);
                 if (!resumed) {
                     log.warnf(
                             "Failed to claim cron %s for resume (deliveryId=%s) - lease lost or superseded",
@@ -153,7 +154,7 @@ public final class CronSessionStatusSync {
         }
     }
 
-    private static String extractExecutionId(String sub) {
+    static String extractExecutionId(String sub) {
         if (sub.length() == 36) {
             return null;
         }

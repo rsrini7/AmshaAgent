@@ -87,7 +87,7 @@ class ModelDefaultsResourceUnitTest {
         Response response = resource.getDefaultForProvider("cohere");
         assertEquals(200, response.getStatus());
         Map<?, ?> map = (Map<?, ?>) response.getEntity();
-        assertEquals("command-r-plus-08-2024", map.get("defaultModel"));
+        assertEquals("command-r-08-2024", map.get("defaultModel"));
         assertEquals("https://api.cohere.ai/compatibility/v1", map.get("defaultBaseUrl"));
     }
 

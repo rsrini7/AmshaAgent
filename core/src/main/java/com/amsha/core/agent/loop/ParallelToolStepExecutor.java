@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -33,7 +34,6 @@ import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.MdcCleaner;
 import com.amsha.core.util.MdcKeys;
 import com.amsha.core.util.PreExecutionFilter;
-import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolCategory;
 import com.amsha.tool.api.ToolResponse;
@@ -199,6 +199,7 @@ public class ParallelToolStepExecutor {
                 MdcKeys.PARALLEL_TOOLS,
                 allowedCalls.stream().map(ParallelToolCall::toolName).collect(Collectors.joining(",")));
 
+        observers.forEach(o -> o.onBatchStart(context.sessionId(), context.agentRole(), allowedCalls.size()));
         List<ParallelToolCall> allowedCompleted;
         try {
             allowedCompleted = runAllowedCallsAsync(context, history, allowedCalls, otelContext);
@@ -212,6 +213,14 @@ public class ParallelToolStepExecutor {
             throw re;
         } finally {
             MdcCleaner.clear(MdcKeys.PARALLEL_BATCH_SIZE, MdcKeys.PARALLEL_TOOLS);
+            observers.forEach(o -> o.onBatchComplete(context.sessionId(), context.agentRole()));
+        }
+
+        Optional<DelegatedParallelPauseSupport.Pause> delegatedPause =
+                DelegatedParallelPauseSupport.find(allowedCompleted, objectMapper);
+        if (delegatedPause.isPresent()) {
+            return persistDelegatedPause(
+                    context, calls, dedupCalls, allowedCompleted, history, batchStep, delegatedPause.get());
         }
 
         List<ParallelToolCall> allCompleted =
@@ -376,10 +385,20 @@ public class ParallelToolStepExecutor {
             List<ParallelToolCall> calls) {
 
         Set<String> safeTools = preExecutableTools.map(HashSet::new).orElse(new HashSet<>());
-
-        AutonomyLevel autonomy = context.autonomyLevel();
-
-        PreExecutionFilter.SplitResult split = PreExecutionFilter.split(calls, autonomy, safeTools);
+        PreExecutionFilter.SplitResult split = PreExecutionFilter.split(
+                calls,
+                context.autonomyLevel(),
+                safeTools,
+                call -> guard.evaluate(
+                                context.sessionId(),
+                                context.agentRole(),
+                                context.autonomyLevel(),
+                                call.toolName(),
+                                call.params(),
+                                history,
+                                context.goal(),
+                                List.of())
+                        instanceof ToolInvocationGuard.GuardDecision.PauseForApproval);
 
         if (split.preExecutable().isEmpty()) {
             List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
@@ -397,20 +416,23 @@ public class ParallelToolStepExecutor {
                         context.agentRole(),
                         () -> sequentialToolExecutor.invoke(call.toolName(), call.params(), context.sessionId()));
 
-                preResults.put(call.toolName(), resp);
+                preResults.put(resultKey(call), resp);
                 log.debugf("[PRE-EXEC] session=%s tool=%s succeeded.", context.sessionId(), call.toolName());
             } catch (Exception e) {
                 log.warnf(
                         "[PRE-EXEC] session=%s tool %s failed pre-execution: %s",
                         context.sessionId(), call.toolName(), LogUtil.rootMessage(e));
-                preResults.put(call.toolName(), ToolResponse.failure(1, "Pre-execution failed: " + e.getMessage()));
+                preResults.put(resultKey(call), ToolResponse.failure(1, "Pre-execution failed: " + e.getMessage()));
             }
         }
 
         if (split.hitlPending().isEmpty()) {
             List<ParallelToolCall> completed = new ArrayList<>();
             for (ParallelToolCall call : calls) {
-                ToolResponse resp = preResults.get(call.toolName());
+                ToolResponse resp = preResults.get(resultKey(call));
+                if (resp == null) {
+                    resp = preResults.get(call.toolName());
+                }
                 if (resp != null) {
                     completed.add(call.withResult(resp.output(), resp.success()));
                 } else {
@@ -425,6 +447,45 @@ public class ParallelToolStepExecutor {
         List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
         return StepDecision.terminal(checkpointManager.persistBatchWithPreExecuted(
                 context, calls, preResults, historyAtPause, context.channelType(), context.channelPlatformId()));
+    }
+
+    private StepDecision persistDelegatedPause(
+            AgentExecutionContext context,
+            List<ParallelToolCall> calls,
+            List<ParallelToolCall> dedupCalls,
+            List<ParallelToolCall> allowedCompleted,
+            List<ReasoningStep> history,
+            ReasoningStep batchStep,
+            DelegatedParallelPauseSupport.Pause pause) {
+        Map<String, ToolResponse> completedResults =
+                DelegatedParallelPauseSupport.completedResults(dedupCalls, allowedCompleted, pause);
+        List<ReasoningStep> historyAtPause = batchResultAggregator.appendPendingBatchStep(history, batchStep);
+        List<ParallelToolCall> checkpointCalls = rewriteDelegatedCalls(calls, allowedCompleted);
+        return StepDecision.terminal(checkpointManager.persistBatchWithPreExecuted(
+                context,
+                checkpointCalls,
+                completedResults,
+                historyAtPause,
+                context.channelType(),
+                context.channelPlatformId()));
+    }
+
+    private List<ParallelToolCall> rewriteDelegatedCalls(
+            List<ParallelToolCall> calls, List<ParallelToolCall> completed) {
+        return calls.stream()
+                .map(original -> completed.stream()
+                        .filter(candidate -> Objects.equals(candidate.callId(), original.callId()))
+                        .filter(candidate ->
+                                ToolCapability.DELEGATE_TO_AGENT.toolName().equals(candidate.toolName()))
+                        .findFirst()
+                        .map(candidate -> ParallelToolCall.pending(
+                                candidate.callId(), candidate.toolName(), candidate.params(), candidate.paramsJson()))
+                        .orElse(original))
+                .toList();
+    }
+
+    private static String resultKey(ParallelToolCall call) {
+        return call.callId() == null || call.callId().isBlank() ? call.toolName() : call.callId();
     }
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep batchStep, String sessionId) {

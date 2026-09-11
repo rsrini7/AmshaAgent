@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
@@ -11,7 +12,6 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolResponse;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,13 +24,8 @@ class SmartWebFetchToolIntegrationTest {
     void setUp() {
         tool = new SmartWebFetchTool();
         tool.auditService = mock(AuditService.class);
-        tool.init();
         mockCtx = mock(ToolExecutionContext.class);
-    }
-
-    @AfterEach
-    void tearDown() {
-        tool.cleanup();
+        when(mockCtx.userId()).thenReturn("user-1");
     }
 
     @Test

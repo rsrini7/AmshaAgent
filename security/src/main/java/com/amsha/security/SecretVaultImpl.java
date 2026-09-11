@@ -2,6 +2,7 @@ package com.amsha.security;
 
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
@@ -141,11 +142,39 @@ public class SecretVaultImpl implements SecretVault {
         store(keyName, secret, userId, userVaultScope(userId));
     }
 
+    private static final class KeyHolder implements AutoCloseable {
+        private final VaultKey key;
+        private final boolean closeOnExit;
+
+        KeyHolder(VaultKey key, boolean closeOnExit) {
+            this.key = key;
+            this.closeOnExit = closeOnExit;
+        }
+
+        VaultKey key() {
+            return key;
+        }
+
+        @Override
+        public void close() {
+            if (closeOnExit && key != null) {
+                key.close();
+            }
+        }
+    }
+
+    private KeyHolder acquireSessionKey(String sessionId) {
+        try {
+            return new KeyHolder(keyCache.getOrDerive(sessionId, keyDerivation), false);
+        } catch (ContextNotActiveException _) {
+            return new KeyHolder(keyDerivation.deriveSessionKey(sessionId), true);
+        }
+    }
+
     private void store(String keyName, byte[] secret, String userId, String sessionId) {
         Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_VAULT_STORE);
-        // 1. Derive Key
-        VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
-        try {
+        try (KeyHolder keyHolder = acquireSessionKey(sessionId)) {
+            VaultKey sessionKey = keyHolder.key();
             if (span != null) span.setAttribute(AgentOTelConstants.ATTR_VAULT_KEY_NAME, keyName);
             // 2. Encrypt (AAD = keyName)
             AesGcmSivCipher.CipherResult result = cipher.encrypt(secret, sessionKey, keyName);
@@ -180,7 +209,6 @@ public class SecretVaultImpl implements SecretVault {
         } finally {
             if (span != null) span.end();
         }
-        // sessionKey NOT auto-closed here - lifecycle managed by VaultKeyCache
     }
 
     @Override
@@ -226,10 +254,12 @@ public class SecretVaultImpl implements SecretVault {
                 return Optional.empty();
             }
 
-            // 2. Derive Key
-            VaultKey sessionKey = keyCache.getOrDerive(sessionId, keyDerivation);
-            // 3. Decrypt
-            byte[] plaintext = cipher.decrypt(dto.ciphertext(), dto.nonce(), sessionKey, keyName);
+            // 2. Derive Key & 3. Decrypt
+            byte[] plaintext;
+            try (KeyHolder keyHolder = acquireSessionKey(sessionId)) {
+                VaultKey sessionKey = keyHolder.key();
+                plaintext = cipher.decrypt(dto.ciphertext(), dto.nonce(), sessionKey, keyName);
+            }
             if (!VaultConstants.SYSTEM_SESSION_ID.equals(sessionId)) {
                 auditService.record(
                         sessionId,

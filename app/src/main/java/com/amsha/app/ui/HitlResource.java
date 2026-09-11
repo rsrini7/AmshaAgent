@@ -151,11 +151,14 @@ public class HitlResource {
                     .entity(new AmshaErrorResponse("Authentication required", "Cannot resolve user identity"))
                     .build();
         }
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Response cached = idempotencyCache.getIfPresent(idempotencyKey);
+        String toolName = (request != null) ? request.toolName() : null;
+        String cacheKey = (idempotencyKey != null && !idempotencyKey.isBlank())
+                ? idempotencyKey + ":" + (toolName != null ? toolName : "all")
+                : null;
+        if (cacheKey != null) {
+            Response cached = idempotencyCache.getIfPresent(cacheKey);
             if (cached != null) return cached;
         }
-        String toolName = (request != null) ? request.toolName() : null;
         String reason = (request != null
                         && request.reason() != null
                         && !request.reason().isBlank())
@@ -176,8 +179,8 @@ public class HitlResource {
                     AUDIT_TASK_ID_PREFIX + taskId + " tool=" + toolName + " via=REST");
             Response response = Response.ok(new CheckpointApprovalResponse("approved", taskId, toolName, reason))
                     .build();
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                idempotencyCache.put(idempotencyKey, response);
+            if (cacheKey != null) {
+                idempotencyCache.put(cacheKey, response);
             }
             return response;
         } catch (Exception e) {
@@ -199,11 +202,14 @@ public class HitlResource {
                     .entity(new AmshaErrorResponse("Authentication required", "Cannot resolve user identity"))
                     .build();
         }
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            Response cached = idempotencyCache.getIfPresent(idempotencyKey);
+        String toolName = (request != null) ? request.toolName() : null;
+        String cacheKey = (idempotencyKey != null && !idempotencyKey.isBlank())
+                ? idempotencyKey + ":" + (toolName != null ? toolName : "all")
+                : null;
+        if (cacheKey != null) {
+            Response cached = idempotencyCache.getIfPresent(cacheKey);
             if (cached != null) return cached;
         }
-        String toolName = (request != null) ? request.toolName() : null;
         String reason = (request != null
                         && request.reason() != null
                         && !request.reason().isBlank())
@@ -224,8 +230,8 @@ public class HitlResource {
                     AUDIT_TASK_ID_PREFIX + taskId + " tool=" + toolName + " via=REST");
             Response response = Response.ok(new CheckpointApprovalResponse("rejected", taskId, toolName, reason))
                     .build();
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-                idempotencyCache.put(idempotencyKey, response);
+            if (cacheKey != null) {
+                idempotencyCache.put(cacheKey, response);
             }
             return response;
         } catch (Exception e) {

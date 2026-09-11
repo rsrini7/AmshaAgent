@@ -9,10 +9,12 @@ import jakarta.enterprise.inject.Instance;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.mcp.transport.McpConnectionLifecycleService;
 import com.amsha.onboarding.extension.McpOnboardingExtension;
@@ -21,6 +23,7 @@ import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelProfileDto;
+import com.amsha.persistence.api.ModelRouteAssignmentDto;
 import com.amsha.persistence.api.OnboardingCommitReceiptDto;
 import com.amsha.persistence.api.OnboardingCommitReceiptStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
@@ -35,6 +38,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -61,6 +65,7 @@ class OnboardingCoordinatorExtensionTest {
     InMemoryReceiptStore receiptStore;
     SecretVault vault;
     Instance<OnboardingExtension> exts;
+    ObjectMapper objectMapper;
 
     static final class InMemoryReceiptStore implements OnboardingCommitReceiptStorePort {
         final Map<String, OnboardingCommitReceiptDto> receipts = new LinkedHashMap<>();
@@ -101,7 +106,7 @@ class OnboardingCoordinatorExtensionTest {
 
         vault = mock(SecretVault.class);
         receiptStore = new InMemoryReceiptStore();
-        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper = new ObjectMapper();
 
         scrubber = new OnboardingSelectionScrubber();
         scrubber.vault = vault;
@@ -115,6 +120,8 @@ class OnboardingCoordinatorExtensionTest {
         commitSaga.extensions = exts;
         commitSaga.scrubber = scrubber;
         commitSaga.vaultPriority = true;
+        commitSaga.profileExporter = new OnboardingProfileExporter();
+        commitSaga.profileStore = profileStore;
 
         coordinator = new OnboardingCoordinator();
         coordinator.draftStore = draftStore;
@@ -280,6 +287,103 @@ class OnboardingCoordinatorExtensionTest {
                 .storeSystemKey(
                         eq(VaultConstants.LLM_BASE_URL_KEY),
                         eq("https://provider.example/v1".getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void activateLlmSettingsDoesNotPromoteUserApiKeyToSystemVault() {
+        OnboardingDraftDto base = draft("no-key-promotion", OnboardingDraftState.DRAFT, List.of());
+        String payload = """
+                {"connections":[{"provider":"openai","modelId":"gpt-4o",
+                 "apiKeyVaultRef":"vault-key-user-123"}],
+                 "concernRoutes":{"agentLoop":[0]}}
+                """;
+        OnboardingDraftDto selected = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of(payload),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        commitSaga.activateLlmSettings(selected);
+
+        // Verify provider and model are stored in system vault, but NOT the API key!
+        verify(vault)
+                .storeSystemKey(eq(VaultConstants.LLM_PROVIDER_KEY), eq("openai".getBytes(StandardCharsets.UTF_8)));
+        verify(vault).storeSystemKey(eq(VaultConstants.LLM_MODEL_KEY), eq("gpt-4o".getBytes(StandardCharsets.UTF_8)));
+        verify(vault, never()).storeSystemKey(eq(VaultConstants.LLM_API_KEY), any());
+    }
+
+    @Test
+    void activateOptionalStagesScrubsSecretsBeforeWritingToSystemVault() {
+        OnboardingDraftDto base = draft("scrub-optional-secrets", OnboardingDraftState.DRAFT, List.of());
+        String payload = """
+                {"connections":[{"provider":"openai","modelId":"gpt-4o"}],
+                 "concernRoutes":{"agentLoop":[0]},
+                 "integrations":{"playwrightEnabled":true,"githubToken":"ghp_supersecret123"}}
+                """;
+        OnboardingDraftDto selected = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of(payload),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        commitSaga.activateLlmSettings(selected);
+
+        // Secret should be scrubbed and stored in user vault scope
+        verify(vault).store(anyString(), eq("ghp_supersecret123".getBytes(StandardCharsets.UTF_8)), eq(base.ownerId()));
+
+        // System vault should store settings:integrations without plaintext secret
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+        verify(vault).storeSystemKey(eq("settings:integrations"), captor.capture());
+        String storedJson = new String(captor.getValue(), StandardCharsets.UTF_8);
+        assertTrue(storedJson.contains("githubTokenVaultRef"));
+        assertFalse(storedJson.contains("ghp_supersecret123"));
+    }
+
+    @Test
+    void cleanupStagedSecretsCleansOptionalSectionVaultRefs() {
+        OnboardingDraftDto base = draft("cleanup-optional-secrets", OnboardingDraftState.DRAFT, List.of());
+        String payload = """
+                {"integrations":{"githubTokenVaultRef":"vault-key-staged-123"}}
+                """;
+        OnboardingDraftDto draft = new OnboardingDraftDto(
+                base.draftId(),
+                base.ownerId(),
+                base.purpose(),
+                base.planFingerprint(),
+                base.currentStepId(),
+                base.completedStepIds(),
+                List.of(payload),
+                base.safeFieldErrors(),
+                base.pendingApprovalIds(),
+                base.state(),
+                base.revision(),
+                base.expiresAt(),
+                base.createdAt(),
+                base.updatedAt());
+
+        coordinator.scrubber.cleanupStagedSecrets(draft);
+
+        verify(vault).remove(eq("vault-key-staged-123"), eq(base.ownerId()));
     }
 
     @Test
@@ -518,6 +622,158 @@ class OnboardingCoordinatorExtensionTest {
         coordinator.importProfiles("owner-1", data, profileStore);
         verify(profileStore).saveConnection(any());
         verify(profileStore).saveModelProfile(any());
+    }
+
+    @Test
+    void importProfilesToDraft_stagesSerializedTopologyWithoutWritingProfileStore() {
+        Map<String, Object> data = Map.of(
+                "connections",
+                        List.of(Map.of("id", "c-import", "providerAdapterId", "openai", "displayName", "Imported")),
+                "profiles", List.of(Map.of("id", "p-import", "connectionId", "c-import", "modelId", "gpt-4o")),
+                "routes",
+                        List.of(Map.of(
+                                "id", "r-import", "targetKind", "DEFAULT", "orderedProfileIds", List.of("p-import"))));
+
+        OnboardingDraftDto base = draft("d-import-stage", OnboardingDraftState.DRAFT, List.of());
+        AtomicReference<OnboardingDraftDto> holder = new AtomicReference<>(base);
+        when(draftStore.findActiveByOwner(eq("owner-1"), any())).thenReturn(Optional.of(base));
+        when(draftStore.update(any(), anyInt())).thenAnswer(inv -> {
+            holder.set(inv.getArgument(0));
+            return true;
+        });
+        when(draftStore.findById("d-import-stage")).thenAnswer(inv -> Optional.ofNullable(holder.get()));
+
+        OnboardingDraftDto result = coordinator.importProfilesToDraft("owner-1", data, profileStore);
+
+        // Invariant: profileStore is NOT written during import to draft!
+        verify(profileStore, never()).saveConnection(any());
+        verify(profileStore, never()).saveModelProfile(any());
+        verify(profileStore, never()).saveRouteAssignment(any());
+
+        assertNotNull(result);
+        assertEquals("review", result.currentStepId());
+        assertEquals(OnboardingDraftState.DRAFT, result.state());
+        assertFalse(result.selectedNonSecretIds().isEmpty());
+        String stagedJson = result.selectedNonSecretIds().get(0);
+        assertTrue(stagedJson.contains("c-import"));
+        assertTrue(stagedJson.contains("p-import"));
+        assertTrue(stagedJson.contains("concernRoutes"));
+    }
+
+    @Test
+    void importProfilesToDraft_scrubsCallerSuppliedSecretsIntoVaultReferences() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("apiKey", "attacker-top-level-key");
+        data.put("password", "attacker-top-level-pass");
+        data.put(
+                "connections",
+                List.of(Map.of(
+                        "id", "c-sec",
+                        "providerAdapterId", "openai",
+                        "apiKey", "sk-secret-conn-key",
+                        "password", "conn-secret-pass")));
+        data.put("profiles", List.of(Map.of("id", "p-sec", "connectionId", "c-sec", "modelId", "gpt-4o")));
+        data.put(
+                "routes",
+                List.of(Map.of("id", "r-sec", "targetKind", "DEFAULT", "orderedProfileIds", List.of("p-sec"))));
+        data.put("mcp", Map.of("headers", Map.of("Authorization", "Bearer mcp-secret-token")));
+        data.put("integrations", Map.of("slackToken", "xoxb-secret-slack-token"));
+
+        OnboardingDraftDto base = draft("d-import-secrets", OnboardingDraftState.DRAFT, List.of());
+        AtomicReference<OnboardingDraftDto> holder = new AtomicReference<>(base);
+        when(draftStore.findActiveByOwner(eq("owner-1"), any())).thenReturn(Optional.of(base));
+        when(draftStore.update(any(), anyInt())).thenAnswer(inv -> {
+            holder.set(inv.getArgument(0));
+            return true;
+        });
+        when(draftStore.findById("d-import-secrets")).thenAnswer(inv -> Optional.ofNullable(holder.get()));
+
+        List<Map.Entry<String, String>> storedSecrets = captureStoredSecrets();
+        OnboardingDraftDto result = coordinator.importProfilesToDraft("owner-1", data, profileStore);
+
+        assertNotNull(result);
+        assertFalse(result.selectedNonSecretIds().isEmpty());
+        String stagedJson = result.selectedNonSecretIds().get(0);
+
+        // Plaintext secrets MUST NOT appear in the staged draft
+        assertFalse(stagedJson.contains("attacker-top-level-key"));
+        assertFalse(stagedJson.contains("attacker-top-level-pass"));
+        assertFalse(stagedJson.contains("sk-secret-conn-key"));
+        assertFalse(stagedJson.contains("conn-secret-pass"));
+        assertFalse(stagedJson.contains("Bearer mcp-secret-token"));
+        assertFalse(stagedJson.contains("xoxb-secret-slack-token"));
+
+        // Staged draft MUST contain opaque vault references
+        assertTrue(stagedJson.contains("apiKeyVaultRef"));
+        assertTrue(stagedJson.contains("passwordVaultRef"));
+        assertTrue(stagedJson.contains("headerVaultRefs"));
+        assertTrue(stagedJson.contains("slackTokenVaultRef"));
+
+        // Verify secrets were stored in the vault for owner-1
+        assertTrue(containsSecret(storedSecrets, "vault-key-", "sk-secret-conn-key"));
+        assertTrue(containsSecret(storedSecrets, "vault-key-", "conn-secret-pass"));
+        assertTrue(containsSecret(storedSecrets, "mcp-header-", "Bearer mcp-secret-token"));
+        assertTrue(containsSecret(storedSecrets, "vault-key-", "xoxb-secret-slack-token"));
+        verify(vault, atLeastOnce()).store(anyString(), any(), eq("owner-1"));
+    }
+
+    /**
+     * Records (reference, plaintext) pairs at invocation time. The scrubber zeroes its plaintext
+     * buffer once the vault has consumed it, so assertions cannot inspect the array afterwards.
+     */
+    private List<Map.Entry<String, String>> captureStoredSecrets() {
+        List<Map.Entry<String, String>> captured = new ArrayList<>();
+        doAnswer(invocation -> {
+                    captured.add(Map.entry(
+                            invocation.getArgument(0),
+                            new String((byte[]) invocation.getArgument(1), StandardCharsets.UTF_8)));
+                    return null;
+                })
+                .when(vault)
+                .store(anyString(), any(), anyString());
+        return captured;
+    }
+
+    private static boolean containsSecret(List<Map.Entry<String, String>> stored, String refPrefix, String secret) {
+        return stored.stream().anyMatch(e -> e.getKey().contains(refPrefix) && secret.equals(e.getValue()));
+    }
+
+    @Test
+    void commitDraft_withImportedTopology_activatesProfileStoreAndTransitionsToCompleted() {
+        Map<String, Object> data = Map.of(
+                "connections",
+                        List.of(Map.of("id", "c-import", "providerAdapterId", "openai", "displayName", "Imported")),
+                "profiles", List.of(Map.of("id", "p-import", "connectionId", "c-import", "modelId", "gpt-4o")),
+                "routes",
+                        List.of(Map.of(
+                                "id", "r-import", "targetKind", "DEFAULT", "orderedProfileIds", List.of("p-import"))));
+
+        OnboardingDraftDto base = draft("d-import-commit", OnboardingDraftState.DRAFT, List.of());
+        OnboardingDraftDto stagedDraft = OnboardingResourceHelper.buildImportedReviewDraft(base, data, objectMapper);
+
+        when(draftStore.findById("d-import-commit")).thenReturn(Optional.of(stagedDraft));
+        when(draftStore.update(any(), anyInt())).thenReturn(true);
+
+        Optional<OnboardingDraftDto> committed = coordinator.commitDraft("d-import-commit");
+
+        assertTrue(committed.isPresent());
+        assertEquals(OnboardingDraftState.COMPLETED, committed.get().state());
+
+        // Upon review/commit, durable records are activated!
+        ArgumentCaptor<LlmConnectionDto> connCaptor = ArgumentCaptor.forClass(LlmConnectionDto.class);
+        verify(profileStore).saveConnection(connCaptor.capture());
+        assertEquals("c-import", connCaptor.getValue().id());
+        assertEquals("ACTIVE", connCaptor.getValue().state());
+
+        ArgumentCaptor<ModelProfileDto> profCaptor = ArgumentCaptor.forClass(ModelProfileDto.class);
+        verify(profileStore).saveModelProfile(profCaptor.capture());
+        assertEquals("p-import", profCaptor.getValue().id());
+        assertTrue(profCaptor.getValue().enabled());
+
+        ArgumentCaptor<ModelRouteAssignmentDto> routeCaptor = ArgumentCaptor.forClass(ModelRouteAssignmentDto.class);
+        verify(profileStore).saveRouteAssignment(routeCaptor.capture());
+        assertEquals("r-import", routeCaptor.getValue().id());
+        assertTrue(routeCaptor.getValue().enabled());
     }
 
     // ---- draft revision/conflict ----
@@ -785,6 +1041,8 @@ class OnboardingCoordinatorExtensionTest {
         restartedSaga.objectMapper = new ObjectMapper();
         restartedSaga.extensions = exts;
         restartedSaga.scrubber = scrubber;
+        restartedSaga.profileExporter = new OnboardingProfileExporter();
+        restartedSaga.profileStore = profileStore;
 
         OnboardingCoordinator restartedCoordinator = new OnboardingCoordinator();
         restartedCoordinator.draftStore = draftStore;

@@ -1,9 +1,9 @@
 # ADR: Amsha Visual Cockpit — Observable & Governed Execution
 
 - **Status**: Accepted
-- **Date**: 2026-09-01
+- **Date**: 2026-09-01 (Reconciled: 2026-09-07)
 - **Decision Owners**: Amsha Architecture Committee
-- **Related Invariants**: `docs/Architecture_Invariants.md` §1.4, §1.8, §4.12, §5.9, §5.10, §5.24, §6.7, §7.7; `AGENTS.md` §8
+- **Related Invariants**: `docs/Architecture_Invariants.md` §1.4, §1.8, §4.12, §5.9, §5.10, §5.24, §6.1, §7.7, §26.1–§26.4; `AGENTS.md` §8
 - **Feature Slug**: `amsha-visual-cockpit`
 - **Issue Tracker**: `.scratch/amsha-visual-cockpit/`
 
@@ -32,8 +32,9 @@ in the existing Lit UI. Concretely:
    OpenTelemetry-context and observer-callback responsibilities.
 3. **Server-side redaction + bounded live stream.** A `TraceRedactor` (core) strips raw
    prompts/completions, secrets, tool parameters, and audit keys, and caps payload size, *before*
-   publication. The initial trace is a **bounded live stream** (per-run, in-memory bounded);
-   durable replay/scrubbing was implemented in Issue 08 across SQLite, PostgreSQL, and filesystem stores.
+   publication. The initial trace is a **bounded live stream** (in-memory buffer capped at 500
+   events per session); durable replay/scrubbing was implemented in Issue 08 across SQLite,
+   PostgreSQL, and filesystem stores with a 30-day retention bound.
 4. **Reuse the existing Lit shell.** Render in the existing `arc-*` components
    (`arc-shell`, `arc-chat-interface`, `arc-hitl-panel`) extended with new cockpit components;
    keep visualization modules out of channel modules.
@@ -44,9 +45,9 @@ in the existing Lit UI. Concretely:
    parameters, audit keys, and model text are never published by default.
 7. **Durable trace storage, retention, replay, and scrubbing (Issue 08).** Persist already-redacted
    trace events durably using a dedicated store port with semantic parity across SQLite, PostgreSQL,
-   and filesystem backends. Enforce server-side session ownership and operator authorization for
-   replay reads, keeping durable replay separate from the transient pending-approval SSE replay
-   path. Provide bounded sequence/time scrubbing in the cockpit UI without client-side step synthesis.
+   and filesystem backends (with 30-day retention). Enforce server-side session ownership and operator
+   authorization for replay reads, keeping durable replay separate from the transient pending-approval
+   SSE replay path. Provide bounded sequence/time scrubbing in the cockpit UI without client-side step synthesis.
 8. **Evaluated and rejected third-party animation libraries (Issue 09).** Evaluated optional GSAP
    motion enhancement under strict evidence gates. The evaluation concluded with **Rejected**:
    no non-fabricating target for MotionPath exists (trace events are discrete lifecycle stages,
@@ -68,11 +69,11 @@ in the existing Lit UI. Concretely:
 11. **Safe allowlisted symbolication enforced over raw-source X-Ray (Issue 12).** Formally rejected streaming raw Java source files, arbitrary method parameters, prompts, completions, and secret keys due to severe information-disclosure and multi-tenant isolation risks. Implemented safe allowlisted symbolication only via `TraceSymbolicationService` (strictly 9 architectural classes), resource-layer `isInternal()` authorization in `CockpitResource`, multi-tenant session ownership with 404 non-disclosure, mandatory operator audit logging, and server-side trace redaction via `TraceRedactor`.
 12. **Read-Only DB Console and Model Arena implemented (Issue 13).** Delivered internal-only operator surfaces:
     - **Read-Only DB Console** (`POST /api/v1/admin/db/query`): AST-level read-only SQL validation (single-statement enforcement, recursive DML/DDL rejection under EXPLAIN/CTE, exact PRAGMA allowlist), schema-metadata allowlist and wildcard ban enforced across SQLite (`sqlite_master`, `sqlite_schema`) and PostgreSQL (`information_schema.tables`, `flyway_schema_history`), two-tier programmatic tenant isolation predicates, SQLite `PRAGMA query_only = ON;`, PostgreSQL read-only transaction boundaries with guaranteed rollback, poisoned connection discard on reset failure, and mandatory audit logging.
-    - **Model Arena** (`POST /api/v1/admin/arena/compare`): Dedicated fail-closed `CredentialDetector` contract (400 Bad Request), PII policy enforcement, strict token bounding (<=2,048 input tokens, <=1,024 output tokens), provider endpoint resolution, per-provider pre-invocation egress governance via `GovernedTransportService.validateEgress()` with mandatory audit gating (zero agent tool / shell execution; chat completions delegate to resolved `ChatModel` instances with byte-level `GovernedTransportService.send()` unification across provider SDKs via `GovernedLangChainHttpClient`; open §O2 items are live catalog discovery, OAuth migration, and richer network-profile UI), and mandatory categorical audit logging (zero prompt or completion disclosure).
+    - **Model Arena** (`POST /api/v1/admin/arena/compare`): Dedicated fail-closed `CredentialDetector` contract (400 Bad Request), PII policy enforcement, strict token bounding (<=2,048 input tokens, <=1,024 output tokens), provider endpoint resolution, per-provider pre-invocation egress governance via `GovernedTransportService.validateEgress()` with mandatory audit gating (zero agent tool / shell execution; chat completions delegate to resolved `ChatModel` instances with byte-level `GovernedTransportService.send()` unification across provider SDKs via `GovernedLangChainHttpClient`; §O2 items — live catalog discovery, OAuth migration, and richer network-profile UI — are fully completed and verified), and mandatory categorical audit logging (zero prompt or completion disclosure).
     - **Operator UI Baseline**: Client security preserves session-scoped CSRF resolution (`sessionStorage` fallback alongside document cookies, strictly excluding persistent `localStorage`) and explicit 403 differentiation (distinguishing role-based authorization from transient/CSRF failures without broad substring leakage).
-13. **Advanced surfaces registry fully resolved and reconciled (Issue 07).** Every P3 advanced surface listed in Issue 07 has cleared its evidence gate: durable trace storage (Issue 08, implemented), third-party GSAP motion (Issue 09, evaluated & rejected in favor of calm SVG/CSS), local Whisper (Issue 10, implemented), additional paradigm loops (Issue 11, audited; non-fabricating conveyor fallback retained), raw-source X-Ray (Issue 12, rejected; safe symbolication retained), and DB console/Model Arena (Issue 13, DB Console evidence-verified; Model Arena core verified with byte-level `GovernedTransportService.send()` provider execution implemented via `GovernedLangChainHttpClient`; open §O2 items are live catalog discovery, OAuth migration, and richer network-profile UI).
+13. **Advanced surfaces registry fully resolved and reconciled (Issue 07).** Every P3 advanced surface listed in Issue 07 has cleared its evidence gate: durable trace storage (Issue 08, implemented), third-party GSAP motion (Issue 09, evaluated & rejected in favor of calm SVG/CSS), local Whisper (Issue 10, implemented), additional paradigm loops (Issue 11, audited; non-fabricating conveyor fallback retained), raw-source X-Ray (Issue 12, rejected; safe symbolication retained), and DB console/Model Arena (Issue 13, DB Console evidence-verified; Model Arena core verified with byte-level `GovernedTransportService.send()` provider execution implemented via `GovernedLangChainHttpClient`; §O2 items — live catalog discovery, OAuth migration, and richer network-profile UI — are completed and evidence-verified under `.scratch/o2-provider-onboarding/`).
 
-## 3. Alternatives Rejected
+## 3. Alternatives Considered
 
 - **UI-only fake animation** (pulsing without real events): rejected — visualization must only
   ever reflect observed events; animation is never evidence of a backend step.
@@ -117,7 +118,7 @@ in the existing Lit UI. Concretely:
 
 - **Transaction-Free Zone (§5.9)**: `TracePublisher` and every trace hook are non-transactional;
   `CheckpointApprovalService.approve/deny` keep `@Transactional(NOT_SUPPORTED)` (§5.10).
-- **GraalVM Native Reflection (§6.7 / AGENTS.md §8)**: register each new type in the **owning
+- **GraalVM Native Reflection (§6.1 / AGENTS.md §8)**: register each new type in the **owning
   module's** `*ReflectionConfig` — core trace records/enums in `CoreReflectionConfig`, app-level
   DTOs in `AppReflectionConfig`; never type-level `@RegisterForReflection`; nested/private types via
   `classNames` with binary names. UI TypeScript types need no GraalVM registration.
@@ -135,9 +136,17 @@ test`; Java `python3 ./scripts/fix_fqns.py && ./mvnw spotless:apply -q` and
 `./mvnw -pl <module> -am pmd:check -DskipTests`; native smoke `mise run smoke:local-runtime --
 native --binary dist/amsha-sqlite` (zero reflection-registration errors).
 
-## 6. Status and Review
+## 6. Acceptance Criteria
+
+- **SSE Compatibility**: `AgentTraceEvent` serializes on the existing SSE stream as a discriminated payload without altering existing `HitlEvent`, `AgentStatusEvent`, or `HeartbeatEvent` message schemas.
+- **Transaction Safety**: `TracePublisher` and all trace lifecycle listeners execute outside JTA transactions (`@Transactional(NOT_SUPPORTED)`), verified by thread and connection assertion tests (§5.9, §5.10).
+- **Redaction and Privacy**: `TraceRedactor` redacts prompts, completions, secret references, and tool arguments before emission or persistence.
+- **Durable Trace Storage**: Trace store ports achieve semantic parity across SQLite, PostgreSQL, and filesystem backends with session-scoped ownership validation and a 30-day retention bound.
+- **Operator Read-Only DB Console**: `POST /api/v1/admin/db/query` enforces AST parsing, single-statement SELECT only, PRAGMA allowlist, schema metadata restrictions, `PRAGMA query_only = ON;` (SQLite) / read-only rollback transactions (PostgreSQL), connection poisoning protection, and mandatory audit logging (§26.2).
+- **Governed Model Arena**: `POST /api/v1/admin/arena/compare` enforces fail-closed `CredentialDetector` scanning, token bounds (<=2048 in, <=1024 out), and byte-level governed transport via `GovernedLangChainHttpClient` routing through `GovernedTransportService.send()` (§26.3).
+- **Calm UI Baseline**: Cockpit UI components render state transitions via standard SVG/CSS without synthetic motion paths, unconfirmed execution paradigms, or client-side event synthesis.
+
+## 7. Status and Review
 
 - **Status**: Accepted.
-- **Decision Date**: 2026-09-01.
-- **Reconciliation Date**: 2026-09-07.
-- Core visual cockpit iterations (P0, P1, P2) and P3 advanced surfaces (Issues 08, 09, 10, 11, 12, and 13) are fully implemented and evidence-verified. Issue 13's Model Arena byte-level provider transport unification under provider transport roadmap §O2 is implemented via `GovernedLangChainHttpClient` routing all outbound HTTP bytes through `GovernedTransportService.send()` with full audit, token bounding, and actor propagation. Detailed scope, claim classification, and iteration issues live in the feature tracker under `.scratch/amsha-visual-cockpit/` (`spec.md` and `issues/`).
+- Core visual cockpit iterations (P0, P1, P2) and P3 advanced surfaces (Issues 08, 09, 10, 11, 12, and 13) are fully implemented and evidence-verified. Issue 13's Model Arena byte-level provider transport unification under provider transport roadmap §O2 is implemented via `GovernedLangChainHttpClient` routing all outbound HTTP bytes through `GovernedTransportService.send()` with full audit, token bounding, and actor propagation. Detailed iteration scope, issue progression, and verification receipts are tracked under `.scratch/amsha-visual-cockpit/` (`spec.md` and `issues/`).

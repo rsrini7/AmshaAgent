@@ -231,7 +231,9 @@ public class AgentLoop {
 
                 String effectiveRole = canonicalRole;
                 if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
-                    if (intentClassificationService.isResumeCommand(goal) || isContinuationRequest(context)) {
+                    if (intentClassificationService.isResumeCommand(goal)
+                            || isContinuationRequest(context)
+                            || (context != null && context.isResumeSignal())) {
                         resumedHistory.addAll(r.history());
                         effectiveRole = r.checkpointRole();
                         if (isContinuationRequest(context)) {
@@ -401,7 +403,9 @@ public class AgentLoop {
 
         int startingIteration = 0;
         if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
-            if (intentClassificationService.isResumeCommand(goal) || isContinuationRequest(context)) {
+            if (intentClassificationService.isResumeCommand(goal)
+                    || isContinuationRequest(context)
+                    || (context != null && context.isResumeSignal())) {
                 startingIteration = r.iterationsUsed();
             }
         }

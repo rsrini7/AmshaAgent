@@ -23,9 +23,8 @@ class NetworkProfilePolicyTest {
     }
 
     @Test
-    void unparseableJsonDefaultsToAllowAll() {
-        NetworkProfilePolicy p = NetworkProfilePolicy.fromJson("{not json");
-        assertEquals(NetworkProfilePolicy.EgressMode.ALLOW_ALL, p.egressMode());
+    void unparseableJsonFailsClosed() {
+        assertThrows(IllegalArgumentException.class, () -> NetworkProfilePolicy.fromJson("{not json"));
     }
 
     @Test

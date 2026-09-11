@@ -1,5 +1,9 @@
 package com.amsha.core.message;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.regex.Pattern;
+
 import com.amsha.tool.api.ToolCapability;
 
 /**
@@ -52,6 +56,9 @@ public final class UserMessages {
     /** Separator between a user-safe observation and coordinator-only instructions. */
     public static final String CRITICAL_DIRECTIVE_SEPARATOR = "\n\n" + CRITICAL_DIRECTIVE_MARKER;
 
+    /** Internal, encoded payload used to carry delegated parameters across the tool boundary. */
+    public static final String DELEGATION_PARAMS_BASE64_MARKER = "DELEGATION_PARAMS_BASE64:";
+
     /**
      * Stable marker embedded in {@link #DELEGATION_PAUSED_FORMAT} so deterministic
      * terminal guards (ToolResultProcessor.handleDelegateOutcome) can detect a paused
@@ -72,6 +79,20 @@ public final class UserMessages {
                     + CRITICAL_DIRECTIVE_SEPARATOR
                     + " This is a system status, not an error. Do NOT retry the delegation. "
                     + "Do NOT add commentary; you must FINISH this turn now.";
+
+    public static final String DELEGATION_PAUSED_WITH_PARAMS_FORMAT = "⏸ Delegation to '%s' is "
+            + DELEGATION_PAUSED_MARKER + ": tool '%s' needs human approval. "
+            + "The delegated agent's result will be delivered automatically once it is granted."
+            + " This is a separate approval for the delegated tool. "
+            + "Reply with `/approve` again to continue, or `/deny` to cancel."
+            + CRITICAL_DIRECTIVE_SEPARATOR
+            + " " + DELEGATION_PARAMS_BASE64_MARKER + "%s"
+            + "\n"
+            + " This is a system status, not an error. Do NOT retry the delegation. "
+            + "Do NOT add commentary; you must FINISH this turn now.";
+
+    private static final Pattern PAUSED_TOOL_AND_PARAMS_PATTERN =
+            Pattern.compile("tool '([^']+)'(?: with parameters [^\\r\\n]*)? needs human approval");
 
     public static final String DELEGATION_EXCEEDED_FORMAT =
             "Agent '%s' exceeded its iteration budget (%d iterations). Try simplifying the goal.";
@@ -157,6 +178,7 @@ public final class UserMessages {
     public static final String TOKEN_LIMIT_SIMPLE_FORMAT = "⚠️ Daily token limit reached. Please try again in %s.";
 
     // Success / Informational
+    public static final String TOOL_APPROVED_FORMAT = "✅ Tool '%s' approved.";
     public static final String TOOL_DENIED_FORMAT = "🚫 Tool '%s' denied.";
     public static final String CRON_DELETED_FORMAT = "✅ Cron job %s deleted.";
     public static final String CRON_NOT_FOUND_ID_FORMAT = "❌ Cron job not found: %s. Use /crons to see valid IDs.";
@@ -173,6 +195,13 @@ public final class UserMessages {
      */
     public static String approvalNeeded(String toolName) {
         return String.format(APPROVAL_NEEDED, toolName);
+    }
+
+    /**
+     * Formats a tool approved message.
+     */
+    public static String toolApproved(String toolName) {
+        return String.format(TOOL_APPROVED_FORMAT, toolName);
     }
 
     /**
@@ -237,8 +266,48 @@ public final class UserMessages {
         return String.format(DELEGATION_FAILED_FORMAT, target, error);
     }
 
-    public static String delegationPaused(String target, String tool) {
+    public static String delegationPaused(String target, String tool, String paramsJson) {
+        if (paramsJson != null && !paramsJson.isBlank() && !"{}".equals(paramsJson.trim())) {
+            String encoded = Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(paramsJson.trim().getBytes(StandardCharsets.UTF_8));
+            return String.format(DELEGATION_PAUSED_WITH_PARAMS_FORMAT, target, tool, encoded);
+        }
         return String.format(DELEGATION_PAUSED_FORMAT, target, tool);
+    }
+
+    public static String delegationPaused(String target, String tool) {
+        return delegationPaused(target, tool, "{}");
+    }
+
+    public static String extractPausedTool(String obs) {
+        if (obs != null) {
+            var matcher = PAUSED_TOOL_AND_PARAMS_PATTERN.matcher(obs);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+        return ToolCapability.DELEGATE_TO_AGENT.toolName();
+    }
+
+    public static String extractPausedParamsJson(String obs) {
+        if (obs != null) {
+            int markerIndex = obs.indexOf(DELEGATION_PARAMS_BASE64_MARKER);
+            if (markerIndex >= 0) {
+                int valueStart = markerIndex + DELEGATION_PARAMS_BASE64_MARKER.length();
+                int valueEnd = valueStart;
+                while (valueEnd < obs.length() && !Character.isWhitespace(obs.charAt(valueEnd))) {
+                    valueEnd++;
+                }
+                try {
+                    byte[] decoded = Base64.getUrlDecoder().decode(obs.substring(valueStart, valueEnd));
+                    return new String(decoded, StandardCharsets.UTF_8);
+                } catch (IllegalArgumentException _) {
+                    return null;
+                }
+            }
+        }
+        return "{}";
     }
 
     /**

@@ -11,8 +11,9 @@ This is an **impl-tier** module: it depends on `amsha-security-api` and on `amsh
 | `SecretVaultImpl` | `SecretVault` port implementation backed by AES-GCM-SIV (`AesGcmSivCipher`) |
 | `Argon2idKeyDerivation` | Argon2id-based key derivation from the system pepper |
 | `VaultKeyCache` | Session-scoped derived-key cache |
-| `GovernedTransportService` / `GovernedHttpClient` | Outbound HTTP governance: policy decisions, DNS revalidation, approval receipts |
-| `ApprovalReceiptIssuer` / `OutboundApprovalReceipt` | Issuance and validation of HITL outbound-approval receipts |
+| `GovernedTransportService` / `GovernedHttpClient` | Outbound HTTP governance: policy decisions, pre-connect DNS revalidation, proxy socket-pinning, and approval receipts |
+| `GovernedHttpDnsPinning` | DNS validation, trusted-proxy socket pinning (`PinnedProxy`), and SSRF IP safety checks |
+| `ApprovalReceiptIssuer` / `OutboundApprovalReceipt` | Issuance and validation of single-use, checkpoint-backed outbound-approval receipts |
 | `StandardAutonomyPolicy` | Default `AutonomyLevel` evaluation |
 | `BootstrapCredentialIssuer` / `DevSecretSeeder` | Bootstrap credentials and optional dev-secret seeding |
 | `GovernedMediaDownloadService` | Implementation of `MediaDownloadPort` with streaming size limits, SSRF, and redirect revalidation |
@@ -52,6 +53,15 @@ All outbound HTTP calls routed through `GovernedTransportService` (including LLM
 |---|---|---|---|
 | `amsha.transport.requests.total` | Counter | `purpose`, `status` | Total outbound HTTP requests categorized by purpose (`provider_api_call`, `media_download`) and status (`success`, `ssrf_denied`, `credential_denied`, `policy_denied`, `timeout`, `error`). |
 | `amsha.transport.duration` | Timer | `purpose`, `status` | Latency distribution of outbound HTTP requests. |
+
+## Governed HTTP Transport & DNS Pinning
+
+All outbound HTTP requests and proxy resolutions pass through SSRF and DNS safety validation implemented by `GovernedHttpClient` and `GovernedHttpDnsPinning`:
+
+* **SSRF Defense & IP Safety**: Hostnames and IP addresses are validated via `GovernedHttpDnsPinning.validateAddressSafety()`. The resolver rejects loopback, link-local, private LAN/site-local, multicast, and cloud metadata addresses (`169.254.169.254`).
+* **Trusted-Proxy Socket Pinning**: When an outbound HTTP proxy is configured, `GovernedHttpDnsPinning.resolveProxy()` pre-resolves the proxy host, validates address safety, and constructs a `PinnedProxy` binding the connection to a validated `pinnedAddress`.
+* **Pre-Connect DNS Revalidation**: For direct outbound connections, `GovernedHttpClient` performs pre-connect DNS revalidation before issuing requests. Complete direct socket-level pinning is deferred to an infrastructure trusted egress proxy.
+* **Checkpoint-Backed Operation Grants**: Sensitive outbound operations consume single-use `approvalToken` receipts minted by `ApprovalReceiptIssuer` upon durable checkpoint approval.
 
 ## Downstream Usage
 

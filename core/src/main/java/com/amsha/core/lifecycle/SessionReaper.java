@@ -8,9 +8,9 @@ import jakarta.transaction.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.hitl.ApprovalDecision;
@@ -27,6 +27,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.audit.SessionAuditSequencer;
 import com.amsha.core.compaction.CompactionInFlightFlag;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.core.util.DatabaseSafetyGuard;
@@ -265,9 +266,14 @@ public class SessionReaper {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     Set<String> findAwaitingApprovalIds() {
-        return checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name()).stream()
-                .map(CheckpointDto::sessionId)
-                .collect(Collectors.toSet());
+        Set<String> ids = new HashSet<>();
+        for (CheckpointDto cp : checkpointStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name())) {
+            if (cp != null && cp.sessionId() != null) {
+                ids.add(cp.sessionId());
+                SessionTree.parentOf(cp.sessionId()).ifPresent(ids::add);
+            }
+        }
+        return ids;
     }
 
     // APPROVAL TIMEOUT SWEEP - terminates stale AWAITING_APPROVAL sessions

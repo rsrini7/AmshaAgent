@@ -24,4 +24,13 @@ public interface AdvisoryLockPort {
      * Checks if the lock is currently held by anyone and is not expired.
      */
     boolean isLocked(String lockKey);
+
+    /**
+     * Atomically renews a lock currently held by the caller.
+     *
+     * @param lockKey the lock identifier
+     * @param timeoutSeconds how long to hold the lock from now
+     * @return true if renewed, false if the lock is no longer held or expired
+     */
+    boolean renew(String lockKey, int timeoutSeconds);
 }

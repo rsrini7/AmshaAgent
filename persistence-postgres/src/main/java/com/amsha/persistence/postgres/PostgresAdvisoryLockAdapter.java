@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.AdvisoryLockPort;
 import com.amsha.persistence.postgres.jdbi.LockJdbiDao;
 
@@ -68,6 +69,19 @@ public class PostgresAdvisoryLockAdapter implements AdvisoryLockPort {
         try {
             return jdbi.withExtension(LockJdbiDao.class, dao -> dao.countActive(lockKey, Instant.now()) > 0);
         } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean renew(String lockKey, int timeoutSeconds) {
+        log.tracef("renew key=%s timeout=%d", lockKey, timeoutSeconds);
+        try {
+            return jdbi.withExtension(
+                    LockJdbiDao.class,
+                    dao -> dao.renew(lockKey, ownerId, Instant.now().plusSeconds(timeoutSeconds)) > 0);
+        } catch (Exception e) {
+            log.debugf("Failed to renew advisory lock %s: %s", lockKey, LogUtil.rootMessage(e));
             return false;
         }
     }

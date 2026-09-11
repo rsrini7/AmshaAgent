@@ -19,7 +19,7 @@ Houses all 21 built-in concrete LLM provider factories, LangChain4j concrete SDK
 | Hugging Face | `huggingface` | `meta-llama/Llama-3.3-70B-Instruct` | `https://router.huggingface.co/v1` |
 | Mistral AI | `mistral` | `codestral-latest` | `https://api.mistral.ai/v1` |
 | Cloudflare Workers AI | `cloudflare` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` |
-| Cohere | `cohere` | `command-r-plus-08-2024` | `https://api.cohere.ai/compatibility/v1` |
+| Cohere | `cohere` | `command-r-08-2024` | `https://api.cohere.ai/compatibility/v1` |
 | Codex CLI | `codex` | `gpt-5.6-luna` | `https://chatgpt.com/backend-api/codex` |
 | Claude Code | `claude-code` | `claude-sonnet-4-5` | `https://api.anthropic.com` |
 | Antigravity CLI | `agy` | `gemini-3.1-flash-lite` | `https://generativelanguage.googleapis.com/v1beta/openai` |

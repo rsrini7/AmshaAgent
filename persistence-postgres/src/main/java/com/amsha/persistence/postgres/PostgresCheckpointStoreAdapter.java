@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
-import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 
 import io.quarkus.arc.Unremovable;
@@ -72,7 +71,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                     && CheckpointStatus.AWAITING_APPROVAL
                             .name()
                             .equals(existing.get().status())) {
-                toSave = mergeBatchDecisions(existing.get(), checkpointDto);
+                toSave = PostgresCheckpointHelper.mergeBatchDecisions(existing.get(), checkpointDto, objectMapper);
             } else {
                 toSave = checkpointDto;
             }
@@ -192,7 +191,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                     dao.findAnyBySessionAndRole(sessionId, agentRole).orElseThrow();
             dao.deleteSteps(saved.id());
             if (steps != null && !steps.isEmpty()) {
-                insertSteps(handle, saved.id(), steps);
+                PostgresCheckpointHelper.insertSteps(handle, saved.id(), steps);
             }
             return new CheckpointUpsertResult(saved, true);
         });
@@ -215,7 +214,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
                     .orElseThrow();
             if (steps != null && !steps.isEmpty()) {
                 dao.deleteSteps(saved.id());
-                insertSteps(handle, saved.id(), steps);
+                PostgresCheckpointHelper.insertSteps(handle, saved.id(), steps);
             }
             return saved;
         });
@@ -234,6 +233,14 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
     @Override
     public List<CheckpointDto> findActiveBySession(String sessionId) {
         return jdbi.withExtension(CheckpointJdbiDao.class, dao -> dao.findActiveBySession(sessionId));
+    }
+
+    @Override
+    public List<CheckpointDto> findActiveBySessionTree(String rootSessionId) {
+        if (rootSessionId == null) return List.of();
+        String prefixPattern = rootSessionId + ":delegate:%";
+        return jdbi.withExtension(
+                CheckpointJdbiDao.class, dao -> dao.findActiveBySessionTree(rootSessionId, prefixPattern));
     }
 
     @Override
@@ -351,7 +358,7 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
             var dao = handle.attach(CheckpointJdbiDao.class);
             dao.deleteSteps(checkpointId);
             if (steps != null && !steps.isEmpty()) {
-                insertSteps(handle, checkpointId, steps);
+                PostgresCheckpointHelper.insertSteps(handle, checkpointId, steps);
             }
         });
     }
@@ -476,61 +483,5 @@ public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
             dao.deleteReasoningStepsForPurge(cutoff);
             dao.deleteCheckpointsForPurge(cutoff);
         });
-    }
-
-    private void insertSteps(Handle handle, Long checkpointId, List<ReasoningStepDto> steps) {
-        var batch = handle.prepareBatch(
-                "INSERT INTO reasoning_step (checkpoint_id, sequence_num, thoughtJson, action, actionInputJson, observation, input_tokens, output_tokens, success, error_code, trace_id, root_cause_class) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        for (int i = 0; i < steps.size(); i++) {
-            ReasoningStepDto s = steps.get(i);
-            batch.add(
-                    checkpointId,
-                    i,
-                    s.thoughtJson(),
-                    s.action(),
-                    s.actionInputJson(),
-                    s.observation(),
-                    s.inputTokens(),
-                    s.outputTokens(),
-                    s.success(),
-                    s.errorCode(),
-                    s.traceId(),
-                    s.rootCauseClass());
-        }
-        batch.execute();
-    }
-
-    private CheckpointDto mergeBatchDecisions(CheckpointDto managed, CheckpointDto incoming) {
-        if (incoming.batchToolDecisions() == null) {
-            if (managed.batchToolDecisions() != null) {
-                return incoming.withBatchToolDecisions(managed.batchToolDecisions());
-            }
-            return incoming;
-        }
-        if (managed.batchToolDecisions() == null) return incoming;
-        try {
-            Map<String, ToolDecision> managedMap = objectMapper.readValue(
-                    managed.batchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
-            Map<String, ToolDecision> incomingMap = objectMapper.readValue(
-                    incoming.batchToolDecisions(), new TypeReference<Map<String, ToolDecision>>() {});
-            boolean changed = false;
-            for (Map.Entry<String, ToolDecision> entry : managedMap.entrySet()) {
-                String tool = entry.getKey();
-                ToolDecision managedDecision = entry.getValue();
-                ToolDecision incomingDecision = incomingMap.get(tool);
-                if (ToolDecision.PENDING != managedDecision && ToolDecision.PENDING == incomingDecision) {
-                    incomingMap.put(tool, managedDecision);
-                    changed = true;
-                }
-            }
-            if (changed) {
-                String mergedJson = objectMapper.writeValueAsString(incomingMap);
-                return incoming.withBatchToolDecisions(mergedJson);
-            }
-        } catch (Exception e) {
-            log.warnf(
-                    "Failed to merge batch decisions for session %s: %s", managed.sessionId(), LogUtil.rootMessage(e));
-        }
-        return incoming;
     }
 }

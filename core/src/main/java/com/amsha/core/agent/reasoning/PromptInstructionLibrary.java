@@ -470,7 +470,8 @@ public class PromptInstructionLibrary {
                 "7. Use `recall_memory_search` for exact past-session text. Use `archival_memory_search` for semantic knowledge (patterns, facts, preferences).\n");
         sb.append(selfEvolveDirectiveRules()).append('\n');
         if (available.contains("browser_navigate")) {
-            sb.append("8. Use `browser_navigate` only for webpage/URL/browser extraction tasks.\n");
+            sb.append(
+                    "8. URL retrieval order: search first for open-ended research; for each exact URL, use `browser_navigate` first, then `web_fetch` only if browser navigation fails, then one alternative search if both fail. Never invent URLs.\n");
         }
         sb.append("9. Use `garuda` only for complex specialist work, not for simple direct tool calls.\n");
         sb.append(

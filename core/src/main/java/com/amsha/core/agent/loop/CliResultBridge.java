@@ -138,7 +138,10 @@ public class CliResultBridge {
             log.debugf("CliResultBridge: timeout or interruption waiting for session %s", sessionId);
             return null;
         } finally {
-            waiters.remove(sessionId);
+            // Remove this exact waiter on timeout/interruption as well as normal
+            // completion. Conditional removal preserves a newer waiter registered
+            // by the CLI after an approval frame wakes the previous one.
+            waiters.remove(sessionId, future);
         }
     }
 

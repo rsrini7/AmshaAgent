@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,9 @@ class ProviderCatalogResourceUnitTest {
 
     @Mock
     LlmProviderOnboardingAdapter providerAdapter;
+
+    @Mock
+    SecurityContext securityContext;
 
     @InjectMocks
     ProviderCatalogResource resource;
@@ -44,5 +49,40 @@ class ProviderCatalogResourceUnitTest {
         Response response = resource.getCatalog();
         assertEquals(200, response.getStatus());
         assertNotNull(response.getEntity());
+    }
+
+    @Test
+    void testGetProviderModelsSuccess() {
+        Principal principal = mock(Principal.class);
+        when(principal.getName()).thenReturn("owner-1");
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+
+        ModelEntry model = new ModelEntry("gpt-4o", "GPT-4o");
+        when(providerAdapter.discoverModels(eq("openai"), isNull(), eq("test-key"), eq("owner-1")))
+                .thenReturn(List.of(model));
+
+        Response response = resource.getProviderModels("openai", null, "test-key");
+        assertEquals(200, response.getStatus());
+        assertEquals(List.of(model), response.getEntity());
+    }
+
+    @Test
+    void testGetProviderModelsUnauthenticatedReturns401() {
+        when(securityContext.getUserPrincipal()).thenReturn(null);
+
+        Response response = resource.getProviderModels("openai", null, "test-key");
+        assertEquals(401, response.getStatus());
+    }
+
+    @Test
+    void testGetProviderModelsBlankProviderReturnsBadRequest() {
+        Response response = resource.getProviderModels("  ", null, null);
+        assertEquals(400, response.getStatus());
+    }
+
+    @Test
+    void testGetProviderModelsNullProviderReturnsBadRequest() {
+        Response response = resource.getProviderModels(null, null, null);
+        assertEquals(400, response.getStatus());
     }
 }

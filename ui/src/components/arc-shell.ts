@@ -257,6 +257,7 @@ export class ArcShell extends LitElement {
     this.addEventListener('api-key-set', this._onApiKeySet as EventListener);
     this.addEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
     this.addEventListener('approval-action', this._onApprovalAction as EventListener);
+    this.addEventListener('request-approvals-refresh', () => this._fetchApprovals());
     window.addEventListener('ws-status-change', this._boundWsStatusChange as EventListener);
     window.addEventListener('session-ready', this._boundSessionReady);
     window.addEventListener('workspace-set', this._boundWorkspaceSet as EventListener);
@@ -500,8 +501,24 @@ export class ArcShell extends LitElement {
 
   // SSE event handlers
   private _handleSseEvent(event: SsePayload) {
-    if (event.sessionId && this._sessionId && event.sessionId !== this._sessionId) {
-      return;
+    const rawType = (event as any).eventType ?? (event as any).type ?? '';
+    const isHitlEvent =
+      rawType === 'AWAITING_APPROVAL' ||
+      rawType === 'APPROVED' ||
+      rawType === 'DENIED' ||
+      rawType === 'RESUMED' ||
+      rawType === 'hitl_approval' ||
+      rawType === 'hitl_resolved';
+
+    if (
+      event.sessionId &&
+      this._sessionId &&
+      event.sessionId !== this._sessionId &&
+      !event.sessionId.startsWith(this._sessionId + ':delegate:')
+    ) {
+      if (rawType !== 'status_change' && !isHitlEvent) {
+        return;
+      }
     }
 
     if (isAgentTraceEvent(event)) {
@@ -522,20 +539,15 @@ export class ArcShell extends LitElement {
       return;
     }
 
-    const eventType = event.eventType ?? '';
-    if (eventType === 'status_change') {
+    if (rawType === 'status_change') {
       this._fetchAgents();
       this._fetchApprovals();
-    } else if (eventType === 'progress') {
+    } else if (rawType === 'progress') {
       this._publishProgress(event.agentName || 'Working', event.payload || '', event.sessionId);
-    } else if (
-      eventType === 'AWAITING_APPROVAL' ||
-      eventType === 'APPROVED' ||
-      eventType === 'DENIED' ||
-      eventType === 'RESUMED'
-    ) {
+    } else if (isHitlEvent) {
       this._handleHitlEvent(event);
-    } else if (eventType === 'agent_status') {
+      this._fetchApprovals();
+    } else if (rawType === 'agent_status') {
       this._handleAgentEvent(event);
     }
   }
@@ -618,10 +630,11 @@ export class ArcShell extends LitElement {
     // ─── SSE Event Handlers ──────────────────────────────────────────────────
 
   private _handleHitlEvent(event: any) {
-    if (event.type === 'AWAITING_APPROVAL') {
+    const isAwaiting = event.type === 'AWAITING_APPROVAL' || event.eventType === 'AWAITING_APPROVAL';
+    if (isAwaiting) {
       // Add to pending if not already present
       const existing = this._pendingApprovals.find(
-        (a) => a.taskId === event.sessionId && a.toolName === event.toolName
+        (a) => (a.taskId === event.sessionId || a.sessionId === event.sessionId) && a.toolName === event.toolName
       );
       if (!existing) {
         let paramsObj = {};
@@ -630,6 +643,7 @@ export class ArcShell extends LitElement {
           ...this._pendingApprovals,
           {
             taskId: event.sessionId,
+            sessionId: event.sessionId,
             toolName: event.toolName,
             params: paramsObj,
             requestedAt: event.timestamp || new Date().toISOString(),
@@ -642,7 +656,7 @@ export class ArcShell extends LitElement {
       this._pendingApprovals = this._pendingApprovals.filter(
         (a) =>
           !(
-            a.taskId === event.sessionId &&
+            (a.taskId === event.sessionId || a.sessionId === event.sessionId) &&
             (a.toolName === event.toolName || !event.toolName)
           )
       );
@@ -652,7 +666,8 @@ export class ArcShell extends LitElement {
   }
 
   private _publishHitlProgress(event: any) {
-    switch (event?.type) {
+    const type = event?.type ?? event?.eventType;
+    switch (type) {
       case 'AWAITING_APPROVAL':
         this._publishProgress('Waiting for approval', 'Approve or deny the tool request', event.sessionId);
         break;

@@ -192,6 +192,15 @@ three-tuple `(channelType, channelId, userId)`.
   via channel, and call `WorkspaceManager.terminateSession()` without entering 
   the agent loop.
 - `HitlService.resolve()` delegates to `CheckpointApprovalService.approveTool()`/`denyTool()`/`approveAll()`/`denyAll()` followed by `checkpointApprovalService.triggerResume(resolvedCp)`. The decision methods update batch decisions and persist; `triggerResume()` enters the transaction-free zone.
+- REST `approve`/`deny` on an already-resolved checkpoint MUST return HTTP 409
+  (`ALREADY_RESOLVED`), never HTTP 500. A duplicate or overlapping approval arriving
+  after inline resume resolved the checkpoint is a benign client-observable race (same
+  treatment as `HitlService.isResolutionRace`), not a server failure.
+- A parent approve/deny whose own checkpoint carries no undecided tools MUST cascade
+  into awaiting delegate sub-sessions (`parentSessionId + ":delegate:"` prefix) via
+  `DelegateApprovalCascade` instead of failing: delegate pauses (e.g. a delegated
+  researcher's `web_fetch`) are otherwise unreachable from the parent session and the
+  flow stalls until session cleanup.
 
 ### 3.5 Structured retry budget behavior
 - Soft budget warnings may be logged and tolerated for retry behavior.
@@ -510,10 +519,6 @@ MUST NOT: Use JPA `EntityManager` operations (`em.merge()`, `em.persist()`, `em.
 **Safety Condition:**
 - Callers of advisory locks (e.g., `AgentCronScheduler`, `CheckpointResumeHandler`, `TelegramCallbackHandler`) MUST be non-transactional (`NOT_SUPPORTED`) at their entry points.
 - This ensures the `REQUIRES_NEW` lock transaction is the *only* transaction on the thread, preventing the §5.8 nesting deadlock.
-
----
-
-## 5.9 Transaction-Free Zone: Long-Running Operations
 
 ---
 
@@ -1236,6 +1241,8 @@ The `embedding vector(768)` column and HNSW index MUST be similarly guarded with
 - HITL sessions MUST survive WebSocket disconnects — `WebChatEndpoint.onClose()` MUST check for `AWAITING_APPROVAL` before terminating the session.
 - The WebSocket endpoint path is `/ws/chat` (sessionId is in the message or query parameter, not in the URL path).
 
+---
+
 ## §7. Parallel Tool Execution
 
 7.1 MUST: A parallel LLM turn (N tool calls in one ChatResponse) MUST
@@ -1846,6 +1853,17 @@ Run this checklist mentally before every major refactor touching persistence, ap
 - [ ] Is `SessionReaper.findAwaitingApprovalIds()` still `NOT_SUPPORTED`? (§5.16)
 - [ ] Is `SessionReaper.markApprovalTimedOut()` still `NOT_SUPPORTED`? (§5.16)
 
+### 19.1 External-data and review gates
+
+The following gates apply to every REST, UI, import, onboarding, provider, and tool boundary that accepts external data:
+
+- [ ] Every accepted JSON object has explicit type checks for required fields; malformed JSON, wrong value types, missing identifiers, duplicate identifiers, and unknown references fail closed. Broad catches must not turn invalid input into a successful or skipped validation result.
+- [ ] Policy validation has one canonical implementation. Network, URI, TLS, proxy, timeout, allow-list, and no-proxy semantics must not diverge between DTO, draft, import, and runtime validators.
+- [ ] Defaults are limited to a named legacy-compatibility path. Explicit current-format records must carry their required identity and routing fields; an importer must not invent a model, provider, scope, or route for malformed explicit data.
+- [ ] Persistent identifiers are generated with collision-resistant values and references are checked across the complete request, including sibling and repeated sections. Removing a parent record must remove or invalidate its derived child records in the same draft state.
+- [ ] Tests cover the production wiring boundary and assert the governed side effect. Tests that only mock the collaborator being reviewed are insufficient; include malformed-input and partial-payload cases.
+- [ ] Logs, error responses, fixtures, review reports, and local agent notes are payload-free with respect to credentials, authorization headers, prompts, provider responses, and secret-bearing malformed input.
+
 ## 20. Routing and Classification Consolidation
 
 ### 20.1 Implementation Proximity and Provider Modularization
@@ -2222,7 +2240,7 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 - **Mandatory Audit**: Every console query MUST record `DB_QUERY_EXECUTED` or `DB_QUERY_REJECTED` in the audit log.
 
 ### 26.3 Governed LLM Transport & Model Arena (§26.3 INVARIANT)
-- **Byte-Level Governed Egress**: Outbound model HTTP requests MUST route through `GovernedTransportService.validateEgress(...)` via `GovernedLangChainHttpClient`. No provider SDK may bypass this governed client.
+- **Byte-Level Governed Egress**: Outbound HTTP requests MUST route through governed transport enforcing `GovernedTransportService.validateEgress(...)`: LangChain4j providers (OpenAI, Anthropic, Ollama, Gemini, LlamaCpp, etc.) use `GovernedLangChainHttpClient` (delegating to `GovernedTransportService.send(...)` under `OutboundPurpose.LLM_INFERENCE`), custom wrappers (`Kimchi`, `Foundry`) and internal services call `GovernedTransportService.send(...)` directly with typed `OutboundPurpose` contracts, and built-in tools use `GovernedHttpClient`. No provider SDK, custom wrapper, or tool may bypass governed transport via unmediated HTTP clients.
 - **SSRF & Header Sanitization**: Destination addresses MUST be checked against the IP blocklist (blocking loopback, private IPv4/IPv6, and metadata addresses). Restricted and hop-by-hop headers MUST be stripped.
 - **Actor Attenuation**: Outbound requests MUST propagate the caller identity from `ScopedValue` (`USER_ID`) or session context.
 - **Fail-Closed Credential Gating**: Arena comparisons (`/api/v1/admin/arena/compare`) MUST scan input prompts via `CredentialDetector` and fail-closed with HTTP 400 if credentials, vault peppers, or API keys are present.
@@ -2235,6 +2253,5 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 
 ### 26.5 Dynamic Provider Discovery Invariant (§26.5 INVARIANT)
 - **No Hardcoded Static Provider Sets**: `ModelArenaHelper` and health resources MUST NOT hardcode static sets of allowed providers or base URL maps in application source code.
-- **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
-
+- **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`, `requiresCustomBaseUrl()`, `probeUrlForProvider()`, `authHeadersForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
 

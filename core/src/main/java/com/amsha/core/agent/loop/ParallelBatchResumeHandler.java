@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
@@ -11,15 +12,20 @@ import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
+import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
+import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -75,21 +81,26 @@ class ParallelBatchResumeHandler {
             }
         }
 
-        Map<String, String> preExecuted = Map.of();
+        Map<String, JsonNode> preExecuted = Map.of();
         if (checkpoint.hasPreExecutedResults()) {
             try {
                 preExecuted = objectMapper.readValue(
-                        checkpoint.getPreExecutedResults(), new TypeReference<Map<String, String>>() {});
+                        checkpoint.getPreExecutedResults(), new TypeReference<Map<String, JsonNode>>() {});
             } catch (Exception e) {
                 log.debugf("Pre-executed result parse fallback (non-fatal): %s", LogUtil.rootMessage(e));
             }
         }
 
         List<ParallelToolCall> completed = new ArrayList<>();
-        for (ParallelToolCall call : calls) {
-            if (preExecuted.containsKey(call.toolName())) {
+        for (int i = 0; i < calls.size(); i++) {
+            ParallelToolCall call = calls.get(i);
+            String preExecutedKey = preExecuted.containsKey(call.callId()) ? call.callId() : call.toolName();
+            if (preExecuted.containsKey(preExecutedKey)) {
                 try {
-                    ToolResponse stored = objectMapper.readValue(preExecuted.get(call.toolName()), ToolResponse.class);
+                    var storedNode = preExecuted.get(preExecutedKey);
+                    ToolResponse stored = storedNode.isTextual()
+                            ? objectMapper.readValue(storedNode.asText(), ToolResponse.class)
+                            : objectMapper.treeToValue(storedNode, ToolResponse.class);
                     completed.add(
                             switch (stored) {
                                 case ToolResponse.ToolSuccess success -> call.withResult(success.output(), true);
@@ -102,7 +113,15 @@ class ParallelBatchResumeHandler {
                 }
             }
 
-            if (decisions.getOrDefault(call.toolName(), ToolDecision.PENDING) == ToolDecision.DENIED) {
+            String decisionKey = BatchDecisionUtil.decisionKey(call, i + 1, calls);
+            ToolDecision toolDecision = decisions.get(decisionKey);
+            if (toolDecision == null && call.callId() != null) {
+                toolDecision = decisions.get(call.callId());
+            }
+            if (toolDecision == null) {
+                toolDecision = decisions.getOrDefault(call.toolName(), ToolDecision.PENDING);
+            }
+            if (toolDecision == ToolDecision.DENIED) {
                 completed.add(call.withResult("User denied this tool execution.", false));
                 continue;
             }
@@ -153,6 +172,11 @@ class ParallelBatchResumeHandler {
                             "Tool execution blocked by safety guard: " + b.observation(), false));
                     continue;
                 }
+                if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval pause) {
+                    checkpoint.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+                    agentStore.save(checkpoint);
+                    return AgentResult.awaitingApproval(pause.frame(), sessionId, List.copyOf(history));
+                }
 
                 ToolResponse response = WorkspaceContext.runWithFullAutonomy(
                         context.sessionId(),
@@ -175,6 +199,20 @@ class ParallelBatchResumeHandler {
             }
         }
 
+        Optional<DelegatedPause> delegatedPause = findDelegatedPause(completed);
+        if (delegatedPause.isPresent()) {
+            // A delegated child can pause after the parent batch itself was
+            // approved. Do not turn that pause into a successful `garuda→OK`
+            // result: doing so finalizes the parent while the child is still
+            // waiting and loses the eventual research result.
+            checkpoint.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+            agentStore.save(checkpoint);
+            DelegatedPause pause = delegatedPause.get();
+            return AgentResult.awaitingApproval(
+                    new ApprovalFrame(pause.toolName(), pause.params(), RiskLevel.HIGH),
+                    sessionId,
+                    List.copyOf(history));
+        }
         try {
             String completedJson = objectMapper.writeValueAsString(completed);
             String summary = completed.stream()
@@ -188,6 +226,30 @@ class ParallelBatchResumeHandler {
             return handleCorruptBatch(checkpoint, history);
         }
     }
+
+    private Optional<DelegatedPause> findDelegatedPause(List<ParallelToolCall> completed) {
+        for (ParallelToolCall call : completed) {
+            if (!call.success()
+                    || call.observation() == null
+                    || !call.observation().contains(UserMessages.DELEGATION_PAUSED_MARKER)) {
+                continue;
+            }
+            String toolName = UserMessages.extractPausedTool(call.observation());
+            String paramsJson = UserMessages.extractPausedParamsJson(call.observation());
+            if (toolName == null || toolName.isBlank() || paramsJson == null) {
+                continue;
+            }
+            if (!BatchDecisionUtil.isValidBatchParamsJson(paramsJson, objectMapper)) {
+                log.warnf("[ResumeStrategy] Invalid delegated pause payload for %s", toolName);
+                continue;
+            }
+            Map<String, Object> params = BatchDecisionUtil.parseBatchDisplayParams(paramsJson, objectMapper);
+            return Optional.of(new DelegatedPause(toolName, params));
+        }
+        return Optional.empty();
+    }
+
+    private record DelegatedPause(String toolName, Map<String, Object> params) {}
 
     private String buildDelegationParams(String toolName, String paramsJson, String owner) {
         Map<String, Object> params = Map.of();

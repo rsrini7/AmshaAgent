@@ -1,20 +1,24 @@
 # ADR: Redesign Onboarding Around Connections, Model Profiles, and Route Assignments
 
-- **Status**: Proposed (2026-08-30; awaiting maintainer review)
-- **Date**: 2026-08-30
+- **Status**: Accepted (2026-09-09; kicking off Iteration 0)
+- **Date**: 2026-09-09
 - **Decision owners**: Amsha maintainers
+- **Supersedes / Extends**: `Ideas-Pending/ADR-Onboarding-Multi-Agent-Provider-Model.md` (extends O2/O3 multi-agent configuration and supersedes the initial conflated connection/model profile UI draft)
+- **Related**: `Ideas-Pending/ADR-Onboarding-Multi-Agent-Provider-Model.md`, `Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md`, `Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md` (P7 turn-aware modality routing), `docs/Architecture_Invariants.md`
 - **Feature slug**: `onboarding-route-assignments`
 - **Issue tracker**: `.scratch/onboarding-route-assignments/`
-- **Related**: `Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md` (P7 turn-aware modality routing), `docs/Architecture_Invariants.md`
 
 ## 1. Context
 
-Amsha now has the runtime seams needed to select a model per turn: `TurnRequirements`,
-`ModelRoute`, `ModelRouteSelector`, explicit `MultimodalCapability`, lazy model
-creation, and same-modality fallback. Onboarding does not expose that model cleanly.
+Amsha now has the core backend runtime seams needed to select a model per turn:
+`TurnRequirements`, `ModelRoute`, `ModelRouteSelector`, explicit `MultimodalCapability`, lazy model
+creation, and same-modality fallback (with LangChain4j P7 Slabs A–D landed, while Slab E remains
+open pending live OMLX matrix evidence). Onboarding does not yet expose that model cleanly.
 
-The current UI draft puts one `modelId` and a small capability list inside each
-connection entry. This conflates three different concepts:
+While O2 in `ADR-Onboarding-Multi-Agent-Provider-Model.md` delivered backend connection network
+profile validation (`NetworkProfilePolicyDto`) and settings form controls, the initial UI draft put
+one `modelId` and a small capability list directly inside each connection entry. This conflates three
+different concepts:
 
 - a connection: provider adapter, endpoint profile, custom endpoint, network policy,
   and vault-backed secret references;
@@ -23,14 +27,14 @@ connection entry. This conflates three different concepts:
 - a route assignment: the ordered profile candidates available to a scope and
   target.
 
-The persisted model already separates these concepts. `LlmConnectionDto` contains
-connection metadata such as `providerAdapterId`, `endpointProfileId`,
-`customBaseUrl`, `authScheme`, `networkProfileJson`, and lifecycle state. Secrets are
-stored through `LlmConnectionSecretRefDto`. `ModelProfileDto` references a connection
-and contains `modelId`, `structuredOutputMode`, `capabilityJson`, `safeLimitsJson`,
-`enabled`, and revision metadata. `ModelRouteAssignmentDto` contains the ordered
-`profileId` chain. These records and `LlmProfileStorePort` already have
-SQLite/PostgreSQL/filesystem implementations.
+The persisted model already separates these concepts into distinct domain entities and DTOs.
+`LlmConnection` / `LlmConnectionDto` contains connection metadata such as `providerAdapterId`,
+`endpointProfileId`, `customBaseUrl`, `authScheme`, `networkProfileJson`, and lifecycle state.
+Secrets are stored through `LlmConnectionSecretRef` / `LlmConnectionSecretRefDto`.
+`ModelProfile` / `ModelProfileDto` references a connection and contains `modelId`,
+`structuredOutputMode`, `capabilityJson`, `safeLimitsJson`, `enabled`, and revision metadata.
+`ModelRouteAssignment` / `ModelRouteAssignmentDto` contains the ordered `profileId` chain.
+These records and `LlmProfileStorePort` already have SQLite/PostgreSQL/filesystem implementations.
 
 `AMSHA_OMLX_MODEL` remains a deployment-level comma-separated same-modality
 failover list. It is not a durable modality-routing configuration. A mixed list can
@@ -87,6 +91,10 @@ output needs. The remaining candidates form a same-modality fallback chain.
 The selected route is an immutable per-request snapshot. A profile or assignment
 change applies to the next turn; it must not change an in-flight request. A model
 profile revision or configuration epoch must prevent stale lazy model reuse.
+No-restart updates apply when vault-backed routing is prioritized via
+`AMSHA_LLM_VAULT_PRIORITY=true` (default `false`), governed by
+`ADR-Onboarding-Configuration-Source-and-Precedence.md`; otherwise startup environment
+routing remains authoritative.
 
 ### 2.4 One deep configuration module
 
@@ -129,7 +137,8 @@ capability filtering or fallback algorithm.
   order. It never carries API keys, secret material, or credentials.
 - **Environment variables** remain a compatibility/bootstrap path. They are
   startup configuration and cannot be the canonical no-restart modality-routing
-  mechanism.
+  mechanism. Dynamic no-restart profile and assignment routing requires
+  `AMSHA_LLM_VAULT_PRIORITY=true`.
 - **Chat/CLI profile selection**, if added, is an explicit owner-approved profile
   override for testing only; it still passes capability, scope, and security checks.
 
@@ -157,11 +166,28 @@ the local server accepts the payload.
   `.env.example`, and the relevant module README.
 - Agents do not stage or commit changes.
 
-## 3. Consequences
+## 3. Alternatives Considered
+
+- **Conflated single-`modelId`-per-connection UI**: Rejected. Coupling a single model ID to a
+  connection entry prevents one endpoint/credential from serving multiple models of distinct
+  modalities (e.g. text reasoning alongside vision or speech), requires duplicate connection
+  records for the same provider account, and conflates network transport rules with model-level
+  capabilities.
+- **Environment-variable-based modality routing**: Rejected. Environment variables provide
+  static startup configuration but cannot support no-restart updates, lack structured capability
+  schemas and safe limit bounding, cannot be validated through a shared application seam, and
+  cannot represent owner/workspace tenancy boundaries.
+- **Client-side route evaluation/filtering in the Lit UI**: Rejected. Implementing modality
+  filtering and candidate selection in frontend JavaScript would duplicate backend routing
+  logic, create behavioral divergence, and risk leaking unassigned or unauthorized candidate
+  metadata to client state.
+
+## 4. Consequences
 
 Positive consequences are reusable connections, repeatable model profiles, explicit
-same-modality failover, deterministic route preview, no-restart updates, and one
-validation path shared by UI, REST, and import/export.
+same-modality failover, deterministic route preview, no-restart updates (when
+`AMSHA_LLM_VAULT_PRIORITY=true`), and one validation path shared by UI, REST, and
+import/export.
 
 Accepted costs are a richer onboarding flow, connection/profile reference handling
 during import, and a readiness/preview step before activation. True parallel fan-out
@@ -170,20 +196,30 @@ execution-plan decision covering cost budgets, cancellation, aggregation, and
 side-effect isolation. A future preprocessor pipeline (for example transcription
 followed by a text reasoning model) is also a separate extension.
 
-## 4. Verification and stop condition
+## 5. Acceptance Criteria
 
-The feature is complete only when its ordered issues are green and demonstrate:
-
-- one connection shared by independent text, image, and audio profiles;
-- deterministic selection and same-modality fallback by `TurnRequirements`;
-- route preview that agrees with runtime selection;
-- safe bounded placeholder behavior when no candidate qualifies;
-- no-restart profile/assignment updates with no mid-request route mutation;
-- credential-free, lossless capability/limit/enabled/route-order import/export;
-- owner/workspace authorization and audit coverage;
-- OMLX live matrix evidence for every claimed local modality;
-- Java formatting, focused tests, module PMD, documentation verification, and native
-  compile/reflection checks required by `AGENTS.md`.
-
-Stopping at a green staged slice is valid; `VIDEO` and true multi-model fan-out must
-not be pulled into this feature for convenience.
+- **Cardinality and Persistence**: `LlmProfileStorePort` supports one connection to many
+  model profiles across SQLite, PostgreSQL, and filesystem backends without data loss or
+  schema bifurcation.
+- **Server-Side Profile Validation**: Profiles enforce non-blank `modelId`, valid
+  `StructuredOutputMode`, typed `MultimodalCapability`, and normalized MIME limits; unconfirmed
+  capabilities (including `VIDEO`) fail closed.
+- **Deterministic Route Selection**: Runtime selection follows `TurnRequirements` against
+  ordered assignments, filtering by modality and readiness with same-modality failover and
+  zero cross-modality degradation.
+- **Route Preview Agreement**: Server-generated route preview matches effective runtime model
+  resolution for all supported modalities (text, image, audio) and emits safe unassigned outcomes.
+- **Atomic Activation and Epoch Invalidation**: Configuration activation is atomic under revision
+  checks; activating a new epoch invalidates cached lazy model instances without mutating in-flight
+  turns.
+- **No-Restart Dynamic Updates**: When `AMSHA_LLM_VAULT_PRIORITY=true`, route updates take
+  effect on subsequent turns without server restarts; when false, environment variables remain
+  authoritative.
+- **Credential-Free Import/Export**: Import/export round-trips non-secret connection metadata,
+  profiles, and route order without persisting or exposing secrets.
+- **OMLX Modality Verification**: Modality claims for local OMLX models are supported by live
+  matrix evidence verifying endpoint capability.
+- **Verification Gates**: Unit and integration test suites pass with three-backend persistence
+  parity, PMD bounds, Spotless formatting, and GraalVM reflection configuration.
+- **Scope Discipline**: Stopping at a green staged slice is valid; `VIDEO` and true multi-model
+  fan-out must not be pulled into this feature for convenience.

@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,7 @@ import com.amsha.onboarding.spi.OnboardingInput;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
 import com.amsha.onboarding.spi.PreparedOnboardingStep;
 import com.amsha.onboarding.spi.ValidatedOnboardingInput;
+import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.OnboardingCommitReceiptDto;
 import com.amsha.persistence.api.OnboardingCommitReceiptStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
@@ -28,7 +30,6 @@ import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingDraftStorePort;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
-import com.amsha.security.api.VaultKey;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -62,6 +63,14 @@ public class OnboardingCommitSaga {
 
     @Inject
     OnboardingSelectionScrubber scrubber;
+
+    @Inject
+    Instance<LlmProfileStorePort> profileStoreInstance;
+
+    @Inject
+    OnboardingProfileExporter profileExporter;
+
+    LlmProfileStorePort profileStore;
 
     @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
     boolean vaultPriority;
@@ -102,6 +111,7 @@ public class OnboardingCommitSaga {
 
         try {
             activateLlmSettings(d);
+            activateProfileStore(d);
             OnboardingDraftDto updated = markCompleted(d);
             if (draftStore.update(updated, d.revision())) {
                 return Optional.of(updated);
@@ -135,8 +145,8 @@ public class OnboardingCommitSaga {
             Object agentLoopRaw = concernRoutesMap.get("agentLoop");
             if (!(agentLoopRaw instanceof List<?> agentLoopList) || agentLoopList.isEmpty()) return;
             Object firstIdx = agentLoopList.get(0);
-            if (!(firstIdx instanceof Number)) return;
-            int activeIdx = ((Number) firstIdx).intValue();
+            if (!(firstIdx instanceof Number number)) return;
+            int activeIdx = number.intValue();
             if (activeIdx < 0 || activeIdx >= connectionsList.size()) return;
             Object activeConnectionRaw = connectionsList.get(activeIdx);
             if (!(activeConnectionRaw instanceof Map<?, ?> activeConnection)) return;
@@ -145,17 +155,126 @@ public class OnboardingCommitSaga {
             storeSystemSetting(activeConn, "modelId", VaultConstants.LLM_MODEL_KEY);
             storeOptionalSystemSetting(
                     activeConn, VaultConstants.LLM_BASE_URL_KEY, "customBaseUrl", "baseUrl", "targetUrl");
-            Object vaultRefRaw = activeConn.get("apiKeyVaultRef");
-            if (vaultRefRaw instanceof String vaultRef && !vaultRef.isBlank()) {
-                vault.get(vaultRef, d.ownerId()).ifPresent(vk -> {
-                    try (VaultKey k = vk) {
-                        vault.storeSystemKey(VaultConstants.LLM_API_KEY, k.get());
-                    }
-                });
-            }
+            // Invariant: User credentials remain strictly in USER:<userId> or WORKSPACE:<workspaceId> scope.
+            // Do not promote apiKeyVaultRef to system vault keys.
+
+            activateConcernRoutes(concernRoutesMap, connectionsList);
+            activateOptionalStages(d.ownerId(), payload);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to activate LLM configuration on draft commit", e);
         }
+    }
+
+    private void activateConcernRoutes(Map<String, Object> routes, List<?> connections) {
+        storeConcernRoute(routes, connections, "compaction");
+        storeConcernRoute(routes, connections, "classifier");
+        storeConcernRoute(routes, connections, "embedding");
+    }
+
+    @SuppressWarnings("unchecked")
+    private void storeConcernRoute(Map<String, Object> routes, List<?> connections, String concern) {
+        Object raw = routes.get(concern);
+        if (raw instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Number num) {
+            int idx = num.intValue();
+            if (idx >= 0 && idx < connections.size() && connections.get(idx) instanceof Map<?, ?> connMap) {
+                Map<String, Object> conn = (Map<String, Object>) connMap;
+                String provider = (String) conn.get("provider");
+                String model = (String) conn.get("modelId");
+                if (provider != null && model != null) {
+                    String value = provider + ":" + model;
+                    vault.storeSystemKey("amsha.llm." + concern + ".target", value.getBytes(StandardCharsets.UTF_8));
+                }
+            }
+        }
+    }
+
+    private void activateOptionalStages(String ownerId, Map<String, Object> payload) {
+        storeOptionalSection(ownerId, payload, "integrations", "settings:integrations");
+        storeOptionalSection(ownerId, payload, "memory", "settings:memory");
+        storeOptionalSection(ownerId, payload, "channels", "settings:channels");
+        storeOptionalSection(ownerId, payload, "security", "settings:security");
+        storeOptionalSection(ownerId, payload, "advanced", "settings:advanced");
+    }
+
+    @SuppressWarnings("unchecked")
+    private void storeOptionalSection(String ownerId, Map<String, Object> payload, String sectionKey, String vaultKey) {
+        Object section = payload.get(sectionKey);
+        if (section instanceof Map<?, ?> rawMap && !rawMap.isEmpty()) {
+            try {
+                Map<String, Object> scrubbedMap = scrubOptionalMap(ownerId, (Map<String, Object>) rawMap);
+                String json = objectMapper.writeValueAsString(scrubbedMap);
+                vault.storeSystemKey(vaultKey, json.getBytes(StandardCharsets.UTF_8));
+            } catch (Exception _) {
+                // Ignore serialization error on optional section
+            }
+        }
+    }
+
+    private Map<String, Object> scrubOptionalMap(String ownerId, Map<String, Object> map) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String key = entry.getKey();
+            Object val = entry.getValue();
+            if (val instanceof String str && isSecretKey(key) && !str.isBlank() && !str.startsWith("vault-key-")) {
+                String vaultRef = "vault-key-"
+                        + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                vault.store(vaultRef, str.getBytes(StandardCharsets.UTF_8), ownerId);
+                String refKey = key.endsWith("VaultRef") ? key : key + "VaultRef";
+                copy.put(refKey, vaultRef);
+            } else {
+                copy.put(key, val);
+            }
+        }
+        return copy;
+    }
+
+    private static boolean isSecretKey(String key) {
+        if (key == null) return false;
+        String lower = key.toLowerCase(Locale.ROOT);
+        return (lower.contains("secret")
+                        || lower.contains("token")
+                        || lower.contains("password")
+                        || lower.contains("key")
+                        || lower.contains("pass"))
+                && !lower.endsWith("vaultref")
+                && !lower.endsWith("ref");
+    }
+
+    @SuppressWarnings("unchecked")
+    public void activateProfileStore(OnboardingDraftDto d) {
+        LlmProfileStorePort store = getProfileStore();
+        if (store == null || profileExporter == null) {
+            return;
+        }
+        if (d.selectedNonSecretIds() == null || d.selectedNonSecretIds().isEmpty()) {
+            return;
+        }
+        try {
+            String payloadStr = d.selectedNonSecretIds().get(0);
+            Map<String, Object> payload = objectMapper.readValue(payloadStr, Map.class);
+            Object connsRaw = payload.get("connections");
+            if (connsRaw instanceof List<?> connsList && !connsList.isEmpty()) {
+                boolean hasProfilesOrRoutes = payload.containsKey("profiles") || payload.containsKey("routes");
+                boolean hasIdentifiedConnections = connsList.get(0) instanceof Map<?, ?> m && m.containsKey("id");
+                if (hasProfilesOrRoutes || hasIdentifiedConnections) {
+                    profileExporter.importProfiles(d.ownerId(), payload, store, true);
+                }
+            }
+        } catch (Exception e) {
+            log.warnf(
+                    "[ONBOARDING] Failed to activate profile store topology on draft commit: %s",
+                    LogUtil.rootMessage(e));
+        }
+    }
+
+    private LlmProfileStorePort getProfileStore() {
+        if (profileStore != null) {
+            return profileStore;
+        }
+        if (profileStoreInstance != null && profileStoreInstance.isResolvable()) {
+            return profileStoreInstance.get();
+        }
+        return null;
     }
 
     // ---- internal saga helpers ----

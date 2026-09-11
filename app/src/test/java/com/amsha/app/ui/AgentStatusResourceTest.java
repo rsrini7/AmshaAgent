@@ -70,4 +70,18 @@ class AgentStatusResourceTest {
                         .orElseThrow()
                         .tokenCount());
     }
+
+    @Test
+    void testAgentStateStoreDeduplicationAndNormalization() {
+        AgentStateStore localStore = new AgentStateStore();
+        localStore.onAgentStateChanged(
+                new AgentStateChangedEvent("session1", "core:researcher", "waiting-approval", "task1"));
+        localStore.onAgentStateChanged(
+                new AgentStateChangedEvent("session1:delegate:saraswati:child", "researcher", "idle", "task2"));
+
+        assertEquals(1, localStore.getAll().size());
+        AgentStateStore.AgentState researcher = localStore.getAll().iterator().next();
+        assertEquals("researcher", researcher.name());
+        assertEquals("idle", researcher.status());
+    }
 }

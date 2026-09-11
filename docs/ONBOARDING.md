@@ -182,8 +182,9 @@ false or commented, legacy persona/group/global deployment routing is used. When
 true, eligible workspace or system model profiles may take precedence, with a
 fallback to legacy routing when no profile route applies. It does not control
 onboarding visibility, bootstrap state, vault priority, or the automatic
-preconfigured check. The current O1 onboarding flow also does not create the
-final profile-route records required for that feature.
+preconfigured check. The O1 onboarding flow activates the profile topology
+(connections, model profiles, and route assignments) during draft commit or
+import whenever the payload contains profiles/routes or identified connections.
 
 This explains the Settings page message:
 

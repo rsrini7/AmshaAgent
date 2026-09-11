@@ -3,7 +3,8 @@
 - **Status**: Approved
 - **Date**: 2026-08-19
 - **Decision Owners**: Amsha Maintainers & Architecture Committee
-- **Related Invariants**: `docs/Architecture_Invariants.md` §15.2, §16.1–16.3, §16.7, §20.1–20.2
+- **Related Invariants**: `docs/Architecture_Invariants.md` §15.2, §16.1–16.3, §16.7, §20.1–20.2, §26.3
+- **Related ADRs**: `Ideas-Pending/Providers/ADR-o2-provider-onboarding.md`, `Ideas-Pending/ADR-Onboarding-Multi-Agent-Provider-Model.md`
 
 ---
 
@@ -55,7 +56,7 @@ To prevent cyclic dependencies and maintain strict module boundaries, we adopt a
 | Module | Package Root | Responsibilities & Contents | Dependencies |
 |---|---|---|---|
 | **`amsha-llm-provider-api`** | `com.amsha.llm.api` | • **SPIs**: `AgentChatModelProvider`, `RoutingChatModelProvider`, `ChatModelCreationPort`<br>• **Contracts & Constants**: `ModelDefaults`, `LlmModelConfig`, `AgentLlmConfig`, `StructuredOutputMode`<br>• **Onboarding DTOs**: `LlmProviderOnboardingAdapter`, `LlmProviderDescriptor`, `ModelEntry`, `ConnectionValidationRequest`, `ProviderValidationResult`, `NetworkProfilePolicy`, `NetworkPolicyViolation`<br>• **Reflection**: `LlmProviderApiReflectionConfig` | `amsha-common`<br>`dev.langchain4j:langchain4j-core`<br>`quarkus-langchain4j-core`<br>`jackson-databind` |
-| **`amsha-llm-providers`** | `com.amsha.llm.providers` | • **21 Concrete Factories**: All 21 `AgentChatModelProvider` and 21 `RoutingChatModelProvider` implementations<br>• **5 Custom Wrappers**: `Agy`, `Codex`, `Kimchi`, `Foundry`, `ClaudeCode`<br>• **12 Helpers**: Token resolvers, OAuth extractors, CLI executors<br>• **Catalog**: `StaticProviderCatalogAdapter` + `provider-catalog.json`<br>• **Factory Implementation**: `ChatModelFactory` implementing `ChatModelCreationPort`<br>• **Classifiers**: `GeminiExceptionClassifier`<br>• **Reflection**: `LlmProvidersReflectionConfig` | `amsha-llm-provider-api`<br>`amsha-core`<br>`quarkus-langchain4j-openai`<br>`quarkus-langchain4j-anthropic`<br>`quarkus-langchain4j-ollama`<br>`quarkus-langchain4j-ai-gemini` |
+| **`amsha-llm-providers`** | `com.amsha.llm.providers` | • **21 Concrete Factories**: All 21 `AgentChatModelProvider` and 21 `RoutingChatModelProvider` implementations<br>• **5 Custom Wrappers**: `Agy`, `Codex`, `Kimchi`, `Foundry`, `ClaudeCode`<br>• **Governed Transport & Catalog**: `GovernedTransportService`, `GovernedHttpClient`, `GovernedLangChainHttpClient`, `LiveProviderCatalogService`, `StaticProviderCatalogAdapter` + `provider-catalog.json`<br>• **OAuth & PKCE Security**: `ProviderOAuthPkceStore`, `ProviderOAuthExchangeService`, token resolvers, OAuth extractors, CLI executors<br>• **Factory Implementation**: `ChatModelFactory` implementing `ChatModelCreationPort`<br>• **Classifiers**: `GeminiExceptionClassifier`<br>• **Reflection**: `LlmProvidersReflectionConfig` | `amsha-llm-provider-api`<br>`amsha-core`<br>`quarkus-langchain4j-openai`<br>`quarkus-langchain4j-anthropic`<br>`quarkus-langchain4j-ollama`<br>`quarkus-langchain4j-ai-gemini` |
 | **`amsha-core`** | `com.amsha.core` | • **Core Orchestration**: `ChatModelProducer`, `ModelRouter`, `ChatModelPool`, `LlmModelFactory`<br>• **Composite Wrappers**: `MultiModelChatModel`, `OrderedFailoverChatModel`, `InfiniteLoopChatModel`<br>• **Internal Loop Provider**: `InfiniteLoopAgentChatModelProvider`<br>• **Policy Enforcement**: `NetworkPolicyEnforcer`<br>• **Identity & Routing**: `ModelProfileResolverImpl`, `ModelProfileCredentialResolver`<br>• **Verification & Invariants**: `LangChain4jLlmAdapter` (§20.1), `LlmValidationService`, `IntentDetectorModelProducer` | `amsha-llm-provider-api`<br>`amsha-persistence-api`<br>`amsha-common` |
 
 ---

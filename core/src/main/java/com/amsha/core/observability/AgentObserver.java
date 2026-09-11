@@ -19,6 +19,17 @@ public interface AgentObserver {
     void recordLlmCall(String sessionId, int inputTokens, int outputTokens);
 
     /**
+     * Called when a reasoning iteration or execution step begins.
+     * Allows observers to track active execution or start heartbeats.
+     *
+     * @param sessionId The workspace session ID.
+     * @param role      The agent role identifier.
+     */
+    default void onStepStart(String sessionId, String role) {
+        // no-op by default
+    }
+
+    /**
      * Called after each reasoning step completes (observation appended, before
      * checkpoint save). Allows observers to opt into step-level events without
      * breaking existing implementations.
@@ -31,6 +42,23 @@ public interface AgentObserver {
         // no-op by default - existing implementations (GovernanceLayer,
         // AgentOtelContext) are unaffected.
     }
+
+    /**
+     * Called when a parallel tool batch begins execution.
+     *
+     * @param sessionId The workspace session ID.
+     * @param role      The agent role identifier.
+     * @param batchSize The number of parallel tools in the batch.
+     */
+    default void onBatchStart(String sessionId, String role, int batchSize) {}
+
+    /**
+     * Called when a parallel tool batch completes execution.
+     *
+     * @param sessionId The workspace session ID.
+     * @param role      The agent role identifier.
+     */
+    default void onBatchComplete(String sessionId, String role) {}
 
     default void onLoopComplete(
             String sessionId, String userId, String agentRole, String goalHash, AgentResult result) {}

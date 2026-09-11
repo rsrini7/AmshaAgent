@@ -37,6 +37,7 @@ public final class AgentSentinels {
 
     // session ID prefix
     public static final String CRON_SESSION_PREFIX = "cron-";
+    public static final String CLI_SESSION_PREFIX = "cli-";
 
     /** Sentinel used in chat history to identify the distilled context from prior messages. */
     public static final String COMPACTED_SUMMARY_SENTINEL = "[CONTEXT FROM PRIOR SESSION]";

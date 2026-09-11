@@ -248,7 +248,7 @@ class GovernedHttpClientTest {
                 .connection(conn)
                 .actor("u")
                 .build();
-        HttpRequest req = HttpRequest.newBuilder(URI.create("http://10.255.255.1:9/"))
+        HttpRequest req = HttpRequest.newBuilder(URI.create("http://198.51.100.1:9/"))
                 .GET()
                 .build();
         OutboundHttpException ex =

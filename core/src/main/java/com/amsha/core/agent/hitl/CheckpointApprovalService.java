@@ -6,25 +6,36 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
+import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.agent.sse.HitlEventType;
 import com.amsha.core.agent.trace.StationCode;
 import com.amsha.core.agent.trace.TracePublisher;
 import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.event.DomainEventBus;
+import com.amsha.core.event.EventTypeCatalog;
+import com.amsha.core.hitl.ApprovalLeaseStore;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -48,6 +59,10 @@ public class CheckpointApprovalService {
     private final ObjectMapper objectMapper;
     private final Instance<CheckpointResumeHandler> resumeHandlerInstance;
     private final TracePublisher tracePublisher;
+    private final Instance<DomainEventBus> eventBusInstance;
+
+    @Inject
+    ApprovalLeaseStore approvalLeaseStore;
 
     @Inject
     public CheckpointApprovalService(
@@ -55,21 +70,33 @@ public class CheckpointApprovalService {
             AgentSseService agentSseService,
             ObjectMapper objectMapper,
             Instance<CheckpointResumeHandler> resumeHandlerInstance,
-            TracePublisher tracePublisher) {
+            TracePublisher tracePublisher,
+            Instance<DomainEventBus> eventBusInstance) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.objectMapper = objectMapper;
         this.resumeHandlerInstance = resumeHandlerInstance;
         this.tracePublisher = tracePublisher;
+        this.eventBusInstance = eventBusInstance;
     }
 
-    /** Visible for tests that do not require trace publishing. */
+    /** Visible for tests that do not require trace publishing or event bus. */
     public CheckpointApprovalService(
             StatefulAgentStore agentStore,
             AgentSseService agentSseService,
             ObjectMapper objectMapper,
             Instance<CheckpointResumeHandler> resumeHandlerInstance) {
-        this(agentStore, agentSseService, objectMapper, resumeHandlerInstance, null);
+        this(agentStore, agentSseService, objectMapper, resumeHandlerInstance, null, null);
+    }
+
+    /** Visible for tests that do not require event bus. */
+    public CheckpointApprovalService(
+            StatefulAgentStore agentStore,
+            AgentSseService agentSseService,
+            ObjectMapper objectMapper,
+            Instance<CheckpointResumeHandler> resumeHandlerInstance,
+            TracePublisher tracePublisher) {
+        this(agentStore, agentSseService, objectMapper, resumeHandlerInstance, tracePublisher, null);
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
@@ -99,14 +126,24 @@ public class CheckpointApprovalService {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint approveAll(String sessionId, String reason) {
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
+        Optional<AgentCheckpoint> cpOpt = agentStore
+                .findLatestAwaitingApproval(sessionId)
+                .or(() -> agentStore.findLatestAwaitingApprovalBySessionContaining(sessionId));
         if (cpOpt.isEmpty())
             throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
         Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-APPROVE-ALL");
         int updated = applyAllPending(cp, decisions, ToolDecision.APPROVED);
-        if (updated == 0) throw alreadyDecided(sessionId, "all");
+        if (updated == 0) {
+            // A double-click or retry can arrive after another request has
+            // already approved every call while the checkpoint is still marked
+            // AWAITING_APPROVAL. Treat that state as an idempotent success.
+            if (decisions.values().stream().allMatch(ToolDecision.APPROVED::equals)) {
+                return cp;
+            }
+            throw alreadyDecided(sessionId, "all");
+        }
 
         setLocalDecisions(cp, decisions, "HITL-APPROVE-ALL");
         publishDecision(cp, HitlEventType.APPROVED, null, null);
@@ -133,7 +170,9 @@ public class CheckpointApprovalService {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint denyAll(String sessionId, String reason) {
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
+        Optional<AgentCheckpoint> cpOpt = agentStore
+                .findLatestAwaitingApproval(sessionId)
+                .or(() -> agentStore.findLatestAwaitingApprovalBySessionContaining(sessionId));
         if (cpOpt.isEmpty())
             throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
@@ -149,39 +188,72 @@ public class CheckpointApprovalService {
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint approveTool(String sessionId, String toolName, String reason) {
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
+        String cleanTool = BatchDecisionUtil.normalizeToolName(toolName);
+        if (cleanTool == null || "all".equalsIgnoreCase(cleanTool)) {
+            return approveAll(sessionId, reason);
+        }
+        Optional<AgentCheckpoint> cpOpt = agentStore
+                .findLatestAwaitingApproval(sessionId)
+                .or(() -> agentStore.findLatestAwaitingApprovalBySessionContaining(sessionId));
         if (cpOpt.isEmpty())
             throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
         Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-APPROVE-TOOL");
-        if (!applyDecision(cp, decisions, toolName, ToolDecision.APPROVED)) {
-            throw alreadyDecided(sessionId, toolName);
+        if (!applyDecision(cp, decisions, cleanTool, ToolDecision.APPROVED)) {
+            String decisionKey = resolveDecisionKey(cp, decisions, cleanTool);
+            if (decisionKey != null && ToolDecision.APPROVED == decisions.get(decisionKey)) {
+                return cp;
+            }
+            throw alreadyDecided(sessionId, cleanTool);
         }
         setLocalDecisions(cp, decisions, "HITL-APPROVE-TOOL");
-        publishDecision(cp, HitlEventType.APPROVED, null, toolName);
+        publishDecision(cp, HitlEventType.APPROVED, null, cleanTool);
         return cp;
     }
 
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public AgentCheckpoint denyTool(String sessionId, String toolName, String reason) {
-        Optional<AgentCheckpoint> cpOpt = agentStore.findLatestAwaitingApproval(sessionId);
+        String cleanTool = BatchDecisionUtil.normalizeToolName(toolName);
+        if (cleanTool == null || "all".equalsIgnoreCase(cleanTool)) {
+            return denyAll(sessionId, reason);
+        }
+        Optional<AgentCheckpoint> cpOpt = agentStore
+                .findLatestAwaitingApproval(sessionId)
+                .or(() -> agentStore.findLatestAwaitingApprovalBySessionContaining(sessionId));
         if (cpOpt.isEmpty())
             throw new CheckpointResolutionException("No pending checkpoint found for session: " + sessionId, 404);
 
         AgentCheckpoint cp = cpOpt.get();
         Map<String, ToolDecision> decisions = readDecisions(cp, "HITL-DENY-TOOL");
-        if (!applyDecision(cp, decisions, toolName, ToolDecision.DENIED)) {
-            throw alreadyDecided(sessionId, toolName);
+        if (!applyDecision(cp, decisions, cleanTool, ToolDecision.DENIED)) {
+            String decisionKey = resolveDecisionKey(cp, decisions, cleanTool);
+            if (decisionKey != null && ToolDecision.DENIED == decisions.get(decisionKey)) {
+                return cp;
+            }
+            throw alreadyDecided(sessionId, cleanTool);
         }
         setLocalDecisions(cp, decisions, "HITL-DENY-TOOL");
-        publishDecision(cp, HitlEventType.DENIED, reason, toolName);
+        publishDecision(cp, HitlEventType.DENIED, reason, cleanTool);
         return cp;
     }
 
     private Map<String, ToolDecision> readDecisions(AgentCheckpoint cp, String operation) {
         String json = cp.getBatchToolDecisions();
-        if (json == null || json.isBlank()) return new LinkedHashMap<>();
+        if (json != null && json.isBlank()) {
+            throw new CheckpointResolutionException("Approval state cannot be resolved safely", 409);
+        }
+        if (json == null) {
+            if (operation != null && operation.contains("ALL")) {
+                throw new CheckpointResolutionException("Approval state cannot be resolved safely", 409);
+            }
+            if (cp.getPendingToolName() != null && !cp.getPendingToolName().isBlank()) {
+                Map<String, ToolDecision> fallback = new LinkedHashMap<>();
+                fallback.put(cp.getPendingToolName(), ToolDecision.PENDING);
+                return fallback;
+            }
+            return new LinkedHashMap<>();
+        }
         try {
             Map<String, ToolDecision> parsed = objectMapper.readValue(json, new TypeReference<>() {});
             return parsed == null ? new LinkedHashMap<>() : new LinkedHashMap<>(parsed);
@@ -201,13 +273,90 @@ public class CheckpointApprovalService {
 
     private boolean applyDecision(
             AgentCheckpoint cp, Map<String, ToolDecision> decisions, String toolName, ToolDecision target) {
-        if (!isFinalDecision(target) || toolName == null || !ToolDecision.PENDING.equals(decisions.get(toolName))) {
+        String cleanTool = BatchDecisionUtil.normalizeToolName(toolName);
+        String decisionKey = resolveDecisionKey(cp, decisions, cleanTool);
+        if (!isFinalDecision(target)
+                || decisionKey == null
+                || !ToolDecision.PENDING.equals(decisions.get(decisionKey))) {
             return false;
         }
         boolean updated =
-                agentStore.updateBatchToolDecision(cp.getSessionId(), cp.getAgentRole(), toolName, target.name());
-        if (updated) decisions.put(toolName, target);
+                agentStore.updateBatchToolDecision(cp.getSessionId(), cp.getAgentRole(), decisionKey, target.name());
+        if (updated) {
+            decisions.put(decisionKey, target);
+            if (target == ToolDecision.APPROVED) {
+                grantLease(cp.getSessionId(), cp, decisionKey);
+            }
+        }
         return updated;
+    }
+
+    private String resolveDecisionKey(AgentCheckpoint cp, Map<String, ToolDecision> decisions, String requested) {
+        if (requested == null || requested.isBlank() || "all".equalsIgnoreCase(requested)) return requested;
+        if (decisions.containsKey(requested)) return requested;
+        try {
+            List<ParallelToolCall> calls = objectMapper.readValue(
+                    cp.getPendingToolParametersJson(), new TypeReference<List<ParallelToolCall>>() {});
+            List<String> matches = new ArrayList<>();
+            for (int i = 0; i < calls.size(); i++) {
+                ParallelToolCall call = calls.get(i);
+                if (requested.equalsIgnoreCase(call.toolName()) || requested.equalsIgnoreCase(call.callId())) {
+                    String key = BatchDecisionUtil.decisionKey(call, i + 1, calls);
+                    if (decisions.containsKey(key)) {
+                        matches.add(key);
+                    } else if (call.callId() != null && decisions.containsKey(call.callId())) {
+                        // Checkpoints written before the tool-name key format
+                        // correction used call IDs for every invocation.
+                        matches.add(call.callId());
+                    } else if (decisions.containsKey(call.toolName())) {
+                        matches.add(call.toolName());
+                    }
+                }
+            }
+            if (matches.size() > 1) {
+                throw new CheckpointResolutionException(
+                        "Tool name is ambiguous; approve the specific parallel call ID", 409);
+            }
+            return matches.isEmpty() ? requested : matches.getFirst();
+        } catch (JsonProcessingException e) {
+            return requested;
+        }
+    }
+
+    private void grantLease(String sessionId, AgentCheckpoint cp, String toolName) {
+        if (approvalLeaseStore == null || sessionId == null || cp == null || toolName == null) {
+            return;
+        }
+        try {
+            String paramsJson = cp.getPendingToolParametersJson();
+            if (paramsJson == null || paramsJson.isBlank()) {
+                return;
+            }
+            JsonNode root = objectMapper.readTree(paramsJson);
+            if (root.isArray()) {
+                for (JsonNode element : root) {
+                    if (toolName.equals(element.path("toolName").asText(null))
+                            || toolName.equals(element.path("callId").asText(null))) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> extracted = objectMapper.convertValue(element.path("params"), Map.class);
+                        if (extracted != null) {
+                            approvalLeaseStore.grant(
+                                    sessionId, element.path("toolName").asText(toolName), extracted);
+                        }
+                    }
+                }
+            } else if (root.isObject()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> extracted = objectMapper.convertValue(root, Map.class);
+                if (extracted != null) {
+                    approvalLeaseStore.grant(sessionId, toolName, extracted);
+                }
+            }
+        } catch (Exception e) {
+            log.warnf(
+                    "[CAS] Lease grant skipped for session=%s tool=%s: %s",
+                    sessionId, toolName, LogUtil.rootMessage(e));
+        }
     }
 
     private void setLocalDecisions(AgentCheckpoint cp, Map<String, ToolDecision> decisions, String operation) {
@@ -230,6 +379,18 @@ public class CheckpointApprovalService {
                         null,
                         reason,
                         Instant.now()));
+
+        if (eventBusInstance != null && eventBusInstance.isResolvable()) {
+            eventBusInstance
+                    .get()
+                    .publish(
+                            EventTypeCatalog.AGENT_STATE_CHANGED,
+                            new AgentStateChangedEvent(
+                                    cp.getSessionId(),
+                                    cp.getAgentRole(),
+                                    type.wireValue().toLowerCase(Locale.ROOT),
+                                    toolName != null ? toolName : cp.getPendingToolName()));
+        }
 
         if (tracePublisher != null) {
             String resolvedToolName = toolName != null ? toolName : cp.getPendingToolName();
@@ -259,8 +420,10 @@ public class CheckpointApprovalService {
     public boolean triggerResume(AgentCheckpoint cp) {
         if (cp == null) return false;
 
-        AgentCheckpoint latest =
-                agentStore.findLatestAwaitingApproval(cp.getSessionId()).orElse(cp);
+        AgentCheckpoint latest = agentStore
+                .findLatestAwaitingApproval(cp.getSessionId())
+                .or(() -> agentStore.findLatestAwaitingApprovalBySessionContaining(cp.getSessionId()))
+                .orElse(cp);
         if (BatchDecisionUtil.hasPendingToolNames(latest, objectMapper)) {
             log.debugf(
                     "HITL-RESUME: skipping trigger for session %s as batch tools are still pending",
@@ -275,12 +438,18 @@ public class CheckpointApprovalService {
         try {
             if (resumeHandlerInstance.isResolvable()) {
                 CheckpointResumeHandler handler = resumeHandlerInstance.get();
+                String effectiveChannelType = latest.getChannelType();
+                if ((effectiveChannelType == null || effectiveChannelType.isBlank())
+                        && latest.getSessionId() != null
+                        && latest.getSessionId().startsWith(AgentSentinels.CLI_SESSION_PREFIX)) {
+                    effectiveChannelType = ChannelType.CLI.id();
+                }
                 accepted = handler.resumeAfterBatchDecision(
                         latest.getSessionId(),
                         latest.getAgentRole(),
                         latest.getChannelPlatformId() != null ? latest.getChannelPlatformId() : "unknown",
                         latest.getChannelPlatformId() != null ? latest.getChannelPlatformId() : latest.getSessionId(),
-                        latest.getChannelType() != null ? latest.getChannelType() : "websocket");
+                        effectiveChannelType != null ? effectiveChannelType : "websocket");
             } else {
                 log.warnf(
                         "HITL-RESUME: no CheckpointResumeHandler is resolvable for session %s", latest.getSessionId());
@@ -302,6 +471,14 @@ public class CheckpointApprovalService {
                         null,
                         null,
                         Instant.now()));
+
+        if (eventBusInstance != null && eventBusInstance.isResolvable()) {
+            eventBusInstance
+                    .get()
+                    .publish(
+                            EventTypeCatalog.AGENT_STATE_CHANGED,
+                            new AgentStateChangedEvent(latest.getSessionId(), latest.getAgentRole(), "resumed", ""));
+        }
         return true;
     }
 }

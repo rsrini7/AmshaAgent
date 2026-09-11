@@ -13,11 +13,11 @@ The lifecycle is illustrated in [the MCP execution diagram](../docs/assets/amsha
 
 All lifecycle surfaces delegate to the same management service and persistence model:
 
-1. **Discover** validates the endpoint, requests `MCP_CONNECT` approval, performs a handshake and `tools/list` after approval, and returns a bounded throwaway preview. It does not persist a connection, vault secret, or registered tool. Connect performs a new handshake.
-2. **Connect** requests `MCP_CONNECT` approval before network I/O, then persists the connection and all discovered tools disabled. A durable row can be `PENDING_APPROVAL`, `CONNECTING`, `CONNECTED`, `PAUSED`, `DEGRADED`, `FAILED`, or `DISCONNECTED`.
+1. **Discover** validates the endpoint, requests `MCP_CONNECT` approval (verifying a single-use `approvalToken` receipt binding actor, session, purpose `MCP_CONNECT`, and target host issued via `ApprovalReceiptIssuer`), performs a handshake and `tools/list` after approval, and returns a bounded throwaway preview. It does not persist a connection, vault secret, or registered tool. Connect performs a new handshake with a fresh receipt.
+2. **Connect** consumes a single-use checkpoint-backed `approvalToken` receipt for `MCP_CONNECT` before network I/O, then persists the connection and all discovered tools disabled. A durable row can be `PENDING_APPROVAL`, `CONNECTING`, `CONNECTED`, `PAUSED`, `DEGRADED`, `FAILED`, or `DISCONNECTED`.
 3. **Enable a tool** requests `MCP_TOOL_ENABLE` approval, verifies the server is reachable, and registers only that tool for the owning user. New or schema-changed tools stay disabled.
 4. **Pause/resume/reconnect/disconnect** preserve user ownership and apply bounded drain before deregistration. Startup reconnect restores only explicitly enabled tools for durable connections.
-5. **Reconfigure** atomically changes an endpoint or credentials after `MCP_CONNECT` approval. Send `If-MCP-Revision` with the current revision; stale mutations return `409`. Existing enabled policy is retained only when the tool name and schema hash are unchanged. `rotate-headers` is the compatibility alias for credential rotation.
+5. **Reconfigure** atomically changes an endpoint or credentials after consuming an `MCP_CONNECT` `approvalToken` receipt. Send `If-MCP-Revision` with the current revision; stale mutations return `409`. Existing enabled policy is retained only when the tool name and schema hash are unchanged. `rotate-headers` is the compatibility alias for credential rotation.
 
 No tool is executable merely because it was returned by `tools/list`; activation is explicit.
 

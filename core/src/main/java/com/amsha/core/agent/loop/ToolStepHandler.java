@@ -17,6 +17,7 @@ import com.amsha.core.agent.trace.StationCode;
 import com.amsha.core.agent.trace.TracePublisher;
 import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.governance.RequiresApprovalException;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.skill.CompiledSkillEntry;
@@ -271,8 +272,18 @@ public class ToolStepHandler {
                 toolName, observation.length() > 200 ? observation.substring(0, 200) + "..." : observation);
 
         // Phase 4 - Resolve
-        return resultProcessor.resolveOutcome(
+        StepDecision outcome = resultProcessor.resolveOutcome(
                 context, toolName, params, response, observation, completedStep, history, consecutiveFailures);
+        if (outcome.result() instanceof AgentResult.AwaitingApproval
+                && ToolCapability.DELEGATE_TO_AGENT.toolName().equals(toolName)
+                && observation.contains(UserMessages.DELEGATION_PAUSED_MARKER)
+                && !checkpointManager.persistDelegatedWait(context, toolName, params, history)) {
+            return StepDecision.terminal(AgentResult.failed(
+                    "Could not persist delegated wait state.",
+                    AgentResult.FailureCategory.SYSTEM_ERROR,
+                    List.copyOf(history)));
+        }
+        return outcome;
     }
 
     private StepDecision evaluateGuard(

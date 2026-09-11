@@ -7,7 +7,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.Authenticator;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.PasswordAuthentication;
 import java.net.ProxySelector;
 import java.net.URI;
@@ -15,6 +14,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -22,6 +23,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,7 +37,6 @@ import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultKey;
-import com.amsha.security.media.MediaSecurityValidator;
 
 import org.jboss.logging.Logger;
 
@@ -80,6 +81,7 @@ public final class GovernedHttpClient {
     private final boolean preApproved;
     private final UnaryOperator<URI> policyUriMapper;
     private final Duration connectTimeoutOverride;
+    private final InetAddress pinnedAddress;
 
     private GovernedHttpClient(
             OutboundHttpPolicyService policyService,
@@ -89,7 +91,8 @@ public final class GovernedHttpClient {
             String actorUserId,
             boolean preApproved,
             UnaryOperator<URI> policyUriMapper,
-            Duration connectTimeoutOverride) {
+            Duration connectTimeoutOverride,
+            InetAddress pinnedAddress) {
         this.policyService = policyService;
         this.vault = vault;
         this.purpose = purpose;
@@ -98,6 +101,7 @@ public final class GovernedHttpClient {
         this.preApproved = preApproved;
         this.policyUriMapper = policyUriMapper;
         this.connectTimeoutOverride = connectTimeoutOverride;
+        this.pinnedAddress = pinnedAddress;
     }
 
     public static Builder builder(OutboundHttpPolicyService policyService) {
@@ -128,9 +132,10 @@ public final class GovernedHttpClient {
 
         revalidateDns(request.uri());
 
-        HttpClient client = buildClient(request.uri());
+        List<Runnable> cleanups = new ArrayList<>();
         HttpResponse<T> response;
         try {
+            HttpClient client = buildClient(request.uri(), cleanups);
             response = client.send(request, bodyHandler);
         } catch (HttpTimeoutException e) {
             log.warnf("Request timed out: %s", policyUri.getHost());
@@ -142,6 +147,14 @@ public final class GovernedHttpClient {
             Thread.currentThread().interrupt();
             log.warnf("Interrupted during request to %s", policyUri.getHost());
             throw OutboundHttpException.io("Interrupted during request to " + policyUri.getHost(), e);
+        } finally {
+            for (Runnable cleanup : cleanups) {
+                try {
+                    cleanup.run();
+                } catch (Exception _) {
+                    // Suppress cleanup failures
+                }
+            }
         }
 
         int status = response.statusCode();
@@ -184,7 +197,10 @@ public final class GovernedHttpClient {
                 || "cookie".equalsIgnoreCase(name)
                 || "cookie2".equalsIgnoreCase(name)
                 || "proxy-authorization".equalsIgnoreCase(name)
-                || "mcp-session-id".equalsIgnoreCase(name);
+                || "mcp-session-id".equalsIgnoreCase(name)
+                || "x-subscription-token".equalsIgnoreCase(name)
+                || "x-api-key".equalsIgnoreCase(name)
+                || "x-goog-api-key".equalsIgnoreCase(name);
     }
 
     private static boolean sameOrigin(URI first, URI second) {
@@ -198,59 +214,40 @@ public final class GovernedHttpClient {
         return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
-    /** Revalidates the resolved address immediately before connect to defeat DNS rebinding. */
+    /**
+     * Revalidates the resolved destination address immediately before connect against SSRF/rebinding
+     * policies and against any configured pinnedAddress. Note: In the absence of an egress proxy that
+     * terminates and pins transport resolution, direct remote connections through JDK HttpClient resolve
+     * via system DNS; socket-level connection pinning is enforced for proxies and deferred for direct
+     * egress as documented in ADR-Onboarding-Multi-Agent-Provider-Model. Sensitive targets subject to
+     * DNS rebinding attacks must configure {@code requireProxy=true} on their network profile.
+     */
     private void revalidateDns(URI uri) {
         String host = uri.getHost();
         if (host == null) return;
         // Skip literal localhost (development/Ollama/MCP) — already exempted by the policy service.
         if (isLocalhost(host)) return;
         String normalized = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
-        // For literal IPs the policy service already blocked private ranges; only DNS names need revalidation.
-        if (normalized.matches("[0-9a-fA-F:.]+")) return;
-        try {
-            InetAddress[] addresses = MediaSecurityValidator.resolveAndValidateHost(
-                    normalized, Duration.ofMillis(effectiveConnectTimeoutMillis()));
-            for (InetAddress addr : addresses) {
-                if (addr.isLoopbackAddress()
-                        || addr.isLinkLocalAddress()
-                        || addr.isSiteLocalAddress()
-                        || addr.isMulticastAddress()
-                        || addr.isAnyLocalAddress()) {
-                    throw OutboundHttpException.dnsRebinding(
-                            "Resolved address for " + host + " is a prohibited internal/loopback range");
+        // For literal IPs enforce address safety check; for DNS names re-resolve and validate.
+        if (GovernedHttpDnsPinning.isIpLiteral(normalized)) {
+            try {
+                InetAddress literalAddr = InetAddress.getByName(normalized);
+                GovernedHttpDnsPinning.validateAddressSafety(literalAddr, host);
+                if (pinnedAddress != null) {
+                    GovernedHttpDnsPinning.validateAddressSafety(pinnedAddress, host);
+                    if (!literalAddr.equals(pinnedAddress)) {
+                        throw OutboundHttpException.dnsRebinding(
+                                "Connected address does not match checked address: " + pinnedAddress);
+                    }
                 }
-                byte[] bytes = addr.getAddress();
-                if (bytes.length == 4
-                        && (bytes[0] & 0xff) == 169
-                        && (bytes[1] & 0xff) == 254
-                        && (bytes[2] & 0xff) == 169
-                        && (bytes[3] & 0xff) == 254) {
-                    // Explicit pin for the cloud metadata endpoint. isLinkLocalAddress() already covers
-                    // 169.254.0.0/16; this makes the highest-value target unmissable even if the
-                    // link-local check is ever narrowed.
-                    throw OutboundHttpException.dnsRebinding(
-                            "Resolved address for " + host + " is the cloud metadata endpoint");
-                }
-                if (bytes.length == 4
-                        && (bytes[0] & 0xff) == 100
-                        && ((bytes[1] & 0xff) >= 64 && (bytes[1] & 0xff) <= 127)) {
-                    throw OutboundHttpException.dnsRebinding(
-                            "Resolved address for " + host + " is in shared address space (100.64.0.0/10)");
-                }
-                if (isIpv4MappedAddress(bytes)) {
-                    throw OutboundHttpException.dnsRebinding(
-                            "Resolved address for " + host + " is an IPv4-mapped address");
-                }
-                if (bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc) {
-                    throw OutboundHttpException.dnsRebinding(
-                            "Resolved address for " + host + " is an IPv6 Unique Local Address (fc00::/7)");
-                }
+            } catch (OutboundHttpException e) {
+                throw e;
+            } catch (Exception _) {
+                throw OutboundHttpException.dns("DNS resolution failed for " + host);
             }
-        } catch (OutboundHttpException e) {
-            throw e;
-        } catch (Exception _) {
-            throw OutboundHttpException.dns("DNS resolution failed for " + host);
+            return;
         }
+        GovernedHttpDnsPinning.validateHostDns(host, effectiveConnectTimeoutMillis(), pinnedAddress);
     }
 
     private int effectiveConnectTimeoutMillis() {
@@ -260,20 +257,7 @@ public final class GovernedHttpClient {
         return policy.connectTimeoutMs() > 0 ? policy.connectTimeoutMs() : DEFAULT_CONNECT_TIMEOUT_MS;
     }
 
-    /** Builds a per-connection HttpClient honoring the network profile policy. */
-    private static boolean isIpv4MappedAddress(byte[] bytes) {
-        if (bytes.length != 16) {
-            return false;
-        }
-        for (int i = 0; i < 10; i++) {
-            if (bytes[i] != 0) {
-                return false;
-            }
-        }
-        return bytes[10] == (byte) 0xff && bytes[11] == (byte) 0xff;
-    }
-
-    private HttpClient buildClient(URI uri) {
+    private HttpClient buildClient(URI uri, List<Runnable> cleanups) {
         NetworkProfilePolicy policy = connection != null && connection.networkProfileJson() != null
                 ? NetworkProfilePolicy.fromJson(connection.networkProfileJson())
                 : NetworkProfilePolicy.allowAll();
@@ -289,21 +273,12 @@ public final class GovernedHttpClient {
         // Proxy: required by policy unless the host is a no-proxy exclusion.
         if (policy.requireProxy() && !policy.isNoProxyHost(uri.getHost())) {
             String proxyUrl = policy.proxyUrl().orElse(null);
-            if (proxyUrl == null || proxyUrl.isBlank()) {
-                throw OutboundHttpException.policy("Connection requires a proxy but none is configured");
-            }
-            try {
-                URI proxyUri = URI.create(proxyUrl);
-                int proxyPort = proxyUri.getPort() < 0 ? 80 : proxyUri.getPort();
-                ProxySelector selector = ProxySelector.of(new InetSocketAddress(proxyUri.getHost(), proxyPort));
-                builder.proxy(selector);
-                // Authenticated proxy: resolve the opaque vault reference to bytes only for this build.
-                policy.proxyCredentialVaultRef().ifPresent(ref -> applyProxyCredentials(builder, ref));
-            } catch (OutboundHttpException e) {
-                throw e;
-            } catch (Exception _) {
-                throw OutboundHttpException.policy("Invalid proxy URL: " + proxyUrl);
-            }
+            GovernedHttpDnsPinning.PinnedProxy pinnedProxy =
+                    GovernedHttpDnsPinning.validateTrustedProxy(proxyUrl, effectiveConnectTimeoutMillis());
+            ProxySelector selector = ProxySelector.of(pinnedProxy.socketAddress());
+            builder.proxy(selector);
+            // Authenticated proxy: resolve the opaque vault reference to bytes only for this build.
+            policy.proxyCredentialVaultRef().ifPresent(ref -> applyProxyCredentials(builder, ref, cleanups));
         }
 
         // TLS trust mode.
@@ -335,7 +310,7 @@ public final class GovernedHttpClient {
         return builder.build();
     }
 
-    private void applyProxyCredentials(HttpClient.Builder builder, String ref) {
+    private void applyProxyCredentials(HttpClient.Builder builder, String ref, List<Runnable> cleanups) {
         if (vault == null) {
             throw OutboundHttpException.policy("Proxy credentials are configured but no vault is available");
         }
@@ -344,15 +319,32 @@ public final class GovernedHttpClient {
             throw OutboundHttpException.policy("Proxy credential vault reference could not be resolved");
         }
         try (VaultKey k = key.get()) {
-            String cred = new String(k.get(), StandardCharsets.UTF_8);
-            String[] parts = cred.split(":", 2);
-            if (parts.length != 2) {
+            byte[] bytes = k.get();
+            int colonIdx = -1;
+            for (int i = 0; i < bytes.length; i++) {
+                if (bytes[i] == ':') {
+                    colonIdx = i;
+                    break;
+                }
+            }
+            if (colonIdx <= 0 || colonIdx == bytes.length - 1) {
                 throw OutboundHttpException.policy("Proxy credential must be user:password");
             }
+            String username = new String(bytes, 0, colonIdx, StandardCharsets.UTF_8);
+            CharBuffer cb =
+                    StandardCharsets.UTF_8.decode(ByteBuffer.wrap(bytes, colonIdx + 1, bytes.length - (colonIdx + 1)));
+            char[] password = new char[cb.remaining()];
+            cb.get(password);
+            char[] passwordCopy = password.clone();
+            Arrays.fill(password, '\0');
+            if (cb.hasArray()) {
+                Arrays.fill(cb.array(), '\0');
+            }
+            cleanups.add(() -> Arrays.fill(passwordCopy, '\0'));
             Authenticator auth = new Authenticator() {
                 @Override
                 protected PasswordAuthentication getPasswordAuthentication() {
-                    return new PasswordAuthentication(parts[0], parts[1].toCharArray());
+                    return new PasswordAuthentication(username, passwordCopy.clone());
                 }
             };
             builder.authenticator(auth);
@@ -389,10 +381,14 @@ public final class GovernedHttpClient {
         }
     }
 
-    private static boolean isLocalhost(String host) {
+    static boolean isLocalhost(String host) {
         if (host == null) return false;
         String normalized = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
         return normalized.equals("localhost") || normalized.equals("127.0.0.1") || normalized.equals("::1");
+    }
+
+    static boolean isIpv4MappedAddress(byte[] bytes) {
+        return GovernedHttpDnsPinning.isIpv4MappedAddress(bytes);
     }
 
     private URI policyUri(URI requestUri) {
@@ -416,6 +412,7 @@ public final class GovernedHttpClient {
         private boolean preApproved;
         private UnaryOperator<URI> policyUriMapper = UnaryOperator.identity();
         private Duration connectTimeoutOverride;
+        private InetAddress pinnedAddress;
 
         private Builder(OutboundHttpPolicyService policyService) {
             this.policyService = policyService;
@@ -465,6 +462,16 @@ public final class GovernedHttpClient {
             return this;
         }
 
+        /**
+         * Sets the expected validated destination address for pre-connect safety checks and address matching.
+         * For direct connections, Java HttpClient resolves DNS via system resolver; strict socket-level pinning
+         * requires an egress proxy with {@code requireProxy=true}.
+         */
+        public Builder pinnedAddress(InetAddress pinnedAddress) {
+            this.pinnedAddress = pinnedAddress;
+            return this;
+        }
+
         public GovernedHttpClient build() {
             return new GovernedHttpClient(
                     policyService,
@@ -474,7 +481,8 @@ public final class GovernedHttpClient {
                     actorUserId,
                     preApproved,
                     policyUriMapper,
-                    connectTimeoutOverride);
+                    connectTimeoutOverride,
+                    pinnedAddress);
         }
     }
 }

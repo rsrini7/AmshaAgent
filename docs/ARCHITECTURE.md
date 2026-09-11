@@ -631,6 +631,8 @@ graph TD
 | Register MCP Server | `register_mcp_server` | `NETWORK_OUTBOUND` | coder, debugger |
 | MCP dynamic tools | (varies) | (varies) | all roles with MCP |
 
+Web retrieval follows a bounded order. Open-ended requests search first. For each exact URL from search results or the user, `browser_navigate` is attempted first when available; a browser failure permits one governed `web_fetch` attempt on that same URL. If both fail, the agent may perform one alternative natural-language search. It must not construct URL variants after a 404.
+
 ### Governance by Autonomy Level
 
 The `AutonomyPolicy` defines which operations are auto-allowed at each level. Operations not auto-allowed pass through `ToolGovernanceGuard` for role trust pre-flight and potential HITL approval.
@@ -702,7 +704,7 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 | Hugging Face | `meta-llama/Llama-3.3-70B-Instruct` | Inference API / Router |
 | Mistral | `codestral-latest` | Codestral & Mistral frontier models |
 | Cloudflare | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Workers AI serverless inference with account-scoped routing |
-| Cohere | `command-r-plus-08-2024` | Command R+ & enterprise models via OpenAI compatibility API |
+| Cohere | `command-r-08-2024` | Command R & enterprise models via OpenAI compatibility API |
 | Codex CLI | `gpt-5.6-luna` | ChatGPT Plus OAuth session from local Codex CLI / Headroom proxy |
 | OMLX | `mlx-community/Qwen3.6-35B-A3B-4bit` | OMLX inference |
 | LlamaCpp | `qwen3` | Local inference via OpenAI-compatible API on port 9000 |

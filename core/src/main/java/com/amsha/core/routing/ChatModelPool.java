@@ -125,6 +125,26 @@ public class ChatModelPool {
     }
 
     /**
+     * Returns the count of pooled model instances scoped to the specified scopeType and scopeId.
+     * Pool keys follow the typed format {@code scopeType#scopeId#...} per RoutingKey convention.
+     * This O(N) key scan is bounded by pool size (typically 10-100 entries) and is used solely
+     * for administrative routing health diagnostics.
+     */
+    public int countByScope(String scopeType, String scopeId) {
+        if (scopeType == null || scopeId == null) {
+            return 0;
+        }
+        String prefix = scopeType + "#" + scopeId + "#";
+        int count = 0;
+        for (String key : pool.keySet()) {
+            if (key.startsWith(prefix)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
      * Checks if a model is already pooled.
      */
     public boolean contains(String poolKey) {

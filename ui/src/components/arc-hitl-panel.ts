@@ -23,12 +23,40 @@ export class ArcHitlPanel extends LitElement {
   @state() private _error: Record<string, string> = {};
   @state() private _statusUnknown = new Set<string>();
 
+  private _pollTimer?: number;
   private readonly _idempotencyKeys = new Map<string, string>();
   private readonly _lastActions = new Map<string, 'approved' | 'rejected'>();
+
+  override connectedCallback() {
+    super.connectedCallback();
+    this._pollTimer = window.setInterval(() => {
+      this.dispatchEvent(new CustomEvent('request-approvals-refresh', { bubbles: true, composed: true }));
+    }, 4000);
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._pollTimer) {
+      window.clearInterval(this._pollTimer);
+      this._pollTimer = undefined;
+    }
+  }
+
+  private _manualRefresh() {
+    this.dispatchEvent(new CustomEvent('request-approvals-refresh', { bubbles: true, composed: true }));
+  }
 
   static styles = css`
     :host { display: block; padding: var(--space-8); box-sizing: border-box; background: var(--bg-base); }
     h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-6); }
+    .header-row h2 { margin: 0; }
+    .btn-refresh {
+      background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-primary);
+      border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: var(--transition); display: flex; align-items: center; gap: 6px;
+    }
+    .btn-refresh:hover { border-color: var(--accent-secondary); color: var(--accent-secondary); }
     .empty { color: var(--text-muted); font-style: italic; font-size: 14px; }
     
     .card {
@@ -82,12 +110,27 @@ export class ArcHitlPanel extends LitElement {
     .error-msg { color: #ef4444; font-size: 12px; font-weight: 600; margin-top: 8px; }
   `;
 
-  private async _approve(taskId: string) {
-    this._lastActions.set(taskId, 'approved');
-    await this._runApprovalAction(taskId, 'approved');
+  private async _approve(target: PendingApprovalDto | string) {
+    const approval = typeof target === 'string'
+      ? this.approvals.find(it => it.taskId === target) || { taskId: target, toolName: '', params: {}, requestedAt: '', agentName: '' }
+      : target;
+    this._lastActions.set(approval.taskId, 'approved');
+    await this._runApprovalAction(approval, 'approved');
   }
 
-  private async _runApprovalAction(taskId: string, action: 'approved' | 'rejected') {
+  private async _runApprovalAction(target: PendingApprovalDto | string, action: 'approved' | 'rejected') {
+    const approval = typeof target === 'string'
+      ? this.approvals.find(it => it.taskId === target) || { taskId: target, toolName: '', params: {}, requestedAt: '', agentName: '' }
+      : target;
+    const taskId = approval.taskId;
+    const toolName = approval.toolName;
+    const requestedAt = approval.requestedAt;
+
+    // Ignore a second click that arrives before Lit has re-rendered the
+    // processing state. Concurrent approvals otherwise race the same
+    // checkpoint and surface a misleading 409 "Already resolved" error.
+    if (this._processing.has(taskId)) return;
+
     this._processing.add(taskId);
     this._statusUnknown.delete(taskId);
     this._error = { ...this._error, [taskId]: '' };
@@ -101,12 +144,12 @@ export class ArcHitlPanel extends LitElement {
     }
 
     const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
-    const idempotencyKey = this._idempotencyKey(taskId, action);
+    const idempotencyKey = this._idempotencyKey(taskId, action, toolName, requestedAt);
     try {
       if (action === 'approved') {
-        await client.approveHitl(taskId, 'Approved by user', { idempotencyKey });
+        await client.approveHitl(taskId, 'Approved by user', { idempotencyKey, toolName });
       } else {
-        await client.rejectHitl(taskId, this._rejectReason[taskId] || '', { idempotencyKey });
+        await client.rejectHitl(taskId, this._rejectReason[taskId] || '', { idempotencyKey, toolName });
       }
       this._completeAction(taskId, action);
     } catch (error: unknown) {
@@ -132,19 +175,22 @@ export class ArcHitlPanel extends LitElement {
   }
 
   private async _submitReject(taskId: string) {
+    const approval = this.approvals.find(it => it.taskId === taskId)
+      || { taskId, toolName: '', params: {}, requestedAt: '', agentName: '' };
     this._lastActions.set(taskId, 'rejected');
-    await this._runApprovalAction(taskId, 'rejected');
+    await this._runApprovalAction(approval, 'rejected');
     if (!this._error[taskId]) {
       this._rejecting.delete(taskId);
     }
     this.requestUpdate();
   }
 
-  private _idempotencyKey(taskId: string, action: 'approved' | 'rejected'): string {
-    const key = `${action}:${taskId}`;
+  private _idempotencyKey(taskId: string, action: 'approved' | 'rejected', toolName?: string, requestedAt?: string): string {
+    const key = `${action}:${taskId}:${toolName || 'all'}:${requestedAt || ''}`;
     const existing = this._idempotencyKeys.get(key);
     if (existing) return existing;
-    const generated = `arc-hitl-${action}-${taskId}`;
+    const nonce = Math.random().toString(36).substring(2, 8);
+    const generated = `arc-hitl-${action}-${taskId}-${nonce}`;
     this._idempotencyKeys.set(key, generated);
     return generated;
   }
@@ -152,6 +198,11 @@ export class ArcHitlPanel extends LitElement {
   private _completeAction(taskId: string, action: 'approved' | 'rejected') {
     this._statusUnknown.delete(taskId);
     this._error = { ...this._error, [taskId]: '' };
+    for (const k of Array.from(this._idempotencyKeys.keys())) {
+      if (k.includes(`:${taskId}:`) || k.endsWith(`:${taskId}`)) {
+        this._idempotencyKeys.delete(k);
+      }
+    }
     this.dispatchEvent(new CustomEvent('approval-action', {
       detail: { taskId, action },
       bubbles: true,
@@ -254,6 +305,18 @@ export class ArcHitlPanel extends LitElement {
       return String(rawParams);
     }
 
+    if (Array.isArray(paramsObj.batch)) {
+      const items = paramsObj.batch as Array<Record<string, unknown>>;
+      if (items.length === 0) return 'No parameters';
+      return items
+        .map((item, index) => {
+          const tool = item.tool || item.toolName || `Tool #${index + 1}`;
+          const p = item.params ? JSON.stringify(item.params, null, 2) : 'No parameters';
+          return `[${index + 1}] ${tool}:\n${p}`;
+        })
+        .join('\n\n');
+    }
+
     const entries = Object.entries(paramsObj);
     if (entries.length === 0) {
       return 'No parameters';
@@ -267,7 +330,10 @@ export class ArcHitlPanel extends LitElement {
   render() {
     return html`
       <div style="max-width: 1200px; margin: 0 auto;">
-        <h2>Pending Approvals (${this.approvals.length})</h2>
+        <div class="header-row">
+          <h2>Pending Approvals (${this.approvals.length})</h2>
+          <button class="btn-refresh" @click="${this._manualRefresh}" title="Refresh pending approvals">↻ Refresh</button>
+        </div>
         
         ${this.approvals.length === 0
           ? html`<p class="empty">✓ No pending approvals. All agents running autonomously.</p>`
@@ -296,7 +362,7 @@ export class ArcHitlPanel extends LitElement {
                   <button class="btn btn-reject" @click="${() => this._checkStatus(a.taskId)}">Check status</button>
                 `
               : html`
-          <button class="btn btn-approve" @click="${() => this._approve(a.taskId)}">Approve Sequence</button>
+          <button class="btn btn-approve" @click="${() => this._approve(a)}">Approve Sequence</button>
           <button class="btn btn-reject" @click="${() => this._toggleReject(a.taskId)}" ?disabled="${this._rejecting.has(a.taskId)}">Abort</button>
         `
         }

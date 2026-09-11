@@ -1,5 +1,6 @@
 export interface PendingApprovalDto {
   taskId: string;
+  sessionId?: string;
   toolName: string;
   params: Record<string, unknown>;
   requestedAt: string;
@@ -148,19 +149,50 @@ export interface OnboardingCompleteDto {
   pluginSteps: Array<{stepId:string; title:string; isConfigured:boolean}>;
 }
 
+export type EgressMode = 'ALLOW_ALL' | 'ALLOW_LIST' | 'DENY_ALL';
+
+export type StructuredOutputMode = 'NATIVE' | 'PROMPT_DIRECTIVE' | 'LENIENT';
+
+export interface NetworkProfilePolicyDto {
+  egressMode?: EgressMode;
+  allowedHosts?: string[];
+  requireProxy?: boolean;
+  proxyUrl?: string;
+  proxyCredentialVaultRef?: string;
+  noProxyHosts?: string[];
+  connectTimeoutMs?: number;
+  readTimeoutMs?: number;
+  tlsTrustMode?: 'SYSTEM' | 'CUSTOM_CA';
+  customCaVaultRef?: string;
+}
+
+export interface ModelProfileDraft {
+  id: string;
+  connectionId: string;
+  modelId: string;
+  structuredOutputMode?: StructuredOutputMode;
+  capabilityJson?: string;
+  safeLimitsJson?: string;
+  enabled?: boolean;
+}
+
 export interface ConnectionDraft {
+  id?: string;
+  displayName?: string;
   provider: string;
   apiKeyVaultRef?: string;
   apiKey?: string;
   baseUrl?: string;
   targetUrl?: string; // targetUrl is required specifically for generic-openai
-  modelId: string;
-  contextWindow: number;
-  structuredOutputMode: string;
-  capabilities: string[];
+  modelId?: string;
+  contextWindow?: number;
+  structuredOutputMode?: StructuredOutputMode;
+  capabilities?: string[];
   headroomEnabled?: boolean;
   timeoutMs?: number;
   retries?: number;
+  networkProfileJson?: string;
+  profiles?: ModelProfileDraft[];
 }
 
 export interface ConcernRoutes {
@@ -181,6 +213,9 @@ export interface McpServerDraft {
   command?: string;
   args?: string;
   url?: string;
+  category?: string;
+  headers?: Record<string, string>;
+  headerVaultRefs?: Record<string, string>;
   envVars?: Record<string, string>;
   healthCheckIntervalMs?: number;
 }
@@ -252,6 +287,7 @@ export interface IdentityConfig {
 
 export interface O1DraftPayload {
   connections: ConnectionDraft[];
+  profiles?: ModelProfileDraft[];
   concernRoutes: ConcernRoutes;
   personaRoutes?: Record<string, RouteAssignment>;
   groupRoutes?: Record<string, RouteAssignment>;
@@ -264,4 +300,39 @@ export interface O1DraftPayload {
   security?: SecurityConfig;
   channels?: ChannelsConfig;
   identity?: IdentityConfig;
+}
+
+export interface OnboardingFieldDescriptorDto {
+  name: string;
+  type: string;
+  required: boolean;
+  options: string[];
+  title: string;
+  description: string;
+}
+
+export interface OnboardingStepDescriptorDto {
+  id: string;
+  version: string;
+  order: number;
+  optional: boolean;
+  title: string;
+  description: string;
+  fields: OnboardingFieldDescriptorDto[];
+}
+
+export interface ConnectionValidationResponse {
+  tier: string;
+  status: string;
+  approvalId?: string | null;
+  summary?: string | null;
+  valid: boolean;
+  safeErrors?: string | null;
+}
+
+export interface ApprovalResolutionResponse {
+  approvalId: string;
+  status: string;
+  verified: boolean;
+  message: string;
 }

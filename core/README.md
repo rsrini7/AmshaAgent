@@ -48,7 +48,7 @@ and CDI `Instance<T>` multi-bean discovery.
 | Hugging Face | `huggingface` | `meta-llama/Llama-3.3-70B-Instruct` | `https://router.huggingface.co/v1` |
 | Mistral AI | `mistral` | `codestral-latest` | `https://api.mistral.ai/v1` |
 | Cloudflare Workers AI | `cloudflare` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` |
-| Cohere | `cohere` | `command-r-plus-08-2024` | `https://api.cohere.ai/compatibility/v1` |
+| Cohere | `cohere` | `command-r-08-2024` | `https://api.cohere.ai/compatibility/v1` |
 | Codex CLI | `codex` | `gpt-5.6-luna` | `https://chatgpt.com/backend-api/codex` |
 | Claude Code | `claude-code` | `claude-sonnet-4-5` | `https://api.anthropic.com` |
 | Antigravity CLI | `agy` | `gemini-3.1-flash-lite` | `https://generativelanguage.googleapis.com/v1beta/openai` |
@@ -140,12 +140,12 @@ and CDI `Instance<T>` multi-bean discovery.
 |---|---|---|---|
 | `amsha.llm.cohere.api-key` | `AMSHA_COHERE_API_KEY` | — | Cohere API key |
 | `amsha.llm.cohere.base-url` | `AMSHA_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Cohere OpenAI compatibility API base URL |
-| `amsha.llm.cohere.model` | `AMSHA_COHERE_MODEL` | `command-r-plus-08-2024` | Default chat model |
+| `amsha.llm.cohere.model` | `AMSHA_COHERE_MODEL` | `command-r-08-2024` | Default chat model |
 | `amsha.compaction.cohere.api-key` | `AMSHA_COMPACTION_COHERE_API_KEY` | — | Cohere API key for compaction slot |
-| `amsha.compaction.cohere.model` | `AMSHA_COMPACTION_COHERE_MODEL` | `command-r-plus-08-2024` | Compaction slot model |
+| `amsha.compaction.cohere.model` | `AMSHA_COMPACTION_COHERE_MODEL` | `command-r-08-2024` | Compaction slot model |
 | `amsha.compaction.cohere.base-url` | `AMSHA_COMPACTION_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Compaction slot base URL |
 | `amsha.classifier.cohere.api-key` | `AMSHA_CLASSIFIER_COHERE_API_KEY` | — | Cohere API key for classifier slot |
-| `amsha.classifier.cohere.model` | `AMSHA_CLASSIFIER_COHERE_MODEL` | `command-r-plus-08-2024` | Classifier slot model |
+| `amsha.classifier.cohere.model` | `AMSHA_CLASSIFIER_COHERE_MODEL` | `command-r-08-2024` | Classifier slot model |
 | `amsha.classifier.cohere.base-url` | `AMSHA_CLASSIFIER_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Classifier slot base URL |
 
 ## Codex Configuration

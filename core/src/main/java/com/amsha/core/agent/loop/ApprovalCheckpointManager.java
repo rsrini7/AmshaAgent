@@ -1,6 +1,7 @@
 package com.amsha.core.agent.loop;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.time.Instant;
@@ -9,7 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.channel.api.AttachmentType;
+import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
@@ -20,14 +23,20 @@ import com.amsha.core.agent.trace.TracePublisher;
 import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
+import com.amsha.core.event.DomainEventBus;
+import com.amsha.core.event.EventTypeCatalog;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.pipeline.TurnDispatchService;
+import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.llm.api.ToolCallJsonKeys;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.RiskLevel;
+import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.ToolResponse;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -45,23 +54,26 @@ public class ApprovalCheckpointManager {
     private final ObjectMapper objectMapper;
     private final AgentSseService agentSseService;
     private final TracePublisher tracePublisher;
+    private final Instance<DomainEventBus> eventBusInstance;
 
     @Inject
     public ApprovalCheckpointManager(
             StatefulAgentStore agentStore,
             AgentSseService agentSseService,
             ObjectMapper objectMapper,
-            TracePublisher tracePublisher) {
+            TracePublisher tracePublisher,
+            Instance<DomainEventBus> eventBusInstance) {
         this.agentStore = agentStore;
         this.agentSseService = agentSseService;
         this.objectMapper = objectMapper;
         this.tracePublisher = tracePublisher;
+        this.eventBusInstance = eventBusInstance;
     }
 
-    /** Visible for tests that do not require trace publishing. */
+    /** Visible for tests that do not require trace publishing or event bus. */
     public ApprovalCheckpointManager(
             StatefulAgentStore agentStore, AgentSseService agentSseService, ObjectMapper objectMapper) {
-        this(agentStore, agentSseService, objectMapper, null);
+        this(agentStore, agentSseService, objectMapper, null, null);
     }
 
     public void save(AgentCheckpoint cp) {
@@ -123,10 +135,7 @@ public class ApprovalCheckpointManager {
         cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(Instant.now());
 
-        if (context.hasChannelInfo()) {
-            cp.setChannelType(context.channelType());
-            cp.setChannelPlatformId(context.channelPlatformId());
-        }
+        stampChannelInfo(cp, context, channelType, channelPlatformId);
         populateContextData(cp, context);
 
         // Save checkpoint metadata and reasoning steps in one atomic store write.
@@ -137,9 +146,10 @@ public class ApprovalCheckpointManager {
                         + "(channel=%s platformId=%s, risk=%s)",
                 sessionId, toolName, channelType, channelPlatformId, frame.riskLevel());
 
-        // SSE HitlEvent is always sent for UI/Web tracking
-        agentSseService.publish(
+        // SSE HitlEvent is always sent for UI/Web tracking (published to session and parent session tree)
+        publishHitlEvent(
                 sessionId,
+                agentRole,
                 new AgentSseService.HitlEvent(
                         sessionId,
                         HitlEventType.AWAITING_APPROVAL.wireValue(),
@@ -152,6 +162,42 @@ public class ApprovalCheckpointManager {
         publishHitlRequested(sessionId, toolName, frame.riskLevel().name());
 
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
+    }
+
+    /**
+     * Keeps a sequential parent in progress while its delegated child owns
+     * the pending approval. The child checkpoint remains the HITL source of
+     * truth; the parent must not be left awaiting or stale, or it may relaunch
+     * the already approved delegation.
+     */
+    public boolean persistDelegatedWait(
+            AgentExecutionContext context,
+            String delegationTool,
+            Map<String, Object> params,
+            List<ReasoningStep> history) {
+        try {
+            AgentCheckpoint checkpoint = loadActiveOrCreate(context.sessionId(), context.agentRole());
+            agentStore.clearBatchResuming(context.sessionId());
+            checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+            checkpoint.setPendingToolName(delegationTool);
+            checkpoint.setPendingToolRole(context.agentRole());
+            checkpoint.setPendingToolParametersJson(objectMapper.writeValueAsString(params));
+            checkpoint.setPreExecutedResults(null);
+            checkpoint.setBatchToolDecisions(
+                    objectMapper.writeValueAsString(Map.of(delegationTool, ToolDecision.APPROVED)));
+            checkpoint.setMaxIterations(context.maxIterations());
+            checkpoint.setOriginalGoal(context.goal());
+            checkpoint.setSystemNote(context.systemNote());
+            checkpoint.setUpdatedAt(Instant.now());
+            populateContextData(checkpoint, context);
+            agentStore.saveWithSteps(checkpoint, history);
+            return true;
+        } catch (Exception e) {
+            log.warnf(
+                    "[DELEGATION] Could not persist parent delegated wait for %s: %s",
+                    context.sessionId(), LogUtil.rootMessage(e));
+            return false;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -203,8 +249,9 @@ public class ApprovalCheckpointManager {
         Map<String, ToolDecision> decisions = new LinkedHashMap<>();
         try {
             originalBatchJson = objectMapper.writeValueAsString(calls);
-            for (ParallelToolCall call : calls) {
-                decisions.put(call.toolName(), ToolDecision.PENDING);
+            for (int i = 0; i < calls.size(); i++) {
+                ParallelToolCall call = calls.get(i);
+                decisions.put(decisionKey(call, i + 1, calls), ToolDecision.PENDING);
             }
         } catch (Exception e) {
             log.debugf("Serialization fallback (non-fatal): %s", LogUtil.rootMessage(e));
@@ -229,10 +276,7 @@ public class ApprovalCheckpointManager {
         cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(Instant.now());
 
-        if (context.hasChannelInfo()) {
-            cp.setChannelType(context.channelType());
-            cp.setChannelPlatformId(context.channelPlatformId());
-        }
+        stampChannelInfo(cp, context, channelType, channelPlatformId);
         populateContextData(cp, context);
 
         // 3. Save
@@ -240,9 +284,10 @@ public class ApprovalCheckpointManager {
 
         log.infof("STATE-MACHINE Pausing session %s for parallel batch approval: %s", sessionId, compositeName);
 
-        // 4. Notify UI via SSE
-        agentSseService.publish(
+        // 4. Notify UI via SSE (published to session and parent session tree)
+        publishHitlEvent(
                 sessionId,
+                agentRole,
                 new AgentSseService.HitlEvent(
                         sessionId,
                         HitlEventType.AWAITING_APPROVAL.wireValue(),
@@ -255,7 +300,7 @@ public class ApprovalCheckpointManager {
         publishHitlRequested(sessionId, compositeName, RiskLevel.MEDIUM.name());
 
         // Create a synthetic frame for the result
-        ApprovalFrame frame = new ApprovalFrame(compositeName, Map.of("batch", originalBatchJson), RiskLevel.MEDIUM);
+        ApprovalFrame frame = new ApprovalFrame(compositeName, BatchDecisionUtil.toDisplayMap(calls), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
     }
 
@@ -278,7 +323,7 @@ public class ApprovalCheckpointManager {
         // This prevents ResumeStrategyDispatcher from attempting to re-execute already-completed tools.
         String compositeName = ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX
                 + allCalls.stream()
-                        .filter(call -> !results.containsKey(call.toolName()))
+                        .filter(call -> !containsResult(results, call))
                         .map(ParallelToolCall::toolName)
                         .distinct()
                         .reduce((a, b) -> a + "|" + b)
@@ -290,12 +335,16 @@ public class ApprovalCheckpointManager {
 
         try {
             originalBatchJson = objectMapper.writeValueAsString(allCalls);
-            preExecutedJson = objectMapper.writeValueAsString(results);
-            for (ParallelToolCall call : allCalls) {
-                if (!results.containsKey(call.toolName())) {
-                    decisions.put(call.toolName(), ToolDecision.PENDING);
-                } else if (!decisions.containsKey(call.toolName())) {
-                    decisions.put(call.toolName(), ToolDecision.APPROVED);
+            preExecutedJson = objectMapper
+                    .writerFor(new TypeReference<Map<String, ToolResponse>>() {})
+                    .writeValueAsString(results);
+            for (int i = 0; i < allCalls.size(); i++) {
+                ParallelToolCall call = allCalls.get(i);
+                String key = decisionKey(call, i + 1, allCalls);
+                if (!containsResult(results, call)) {
+                    decisions.put(key, ToolDecision.PENDING);
+                } else if (!decisions.containsKey(key)) {
+                    decisions.put(key, ToolDecision.APPROVED);
                 }
             }
         } catch (Exception e) {
@@ -322,10 +371,7 @@ public class ApprovalCheckpointManager {
         cp.setSystemNote(context.systemNote());
         cp.setUpdatedAt(Instant.now());
 
-        if (context.hasChannelInfo()) {
-            cp.setChannelType(context.channelType());
-            cp.setChannelPlatformId(context.channelPlatformId());
-        }
+        stampChannelInfo(cp, context, channelType, channelPlatformId);
         populateContextData(cp, context);
 
         agentStore.saveWithSteps(cp, history);
@@ -334,8 +380,9 @@ public class ApprovalCheckpointManager {
                 "STATE-MACHINE Pausing session %s for parallel batch approval (with %d pre-executed): %s",
                 sessionId, results.size(), compositeName);
 
-        agentSseService.publish(
+        publishHitlEvent(
                 sessionId,
+                agentRole,
                 new AgentSseService.HitlEvent(
                         sessionId,
                         HitlEventType.AWAITING_APPROVAL.wireValue(),
@@ -348,14 +395,32 @@ public class ApprovalCheckpointManager {
         publishHitlRequested(sessionId, compositeName, RiskLevel.MEDIUM.name());
 
         ApprovalFrame frame =
-                new ApprovalFrame(compositeName, Map.of(ToolCallJsonKeys.BATCH, originalBatchJson), RiskLevel.MEDIUM);
+                new ApprovalFrame(compositeName, BatchDecisionUtil.toDisplayMap(allCalls), RiskLevel.MEDIUM);
         return AgentResult.awaitingApproval(frame, sessionId, List.copyOf(history));
+    }
+
+    private static String resultKey(ParallelToolCall call) {
+        return call.callId() == null || call.callId().isBlank() ? call.toolName() : call.callId();
+    }
+
+    private static boolean containsResult(Map<String, ToolResponse> results, ParallelToolCall call) {
+        return results.containsKey(resultKey(call)) || results.containsKey(call.toolName());
+    }
+
+    static String decisionKey(ParallelToolCall call, int index, List<ParallelToolCall> all) {
+        return BatchDecisionUtil.decisionKey(call, index, all);
     }
 
     private void populateContextData(AgentCheckpoint cp, AgentExecutionContext context) {
         Map<String, Object> contextData = new LinkedHashMap<>();
         if (context.data() != null) {
             contextData.putAll(context.data());
+        }
+        if (context.userId() != null) {
+            contextData.put("userId", context.userId());
+        }
+        if (context.chatId() != null) {
+            contextData.put("chatId", context.chatId());
         }
         if (context.mediaAttachments() != null && !context.mediaAttachments().isEmpty()) {
             boolean hasAudio =
@@ -386,5 +451,48 @@ public class ApprovalCheckpointManager {
                 .withStatus("HITL_REQUIRED")
                 .withDetail(toolName)
                 .withRiskLevel(riskLevel));
+    }
+
+    private void stampChannelInfo(
+            AgentCheckpoint cp, AgentExecutionContext context, String channelType, String channelPlatformId) {
+        String type = (context != null
+                        && context.channelType() != null
+                        && !context.channelType().isBlank())
+                ? context.channelType()
+                : channelType;
+        String platformId = (context != null
+                        && context.channelPlatformId() != null
+                        && !context.channelPlatformId().isBlank())
+                ? context.channelPlatformId()
+                : channelPlatformId;
+
+        if (type == null
+                && cp.getSessionId() != null
+                && cp.getSessionId().startsWith(AgentSentinels.CLI_SESSION_PREFIX)) {
+            type = ChannelType.CLI.id();
+        }
+        if (platformId == null && ChannelType.CLI.id().equalsIgnoreCase(type)) {
+            platformId = "cli";
+        }
+
+        if (type != null && !type.isBlank()) {
+            cp.setChannelType(type);
+        }
+        if (platformId != null && !platformId.isBlank()) {
+            cp.setChannelPlatformId(platformId);
+        }
+    }
+
+    private void publishHitlEvent(String sessionId, String agentRole, AgentSseService.HitlEvent event) {
+        agentSseService.publish(sessionId, event);
+        SessionTree.parentOf(sessionId).ifPresent(parent -> agentSseService.publish(parent, event));
+        if (eventBusInstance != null && eventBusInstance.isResolvable()) {
+            String role = (agentRole != null && !agentRole.isBlank()) ? agentRole : "coordinator";
+            eventBusInstance
+                    .get()
+                    .publish(
+                            EventTypeCatalog.AGENT_STATE_CHANGED,
+                            new AgentStateChangedEvent(sessionId, role, "waiting-approval", event.toolName()));
+        }
     }
 }

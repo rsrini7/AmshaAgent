@@ -3,6 +3,7 @@ package com.amsha.core.agent.loop;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -30,13 +31,30 @@ public class CodeGenerationPolicy {
 
     private static final Logger log = Logger.getLogger(CodeGenerationPolicy.class);
 
+    private static final Set<String> STRUCTURED_DATA_LANGUAGES = Set.of(
+            "json",
+            "yaml",
+            "yml",
+            "text",
+            "txt",
+            "markdown",
+            "md",
+            "xml",
+            "pom",
+            "html",
+            "toml",
+            "properties",
+            "ini",
+            "csv",
+            "tsv");
+
     /**
      * Detects whether the answer is a generated code block (fenced ``` with
      * optional language tag).
      *
      * <p><strong>§9.1:</strong> {@code static final} - never compiled per-call.
      */
-    static final Pattern PROSE_CODE_PATTERN = Pattern.compile("```[\\w]*\\n[\\s\\S]*?```", Pattern.MULTILINE);
+    static final Pattern PROSE_CODE_PATTERN = Pattern.compile("```[\\w-]*\\r?\\n[\\s\\S]*?```", Pattern.MULTILINE);
 
     static final Pattern FENCE_HEADER_PATTERN = Pattern.compile("^```([\\w-]*)\\R");
 
@@ -100,17 +118,13 @@ public class CodeGenerationPolicy {
                 .replaceFirst("\\R```\\s*$", "")
                 .trim();
 
-        if ("json".equals(language)
-                || "yaml".equals(language)
-                || "yml".equals(language)
-                || "text".equals(language)
-                || "markdown".equals(language)
-                || "md".equals(language)) {
+        if (STRUCTURED_DATA_LANGUAGES.contains(language)) {
             return !SOURCE_CODE_INDICATOR.matcher(body).find();
         }
 
         boolean jsonLike = (body.startsWith("{") && body.endsWith("}")) || (body.startsWith("[") && body.endsWith("]"));
-        return jsonLike && !SOURCE_CODE_INDICATOR.matcher(body).find();
+        boolean xmlLike = (body.startsWith("<") && body.endsWith(">"));
+        return (jsonLike || xmlLike) && !SOURCE_CODE_INDICATOR.matcher(body).find();
     }
 
     /**

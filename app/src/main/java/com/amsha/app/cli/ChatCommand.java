@@ -8,11 +8,8 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import java.io.BufferedReader;
-import java.io.Console;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -36,9 +33,12 @@ import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.session.SessionCatalogService;
+import com.amsha.core.state.ActiveWork;
+import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.fusesource.jansi.AnsiConsole;
@@ -59,6 +59,7 @@ public class ChatCommand implements Runnable {
 
     private static final String CLI_USER_ID = "cli-user";
     private static final String CLI_CHAT_ID = "cli-chat";
+    private static final long PROGRESS_TICK_SECONDS = 20;
 
     @CommandLine.Option(
             names = {"-r", "--role"},
@@ -97,6 +98,9 @@ public class ChatCommand implements Runnable {
 
     @Inject
     SessionCatalogService sessionCatalogService;
+
+    @Inject
+    StatefulAgentStore agentStore;
 
     @Inject
     Instance<BootstrapStateStorePort> bootstrapStateStores;
@@ -141,7 +145,10 @@ public class ChatCommand implements Runnable {
                     .orElseGet(() -> sessionCatalogService.createSession(cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID));
         } else {
             sessionId = sessionCatalogService.registerOrResumeSession(
-                    "cli-" + UUID.randomUUID(), cliUserId, ChannelType.CLI.id(), CLI_CHAT_ID);
+                    AgentSentinels.CLI_SESSION_PREFIX + UUID.randomUUID(),
+                    cliUserId,
+                    ChannelType.CLI.id(),
+                    CLI_CHAT_ID);
         }
         this.currentCliSessionId = sessionId;
 
@@ -207,6 +214,7 @@ public class ChatCommand implements Runnable {
         try {
             log.debugf("CLI ShutdownEvent triggered for session %s (absolute priority cleanup)", sessionId);
             hitlPending = false;
+            CliJobNotifier.setTerminalPrinter(null);
             cliResultBridge.cancel(sessionId); // unblocks any HITL virtual thread immediately
             workspaceManager.terminateSession(sessionId);
         } catch (Exception e) {
@@ -239,12 +247,18 @@ public class ChatCommand implements Runnable {
                     .build();
 
             this.lineReader = reader;
-            chatLoopInner(reader, terminal);
+            CliJobNotifier.setTerminalPrinter(reader::printAbove);
+            try {
+                chatLoopInner(reader, terminal);
+            } finally {
+                CliJobNotifier.setTerminalPrinter(null);
+            }
 
         } catch (Exception e) {
             log.warnf("JLine3 terminal init failed (%s), falling back to raw input", e.getMessage());
             chatLoopFallback();
         } finally {
+            CliJobNotifier.setTerminalPrinter(null);
             this.lineReader = null;
         }
     }
@@ -284,65 +298,11 @@ public class ChatCommand implements Runnable {
 
     /** Fallback for non-TTY environments (CI, piped stdin, Docker without -t). */
     private void chatLoopFallback() {
-        Console console = System.console();
-        BufferedReader fallbackReader =
-                (console == null) ? new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8)) : null;
-
-        while (true) {
-            String input;
-            try {
-                if (console != null) {
-                    input = console.readLine("\nYou> ");
-                } else {
-                    System.out.print("\nYou> ");
-                    System.out.flush();
-                    input = fallbackReader.readLine();
-                }
-                if (input == null) break;
-                input = input.trim();
-            } catch (Exception _) {
-                break;
-            }
-
-            if ("/exit".equalsIgnoreCase(input) || "/quit".equalsIgnoreCase(input)) {
-                System.out.println("Goodbye.");
-                break;
-            }
-            if (input.isBlank()) continue;
-
-            if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
-                if (hitlPending) {
-                    System.out.println(
-                            "\n▶ Amsha Agent> ⏸ Approval pending - type /approve or /deny before sending new messages.");
-                    continue;
-                }
-            }
-
-            dispatchToWorkflow(input);
-        }
+        CliInputSupport.runFallback(() -> hitlPending, this::dispatchToWorkflow);
     }
 
     private List<String> extractSlashCommands() {
-        return List.of(
-                "/approve",
-                "/approvals",
-                "/commands",
-                "/crons",
-                "/deletecron",
-                "/deny",
-                "/exit",
-                "/halt",
-                "/help",
-                "/history",
-                "/newsession",
-                "/quit",
-                "/reset",
-                "/resume",
-                "/retry",
-                "/sessions",
-                "/status",
-                "/store",
-                "/vault");
+        return CliInputSupport.slashCommands();
     }
 
     private void dispatchToWorkflow(String input) {
@@ -363,19 +323,31 @@ public class ChatCommand implements Runnable {
                     AutonomyLevel.SUPERVISED,
                     canonicalRole(role),
                     ChannelType.CLI.id(),
+                    CLI_CHAT_ID,
                     () -> turnDispatchService.dispatch(new TurnRequest(
                             message,
                             CLI_CHAT_ID,
                             Optional.of(sessionId),
                             Optional.ofNullable(role),
                             Optional.of(maxIterations))));
-            hitlPending = result.agentResult()
-                    .map(AgentResult.AwaitingApproval.class::isInstance)
+            boolean isApprovalPrompt = result.commandResponse()
+                    .map(resp -> resp.contains("⏸ Approval") || resp.contains("⏸ Parallel batch"))
                     .orElse(false);
-            if (hitlPending) {
-                waitForHitlResult(sessionId, cliResultBridge.register(sessionId));
-            }
-            if (input.startsWith("/approve") || input.startsWith("/deny")) {
+            boolean newHitlPending = result.agentResult()
+                    .map(AgentResult.AwaitingApproval.class::isInstance)
+                    .orElse(isApprovalPrompt);
+            if (newHitlPending) {
+                // A synchronous /approve can itself pause on the next call in a
+                // parallel batch. The original waiter already owns the bridge
+                // future; registering another waiter would print the eventual
+                // terminal answer twice.
+                boolean startWaiter = !hitlPending;
+                hitlPending = true;
+                cliResultBridge.markAwaitingApproval(sessionId);
+                if (startWaiter) {
+                    waitForHitlResult(sessionId, cliResultBridge.register(sessionId));
+                }
+            } else if (!isSessionAwaitingApproval(sessionId)) {
                 hitlPending = false;
             }
             // Session rotation: NewSessionReflex changes the active session on disk;
@@ -395,17 +367,23 @@ public class ChatCommand implements Runnable {
     }
 
     private void waitForHitlResult(String sessionId, CompletableFuture<AgentResult> resultFuture) {
+        startProgressTicker(sessionId, resultFuture);
         Thread.ofVirtual().name("hitl-waiter-" + sessionId).start(() -> {
             try {
-                AgentResult result = resultFuture.get(hitlTimeoutHours, TimeUnit.HOURS);
-                if (result == null) return;
-                String output = formatTerminalResult(result);
-                if (output == null) return;
-                LineReader reader = lineReader;
-                if (reader != null) {
-                    reader.printAbove("\n▶ Amsha Agent> " + output);
-                } else {
-                    System.out.println("\n▶ Amsha Agent> " + output);
+                CompletableFuture<AgentResult> next = resultFuture;
+                while (true) {
+                    AgentResult result = next.get(hitlTimeoutHours, TimeUnit.HOURS);
+                    if (result == null) return;
+                    if (result instanceof AgentResult.AwaitingApproval awaiting) {
+                        printAbovePrompt(formatApprovalPrompt(awaiting));
+                        hitlPending = true;
+                        cliResultBridge.markAwaitingApproval(sessionId);
+                        next = cliResultBridge.register(sessionId);
+                        continue;
+                    }
+                    String output = formatTerminalResult(result);
+                    if (output != null) printAbovePrompt("\n▶ Amsha Agent> " + output);
+                    return;
                 }
             } catch (CancellationException e) {
                 log.debugf("CLI HITL waiter cancelled for session %s", sessionId);
@@ -419,6 +397,78 @@ public class ChatCommand implements Runnable {
                 hitlPending = false;
             }
         });
+    }
+
+    private static String formatApprovalPrompt(AgentResult.AwaitingApproval awaiting) {
+        return CliInputSupport.formatApprovalPrompt(awaiting);
+    }
+
+    /**
+     * Emits a periodic progress line while an approved turn executes, so the
+     * terminal is not silently frozen between {@code /approve} and the answer.
+     * The phase comes from the agent loop's activity heartbeat, which is already
+     * refreshed on every reasoning step.
+     */
+    private void startProgressTicker(String sessionId, CompletableFuture<AgentResult> resultFuture) {
+        Thread.ofVirtual().name("cli-progress-" + sessionId).start(() -> {
+            long elapsedSeconds = 0;
+            try {
+                while (!resultFuture.isDone()) {
+                    Thread.sleep(Duration.ofSeconds(PROGRESS_TICK_SECONDS));
+                    if (resultFuture.isDone()) return;
+                    if (WorkspaceManager.isSessionHalted(sessionId)) {
+                        // /halt terminated the session but the bridge future was never
+                        // completed (result-delivery gap) — stop spinning immediately.
+                        return;
+                    }
+                    if (isSessionAwaitingApproval(sessionId)) {
+                        continue;
+                    }
+                    elapsedSeconds += PROGRESS_TICK_SECONDS;
+                    printAbovePrompt("⏳ Still working… " + elapsedSeconds + "s" + describeSessionPhase(sessionId));
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException e) {
+                log.debugf("CLI progress ticker stopped for %s: %s", sessionId, LogUtil.rootMessage(e));
+            }
+        });
+    }
+
+    private void printAbovePrompt(String line) {
+        LineReader reader = lineReader;
+        if (reader != null) {
+            reader.printAbove(line);
+        } else {
+            System.out.println(line);
+        }
+    }
+
+    /**
+     * Renders the coarse activity phase recorded by the agent loop,
+     * e.g. {@code " · running read_file"}. Empty when nothing is running or phase is blank.
+     */
+    static String describePhase(String phase) {
+        return CliInputSupport.describePhase(phase);
+    }
+
+    String describeSessionPhase(String sessionId) {
+        if (agentStore == null) {
+            return "";
+        }
+        return agentStore
+                .getActiveWork(sessionId)
+                .map(ActiveWork::phase)
+                .map(ChatCommand::describePhase)
+                .orElse("");
+    }
+
+    boolean isSessionAwaitingApproval(String sessionId) {
+        if (agentStore == null) return false;
+        return agentStore.hasPendingApproval(sessionId)
+                || agentStore
+                        .findLatestAwaitingApprovalBySessionContaining(sessionId)
+                        .isPresent();
     }
 
     static String formatTerminalResult(AgentResult result) {

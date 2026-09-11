@@ -1,10 +1,10 @@
 package com.amsha.core.api;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,14 +18,13 @@ import com.amsha.channel.api.ChannelUser;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
-import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.core.api.dto.ServiceResult;
-import com.amsha.core.api.dto.SessionStatusResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
@@ -40,6 +39,7 @@ import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.ActiveWorkspaceContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
+import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.session.SessionCatalogService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.MdcManaged;
@@ -74,6 +74,12 @@ public class AgentSessionService {
     private final ActiveWorkspaceContext activeWorkspaceContext;
     private final SessionTestLabelStore sessionTestLabelStore;
     private final int maxResumeIterations;
+
+    @Inject
+    @InputSanitizer.PII
+    Instance<InputSanitizer> piiSanitizerInstance;
+
+    InputSanitizer piiSanitizer;
 
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
     private static final String REST_API_SESSION_PREFIX = "rest-api-";
@@ -283,14 +289,14 @@ public class AgentSessionService {
             try {
                 String goal = request.goal() != null ? request.goal().trim() : "";
                 if ("approve".equalsIgnoreCase(goal) || "/approve".equalsIgnoreCase(goal)) {
-                    AgentCheckpoint cp = checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
-                    checkpointApprovalService.triggerResume(cp);
+                    new DelegateApprovalCascade(agentStore, checkpointApprovalService, auditService)
+                            .approveOrCascade(sessionId, userId, request.agentRole());
                     callback.accept(ServiceResult.success(Map.of("status", CheckpointStatus.APPROVED.name())));
                     return;
                 }
                 if ("deny".equalsIgnoreCase(goal) || "/deny".equalsIgnoreCase(goal)) {
-                    AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
-                    checkpointApprovalService.triggerResume(cp);
+                    new DelegateApprovalCascade(agentStore, checkpointApprovalService, auditService)
+                            .denyOrCascade(sessionId, userId, request.agentRole());
                     callback.accept(ServiceResult.success(Map.of("status", CheckpointStatus.DENIED.name())));
                     return;
                 }
@@ -301,6 +307,8 @@ public class AgentSessionService {
                 ServiceResult<Object> result = toServiceResult(
                         dispatchRestTurn(sessionId, userId, request, canonicalRole, maxIterations), true);
                 callback.accept(result);
+            } catch (CheckpointResolutionException e) {
+                callback.accept(ServiceResult.error(resolutionErrorCode(e), e.getMessage()));
             } catch (Exception e) {
                 sessionTestLabelStore.clearSession(sessionId);
                 log.errorf("Async agent run failed: %s", LogUtil.rootMessage(e));
@@ -315,6 +323,20 @@ public class AgentSessionService {
         }
     }
 
+    private static String resolutionErrorCode(CheckpointResolutionException e) {
+        return switch (e.getStatusCode()) {
+            case 409 -> "ALREADY_RESOLVED";
+            case 404 -> "NO_PENDING_APPROVAL";
+            default -> "SYSTEM";
+        };
+    }
+
+    private static boolean isAlreadyResolved(CheckpointResolutionException e) {
+        return e.getStatusCode() == 409
+                && e.getMessage() != null
+                && e.getMessage().startsWith("Approval decision already resolved");
+    }
+
     public ServiceResult<Object> approve(String sessionId, String userId, String agentRole) {
         var sessionError = validateSession(sessionId, userId);
         if (sessionError.isPresent()) return sessionError.get();
@@ -327,7 +349,16 @@ public class AgentSessionService {
                     return ServiceResult.error("NO_PENDING_APPROVAL", "No pending approval");
                 }
 
-                checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
+                try {
+                    checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
+                } catch (CheckpointResolutionException alreadyResolved) {
+                    // The parent checkpoint carries no undecided tools (e.g. its pause was
+                    // propagated from a delegated sub-session): approve awaiting delegates instead.
+                    if (!isAlreadyResolved(alreadyResolved)) throw alreadyResolved;
+                    int cascaded = new DelegateApprovalCascade(agentStore, checkpointApprovalService, auditService)
+                            .approveAwaitingDelegates(sessionId, userId, canonicalRole);
+                    if (cascaded == 0) throw alreadyResolved;
+                }
                 auditService.recordMandatory(
                         sessionId,
                         userId,
@@ -352,6 +383,12 @@ public class AgentSessionService {
                         });
             };
             return withSelectedWorkspace(() -> WorkspaceScopeHolder.call(sessionId, op));
+        } catch (CheckpointResolutionException e) {
+            // A resolution race (duplicate or overlapping approve after the checkpoint already
+            // resolved) is a client-observable conflict, never a server failure. Mirrors the
+            // benign-race handling in HitlService.isResolutionRace.
+            log.warnf("Approve raced with an already-resolved checkpoint for session %s", sessionId);
+            return ServiceResult.error(resolutionErrorCode(e), e.getMessage());
         } catch (Exception e) {
             log.errorf("Approve failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
@@ -369,7 +406,18 @@ public class AgentSessionService {
                 if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
                     return ServiceResult.error("NO_PENDING_APPROVAL", "No pending approval");
                 }
-                AgentCheckpoint cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
+                AgentCheckpoint cp;
+                try {
+                    cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
+                } catch (CheckpointResolutionException alreadyResolved) {
+                    // The parent checkpoint carries no undecided tools (e.g. its pause was
+                    // propagated from a delegated sub-session): deny awaiting delegates instead.
+                    if (!isAlreadyResolved(alreadyResolved)) throw alreadyResolved;
+                    int cascaded = new DelegateApprovalCascade(agentStore, checkpointApprovalService, auditService)
+                            .denyAwaitingDelegates(sessionId, userId, canonicalRole);
+                    if (cascaded == 0) throw alreadyResolved;
+                    cp = checkpoint.orElseThrow();
+                }
                 auditService.recordMandatory(
                         sessionId,
                         userId,
@@ -380,6 +428,11 @@ public class AgentSessionService {
                 return ServiceResult.success(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId));
             };
             return withSelectedWorkspace(() -> WorkspaceScopeHolder.call(sessionId, op));
+        } catch (CheckpointResolutionException e) {
+            // Same benign-race mapping as approve(): an overlapping deny after resolution
+            // is a conflict, never a server failure.
+            log.warnf("Deny raced with an already-resolved checkpoint for session %s", sessionId);
+            return ServiceResult.error(resolutionErrorCode(e), e.getMessage());
         } catch (Exception e) {
             log.errorf("Deny failed: %s", LogUtil.rootMessage(e));
             return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
@@ -392,25 +445,26 @@ public class AgentSessionService {
 
         try {
             String canonicalRole = AgentRoleEnum.fromString(role).toScopedName();
-            var checkpointOpt = loadStatusCheckpoint(sessionId, canonicalRole);
-            if (checkpointOpt.isEmpty()) {
-                return ServiceResult.success(
-                        Map.of("sessionId", sessionId, "status", CheckpointStatus.NOT_STARTED.name()));
-            }
-            var cp = checkpointOpt.get();
-            List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
-            return ServiceResult.success(
-                    new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason()));
+            return SessionStatusResolver.resolve(agentStore, sessionId, canonicalRole, resolveSanitizer());
         } catch (Exception e) {
             return ServiceResult.error("SYSTEM", e.getMessage());
         }
     }
 
-    private Optional<AgentCheckpoint> loadStatusCheckpoint(String sessionId, String canonicalRole) {
-        if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            return agentStore.findLatestNonArchivedCheckpoint(sessionId);
+    private InputSanitizer resolveSanitizer() {
+        if (piiSanitizer != null) {
+            return piiSanitizer;
         }
-        return agentStore.load(sessionId, canonicalRole);
+        if (piiSanitizerInstance != null) {
+            if (piiSanitizerInstance.isResolvable()) {
+                return piiSanitizerInstance.get();
+            }
+            var it = piiSanitizerInstance.iterator();
+            if (it.hasNext()) {
+                return it.next();
+            }
+        }
+        return null;
     }
 
     public ServiceResult<Object> terminateSession(String sessionId, String userId) {

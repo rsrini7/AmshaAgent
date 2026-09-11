@@ -21,4 +21,7 @@ public interface LockJdbiDao {
 
     @SqlQuery("SELECT COUNT(*) FROM advisory_lock WHERE lock_key = :lockKey AND expires_at > :now")
     long countActive(@Bind("lockKey") String lockKey, @Bind("now") Instant now);
+
+    @SqlUpdate("UPDATE advisory_lock SET expires_at = :expiresAt WHERE lock_key = :lockKey AND owner_id = :ownerId")
+    int renew(@Bind("lockKey") String lockKey, @Bind("ownerId") String ownerId, @Bind("expiresAt") Instant expiresAt);
 }

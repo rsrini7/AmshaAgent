@@ -57,6 +57,16 @@ class AgentResultFormatterUnitTest {
     }
 
     @Test
+    void testFormatCronHitlWithParams() {
+        String hitl = AgentResultFormatter.formatCronHitl(
+                "cron-123", "Daily Backup", "execute_shell", "{\"command\":\"backup.sh\"}");
+        assertTrue(hitl.contains("Approval Required for background task"));
+        assertTrue(hitl.contains("Daily Backup"));
+        assertTrue(hitl.contains("backup.sh"));
+        assertTrue(hitl.contains("Reply /approve cron-123 or /deny cron-123"));
+    }
+
+    @Test
     void testSanitizeCriticalDirectiveTailFromFinishedAnswer() {
         String answer =
                 "Delegation is waiting for approval.\n\n" + "CRITICAL DIRECTIVE: Do NOT retry delegation. FINISH now.";

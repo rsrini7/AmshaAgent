@@ -49,7 +49,9 @@ export class ArcAgentStatus extends LitElement {
     }
     .status-active      { background: rgba(108, 99, 255, 0.1); color: var(--accent); }
     .status-idle        { background: rgba(0, 212, 170, 0.1); color: var(--accent-secondary); }
-    .status-waiting_approval { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .status-waiting_approval,
+    .status-waiting-approval { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .status-waiting-delegate { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
     .status-error       { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
     
     .autonomy-chip {

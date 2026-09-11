@@ -4,12 +4,10 @@ import dev.langchain4j.model.chat.request.json.JsonIntegerSchema;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.request.json.JsonStringSchema;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -19,8 +17,11 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.security.http.GovernedTransportService;
+import com.amsha.security.http.OutboundHttpException;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
@@ -34,6 +35,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -47,6 +51,11 @@ import io.quarkus.arc.Unremovable;
         description = "Search the web for real-time Google results using the Serper API",
         defaultRoles = {"researcher", "synthesizer"})
 public class SerperWebSearchTool implements AgentTool {
+
+    public static final String TYPE_SEARCH = "search";
+    public static final String TYPE_NEWS = "news";
+    private static final String SERPER_SEARCH_URL = "https://google.serper.dev/search";
+    private static final String SERPER_NEWS_URL = "https://google.serper.dev/news";
 
     private static final String PARAM_QUERY = "query";
     private static final String PARAM_COUNT = "count";
@@ -78,12 +87,25 @@ public class SerperWebSearchTool implements AgentTool {
     @Inject
     Logger log;
 
-    private HttpClient httpClient;
+    @Inject
+    GovernedTransportService governedTransport;
 
-    @PostConstruct
-    void init() {
-        httpClient =
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    GovernedTransportService resolveGovernedTransport() {
+        if (governedTransport != null) {
+            return governedTransport;
+        }
+        try {
+            ArcContainer container = Arc.container();
+            if (container != null) {
+                InstanceHandle<GovernedTransportService> handle = container.instance(GovernedTransportService.class);
+                if (handle != null && handle.isAvailable()) {
+                    return handle.get();
+                }
+            }
+        } catch (Exception _) {
+            // Context not active or standalone test mode
+        }
+        throw new IllegalStateException("GovernedTransportService is required for Serper search egress");
     }
 
     @Override
@@ -145,8 +167,20 @@ public class SerperWebSearchTool implements AgentTool {
                 .build();
     }
 
+    @Override
+    public String validateParameters(Map<String, Object> params) {
+        if (params == null || !params.containsKey(PARAM_QUERY)) {
+            return "Parameter 'query' is required for serper_web_search.";
+        }
+        Object queryObj = params.get(PARAM_QUERY);
+        if (!(queryObj instanceof String q) || q.isBlank()) {
+            return "Parameter 'query' is required for serper_web_search.";
+        }
+        return null;
+    }
+
     private String resolveEndpoint(String type) {
-        return "news".equals(type) ? "https://google.serper.dev/news" : "https://google.serper.dev/search";
+        return TYPE_NEWS.equals(type) ? SERPER_NEWS_URL : SERPER_SEARCH_URL;
     }
 
     @Override
@@ -176,7 +210,7 @@ public class SerperWebSearchTool implements AgentTool {
         String type = parseType(params);
 
         try {
-            HttpResponse<String> response = fetchSerperResponse(query, count, type);
+            HttpResponse<String> response = fetchSerperResponse(query, count, type, userId);
             if (response.statusCode() != 200) {
                 return ToolResponse.failure(response.statusCode(), "Serper Search API failed: " + response.body());
             }
@@ -184,6 +218,15 @@ public class SerperWebSearchTool implements AgentTool {
             auditService.record(
                     sessionId, userId, agentRole, SecurityEventType.TOOL_EXECUTED, "Serper search: " + query);
             return parseSearchResponse(response.body(), query);
+        } catch (OutboundHttpException e) {
+            int code =
+                    switch (e.category()) {
+                        case POLICY_DENIED, DNS_REBINDING, REDIRECT_DENIED, TLS_TRUST -> 403;
+                        case HITL_REQUIRED -> 409;
+                        case TIMEOUT -> 504;
+                        default -> 502;
+                    };
+            return ToolResponse.failure(code, "Serper search blocked: " + e.getMessage());
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             return ToolResponse.failure(502, "Serper search request failed: " + e.getMessage());
@@ -206,13 +249,14 @@ public class SerperWebSearchTool implements AgentTool {
     }
 
     private String parseType(Map<String, Object> params) {
-        if (params.containsKey("type") && "news".equals(params.get("type"))) {
-            return "news";
+        if (params.containsKey("type") && TYPE_NEWS.equals(params.get("type"))) {
+            return TYPE_NEWS;
         }
-        return "search";
+        return TYPE_SEARCH;
     }
 
-    private HttpResponse<String> fetchSerperResponse(String query, int count, String type) throws Exception {
+    private HttpResponse<String> fetchSerperResponse(String query, int count, String type, String userId)
+            throws Exception {
         ObjectNode bodyNode = objectMapper.createObjectNode();
         bodyNode.put("q", query);
         bodyNode.put("num", count);
@@ -228,7 +272,19 @@ public class SerperWebSearchTool implements AgentTool {
                 .timeout(Duration.ofSeconds(15))
                 .build();
 
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        // HITL boundary: ToolInvocationGuard owns approval for NETWORK_OUTBOUND tools and always
+        // pauses before execution, so transport-level preApproved is false. WEB_SEARCH is
+        // intentionally non-HITL at transport to avoid a double prompt. Connection is null by
+        // design: web search is connection-agnostic (default SSRF/TLS/DNS-rebinding policy).
+        return resolveGovernedTransport()
+                .send(
+                        endpoint.toString(),
+                        OutboundPurpose.WEB_SEARCH,
+                        null,
+                        userId,
+                        false,
+                        request,
+                        HttpResponse.BodyHandlers.ofString());
     }
 
     private ToolResponse parseSearchResponse(String responseBody, String query) throws Exception {

@@ -2,7 +2,6 @@ package com.amsha.core.agent.loop;
 
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
@@ -17,6 +16,7 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
@@ -137,22 +137,41 @@ final class PendingToolResumeExecutor {
 
     private AgentResult executeAttempt(PendingToolRequest request) throws Exception {
         Map<String, Object> params = parseParams(request.paramsJson());
-        ToolInvocationGuard.GuardDecision decision = guard == null
-                ? new ToolInvocationGuard.GuardDecision.Allow()
-                : guard.evaluate(
-                        request.sessionId(),
-                        request.effectiveRole(),
-                        request.context().autonomyLevel(),
-                        request.toolName(),
-                        params,
-                        request.history(),
-                        request.context().goal(),
-                        List.of());
+        if (guard == null) {
+            log.errorf("[ResumeStrategy] Mandatory tool guard unavailable for session %s", request.sessionId());
+            return AgentResult.failed(
+                    "Tool execution blocked because the safety guard is unavailable.",
+                    AgentResult.FailureCategory.SYSTEM_ERROR,
+                    List.copyOf(request.history()));
+        }
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                request.sessionId(),
+                request.effectiveRole(),
+                request.context().autonomyLevel(),
+                request.toolName(),
+                params,
+                request.history(),
+                request.context().goal(),
+                List.of());
         if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked blocked) {
             return AgentResult.failed(
                     "Tool execution blocked by safety guard: " + blocked.observation(),
                     AgentResult.FailureCategory.SYSTEM_ERROR,
                     List.copyOf(request.history()));
+        }
+        if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval pause) {
+            return AgentResult.awaitingApproval(pause.frame(), request.sessionId(), List.copyOf(request.history()));
+        }
+        if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate deduplicate) {
+            recordReasoningStep(
+                    request.toolName(),
+                    request.paramsJson(),
+                    deduplicate.cachedObservation(),
+                    true,
+                    request.history(),
+                    request.sessionId());
+            completeInProgressCheckpoint(request.checkpoint());
+            return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
         }
 
         ToolResponse response = WorkspaceContext.runWithFullAutonomy(
@@ -182,8 +201,22 @@ final class PendingToolResumeExecutor {
         }
         if (response instanceof ToolResponse.ToolSuccess success) {
             if (success.output() != null && success.output().contains(UserMessages.DELEGATION_PAUSED_MARKER)) {
-                String pausedTool = extractPausedTool(success.output());
-                ApprovalFrame frame = new ApprovalFrame(pausedTool, Map.of(), RiskLevel.HIGH);
+                String pausedTool = UserMessages.extractPausedTool(success.output());
+                String pausedParamsJson = UserMessages.extractPausedParamsJson(success.output());
+                Map<String, Object> pausedParams = parsePausedParams(pausedParamsJson);
+                if (pausedTool == null || pausedTool.isBlank() || pausedParamsJson == null || pausedParams == null) {
+                    return AgentResult.failed(
+                            "Delegated approval payload was invalid and was not resumed.",
+                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                            List.copyOf(request.history()));
+                }
+                if (!persistDelegatedWait(request)) {
+                    return AgentResult.failed(
+                            "Could not persist delegated wait state.",
+                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                            List.copyOf(request.history()));
+                }
+                ApprovalFrame frame = new ApprovalFrame(pausedTool, pausedParams, RiskLevel.HIGH);
                 return AgentResult.awaitingApproval(frame, request.sessionId(), List.copyOf(request.history()));
             }
             if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(request.toolName())
@@ -203,16 +236,44 @@ final class PendingToolResumeExecutor {
         return handleFailure(request, response);
     }
 
-    private static final Pattern PAUSED_TOOL_PATTERN = Pattern.compile("tool '([^']+)' needs human approval");
-
-    private static String extractPausedTool(String obs) {
-        if (obs != null) {
-            var matcher = PAUSED_TOOL_PATTERN.matcher(obs);
-            if (matcher.find()) {
-                return matcher.group(1);
-            }
+    /**
+     * Keep the sequential parent alive while its child owns the approval.
+     * The parent delegation was already approved; storing it as IN_PROGRESS
+     * prevents stale-approval cleanup and a second parent approval from
+     * launching a duplicate child. The child checkpoint remains the source of
+     * truth for the pending tool approval.
+     */
+    private boolean persistDelegatedWait(PendingToolRequest request) {
+        AgentCheckpoint checkpoint = request.checkpoint();
+        agentStore.clearBatchResuming(request.sessionId());
+        checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+        checkpoint.setPendingToolName(request.originalToolName());
+        checkpoint.setPendingToolRole(request.effectiveRole());
+        checkpoint.setPendingToolParametersJson(request.paramsJson());
+        checkpoint.setPreExecutedResults(null);
+        try {
+            checkpoint.setBatchToolDecisions(
+                    objectMapper.writeValueAsString(Map.of(request.originalToolName(), ToolDecision.APPROVED)));
+            agentStore.saveWithSteps(checkpoint, request.history());
+            return true;
+        } catch (Exception e) {
+            log.warnf(
+                    "[DELEGATION] Could not persist parent delegated wait for %s: %s",
+                    request.sessionId(), LogUtil.rootMessage(e));
+            return false;
         }
-        return ToolCapability.DELEGATE_TO_AGENT.toolName();
+    }
+
+    private Map<String, Object> parsePausedParams(String paramsJson) {
+        if (paramsJson == null || paramsJson.isBlank() || "{}".equals(paramsJson.trim())) {
+            return Map.of();
+        }
+        try {
+            return parseParams(paramsJson);
+        } catch (Exception e) {
+            log.warnf("Failed to parse delegated approval parameters: %s", LogUtil.rootMessage(e));
+            return null;
+        }
     }
 
     private Map<String, Object> parseParams(String paramsJson) throws Exception {
@@ -223,26 +284,45 @@ final class PendingToolResumeExecutor {
     }
 
     private AgentResult handleFailure(PendingToolRequest request, ToolResponse response) {
-        if (ToolCapability.WEB_FETCH.toolName().equals(request.toolName())) {
-            String url = extractUrlFromParams(request.paramsJson());
-            if (url != null && !url.isBlank()) {
-                String fallbackGoal = "The web_fetch tool was unable to retrieve "
-                        + url
-                        + " (error: "
-                        + response.output()
-                        + "). Please try browser_navigate to visit this URL instead.";
-                log.infof("[ResumeStrategy] web_fetch failed for %s - falling back to browser_navigate", url);
+        String url = extractUrlFromParams(request.paramsJson());
+        if (response != null && !response.success() && url != null && !url.isBlank()) {
+            String fallbackGoal = null;
+            String fallbackMessage = null;
+            if (WebRetrievalFallbackPolicy.isBrowser(request.toolName())) {
+                fallbackGoal = WebRetrievalFallbackPolicy.browserToFetchGoal(url, response.output());
+                fallbackMessage = "Browser navigation failed, falling back to web_fetch.";
+                request.history()
+                        .add(ReasoningStep.observeStep(
+                                ToolCapability.BROWSER_NAVIGATE.toolName(),
+                                WebRetrievalFallbackPolicy.browserFailureMarker(url)
+                                        + ". Tool execution failed: "
+                                        + response.output()
+                                        + ". Fallback: "
+                                        + fallbackGoal,
+                                fallbackMessage));
+            } else if (WebRetrievalFallbackPolicy.isWebFetch(request.toolName())) {
+                boolean browserFailed = WebRetrievalFallbackPolicy.browserAttemptFailed(request.history(), url);
+                fallbackGoal = browserFailed
+                        ? WebRetrievalFallbackPolicy.fetchToSearchGoal(url, response.output())
+                        : WebRetrievalFallbackPolicy.fetchToBrowserGoal(url, response.output());
+                fallbackMessage = browserFailed
+                        ? "Browser and web_fetch failed, falling back to one search."
+                        : "web_fetch failed, falling back to browser_navigate.";
                 request.history()
                         .add(ReasoningStep.observeStep(
                                 ToolCapability.WEB_FETCH.toolName(),
                                 "Tool execution failed: " + response.output() + ". Fallback: " + fallbackGoal,
-                                "web_fetch failed, falling back to browser_navigate."));
+                                fallbackMessage));
+            }
+            if (fallbackGoal != null) {
+                log.infof(
+                        "[ResumeStrategy] %s failed for %s - falling back with bounded retrieval policy",
+                        request.toolName(), url);
                 completeInProgressCheckpoint(request.checkpoint());
                 return request.stateMachineRunner()
                         .run(request.context().withGoal(fallbackGoal), reasoningEngine, request.history());
             }
         }
-
         AgentResult healResult = failureHandler.tryAutoHeal(request, response);
         if (healResult != null) {
             return healResult;

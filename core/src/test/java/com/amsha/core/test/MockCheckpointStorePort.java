@@ -100,6 +100,21 @@ public class MockCheckpointStorePort implements CheckpointStorePort {
     }
 
     @Override
+    public List<CheckpointDto> findActiveBySessionTree(String rootSessionId) {
+        if (rootSessionId == null) return List.of();
+        String delegatePrefix = rootSessionId + ":delegate:";
+        return store.values().stream()
+                .filter(c -> c.sessionId() != null
+                        && (c.sessionId().equals(rootSessionId) || c.sessionId().startsWith(delegatePrefix)))
+                .filter(c -> c.status() != null
+                        && ("IN_PROGRESS".equals(c.status())
+                                || "RESUMING".equals(c.status())
+                                || "AWAITING_APPROVAL".equals(c.status())
+                                || "AWAITING_RETRY".equals(c.status())))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public List<CheckpointDto> findByStatusAndSessionIds(
             String status, List<String> sessionIds, int limit, int offset) {
         return store.values().stream()

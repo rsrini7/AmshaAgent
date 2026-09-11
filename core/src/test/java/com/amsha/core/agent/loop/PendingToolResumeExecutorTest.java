@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +25,7 @@ import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -55,6 +60,9 @@ class PendingToolResumeExecutorTest {
     @Mock
     AgentCheckpoint checkpoint;
 
+    @Mock
+    ToolInvocationGuard guard;
+
     private PendingToolResumeExecutor executor;
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -68,7 +76,10 @@ class PendingToolResumeExecutorTest {
                 recoveryService,
                 escalationService,
                 new ToolDelegationResolver(),
-                null);
+                guard);
+        lenient()
+                .when(guard.evaluate(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
     }
 
     @Test
@@ -220,5 +231,106 @@ class PendingToolResumeExecutorTest {
         assertEquals("sandbox_exec", aa.toolName());
         assertEquals("s-cron", aa.sessionId());
         verify(checkpoint, Mockito.never()).setStatus(CheckpointStatus.COMPLETED);
+        verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
+        verify(agentStore).clearBatchResuming("s-cron");
+        verify(agentStore).saveWithSteps(eq(checkpoint), anyList());
+    }
+
+    @Test
+    void testExecute_delegationPausedWithParamsPropagatesParametersToApprovalFrame() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s-cron",
+                "u1",
+                "c1",
+                "coordinator",
+                "run delegated task",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn("garuda");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        String pausedObs = UserMessages.delegationPaused(
+                "saraswati", "web_fetch", "{\"url\":\"https://spring.io/projects/release-highlights\"}");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.success(pausedObs));
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "TELEGRAM", stateMachineRunner);
+
+        assertNotNull(result);
+        assertInstanceOf(AgentResult.AwaitingApproval.class, result);
+        AgentResult.AwaitingApproval aa = (AgentResult.AwaitingApproval) result;
+        assertEquals("web_fetch", aa.toolName());
+        assertEquals("s-cron", aa.sessionId());
+        assertEquals(
+                "https://spring.io/projects/release-highlights",
+                aa.frame().params().get("url"));
+        assertTrue(aa.paramsJson().contains("https://spring.io/projects/release-highlights"));
+        verify(checkpoint, Mockito.never()).setStatus(CheckpointStatus.COMPLETED);
+    }
+
+    @Test
+    void testExecute_failsClosedWhenMandatoryGuardIsUnavailable() {
+        executor = new PendingToolResumeExecutor(
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                new ToolDelegationResolver(),
+                null);
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s-guard",
+                "u1",
+                "c1",
+                "coordinator",
+                "fetch",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{\"url\":\"https://example.com\"}");
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "CLI", stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        verify(toolRegistry, never()).invokeTool(any(), any(), any());
+    }
+
+    @Test
+    void testExecutePendingToolBrowserFailureFallsBackToWebFetch() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "sess-browser",
+                "u1",
+                "c1",
+                "researcher",
+                "browse page",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "u1",
+                null,
+                Map.of());
+        when(checkpoint.getPendingToolName()).thenReturn(ToolCapability.BROWSER_NAVIGATE.toolName());
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{\"url\":\"https://example.com\"}");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.failure(502, "browser timeout"));
+        when(stateMachineRunner.run(any(), any(), any()))
+                .thenReturn(AgentResult.finished("Fetched by fallback", List.of()));
+
+        AgentResult result = executor.execute(ctx, new ArrayList<>(), checkpoint, "CLI", stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        verify(stateMachineRunner).run(any(AgentExecutionContext.class), eq(reasoningEngine), anyList());
     }
 }

@@ -3,6 +3,8 @@ package com.amsha.core.pipeline.handlers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
@@ -28,9 +30,12 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.speech.SpeechDeliveryService;
+import com.amsha.core.state.ActiveWork;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.core.util.TimeContextInjector;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.tool.api.ToolCapability;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -48,6 +53,9 @@ public class AgentDispatchHandler implements MessageHandler {
     private static final Logger log = Logger.getLogger(AgentDispatchHandler.class);
     private static final Pattern MARKDOWN_LINK_PATTERN = Pattern.compile("\\[([^\\]]+)]\\(([^)]+)\\)");
     private static final int DEFAULT_MAX_ITERATIONS = 5;
+
+    /** Goals longer than this are truncated in the busy message. */
+    private static final int MAX_GOAL_LENGTH = ActiveWork.MAX_GOAL_LENGTH;
 
     @ConfigProperty(name = "amsha.agent.default-timezone", defaultValue = "Asia/Kolkata")
     String defaultTimezone;
@@ -212,18 +220,12 @@ public class AgentDispatchHandler implements MessageHandler {
             int maxIterations,
             String chatId)
             throws Exception {
-        if (!agentStore.markResuming(sessionId)) {
-            log.warnf(
-                    "[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal.",
-                    sessionId);
-            channelPluginRegistry
-                    .find(context.getChannelType())
-                    .map(ChannelPlugin::sender)
-                    .ifPresent(
-                            s -> s.sendRaw(
-                                    context.getUser(),
-                                    "⚠️ I'm currently processing another request. Your message was not queued - please resend it once I finish."));
-            throw new RuntimeException("Busy session");
+        // Delegated children keep running after the parent turn releases its own
+        // lock, so they are checked before claiming the lock for this session.
+        if (hasDelegatedWait(sessionId)
+                || findActiveDelegatedWork(sessionId) != null
+                || !agentStore.markResuming(sessionId, goal)) {
+            throw rejectAsBusy(context, sessionId, goal);
         }
 
         try {
@@ -242,6 +244,76 @@ public class AgentDispatchHandler implements MessageHandler {
         } finally {
             agentStore.clearResuming(sessionId);
         }
+    }
+
+    /**
+     * Logs the rejection, tells the user what is still running, and returns the
+     * exception the caller must throw.
+     */
+    private RuntimeException rejectAsBusy(MessageContext context, String sessionId, String goal) {
+        if (hasDelegatedWait(sessionId)) {
+            ActiveWork work = activeWork(sessionId);
+            String detail = work.isEmpty() ? "" : " (" + work.describe(ActiveWork.MAX_GOAL_LENGTH) + ")";
+            channelPluginRegistry
+                    .find(context.getChannelType())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(s -> s.sendRaw(
+                            context.getUser(),
+                            "I’m still waiting for the delegated researcher to finish" + detail
+                                    + ". Please wait for its result."));
+            return new RuntimeException("Busy session");
+        }
+        ActiveWork work = activeWork(sessionId);
+        log.warnf(
+                "[AgentDispatch] session %s is already busy processing another turn. Rejecting new goal: %s (active: %s, phase: %s)",
+                sessionId, goal, work.goal(), work.phase());
+        channelPluginRegistry
+                .find(context.getChannelType())
+                .map(ChannelPlugin::sender)
+                .ifPresent(s -> s.sendRaw(context.getUser(), formatBusyMessage(work)));
+        return new RuntimeException("Busy session");
+    }
+
+    private ActiveWork activeWork(String sessionId) {
+        ActiveWork work = agentStore.getActiveWork(sessionId).orElse(ActiveWork.EMPTY);
+        String goal = sanitizeGoal(work.goal());
+        return goal == null || goal.isBlank() ? work.withGoal(null) : work.withGoal(goal);
+    }
+
+    static String formatBusyMessage(ActiveWork activeWork) {
+        if (activeWork == null || activeWork.isEmpty()) {
+            return "⚠️ I'm currently processing another request. Your message was not queued - please resend it once I finish.";
+        }
+        return "⚠️ I'm currently processing another request (" + activeWork.describe(MAX_GOAL_LENGTH)
+                + "). Your message was not queued - please resend it once I finish.";
+    }
+
+    private String sanitizeGoal(String goal) {
+        return piiSanitizer != null && goal != null ? piiSanitizer.sanitize(goal) : goal;
+    }
+
+    private AgentCheckpoint findActiveDelegatedWork(String sessionId) {
+        return agentStore
+                .findLatestActiveDelegatedCheckpoint(sessionId)
+                .filter(this::isCurrentDelegatedCheckpoint)
+                .orElse(null);
+    }
+
+    private boolean isCurrentDelegatedCheckpoint(AgentCheckpoint checkpoint) {
+        if (checkpoint.getUpdatedAt() == null) {
+            return true;
+        }
+        long staleMinutes = checkpoint.getStatus() == CheckpointStatus.RESUMING ? 5 : 15;
+        return Duration.between(checkpoint.getUpdatedAt(), Instant.now()).toMinutes() <= staleMinutes;
+    }
+
+    private boolean hasDelegatedWait(String sessionId) {
+        return agentStore
+                .findLatestNonArchivedCheckpoint(sessionId)
+                .filter(cp -> cp.getStatus() == CheckpointStatus.IN_PROGRESS)
+                .filter(cp -> ToolCapability.DELEGATE_TO_AGENT.toolName().equals(cp.getPendingToolName()))
+                .map(_ -> true)
+                .orElse(false);
     }
 
     private HandleResult handleRunException(MessageContext context, String goal, Exception e) {
@@ -278,7 +350,7 @@ public class AgentDispatchHandler implements MessageHandler {
                             if (result instanceof AgentResult.AwaitingApproval aa) {
                                 s.send(
                                         context.getUser(),
-                                        List.of(new ApprovalPrompt(aa.toolName(), aa.paramsJson(), sessionId)));
+                                        List.of(new ApprovalPrompt(aa.toolName(), aa.displayParamsJson(), sessionId)));
                             } else {
                                 String output = AgentResultFormatter.format(result);
                                 speechDeliveryService.deliver(context, s, context.getUser(), result, output);

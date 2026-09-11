@@ -39,6 +39,7 @@ import com.amsha.llm.providers.helper.FoundryCliExecutor;
 import com.amsha.llm.providers.helper.FoundryDiscoveryHelper;
 import com.amsha.llm.providers.reasoning.FoundryProviderFactory;
 import com.amsha.llm.providers.wrapper.FoundryResponsesChatModel;
+import com.amsha.security.http.GovernedTransportService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -62,6 +63,9 @@ class FoundryProviderTest {
 
     @Inject
     AgentLlmConfig agentLlmConfig;
+
+    @Inject
+    GovernedTransportService governedTransport;
 
     private HttpServer loopbackServer;
     private String loopbackBaseUrl;
@@ -114,7 +118,7 @@ class FoundryProviderTest {
     @Test
     void testFoundryResponsesChatModelHttpLoopback() {
         FoundryResponsesChatModel model = new FoundryResponsesChatModel(
-                loopbackBaseUrl, ModelDefaults.DEFAULT_FOUNDRY_MODEL, 2048, null, 0.1, null);
+                loopbackBaseUrl, ModelDefaults.DEFAULT_FOUNDRY_MODEL, 2048, null, 0.1, governedTransport);
 
         ChatResponse response = model.chat(ChatRequest.builder()
                 .messages(List.of(UserMessage.from("Hello Foundry")))
@@ -150,7 +154,12 @@ class FoundryProviderTest {
             unclosedServer.start();
             int port = unclosedServer.getAddress().getPort();
             FoundryResponsesChatModel model = new FoundryResponsesChatModel(
-                    "http://127.0.0.1:" + port + "/v1", ModelDefaults.DEFAULT_FOUNDRY_MODEL, 2048, null, 0.1, null);
+                    "http://127.0.0.1:" + port + "/v1",
+                    ModelDefaults.DEFAULT_FOUNDRY_MODEL,
+                    2048,
+                    null,
+                    0.1,
+                    governedTransport);
 
             ChatResponse response = model.chat(ChatRequest.builder()
                     .messages(List.of(UserMessage.from("write fibonacci")))

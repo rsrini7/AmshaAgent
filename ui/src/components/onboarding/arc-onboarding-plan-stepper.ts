@@ -118,37 +118,45 @@ export class ArcOnboardingPlanStepper extends LitElement {
     ];
 
     return html`
-      <div class="stepper-container">
-        ${milestones.map((m, idx) => {
-          const stageIdxInPlan = this.planStages.indexOf(m.id);
-          const currentIdxInPlan = this.planStages.indexOf(this.currentStepId);
-          
-          let isActive = false;
-          let isDone = false;
+      <nav class="stepper-container" role="navigation" aria-label="Onboarding Progress">
+        <div class="stepper-track" role="list" style="display:contents">
+          ${milestones.map((m, idx) => {
+            const stageIdxInPlan = this.planStages.indexOf(m.id);
+            const currentIdxInPlan = this.planStages.indexOf(this.currentStepId);
 
-          if (this.currentStepId === m.id) {
-            isActive = true;
-          } else if (currentIdxInPlan > stageIdxInPlan && stageIdxInPlan !== -1) {
-            isDone = true;
-          } else if (idx > 0 && idx < milestones.length - 1) {
-            // Check if current step falls between milestones
-            const prevMilestoneIdx = this.planStages.indexOf(milestones[idx - 1].id);
-            const nextMilestoneIdx = this.planStages.indexOf(m.id);
-            if (currentIdxInPlan > prevMilestoneIdx && currentIdxInPlan < nextMilestoneIdx) {
+            let isActive = false;
+            let isDone = false;
+
+            if (this.currentStepId === m.id) {
               isActive = true;
+            } else if (currentIdxInPlan > stageIdxInPlan && stageIdxInPlan !== -1) {
+              isDone = true;
+            } else if (idx > 0 && idx < milestones.length - 1) {
+              const prevMilestoneIdx = this.planStages.indexOf(milestones[idx - 1].id);
+              const nextMilestoneIdx = this.planStages.indexOf(m.id);
+              if (currentIdxInPlan > prevMilestoneIdx && currentIdxInPlan < nextMilestoneIdx) {
+                isActive = true;
+              }
             }
-          }
 
-          return html`
-            <div class="step-item ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}">
-              <div class="step-dot">
-                ${isDone ? '✓' : idx + 1}
+            const stateLabel = isDone ? 'Completed' : isActive ? 'Current' : 'Upcoming';
+
+            return html`
+              <div
+                class="step-item ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}"
+                role="listitem"
+                aria-current="${isActive ? 'step' : 'false'}"
+                aria-label="Step ${idx + 1}: ${m.label} (${stateLabel})"
+              >
+                <div class="step-dot" aria-hidden="true">
+                  ${isDone ? '✓' : idx + 1}
+                </div>
+                <div class="step-label">${m.label}</div>
               </div>
-              <div class="step-label">${m.label}</div>
-            </div>
-          `;
-        })}
-      </div>
+            `;
+          })}
+        </div>
+      </nav>
     `;
   }
 }

@@ -133,6 +133,7 @@ public class AgentStateMachineRunner {
         }
 
         try {
+            notifyStepStart(terminalContext.sessionId(), terminalContext.agentRole());
             ReasoningStep step =
                     engine.nextStep(terminalContext, terminalContext.agentRole(), terminalContext.goal(), history);
             if (step instanceof ReasoningStep.FinishStep finish) {
@@ -161,6 +162,7 @@ public class AgentStateMachineRunner {
                                     + "Even a short sentence like 'Information stored successfully' is acceptable. Finish now."));
 
             try {
+                notifyStepStart(terminalContext.sessionId(), terminalContext.agentRole());
                 ReasoningStep retryStep =
                         engine.nextStep(terminalContext, terminalContext.agentRole(), terminalContext.goal(), history);
                 if (retryStep instanceof ReasoningStep.FinishStep retryFinish) {
@@ -340,6 +342,8 @@ public class AgentStateMachineRunner {
                     iterScope = scope;
                 }
 
+                notifyStepStart(context.sessionId(), context.agentRole());
+
                 RunnerState nextState;
                 try {
                     nextState = state.execute(stateContext);
@@ -367,5 +371,20 @@ public class AgentStateMachineRunner {
                 iterSpan.end();
             }
         }
+    }
+
+    private void notifyStepStart(String sessionId, String role) {
+        if (sessionId == null) {
+            return;
+        }
+        observers.forEach(o -> {
+            try {
+                o.onStepStart(sessionId, role);
+            } catch (Exception e) {
+                log.warnf(
+                        "StateMachine: observer %s threw on onStepStart: %s",
+                        LogUtil.ctx(sessionId, role), LogUtil.rootMessage(e));
+            }
+        });
     }
 }

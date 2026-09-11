@@ -2,7 +2,9 @@ package com.amsha.core.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -11,6 +13,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import jakarta.enterprise.inject.Instance;
 
 import java.time.Instant;
 import java.util.List;
@@ -32,9 +36,11 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.TurnDispatchService;
+import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -273,6 +279,107 @@ class AgentSessionServiceDeepTest {
     }
 
     @Test
+    void testGetStatus_liveExecutionBeatsStaleCompletedCheckpoint() {
+        when(heartbeatTracker.exists("s1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getId()).thenReturn(1L);
+        when(cp.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
+        when(agentStore.load(eq("s1"), anyString())).thenReturn(Optional.of(cp));
+        when(agentStore.loadSteps(1L)).thenReturn(List.of());
+        when(agentStore.isBatchResuming("s1")).thenReturn(true);
+        when(agentStore.getActiveGoal("s1")).thenReturn(Optional.of("diagnose heap usage"));
+        when(agentStore.getActivePhase("s1")).thenReturn(Optional.of("TOOL:read_file"));
+
+        ServiceResult<Object> result = service.getStatus("s1", "user-1", "coordinator");
+
+        assertTrue(result.isSuccess());
+        SessionStatusResponse body = assertInstanceOf(SessionStatusResponse.class, result.value());
+        assertEquals(CheckpointStatus.IN_PROGRESS.name(), body.status());
+        assertEquals("diagnose heap usage", body.activeGoal());
+        assertEquals("TOOL:read_file", body.activePhase());
+    }
+
+    @Test
+    void testGetStatus_sanitizesPiiInActiveGoalAndPhase() {
+        when(heartbeatTracker.exists("s1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getId()).thenReturn(1L);
+        when(cp.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
+        when(agentStore.load(eq("s1"), anyString())).thenReturn(Optional.of(cp));
+        when(agentStore.loadSteps(1L)).thenReturn(List.of());
+        when(agentStore.isBatchResuming("s1")).thenReturn(true);
+        when(agentStore.getActiveGoal("s1")).thenReturn(Optional.of("find user alice@example.com"));
+        when(agentStore.getActivePhase("s1")).thenReturn(Optional.of("TOOL:read_file alice@example.com"));
+
+        InputSanitizer sanitizer = mock(InputSanitizer.class);
+        when(sanitizer.sanitize("find user alice@example.com")).thenReturn("find user [REDACTED_EMAIL]");
+        when(sanitizer.sanitize("TOOL:read_file alice@example.com")).thenReturn("TOOL:read_file [REDACTED_EMAIL]");
+        service.piiSanitizer = sanitizer;
+
+        ServiceResult<Object> result = service.getStatus("s1", "user-1", "coordinator");
+
+        assertTrue(result.isSuccess());
+        SessionStatusResponse body = assertInstanceOf(SessionStatusResponse.class, result.value());
+        assertEquals(CheckpointStatus.IN_PROGRESS.name(), body.status());
+        assertEquals("find user [REDACTED_EMAIL]", body.activeGoal());
+        assertEquals("TOOL:read_file [REDACTED_EMAIL]", body.activePhase());
+    }
+
+    @Test
+    void testGetStatus_liveExecutionFallsBackToCheckpointGoal() {
+        when(heartbeatTracker.exists("s1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getId()).thenReturn(1L);
+        when(cp.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
+        when(cp.getOriginalGoal()).thenReturn("stored goal");
+        when(agentStore.load(eq("s1"), anyString())).thenReturn(Optional.of(cp));
+        when(agentStore.loadSteps(1L)).thenReturn(List.of());
+        when(agentStore.isBatchResuming("s1")).thenReturn(true);
+        when(agentStore.getActiveGoal("s1")).thenReturn(Optional.empty());
+        when(agentStore.getActivePhase("s1")).thenReturn(Optional.empty());
+
+        ServiceResult<Object> result = service.getStatus("s1", "user-1", "coordinator");
+
+        SessionStatusResponse body = assertInstanceOf(SessionStatusResponse.class, result.value());
+        assertEquals(CheckpointStatus.IN_PROGRESS.name(), body.status());
+        assertEquals("stored goal", body.activeGoal());
+    }
+
+    @Test
+    void testGetStatus_awaitingApprovalIsNotOverriddenByLiveExecution() {
+        when(heartbeatTracker.exists("s1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getId()).thenReturn(1L);
+        when(cp.getStatus()).thenReturn(CheckpointStatus.AWAITING_APPROVAL);
+        when(agentStore.load(eq("s1"), anyString())).thenReturn(Optional.of(cp));
+        when(agentStore.loadSteps(1L)).thenReturn(List.of());
+        when(agentStore.isBatchResuming("s1")).thenReturn(true);
+
+        ServiceResult<Object> result = service.getStatus("s1", "user-1", "coordinator");
+
+        SessionStatusResponse body = assertInstanceOf(SessionStatusResponse.class, result.value());
+        assertEquals(CheckpointStatus.AWAITING_APPROVAL.name(), body.status());
+        assertNull(body.activeGoal());
+    }
+
+    @Test
+    void testGetStatus_notStartedWhenIdleWithNoCheckpoint() {
+        when(heartbeatTracker.exists("s1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));
+        when(agentStore.load(eq("s1"), anyString())).thenReturn(Optional.empty());
+        when(agentStore.isBatchResuming("s1")).thenReturn(false);
+
+        ServiceResult<Object> result = service.getStatus("s1", "user-1", "coordinator");
+
+        assertTrue(result.isSuccess());
+        assertEquals(CheckpointStatus.NOT_STARTED.name(), ((Map<?, ?>) result.value()).get("status"));
+    }
+
+    @Test
     void testGetStatus_exceptionReturnsError() {
         when(heartbeatTracker.exists("s1")).thenReturn(true);
         when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));
@@ -281,6 +388,52 @@ class AgentSessionServiceDeepTest {
         ServiceResult<Object> result = service.getStatus("s1", "user-1", "coordinator");
         assertFalse(result.isSuccess());
         assertEquals("SYSTEM", result.errorCode());
+    }
+
+    @Test
+    void testGetStatus_delegatedAwaitingApprovalTrumpsCompletedRoot() {
+        when(heartbeatTracker.exists("s1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));
+
+        AgentCheckpoint completedRoot = mock(AgentCheckpoint.class);
+        when(completedRoot.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
+        when(completedRoot.getSessionId()).thenReturn("s1");
+        when(agentStore.load("s1", "coordinator")).thenReturn(Optional.of(completedRoot));
+
+        AgentCheckpoint childCp = mock(AgentCheckpoint.class);
+        when(childCp.getId()).thenReturn(99L);
+        when(childCp.getSessionId()).thenReturn("s1:delegate:researcher:1");
+        when(childCp.getStatus()).thenReturn(CheckpointStatus.AWAITING_APPROVAL);
+
+        when(agentStore.findLatestAwaitingApprovalBySessionContaining("s1" + AgentSentinels.DELEGATE_SESSION_SENTINEL))
+                .thenReturn(Optional.of(childCp));
+        when(agentStore.loadSteps(99L)).thenReturn(List.of());
+
+        ServiceResult<Object> result = service.getStatus("s1", "user-1", "coordinator");
+        assertTrue(result.isSuccess());
+        SessionStatusResponse body = assertInstanceOf(SessionStatusResponse.class, result.value());
+        assertEquals(CheckpointStatus.AWAITING_APPROVAL.name(), body.status());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testGetStatus_ambiguousSanitizerHandledGracefully() {
+        when(heartbeatTracker.exists("s1")).thenReturn(true);
+        when(heartbeatTracker.getOwner("s1")).thenReturn(Optional.of("user-1"));
+
+        Instance<InputSanitizer> instanceMock = mock(Instance.class);
+        InputSanitizer sanitizer1 = mock(InputSanitizer.class);
+        InputSanitizer sanitizer2 = mock(InputSanitizer.class);
+        when(instanceMock.isResolvable()).thenReturn(false);
+        when(instanceMock.iterator()).thenReturn(List.of(sanitizer1, sanitizer2).iterator());
+        service.piiSanitizerInstance = instanceMock;
+        service.piiSanitizer = null;
+
+        when(agentStore.load(eq("s1"), anyString())).thenReturn(Optional.empty());
+        when(agentStore.isBatchResuming("s1")).thenReturn(false);
+
+        ServiceResult<Object> result = service.getStatus("s1", "user-1", "coordinator");
+        assertTrue(result.isSuccess());
     }
 
     @Test

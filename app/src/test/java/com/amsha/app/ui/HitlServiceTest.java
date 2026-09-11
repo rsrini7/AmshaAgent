@@ -99,4 +99,36 @@ public class HitlServiceTest {
         assertTrue(hitlService.getPendingApprovals(null, 50, 0).isEmpty());
         assertTrue(hitlService.getPendingApprovals("", 50, 0).isEmpty());
     }
+
+    @Test
+    public void testGetPendingApprovals_parsesBatchParameters() {
+        heartbeatTracker.recordHeartbeat("session-userA-batch");
+        heartbeatTracker.tryBindOwner("session-userA-batch", "userA");
+
+        Long batchCpId = jdbi.withHandle(handle -> handle.createUpdate(
+                        "INSERT INTO agent_checkpoint (version, session_id, agent_role, status, pending_tool_name, pending_tool_parameters, updated_at, created_at, depth, iterations_used) "
+                                + "VALUES (0, 'session-userA-batch', 'default', 'AWAITING_APPROVAL', 'parallel|browser_navigate,browser_navigate', "
+                                + ":params, :updatedAt, :createdAt, 0, 0)")
+                .bind(
+                        "params",
+                        "[{\"callId\":\"c1\",\"toolName\":\"browser_navigate\",\"params\":{\"url\":\"https://spring.io\"}},{\"callId\":\"c2\",\"toolName\":\"browser_navigate\",\"params\":{\"url\":\"https://quarkus.io\"}}]")
+                .bind("updatedAt", Instant.now())
+                .bind("createdAt", Instant.now())
+                .executeAndReturnGeneratedKeys("checkpoint_id")
+                .mapTo(Long.class)
+                .one());
+
+        try {
+            Map<String, HitlService.PendingApproval> approvals = hitlService.getPendingApprovals("userA", 50, 0);
+            HitlService.PendingApproval pending = approvals.get(String.valueOf(batchCpId));
+            assertTrue(pending != null, "batch checkpoint must be present");
+            assertEquals(2, pending.params().size(), "batch params must be parsed into display map");
+            assertTrue(pending.params().containsKey("1. browser_navigate"));
+            assertTrue(pending.params().containsKey("2. browser_navigate"));
+        } finally {
+            jdbi.useHandle(handle -> handle.createUpdate("DELETE FROM agent_checkpoint WHERE checkpoint_id = :id")
+                    .bind("id", batchCpId)
+                    .execute());
+        }
+    }
 }

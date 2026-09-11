@@ -117,6 +117,23 @@ class PersistencePortContractTest {
         assertEquals(2, active.size());
     }
 
+    @Test
+    void checkpointFindActiveBySessionTreeIncludesRootAndDelegates() {
+        checkpointStore.save(createCheckpointWithId("tree-root", "IN_PROGRESS"));
+        checkpointStore.save(createCheckpointWithId("tree-root:delegate:sub:1", "RESUMING"));
+        checkpointStore.save(createCheckpointWithId("tree-root:delegate:sub:2", "COMPLETED"));
+        checkpointStore.save(createCheckpointWithId("tree-root:delegate:sub:3", "COMPROMISED"));
+        checkpointStore.save(createCheckpointWithId("tree-root:delegate:sub:4", "LOOP_EXCEEDED"));
+        checkpointStore.save(createCheckpointWithId("tree-root:delegate:sub:5", "ORPHANED"));
+        checkpointStore.save(createCheckpointWithId("tree-root:delegate:sub:6", "APPROVED"));
+        checkpointStore.save(createCheckpointWithId("other-session", "IN_PROGRESS"));
+
+        List<CheckpointDto> active = checkpointStore.findActiveBySessionTree("tree-root");
+        assertEquals(2, active.size());
+        assertTrue(active.stream().anyMatch(c -> "tree-root".equals(c.sessionId())));
+        assertTrue(active.stream().anyMatch(c -> "tree-root:delegate:sub:1".equals(c.sessionId())));
+    }
+
     // ── CronStorePort contract ──
 
     @Test
@@ -365,6 +382,17 @@ class PersistencePortContractTest {
     @Test
     void advisoryLockIsLockedOnUnlockedKey() {
         assertFalse(advisoryLock.isLocked("nonexistent"));
+    }
+
+    @Test
+    void advisoryLockRenewHeldLockSuccess() {
+        assertTrue(advisoryLock.tryLock("lock-renew", 30));
+        assertTrue(advisoryLock.renew("lock-renew", 60));
+    }
+
+    @Test
+    void advisoryLockRenewUnheldLockFails() {
+        assertFalse(advisoryLock.renew("unheld-lock", 60));
     }
 
     // ── McpConnectionStorePort contract ──
@@ -1126,6 +1154,22 @@ class PersistencePortContractTest {
         }
 
         @Override
+        public List<CheckpointDto> findActiveBySessionTree(String rootSessionId) {
+            if (rootSessionId == null) return List.of();
+            String delegatePrefix = rootSessionId + ":delegate:";
+            return store.values().stream()
+                    .filter(c -> c.sessionId() != null
+                            && (c.sessionId().equals(rootSessionId)
+                                    || c.sessionId().startsWith(delegatePrefix)))
+                    .filter(c -> c.status() != null
+                            && ("IN_PROGRESS".equals(c.status())
+                                    || "RESUMING".equals(c.status())
+                                    || "AWAITING_APPROVAL".equals(c.status())
+                                    || "AWAITING_RETRY".equals(c.status())))
+                    .collect(Collectors.toList());
+        }
+
+        @Override
         public List<CheckpointDto> findByStatusAndSessionIds(
                 String status, List<String> sessionIds, int limit, int offset) {
             return store.values().stream()
@@ -1848,6 +1892,11 @@ class PersistencePortContractTest {
 
         @Override
         public boolean isLocked(String lockKey) {
+            return locks.containsKey(lockKey);
+        }
+
+        @Override
+        public boolean renew(String lockKey, int timeoutSeconds) {
             return locks.containsKey(lockKey);
         }
     }

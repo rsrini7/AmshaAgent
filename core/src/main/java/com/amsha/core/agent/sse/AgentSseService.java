@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.smallrye.mutiny.Multi;
@@ -53,6 +54,15 @@ public class AgentSseService {
         BroadcastProcessor<SseEvent> proc = processors.get(sessionId);
         if (proc != null) {
             proc.onNext(event);
+        }
+        // Broadcast HITL events to all active session processors so connected UIs
+        // get immediate notification of approvals across all sessions.
+        if (event instanceof HitlEvent) {
+            for (Map.Entry<String, BroadcastProcessor<SseEvent>> entry : processors.entrySet()) {
+                if (!entry.getKey().equals(sessionId)) {
+                    entry.getValue().onNext(event);
+                }
+            }
         }
         // Store AWAITING_APPROVAL so UI gets it even if SSE connects after event fires
         if (event instanceof HitlEvent h

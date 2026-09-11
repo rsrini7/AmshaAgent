@@ -81,7 +81,7 @@ public class AgentResultFormatter {
                         if (basic) {
                             yield formatBasicHitlMessage(a.toolName(), a.sessionId(), isCron);
                         }
-                        yield formatHitlMessage(a.toolName(), a.paramsJson(), a.sessionId(), isCron);
+                        yield formatHitlMessage(a.toolName(), a.displayParamsJson(), a.sessionId(), isCron);
                     }
                     case AgentResult.LoopExceeded _ -> "⏱ I ran out of steps. Try rephrasing your request.";
                     case AgentResult.AwaitingRetry r ->
@@ -327,8 +327,17 @@ public class AgentResultFormatter {
      * Specialized format for first-time Cron HITL prompts.
      */
     public static String formatCronHitl(String cronId, String goal, String toolName) {
-        return "⚠️ Approval Required for background task.\n\n" + "Goal: " + goal + "\n\n"
-                + formatHitlMessage(toolName, null, cronId, true);
+        return formatCronHitl(cronId, goal, toolName, null);
+    }
+
+    /**
+     * Specialized format for Cron HITL prompts with tool parameters.
+     */
+    public static String formatCronHitl(String cronId, String goal, String toolName, String paramsJson) {
+        String header = (goal != null && !goal.isBlank())
+                ? "⚠️ Approval Required for background task.\n\nGoal: " + goal + "\n\n"
+                : "⚠️ Approval Required for background task.\n\n";
+        return header + formatHitlMessage(toolName, paramsJson, cronId, true);
     }
 
     private static String formatBasicHitlMessage(String compositeName, String _cronId, boolean _isCron) {
@@ -353,14 +362,16 @@ public class AgentResultFormatter {
         if (isBatch) {
             String[] tools = compositeName
                     .substring(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX.length())
-                    .split(",", -1);
+                    .split("[|,]", -1);
             sb.append("⏸ Parallel batch execution requires approval.\n\n");
             sb.append("Tools pending:\n");
 
             // Count occurrences to group duplicates
             Map<String, Integer> toolCounts = new LinkedHashMap<>();
             for (String ts : tools) {
-                toolCounts.put(ts, toolCounts.getOrDefault(ts, 0) + 1);
+                if (!ts.isBlank()) {
+                    toolCounts.put(ts, toolCounts.getOrDefault(ts, 0) + 1);
+                }
             }
 
             for (Map.Entry<String, Integer> entry : toolCounts.entrySet()) {
@@ -369,6 +380,11 @@ public class AgentResultFormatter {
                     sb.append(" (").append(entry.getValue()).append(" calls)");
                 }
                 sb.append("\n");
+            }
+            if (paramsJson != null && !paramsJson.isBlank() && !paramsJson.equals("{}")) {
+                String display =
+                        paramsJson.length() > 500 ? paramsJson.substring(0, 500) + "\n… [truncated]" : paramsJson;
+                sb.append("\n📋 Params:\n").append(display);
             }
         } else {
             sb.append("⏸ Approval needed for tool: ").append(compositeName);
@@ -405,5 +421,9 @@ public class AgentResultFormatter {
         }
 
         return sb.toString();
+    }
+
+    public static String formatHitlPrompt(String compositeName, String paramsJson, String cronId, boolean isCron) {
+        return formatHitlMessage(compositeName, paramsJson, cronId, isCron);
     }
 }

@@ -239,9 +239,8 @@ public class McpManagementService extends McpManagementServiceModels {
     }
 
     /** Throwaway preview: no durable connection, policy row, vault ref, or runtime session remains. */
-    public DiscoveryPreview discover(
-            String userId, String name, String endpoint, Map<String, String> headers, boolean preApproved) {
-        return connectionSetup.discover(userId, name, endpoint, headers, preApproved);
+    public DiscoveryPreview discover(String userId, String name, String endpoint, Map<String, String> headers) {
+        return connectionSetup.discover(userId, name, endpoint, headers);
     }
 
     public DiscoveryPreview discoverWithApproval(
@@ -250,9 +249,8 @@ public class McpManagementService extends McpManagementServiceModels {
     }
 
     /** Creates a durable connection and stores every discovered tool disabled. */
-    public ConnectionSnapshot connectNew(
-            String userId, String name, String endpoint, Map<String, String> headers, boolean preApproved) {
-        return connectionSetup.connectNew(userId, name, endpoint, headers, preApproved);
+    public ConnectionSnapshot connectNew(String userId, String name, String endpoint, Map<String, String> headers) {
+        return connectionSetup.connectNew(userId, name, endpoint, headers);
     }
 
     public ConnectionSnapshot connectNewWithApproval(
@@ -260,9 +258,9 @@ public class McpManagementService extends McpManagementServiceModels {
         return connectionSetup.connectNewWithApproval(userId, name, endpoint, headers, approvalToken);
     }
 
-    /** Activation/reconnect of an existing durable connection. */
-    public ConnectionSnapshot connect(String userId, String name, boolean preApproved) {
-        return connectInternal(userId, name, preApproved, null, OutboundPurpose.MCP_CONNECT, null);
+    /** Activation/reconnect of an existing durable connection without pre-approval. */
+    public ConnectionSnapshot connect(String userId, String name) {
+        return connectInternal(userId, name, null, OutboundPurpose.MCP_CONNECT, null);
     }
 
     public ConnectionSnapshot connectWithApproval(String userId, String name, String approvalToken) {
@@ -299,29 +297,23 @@ public class McpManagementService extends McpManagementServiceModels {
     private ConnectionSnapshot connectWithApproval(
             String userId, String name, String approvalToken, Long expectedRevision, String approvalTaskId) {
         return connectInternal(
-                userId, name, false, approvalToken, OutboundPurpose.MCP_CONNECT, expectedRevision, approvalTaskId);
+                userId, name, approvalToken, OutboundPurpose.MCP_CONNECT, expectedRevision, approvalTaskId);
+    }
+
+    private ConnectionSnapshot connectInternal(
+            String userId, String name, String approvalToken, OutboundPurpose approvalPurpose, Long expectedRevision) {
+        return connectInternal(userId, name, approvalToken, approvalPurpose, expectedRevision, null);
     }
 
     private ConnectionSnapshot connectInternal(
             String userId,
             String name,
-            boolean preApproved,
-            String approvalToken,
-            OutboundPurpose approvalPurpose,
-            Long expectedRevision) {
-        return connectInternal(userId, name, preApproved, approvalToken, approvalPurpose, expectedRevision, null);
-    }
-
-    private ConnectionSnapshot connectInternal(
-            String userId,
-            String name,
-            boolean preApproved,
             String approvalToken,
             OutboundPurpose approvalPurpose,
             Long expectedRevision,
             String approvalTaskId) {
         return connectionOperations.connect(
-                userId, name, preApproved, approvalToken, approvalPurpose, expectedRevision, approvalTaskId);
+                userId, name, approvalToken, approvalPurpose, expectedRevision, approvalTaskId);
     }
 
     /** Agent registration uses the same disabled policy model as every other surface. */
@@ -335,12 +327,11 @@ public class McpManagementService extends McpManagementServiceModels {
         return connectionSetup.registerFromApprovedCheckpoint(userId, name, endpoint, headers, approvalToken, category);
     }
 
-    public ConnectionSnapshot enableTool(String userId, String name, String toolName, boolean preApproved) {
-        return enableTool(userId, name, toolName, preApproved, null);
+    public ConnectionSnapshot enableTool(String userId, String name, String toolName) {
+        return enableTool(userId, name, toolName, (Long) null);
     }
 
-    public ConnectionSnapshot enableTool(
-            String userId, String name, String toolName, boolean preApproved, Long expectedRevision) {
+    public ConnectionSnapshot enableTool(String userId, String name, String toolName, Long expectedRevision) {
         McpManagementSupport.requireUser(userId);
         McpConnectionDto connection = support.findConnection(userId, name);
         McpManagementSupport.checkRevision(connection, expectedRevision);
@@ -349,7 +340,7 @@ public class McpManagementService extends McpManagementServiceModels {
             throw new McpConnectionException("MCP tool was not discovered: " + toolName);
         }
         try {
-            return connectInternal(userId, name, preApproved, null, OutboundPurpose.MCP_CONNECT, expectedRevision);
+            return connectInternal(userId, name, null, OutboundPurpose.MCP_CONNECT, expectedRevision);
         } catch (RuntimeException e) {
             lifecycleService.setToolEnabled(connection.id(), userId, toolName, false);
             throw e;
@@ -381,8 +372,7 @@ public class McpManagementService extends McpManagementServiceModels {
             throw new McpConnectionException("MCP tool was not discovered: " + toolName);
         }
         try {
-            return connectInternal(
-                    userId, name, false, approvalToken, OutboundPurpose.MCP_TOOL_ENABLE, currentRevision);
+            return connectInternal(userId, name, approvalToken, OutboundPurpose.MCP_TOOL_ENABLE, currentRevision);
         } catch (RuntimeException e) {
             lifecycleService.setToolEnabled(connection.id(), userId, toolName, false);
             throw e;
@@ -407,19 +397,18 @@ public class McpManagementService extends McpManagementServiceModels {
                 .orElseThrow();
     }
 
-    public ConnectionSnapshot rotateHeaders(
-            String userId, String name, Map<String, String> headers, boolean preApproved) {
-        return rotateHeaders(userId, name, headers, preApproved, null);
+    public ConnectionSnapshot rotateHeaders(String userId, String name, Map<String, String> headers) {
+        return rotateHeaders(userId, name, headers, (Long) null);
     }
 
     public ConnectionSnapshot rotateHeaders(
-            String userId, String name, Map<String, String> headers, boolean preApproved, Long expectedRevision) {
+            String userId, String name, Map<String, String> headers, Long expectedRevision) {
         McpConnectionDto connection = support.findConnection(userId, name);
         McpManagementSupport.checkRevision(connection, expectedRevision);
         McpConnectionLifecycleService.PersistedConnection persisted = lifecycleService.persistSuccessfulHttp(
                 name, connection.endpoint(), ToolCategory.valueOf(connection.category()), userId, headers);
         clientService.configureHeaderSecretRefs(name, userId, persisted.headerSecretRefs());
-        return connect(userId, name, preApproved);
+        return connect(userId, name);
     }
 
     public ConnectionSnapshot rotateHeadersWithApproval(
@@ -463,20 +452,20 @@ public class McpManagementService extends McpManagementServiceModels {
                 .orElseThrow();
     }
 
-    public ConnectionSnapshot resume(String userId, String name, boolean preApproved) {
-        return resume(userId, name, preApproved, null);
+    public ConnectionSnapshot resume(String userId, String name) {
+        return resume(userId, name, (Long) null);
     }
 
-    public ConnectionSnapshot resume(String userId, String name, boolean preApproved, Long expectedRevision) {
-        return connectInternal(userId, name, preApproved, null, OutboundPurpose.MCP_CONNECT, expectedRevision);
+    public ConnectionSnapshot resume(String userId, String name, Long expectedRevision) {
+        return connectInternal(userId, name, null, OutboundPurpose.MCP_CONNECT, expectedRevision);
     }
 
-    public ConnectionSnapshot reconnect(String userId, String name, boolean preApproved) {
-        return reconnect(userId, name, preApproved, null);
+    public ConnectionSnapshot reconnect(String userId, String name) {
+        return reconnect(userId, name, (Long) null);
     }
 
-    public ConnectionSnapshot reconnect(String userId, String name, boolean preApproved, Long expectedRevision) {
-        return connectInternal(userId, name, preApproved, null, OutboundPurpose.MCP_CONNECT, expectedRevision);
+    public ConnectionSnapshot reconnect(String userId, String name, Long expectedRevision) {
+        return connectInternal(userId, name, null, OutboundPurpose.MCP_CONNECT, expectedRevision);
     }
 
     public boolean disconnect(String userId, String name) {

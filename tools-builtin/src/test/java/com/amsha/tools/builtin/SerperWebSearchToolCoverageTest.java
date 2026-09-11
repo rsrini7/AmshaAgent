@@ -77,4 +77,18 @@ class SerperWebSearchToolCoverageTest {
         assertFalse(resp.success());
         assertTrue(resp.output().contains("query parameter is required"));
     }
+
+    @Test
+    void testValidateParameters() {
+        SerperWebSearchTool tool = new SerperWebSearchTool();
+
+        assertNotNull(tool.validateParameters(null));
+        assertNotNull(tool.validateParameters(Map.of()));
+        assertNotNull(tool.validateParameters(Map.of("num", 5)));
+        assertNotNull(tool.validateParameters(Map.of("query", "   ")));
+        assertNotNull(tool.validateParameters(Map.of("query", 999)));
+
+        assertNull(tool.validateParameters(Map.of("query", "quarkus web")));
+        assertNull(tool.validateParameters(Map.of("query", "amsha agent", "num", 10)));
+    }
 }

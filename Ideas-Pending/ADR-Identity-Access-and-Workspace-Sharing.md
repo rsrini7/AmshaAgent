@@ -1,13 +1,14 @@
 # ADR: Identity, Web Sessions, Multi-Admin Access, and Workspace Sharing
 
-- Status: Partially Implemented
+- Status: Implemented
 - Date: 2026-07-14
 - Decision owners: Amsha Agent maintainers
 - Required by: `ADR-Onboarding-Multi-Agent-Provider-Model.md`
+- Related Invariants: `docs/Architecture_Invariants.md` §2.1, §7, §24; `AGENTS.md`
 
 ## Implementation checkpoint
 
-Identity users/workspaces/memberships, API credentials, opaque web sessions, external-login providers, invitations, and an initial first-owner bootstrap are present. The bootstrap implementation remains provisional: the onboarding ADR requires replacing its pre-CAS identity writes and combined persist/register credential flow before the first-owner acceptance criteria are complete. Phase 5 also remains open: `SecretVault` has no typed `WORKSPACE` scope, web sessions have no distinct active identity-workspace binding, and connection grants are not complete. This ADR must not be reported as fully implemented until the bootstrap replacement, workspace contracts, and their three-backend/security tests pass.
+Identity users/workspaces/memberships, API credentials, opaque web sessions, external-login providers, invitations, and the reservation-based first-owner bootstrap are fully implemented and verified across SQLite, PostgreSQL, and filesystem backends. Phase 5 (I5) is complete: `SecretVault` has a typed `WORKSPACE` vault scope (addressed via key prefix `WORKSPACE:<workspaceId>`) with an OWNER/ADMIN store/remove gate and active-member check, `WorkspaceConnectionGrant*` durable authorization records exist with SQLite/PostgreSQL/filesystem adapters and paired migrations, and the runtime context has a distinct active identity-workspace binding via `WorkspaceContext.ACTIVE_WORKSPACE_ID` (propagated through the context-aware executor) with a guarded `@RequestScoped` `ActiveWorkspaceContext` fallback. Verified by multi-backend contract tests, `SecretVaultWorkspaceAuthTest`, `BootstrapResourceTest`, and identity access test suites.
 
 ## Context
 
@@ -27,7 +28,7 @@ Adopt an **OIDC-first identity model with API-key operator fallback**.
 - Multiple administrators are added through expiring invitations or an owner-issued API-key principal. No second unauthenticated first-owner claim is possible.
 - Shareable resources use explicit scope and grants: `USER:<userId>` for private resources or `WORKSPACE:<workspaceId>` for team resources. A boolean `shared` field is forbidden.
 
-This ADR is the gate that owns the first-owner bootstrap, identity ports, stable-principal mapping, session policy, and workspace authorization contracts. Status is now `Partially Implemented`: I1–I4 foundations (ports, stable principals, opaque sessions, external-login providers, invitations, and the provisional first-owner bootstrap) are present. The remaining work is the joint O1 bootstrap replacement with the onboarding ADR (reservation state machine, state-bound credential activation) and I5 (active identity-workspace context, `WORKSPACE` vault scope, connection grants). Only completion of those two items moves this ADR to `Implemented`.
+This ADR is the gate that owns the first-owner bootstrap, identity ports, stable-principal mapping, session policy, and workspace authorization contracts. Status is now `Implemented`: I1–I4 foundations (ports, stable principals, opaque sessions, external-login providers, invitations) and the joint O1 bootstrap replacement (reservation state machine, state-bound credential activation) are complete. Phase 5 (active identity-workspace context via `WorkspaceContext.ACTIVE_WORKSPACE_ID`, typed `WORKSPACE` vault scope addressed via `WORKSPACE:<workspaceId>` with OWNER/ADMIN gates, and durable `WorkspaceConnectionGrant*` authorization records across SQLite, PostgreSQL, and filesystem) is complete and verified.
 
 ## Goals
 
@@ -90,7 +91,7 @@ The bootstrap replacement also imposes a new coupling on this subsystem: `ApiKey
 
 During compatibility, configured `amsha.api.keys.*` entries remain valid. Their labels resolve through a migration mapping: the configured `internal` key maps to the claimed owner's stable `userId` and `OWNER` role; CI/service keys map to explicit service principals with bounded roles. `ApiKeyRegistry` becomes a cache over configured keys plus `ApiCredentialStorePort`, not an authoritative in-memory identity store.
 
-The first-owner compare-and-set remains unique. After it succeeds, additional users require an authenticated owner/admin action; they cannot call bootstrap claim.
+The first-owner compare-and-set remains unique. After it succeeds, additional users require an authenticated owner/admin action; they cannot call bootstrap claim. Rate-limiting, loopback policy enforcement, and operator-proof validation for the first-owner claim and recovery endpoints are owned by Master ADR §0 (`ADR-Onboarding-Multi-Agent-Provider-Model.md`) and consumed by `BootstrapResource`.
 
 ### 3. OIDC and OAuth login
 
@@ -145,7 +146,7 @@ Connections use `scopeType` and `scopeId` rather than `shared`:
 
 - private connection: `USER`, writable/usable by its owner;
 - team connection: `WORKSPACE`, writable by workspace owner/admin, usable by active members;
-- optional `ConnectionGrant` records may further restrict use to named members or roles.
+- optional `WorkspaceConnectionGrant` records may further restrict use to named members or roles.
 
 Promotion from private to workspace scope writes a fresh workspace vault key, atomically switches non-secret metadata after validation, and deletes the old user key through retryable cleanup. Demotion performs the inverse and requires an explicit target owner. No record references another user's vault partition.
 
@@ -179,15 +180,35 @@ Responses never contain raw credentials except the one-time API-key creation res
 
 1. Add identity, workspace, API-credential, session, and invitation ports with all three backends, migrations, reflection registration, and contract tests.
 2. Migrate `ApiKeyRegistry`/validator/filter/owner resolver to stable principals while preserving configured internal/CI keys.
-3. Implement opaque web sessions and the initial first-owner/default-workspace claim. The session work is present; the provisional claim is replaced jointly with onboarding O1 by the reservation/state-bound activation contract, including takeover/recovery tests.
+3. Implement opaque web sessions and the initial first-owner/default-workspace claim. The session work is present; the provisional claim was replaced jointly with onboarding O1 by the reservation/state-bound activation contract, including takeover/recovery tests.
 4. Freeze the `ExternalIdentityProvider` contract, then add generic OIDC plus GitHub OAuth, account linking, invitations, and multi-admin role enforcement against the same provider contract tests.
-5. **Open:** add the distinct active identity-workspace context, `WORKSPACE` vault scope, and connection grants; integrate profile onboarding and MCP ownership with the same authorization service. Only completion of this item moves this ADR to `Implemented`.
+5. **Complete:** distinct active identity-workspace context (`WorkspaceContext.ACTIVE_WORKSPACE_ID`, `ActiveWorkspaceContext`), typed `WORKSPACE` vault scope (addressed via `WORKSPACE:<workspaceId>`) with OWNER/ADMIN store/delete gates and member read access, and durable `WorkspaceConnectionGrant*` authorization records across SQLite, PostgreSQL, and filesystem backends are implemented, integrated, and verified.
 
 Each phase runs the project's required Java formatting, focused compile/tests, three-backend contracts, native-sensitive compile, documentation verification, and Sonar checks. Identity/security integration tests cover concurrent claims, fixation, replay, CSRF, issuer confusion, invitation races, last-owner enforcement, session revocation, and cross-workspace denial.
 
 ### Cross-ADR dependency
 
 Onboarding Phase 1 (safe bootstrap and foundation) depends on the Identity Phases 1–3 ports, stable principals, authorization, and opaque sessions, and jointly completes the replacement first-owner claim contract. Onboarding Phases 2–3 (LLM profiles, routing cutover) depend on Identity Phase 5 (workspace vault scope). Identity Phase 4 (OIDC + invitations) can run in parallel with Onboarding Phases 1–2 and is not a blocking dependency.
+
+## Alternatives Considered
+
+- **Opaque server-side sessions vs. stateless JWTs**: Stateless JWTs cannot be revoked immediately
+  upon logout, account disabling, privilege changes, or secret rotation without maintaining a global
+  revocation list that negates the operational benefits of stateless tokens. Opaque session tokens
+  stored in `WebSessionStorePort` provide immediate revocability, single-use rotation overlap, and
+  restart safety across all persistence backends.
+- **OIDC-first vs. local password storage**: Storing passwords locally introduces credential-storage
+  liability (PBKDF2/Argon2 tuning, salt management), brute-force vulnerabilities, and complex
+  account recovery workflows. OIDC delegates user authentication to trusted enterprise identity
+  providers, while API keys serve self-contained, scriptable operator and headless needs.
+- **Invitation-based vs. admin-provisioned multi-admin**: Directly provisioning credentials for
+  other administrators introduces insecure out-of-band delivery channels. Expiring, single-use
+  hashed invitations with optional email constraints allow invited users to link their own verified
+  OIDC identities safely.
+- **Partitioned scopes and connection grants vs. `shared` boolean flag**: A simple boolean `shared`
+  column conflates ownership, tenancy boundaries, and execution permissions, leaking secrets across
+  users. Partitioned scopes (`USER:<userId>` and `WORKSPACE:<workspaceId>`) paired with
+  `WorkspaceConnectionGrant` records enforce least-privilege access without exposing raw vault references.
 
 ## Acceptance criteria
 
