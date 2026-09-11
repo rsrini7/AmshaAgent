@@ -327,8 +327,17 @@ public class AgentResultFormatter {
      * Specialized format for first-time Cron HITL prompts.
      */
     public static String formatCronHitl(String cronId, String goal, String toolName) {
-        return "⚠️ Approval Required for background task.\n\n" + "Goal: " + goal + "\n\n"
-                + formatHitlMessage(toolName, null, cronId, true);
+        return formatCronHitl(cronId, goal, toolName, null);
+    }
+
+    /**
+     * Specialized format for Cron HITL prompts with tool parameters.
+     */
+    public static String formatCronHitl(String cronId, String goal, String toolName, String paramsJson) {
+        String header = (goal != null && !goal.isBlank())
+                ? "⚠️ Approval Required for background task.\n\nGoal: " + goal + "\n\n"
+                : "⚠️ Approval Required for background task.\n\n";
+        return header + formatHitlMessage(toolName, paramsJson, cronId, true);
     }
 
     private static String formatBasicHitlMessage(String compositeName, String _cronId, boolean _isCron) {

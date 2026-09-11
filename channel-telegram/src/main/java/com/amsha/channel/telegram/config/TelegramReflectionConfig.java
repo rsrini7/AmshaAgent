@@ -47,6 +47,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "org.apache.camel.component.telegram.model.InlineKeyboardMarkup",
             "org.apache.camel.component.telegram.model.OutgoingTextMessage",
             "org.apache.camel.component.telegram.model.OutgoingAudioMessage",
+            "org.apache.camel.component.telegram.model.SendChatActionMessage",
+            "org.apache.camel.component.telegram.model.SendChatActionMessage$Action",
             "org.apache.camel.component.telegram.model.User"
         })
 public class TelegramReflectionConfig {}

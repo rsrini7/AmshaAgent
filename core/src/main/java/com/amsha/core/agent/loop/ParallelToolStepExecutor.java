@@ -200,6 +200,7 @@ public class ParallelToolStepExecutor {
                 MdcKeys.PARALLEL_TOOLS,
                 allowedCalls.stream().map(ParallelToolCall::toolName).collect(Collectors.joining(",")));
 
+        observers.forEach(o -> o.onBatchStart(context.sessionId(), context.agentRole(), allowedCalls.size()));
         List<ParallelToolCall> allowedCompleted;
         try {
             allowedCompleted = runAllowedCallsAsync(context, history, allowedCalls, otelContext);
@@ -213,6 +214,7 @@ public class ParallelToolStepExecutor {
             throw re;
         } finally {
             MdcCleaner.clear(MdcKeys.PARALLEL_BATCH_SIZE, MdcKeys.PARALLEL_TOOLS);
+            observers.forEach(o -> o.onBatchComplete(context.sessionId(), context.agentRole()));
         }
 
         Optional<DelegatedParallelPauseSupport.Pause> delegatedPause =

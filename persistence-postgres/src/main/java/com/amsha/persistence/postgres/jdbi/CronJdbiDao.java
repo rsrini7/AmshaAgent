@@ -78,7 +78,7 @@ public interface CronJdbiDao {
             @Bind("now") Instant now);
 
     @SqlUpdate(
-            "UPDATE agent_cron SET status = 'RUNNING', lastDeliveryId = :deliveryId, updatedAt = :now WHERE id = :id AND (status = 'AWAITING_APPROVAL' OR status = 'AWAITING_RETRY')")
+            "UPDATE agent_cron SET status = 'RUNNING', lastDeliveryId = :deliveryId, updatedAt = :now WHERE id = :id AND (status = 'AWAITING_APPROVAL' OR status = 'AWAITING_RETRY' OR (status = 'RUNNING' AND lastDeliveryId = :deliveryId))")
     int claimForResume(@Bind("id") String id, @Bind("deliveryId") String deliveryId, @Bind("now") Instant now);
 
     @SqlUpdate("UPDATE agent_cron SET status = :status, updatedAt = :now WHERE id = :id AND status = :expectedStatus")

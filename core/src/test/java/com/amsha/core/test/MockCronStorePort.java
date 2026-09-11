@@ -85,7 +85,12 @@ public class MockCronStorePort implements CronStorePort {
     @Override
     public boolean claimForResume(String id, String deliveryId) {
         AgentCronDto c = store.get(id);
-        if (c != null && ("AWAITING_APPROVAL".equals(c.status()) || "AWAITING_RETRY".equals(c.status()))) {
+        if (c != null
+                && ("AWAITING_APPROVAL".equals(c.status())
+                        || "AWAITING_RETRY".equals(c.status())
+                        || ("RUNNING".equals(c.status())
+                                && deliveryId != null
+                                && deliveryId.equals(c.lastDeliveryId())))) {
             store.put(
                     id,
                     new AgentCronDto(

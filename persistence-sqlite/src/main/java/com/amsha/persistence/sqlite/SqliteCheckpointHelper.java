@@ -3,6 +3,7 @@ package com.amsha.persistence.sqlite;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.ToolDecision;
@@ -66,11 +67,12 @@ final class SqliteCheckpointHelper {
                 try {
                     return incoming.withBatchToolDecisions(objectMapper.writeValueAsString(incomingMap));
                 } catch (Exception e) {
-                    Log.warnf("Failed to serialize merged decisions: %s", e.getMessage());
+                    Log.warnf("Failed to serialize merged decisions: %s", LogUtil.rootMessage(e));
                 }
             }
         } catch (Exception e) {
-            Log.warnf("Failed to merge batch decisions for session %s: %s", managed.sessionId(), e.getMessage());
+            Log.warnf(
+                    "Failed to merge batch decisions for session %s: %s", managed.sessionId(), LogUtil.rootMessage(e));
         }
         return incoming;
     }

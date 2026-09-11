@@ -1,5 +1,6 @@
 package com.amsha.channel.telegram;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
@@ -9,8 +10,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
@@ -26,6 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.camel.Exchange;
 import org.apache.camel.component.telegram.model.IncomingCallbackQuery;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
+import org.apache.camel.component.telegram.model.SendChatActionMessage;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -50,6 +58,12 @@ public class TelegramCallbackHandler {
 
     @Inject
     UserPreferenceService userPreferenceService;
+
+    ScheduledExecutorService progressScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "amsha-telegram-progress");
+        t.setDaemon(true);
+        return t;
+    });
 
     @Inject
     ObjectMapper objectMapper;
@@ -146,10 +160,22 @@ public class TelegramCallbackHandler {
                         BatchHitlKeyboardBuilder.buildKeyboard(sessionId, result.pendingToolNames());
                 sender.editMessage(chatId, messageId, originalText, nextKeyboard);
             } else if (result.outcome() != ApprovalOutcome.ALREADY_DECIDED && result.remainingPendingTools() == 0) {
-                String doneText = result.outcome() == ApprovalOutcome.APPROVED
-                        ? "✅ Approved: " + toolName
-                        : "❌ Rejected: " + toolName;
-                sender.editMessage(chatId, messageId, doneText, null);
+                if (result.outcome() == ApprovalOutcome.APPROVED) {
+                    // APPROVED (all tools): the agent now runs the approved work asynchronously.
+                    // Confirm once here (single source of truth for this edit) and, in addition,
+                    // stream a live "typing" chat action while the resumed run is active so the
+                    // user sees progress instead of a static "Approved" (observation #3).
+                    sender.editMessage(chatId, messageId, "✅ Approved: " + toolName, null);
+                    if (progressScheduler != null) {
+                        // Track the session the approval actually resumed (the checkpoint owner),
+                        // which for delegated work is the ":delegate:" child, not the root session.
+                        String resumedSessionId = result.sessionId() != null ? result.sessionId() : sessionId;
+                        startProgressTracker(chatId, messageId, resumedSessionId);
+                    }
+                } else {
+                    // REJECTED or an expired checkpoint -> clear the keyboard, show rejection.
+                    sender.editMessage(chatId, messageId, "❌ Rejected: " + toolName, null);
+                }
             }
 
             if (popupText != null) {
@@ -247,6 +273,59 @@ public class TelegramCallbackHandler {
                     messageId,
                     "⚠️ Unsupported voice option: **" + voiceName + "**. Please choose a valid voice.",
                     null);
+        }
+    }
+
+    /**
+     * Background tracker: while the resumed agent run is still active, repeatedly
+     * send a Telegram "typing" chat action (Telegram shows the progress icon for
+     * ~5s after each call) so the user sees live progress.
+     * <p>
+     * The approval message is <em>not</em> edited here: the caller already wrote
+     * "✅ Approved: &lt;tool&gt;" synchronously, and re-sending identical text would
+     * make Telegram reject the edit ("message is not modified"). The tracker stops
+     * on its own once the session stops resuming or the safety timeout elapses.
+     *
+     * @param sessionId the session the approval resumed (checkpoint owner, possibly
+     *                  a {@code :delegate:} child), whose resume mark drives the loop
+     */
+    private void startProgressTracker(String chatId, int messageId, String sessionId) {
+        if (progressScheduler == null) {
+            return;
+        }
+        Instant deadline = Instant.now().plus(Duration.ofMinutes(10));
+        AtomicReference<ScheduledFuture<?>> taskRef = new AtomicReference<>();
+        ScheduledFuture<?> future = progressScheduler.scheduleWithFixedDelay(
+                () -> {
+                    try {
+                        if (Instant.now().isAfter(deadline) || !approvalGateway.isSessionResuming(sessionId)) {
+                            ScheduledFuture<?> self = taskRef.get();
+                            if (self != null) {
+                                self.cancel(false);
+                            }
+                            return;
+                        }
+                        sender.sendChatAction(chatId, SendChatActionMessage.Action.TYPING);
+                    } catch (Exception e) {
+                        log.debugf(
+                                "Telegram progress tracker ended for chat=%s msg=%d: %s",
+                                chatId, messageId, LogUtil.rootMessage(e));
+                        ScheduledFuture<?> self = taskRef.get();
+                        if (self != null) {
+                            self.cancel(false);
+                        }
+                    }
+                },
+                2,
+                4,
+                TimeUnit.SECONDS);
+        taskRef.set(future);
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (progressScheduler != null) {
+            progressScheduler.shutdown();
         }
     }
 

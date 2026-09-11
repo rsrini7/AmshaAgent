@@ -318,4 +318,9 @@ public class ApprovalStateMachine implements ApprovalGateway {
         }
         return resolved;
     }
+
+    @Override
+    public boolean isSessionResuming(String sessionId) {
+        return agentStore.isBatchResuming(sessionId);
+    }
 }

@@ -29,6 +29,7 @@ import com.amsha.persistence.api.CheckpointUpsertResult;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.core.type.TypeReference;
 
 import org.junit.jupiter.api.AfterEach;
@@ -237,6 +238,20 @@ public class StatefulAgentStoreImplTest {
     }
 
     @Test
+    public void markResumingWithGoalAndGetActiveGoal() {
+        assertTrue(store.markResuming("goal-sess", "Analyze thread dump"));
+        assertTrue(store.isBatchResuming("goal-sess"));
+        assertEquals(Optional.of("Analyze thread dump"), store.getActiveGoal("goal-sess"));
+
+        // Second call fails
+        assertFalse(store.markResuming("goal-sess", "Other task"));
+
+        store.clearResuming("goal-sess");
+        assertFalse(store.isBatchResuming("goal-sess"));
+        assertEquals(Optional.empty(), store.getActiveGoal("goal-sess"));
+    }
+
+    @Test
     public void markFailedOverloadsDelegateToTransitionService() {
         AgentCheckpoint cp = checkpoint();
 
@@ -295,5 +310,62 @@ public class StatefulAgentStoreImplTest {
         when(fullyDecided.batchToolDecisions()).thenReturn("{\"t1\":\"APPROVED\",\"t2\":\"DENIED\"}");
         when(storeAdapter.findLatestAwaitingApproval("s1")).thenReturn(Optional.of(fullyDecided));
         assertTrue(store.isAllBatchToolsDecided("s1", "coder"));
+    }
+
+    @Test
+    public void isActiveStatusValidatesActiveStatuses() {
+        assertTrue(StatefulAgentStore.isActiveStatus(CheckpointStatus.IN_PROGRESS));
+        assertTrue(StatefulAgentStore.isActiveStatus(CheckpointStatus.RESUMING));
+        assertTrue(StatefulAgentStore.isActiveStatus(CheckpointStatus.AWAITING_APPROVAL));
+        assertTrue(StatefulAgentStore.isActiveStatus(CheckpointStatus.AWAITING_RETRY));
+
+        assertFalse(StatefulAgentStore.isActiveStatus(CheckpointStatus.COMPLETED));
+        assertFalse(StatefulAgentStore.isActiveStatus(CheckpointStatus.FAILED));
+        assertFalse(StatefulAgentStore.isActiveStatus(CheckpointStatus.ARCHIVED));
+        assertFalse(StatefulAgentStore.isActiveStatus(null));
+    }
+
+    @Test
+    public void findLatestActiveDelegatedCheckpointFiltersAndFindsLatest() {
+        String rootSession = "sess-root";
+        String child1 = rootSession + AgentSentinels.DELEGATE_SESSION_SENTINEL + "researcher:1";
+        String child2 = rootSession + AgentSentinels.DELEGATE_SESSION_SENTINEL + "researcher:2";
+        String unrelated = "other-sess" + AgentSentinels.DELEGATE_SESSION_SENTINEL + "researcher:1";
+
+        CheckpointDto rootDto = dto(10L);
+        when(rootDto.sessionId()).thenReturn(rootSession);
+        when(rootDto.updatedAt()).thenReturn(Instant.ofEpochMilli(1000));
+
+        CheckpointDto child1Dto = dto(11L);
+        when(child1Dto.sessionId()).thenReturn(child1);
+        when(child1Dto.updatedAt()).thenReturn(Instant.ofEpochMilli(2000));
+
+        CheckpointDto child2Dto = dto(12L);
+        when(child2Dto.sessionId()).thenReturn(child2);
+        when(child2Dto.updatedAt()).thenReturn(Instant.ofEpochMilli(3000));
+
+        CheckpointDto unrelatedDto = dto(13L);
+        when(unrelatedDto.sessionId()).thenReturn(unrelated);
+        when(unrelatedDto.updatedAt()).thenReturn(Instant.ofEpochMilli(4000));
+
+        when(storeAdapter.findActiveBySessionTree(rootSession))
+                .thenReturn(List.of(rootDto, child1Dto, child2Dto, unrelatedDto));
+
+        Optional<AgentCheckpoint> latest = store.findLatestActiveDelegatedCheckpoint(rootSession);
+        assertTrue(latest.isPresent());
+        assertEquals(12L, latest.get().getId());
+        assertEquals(child2, latest.get().getSessionId());
+    }
+
+    @Test
+    public void findActiveCheckpointsInSessionTreeDelegatesToStoreAdapter() {
+        CheckpointDto rootDto = dto(10L);
+        when(rootDto.sessionId()).thenReturn("tree-root");
+        when(storeAdapter.findActiveBySessionTree("tree-root")).thenReturn(List.of(rootDto));
+
+        List<AgentCheckpoint> list = store.findActiveCheckpointsInSessionTree("tree-root");
+        assertEquals(1, list.size());
+        assertEquals(10L, list.get(0).getId());
+        verify(storeAdapter).findActiveBySessionTree("tree-root");
     }
 }

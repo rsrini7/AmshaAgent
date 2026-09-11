@@ -69,6 +69,11 @@ class PersistenceDtoTest {
             public boolean isLocked(String k) {
                 return false;
             }
+
+            @Override
+            public boolean renew(String k, int t) {
+                return true;
+            }
         };
         assertTrue(mock.tryLock("test", 10));
     }

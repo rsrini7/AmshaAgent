@@ -318,4 +318,22 @@ class CheckpointResumeHandlerUnitTest {
 
         verify(speechDeliveryService).deliver(eq(ctx), eq(sender), eq(user), eq(result), contains("3.15"));
     }
+
+    @Test
+    void testDispatchResumeResultCronSessionDispatchesToCronNotifier() {
+        ResumeCronNotificationDispatcher mockCronDispatcher = mock(ResumeCronNotificationDispatcher.class);
+        handler.cronNotificationDispatcher = mockCronDispatcher;
+
+        ChannelUser user = new ChannelUser("u1", "c1", "User 1", ChannelType.CLI);
+        MessageContext ctx = mock(MessageContext.class);
+        when(ctx.getGoal()).thenReturn("write python");
+
+        String cronSessionId = "cron-12345678-1234-1234-1234-123456789012-session";
+        AgentResult result = AgentResult.awaitingApproval("sandbox_exec", "{}", cronSessionId, List.of());
+
+        handler.dispatchResumeResult(ctx, result, ChannelType.CLI, user, cronSessionId, "brahma");
+
+        verify(mockCronDispatcher).dispatch(cronSessionId, result);
+        verifyNoInteractions(speechDeliveryService);
+    }
 }

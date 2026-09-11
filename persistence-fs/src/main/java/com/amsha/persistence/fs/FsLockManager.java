@@ -13,6 +13,8 @@ import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -80,8 +82,7 @@ public class FsLockManager implements AdvisoryLockPort {
                 closeQuietly(raf);
                 return false;
             }
-            raf.writeBytes(Instant.now().plusSeconds(timeoutSeconds).toString());
-            raf.getFD().sync();
+            writeMeta(lockKey, Instant.now().plusSeconds(timeoutSeconds));
             // raf intentionally NOT closed — held by LockHolder until unlock()
             heldLocks.put(lockKey, new LockHolder(raf, channel, fileLock));
             return true;
@@ -110,6 +111,7 @@ public class FsLockManager implements AdvisoryLockPort {
                 holder.fileLock.release();
                 holder.channel.close();
                 holder.raf.close();
+                Files.deleteIfExists(metaFilePath(lockKey));
                 Files.deleteIfExists(lockFilePath(lockKey));
             } catch (IOException e) {
                 log.debugf("Lock release failed (best effort): %s", LogUtil.rootMessage(e));
@@ -120,19 +122,55 @@ public class FsLockManager implements AdvisoryLockPort {
     @Override
     public boolean isLocked(String lockKey) {
         if (heldLocks.containsKey(lockKey)) return true;
+        Path metaFile = metaFilePath(lockKey);
         Path lockFile = lockFilePath(lockKey);
-        if (!Files.exists(lockFile)) return false;
+        if (!Files.exists(metaFile) && !Files.exists(lockFile)) return false;
         try {
-            String content = Files.readString(lockFile);
+            Path fileToRead = Files.exists(metaFile) ? metaFile : lockFile;
+            String content = Files.readString(fileToRead).trim();
+            if (content.isEmpty()) return false;
             Instant expiresAt = Instant.parse(content);
             if (Instant.now().isAfter(expiresAt)) {
+                Files.deleteIfExists(metaFile);
                 Files.deleteIfExists(lockFile);
                 return false;
             }
             return true;
-        } catch (Exception e) {
+        } catch (Exception _) {
             return false;
         }
+    }
+
+    @Override
+    public boolean renew(String lockKey, int timeoutSeconds) {
+        LockHolder holder = heldLocks.get(lockKey);
+        if (holder == null) {
+            return false;
+        }
+        try {
+            writeMeta(lockKey, Instant.now().plusSeconds(timeoutSeconds));
+            return true;
+        } catch (IOException e) {
+            log.debugf("Lock renewal failed (best effort): %s", LogUtil.rootMessage(e));
+            return false;
+        }
+    }
+
+    private void writeMeta(String lockKey, Instant expiresAt) throws IOException {
+        Path metaFile = metaFilePath(lockKey);
+        Files.createDirectories(metaFile.getParent());
+        Path tempFile = Files.createTempFile(locksDir, "lock-meta-", ".tmp");
+        try {
+            Files.writeString(tempFile, expiresAt.toString(), StandardOpenOption.WRITE);
+            Files.move(tempFile, metaFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    private Path metaFilePath(String lockKey) {
+        String safeName = lockKey.replaceAll("[^a-zA-Z0-9._-]", "_");
+        return locksDir.resolve(safeName + ".meta");
     }
 
     private Path lockFilePath(String lockKey) {

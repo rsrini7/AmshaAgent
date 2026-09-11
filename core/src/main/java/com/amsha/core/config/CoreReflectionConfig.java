@@ -22,6 +22,7 @@ import dev.langchain4j.data.pdf.PdfFile;
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
+import com.amsha.core.agent.loop.ResumeCronNotificationDispatcher;
 import com.amsha.core.agent.loop.ResumeToolInfoFormatter;
 import com.amsha.core.agent.loop.TaskClassifierService;
 import com.amsha.core.agent.reasoning.MultimodalHistoryProjector;
@@ -84,6 +85,8 @@ import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
 import com.amsha.core.skill.SkillPromptParams;
 import com.amsha.core.speech.SpeechDeliveryService;
+import com.amsha.core.state.ActiveWork;
+import com.amsha.core.state.ActivityPhase;
 import com.amsha.core.tools.CheckList;
 import com.amsha.core.tools.CheckListEvent;
 import com.amsha.core.tools.CheckListItem;
@@ -120,6 +123,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RunAgentRequest.class,
             CreateSessionResponse.class,
             SessionStatusResponse.class,
+            ActiveWork.class,
+            ActivityPhase.class,
             AuditEventResponse.class,
             ToolRegistry.ToolDescriptor.class,
             AuditOutcome.class,
@@ -205,6 +210,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ChatModelListenerRuntimeControl.ToggleResult.class,
             AmshaChatModelListener.class,
             SpeechDeliveryService.class,
+            ResumeCronNotificationDispatcher.class,
             ResumeToolInfoFormatter.class,
             SafeSymbolMetadata.class
         },

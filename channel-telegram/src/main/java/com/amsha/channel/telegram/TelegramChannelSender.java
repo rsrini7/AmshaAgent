@@ -27,6 +27,7 @@ import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.apache.camel.component.telegram.model.OutgoingAudioMessage;
 import org.apache.camel.component.telegram.model.OutgoingTextMessage;
+import org.apache.camel.component.telegram.model.SendChatActionMessage;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -320,6 +321,27 @@ public class TelegramChannelSender implements ChannelSender {
             log.debugf("editMessage sent for chatId=%s msgId=%d", chatId, messageId);
         } catch (Exception e) {
             log.warnf("editMessage failed for chatId=%s msgId=%d: %s", chatId, messageId, LogUtil.rootMessage(e));
+        }
+    }
+
+    /**
+     * Sends a Telegram Bot API chat action (e.g. typing) through governed Camel transport.
+     *
+     * @param chatId the destination chat ID
+     * @param action the action to broadcast (e.g. {@link SendChatActionMessage.Action#TYPING})
+     */
+    public void sendChatAction(String chatId, SendChatActionMessage.Action action) {
+        if (chatId == null || chatId.isBlank() || action == null) {
+            log.warn("TELEGRAM-ACTION: chatId or action is null/blank - dropping");
+            return;
+        }
+        try {
+            SendChatActionMessage msg = new SendChatActionMessage(action);
+            msg.setChatId(chatId);
+            producerTemplate.sendBodyAndHeader(TELEGRAM_BOTS_ENDPOINT, msg, TelegramConstants.TELEGRAM_CHAT_ID, chatId);
+            log.debugf("sendChatAction %s sent for chatId=%s", action, chatId);
+        } catch (Exception e) {
+            log.warnf("sendChatAction failed for chatId=%s action=%s: %s", chatId, action, LogUtil.rootMessage(e));
         }
     }
 

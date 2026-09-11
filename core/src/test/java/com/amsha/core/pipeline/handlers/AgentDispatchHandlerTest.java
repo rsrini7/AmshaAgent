@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mockStatic;
@@ -35,6 +36,7 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
+import com.amsha.core.pipeline.HandleResult;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.pipeline.SessionContext;
 import com.amsha.core.scope.WorkspaceContext;
@@ -44,9 +46,13 @@ import com.amsha.core.speech.OutputPolicyContext;
 import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.speech.SpeechOutputPolicy;
 import com.amsha.core.speech.SpeechReplyService;
+import com.amsha.core.state.ActiveWork;
+import com.amsha.core.state.ActivityPhase;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.TimeContextInjector;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -107,6 +113,8 @@ class AgentDispatchHandlerTest {
         lenient().when(intentClassifier.isResumeCommand(anyString())).thenReturn(false);
         lenient().when(channelPluginRegistry.find(any(ChannelType.class))).thenReturn(Optional.empty());
         lenient().when(agentStore.markResuming(anyString())).thenReturn(true);
+        lenient().when(agentStore.markResuming(anyString(), any())).thenReturn(true);
+        lenient().when(agentStore.getActivePhase(anyString())).thenReturn(Optional.empty());
         // Speech output is off by default so existing text-only dispatch paths are unaffected.
         lenient()
                 .when(speechOutputPolicy.resolve(any(OutputPolicyContext.class)))
@@ -442,5 +450,105 @@ class AgentDispatchHandlerTest {
         context.setSessionContext(sessionContext);
 
         return context;
+    }
+
+    @Test
+    void testBusySessionRejectionShowsActiveGoal() {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = Mockito.mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(ChannelType.REST_API)).thenReturn(Optional.of(plugin));
+
+        when(agentStore.markResuming(eq("sess123"), any())).thenReturn(false);
+        when(agentStore.getActiveWork("sess123"))
+                .thenReturn(Optional.of(ActiveWork.of("Diagnose memory leak under load", null)));
+
+        HandleResult result = handler.handle(context);
+        assertEquals(HandleResult.STOP, result);
+        verify(sender).sendRaw(eq(context.getUser()), contains("Diagnose memory leak under load"));
+    }
+
+    @Test
+    void testBusySessionRejectionIncludesDelegatedPhase() {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = Mockito.mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(ChannelType.REST_API)).thenReturn(Optional.of(plugin));
+
+        when(agentStore.markResuming(eq("sess123"), any())).thenReturn(false);
+        when(agentStore.getActiveWork("sess123"))
+                .thenReturn(
+                        Optional.of(ActiveWork.of("Diagnose memory leak under load", ActivityPhase.tool("read_file"))));
+
+        HandleResult result = handler.handle(context);
+        assertEquals(HandleResult.STOP, result);
+        verify(sender).sendRaw(eq(context.getUser()), contains("running read_file"));
+    }
+
+    @Test
+    void testBusySessionRejectionWithoutActiveGoalFallback() {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = Mockito.mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(ChannelType.REST_API)).thenReturn(Optional.of(plugin));
+
+        when(agentStore.markResuming(eq("sess123"), any())).thenReturn(false);
+        when(agentStore.getActiveWork("sess123")).thenReturn(Optional.empty());
+
+        HandleResult result = handler.handle(context);
+        assertEquals(HandleResult.STOP, result);
+        verify(sender)
+                .sendRaw(
+                        eq(context.getUser()),
+                        eq(
+                                "⚠️ I'm currently processing another request. Your message was not queued - please resend it once I finish."));
+    }
+
+    @Test
+    void testBusySessionRejectionWhenWaitingForDelegatedResearcher() {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = Mockito.mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(ChannelType.REST_API)).thenReturn(Optional.of(plugin));
+
+        AgentCheckpoint cp = Mockito.mock(AgentCheckpoint.class);
+        when(cp.getStatus()).thenReturn(CheckpointStatus.IN_PROGRESS);
+        when(cp.getPendingToolName()).thenReturn(ToolCapability.DELEGATE_TO_AGENT.toolName());
+        when(agentStore.findLatestNonArchivedCheckpoint("sess123")).thenReturn(Optional.of(cp));
+
+        HandleResult result = handler.handle(context);
+        assertEquals(HandleResult.STOP, result);
+        verify(sender)
+                .sendRaw(
+                        eq(context.getUser()),
+                        eq("I’m still waiting for the delegated researcher to finish. Please wait for its result."));
+    }
+
+    @Test
+    void testBusySessionRejectionWhenWaitingForDelegatedResearcherWithActiveWork() {
+        MessageContext context = createTestContext(AutonomyLevel.FULL);
+        ChannelSender sender = Mockito.mock(ChannelSender.class);
+        ChannelPlugin plugin = Mockito.mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find(ChannelType.REST_API)).thenReturn(Optional.of(plugin));
+
+        AgentCheckpoint cp = Mockito.mock(AgentCheckpoint.class);
+        when(cp.getStatus()).thenReturn(CheckpointStatus.IN_PROGRESS);
+        when(cp.getPendingToolName()).thenReturn(ToolCapability.DELEGATE_TO_AGENT.toolName());
+        when(agentStore.findLatestNonArchivedCheckpoint("sess123")).thenReturn(Optional.of(cp));
+        when(agentStore.getActiveWork("sess123"))
+                .thenReturn(Optional.of(ActiveWork.of("Diagnose memory leak", "TOOL:read_file")));
+
+        HandleResult result = handler.handle(context);
+        assertEquals(HandleResult.STOP, result);
+        verify(sender)
+                .sendRaw(
+                        eq(context.getUser()),
+                        eq(
+                                "I’m still waiting for the delegated researcher to finish (\"Diagnose memory leak\" · running read_file). Please wait for its result."));
     }
 }

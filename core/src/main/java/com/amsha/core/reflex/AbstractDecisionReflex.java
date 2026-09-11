@@ -226,20 +226,24 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
             throws Exception {
         log.infof("[DELEGATE-%s] admin=%s decision for session=%s", getActionName(), adminId, targetSid);
 
-        Optional<AgentCheckpoint> latestPending = statefulAgentStore.findLatestAwaitingApproval(targetSid);
+        Optional<AgentCheckpoint> latestPending = statefulAgentStore
+                .findLatestAwaitingApproval(targetSid)
+                .or(() -> statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(targetSid));
         if (latestPending.isEmpty()) {
             return "Target session not found or has no pending approval.";
         }
+        String effectiveSid =
+                latestPending.get().getSessionId() != null ? latestPending.get().getSessionId() : targetSid;
         String activeRole = latestPending.get().getAgentRole();
 
         AgentCheckpoint cp = latestPending.get();
         AgentCheckpoint resolved;
         try {
             if (cp.hasBatchToolDecisions()) {
-                resolved = applyDecisionToAll(targetSid, reason);
+                resolved = applyDecisionToAll(effectiveSid, reason);
             } else if (cp.getPendingToolName() != null
                     && !cp.getPendingToolName().isBlank()) {
-                resolved = applyDecisionToTool(targetSid, cp.getPendingToolName(), reason);
+                resolved = applyDecisionToTool(effectiveSid, cp.getPendingToolName(), reason);
             } else {
                 return getNoPendingMessage();
             }
@@ -250,16 +254,16 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
         if (resolved == null || BatchDecisionUtil.hasPendingToolNames(resolved, objectMapper)) {
             log.infof(
                     "[DELEGATE-%s] decision was not terminal for session=%s; resume suppressed",
-                    getActionName(), targetSid);
+                    getActionName(), effectiveSid);
             return getNoPendingMessage();
         }
 
         String auditMsg =
-                "Admin %s performed %s on session %s: %s".formatted(adminId, getActionName(), targetSid, reason);
-        auditService.recordMandatory(targetSid, adminId, activeRole, SecurityEventType.DELEGATE_APPROVAL, auditMsg);
+                "Admin %s performed %s on session %s: %s".formatted(adminId, getActionName(), effectiveSid, reason);
+        auditService.recordMandatory(effectiveSid, adminId, activeRole, SecurityEventType.DELEGATE_APPROVAL, auditMsg);
 
         checkpointResumeHandler.resumeAfterBatchDecision(
-                targetSid,
+                effectiveSid,
                 activeRole,
                 adminId,
                 adminChatId,
@@ -362,30 +366,33 @@ public abstract class AbstractDecisionReflex implements AgentReflex {
 
         // Runtime disambiguation: probe session first, then cron.
         // 1. Session pending? → requires delegate role for cross-session approval
-        Optional<AgentCheckpoint> targetPending = statefulAgentStore.findLatestAwaitingApproval(finalTargetId);
+        Optional<AgentCheckpoint> targetPending = statefulAgentStore
+                .findLatestAwaitingApproval(finalTargetId)
+                .or(() -> statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(finalTargetId));
         if (targetPending.isPresent()) {
             // §Cron-Owner Fast-Path: if the target is a cron-run session owned by this user,
             // allow approval without delegate role.
-            String targetSessionId = targetPending.get().getSessionId();
-            if (targetSessionId != null && targetSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
+            String targetSessionId = targetPending.get().getSessionId() != null
+                    ? targetPending.get().getSessionId()
+                    : finalTargetId;
+            if (targetSessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
                 String cronId = targetSessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
                 if (cronId.length() >= 36) cronId = cronId.substring(0, 36);
                 Optional<AgentCron> cron = cronStore.findById(cronId).map(AgentCronRecord::fromDto);
                 if (cron.isPresent() && cron.get().getUserId().equals(userId)) {
-                    return handleDelegateDecision(finalTargetId, userId, chatId, reason, context);
+                    return handleDelegateDecision(targetSessionId, userId, chatId, reason, context);
                 }
             }
-            if (targetSessionId != null
-                    && (targetSessionId.startsWith(sessionId + ":") || targetSessionId.contains(sessionId))) {
-                return handleDelegateDecision(finalTargetId, userId, chatId, reason, context);
+            if (targetSessionId.startsWith(sessionId + ":") || targetSessionId.contains(sessionId)) {
+                return handleDelegateDecision(targetSessionId, userId, chatId, reason, context);
             }
             if (!delegateGuard.isDelegate(userId)) {
                 log.warnf(
                         "[%s-DELEGATE-DENIED] user=%s attempted session decision for id=%s",
-                        getActionName(), userId, finalTargetId);
+                        getActionName(), userId, targetSessionId);
                 return getNotAuthorizedMessage();
             }
-            return handleDelegateDecision(finalTargetId, userId, chatId, reason, context);
+            return handleDelegateDecision(targetSessionId, userId, chatId, reason, context);
         }
 
         // 2. Not a session — try as cron task (owner can approve their own tasks)

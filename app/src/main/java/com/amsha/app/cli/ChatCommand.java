@@ -13,6 +13,7 @@ import java.io.Console;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +37,9 @@ import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.session.SessionCatalogService;
+import com.amsha.core.state.ActiveWork;
+import com.amsha.core.state.ActivityPhase;
+import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.security.api.AutonomyLevel;
@@ -59,6 +63,7 @@ public class ChatCommand implements Runnable {
 
     private static final String CLI_USER_ID = "cli-user";
     private static final String CLI_CHAT_ID = "cli-chat";
+    private static final long PROGRESS_TICK_SECONDS = 20;
 
     @CommandLine.Option(
             names = {"-r", "--role"},
@@ -97,6 +102,9 @@ public class ChatCommand implements Runnable {
 
     @Inject
     SessionCatalogService sessionCatalogService;
+
+    @Inject
+    StatefulAgentStore agentStore;
 
     @Inject
     Instance<BootstrapStateStorePort> bootstrapStateStores;
@@ -207,6 +215,7 @@ public class ChatCommand implements Runnable {
         try {
             log.debugf("CLI ShutdownEvent triggered for session %s (absolute priority cleanup)", sessionId);
             hitlPending = false;
+            CliJobNotifier.setTerminalPrinter(null);
             cliResultBridge.cancel(sessionId); // unblocks any HITL virtual thread immediately
             workspaceManager.terminateSession(sessionId);
         } catch (Exception e) {
@@ -239,12 +248,18 @@ public class ChatCommand implements Runnable {
                     .build();
 
             this.lineReader = reader;
-            chatLoopInner(reader, terminal);
+            CliJobNotifier.setTerminalPrinter(reader::printAbove);
+            try {
+                chatLoopInner(reader, terminal);
+            } finally {
+                CliJobNotifier.setTerminalPrinter(null);
+            }
 
         } catch (Exception e) {
             log.warnf("JLine3 terminal init failed (%s), falling back to raw input", e.getMessage());
             chatLoopFallback();
         } finally {
+            CliJobNotifier.setTerminalPrinter(null);
             this.lineReader = null;
         }
     }
@@ -395,6 +410,7 @@ public class ChatCommand implements Runnable {
     }
 
     private void waitForHitlResult(String sessionId, CompletableFuture<AgentResult> resultFuture) {
+        startProgressTicker(sessionId, resultFuture);
         Thread.ofVirtual().name("hitl-waiter-" + sessionId).start(() -> {
             try {
                 AgentResult result = resultFuture.get(hitlTimeoutHours, TimeUnit.HOURS);
@@ -419,6 +435,59 @@ public class ChatCommand implements Runnable {
                 hitlPending = false;
             }
         });
+    }
+
+    /**
+     * Emits a periodic progress line while an approved turn executes, so the
+     * terminal is not silently frozen between {@code /approve} and the answer.
+     * The phase comes from the agent loop's activity heartbeat, which is already
+     * refreshed on every reasoning step.
+     */
+    private void startProgressTicker(String sessionId, CompletableFuture<AgentResult> resultFuture) {
+        Thread.ofVirtual().name("cli-progress-" + sessionId).start(() -> {
+            long elapsedSeconds = 0;
+            try {
+                while (!resultFuture.isDone()) {
+                    Thread.sleep(Duration.ofSeconds(PROGRESS_TICK_SECONDS));
+                    if (resultFuture.isDone()) return;
+                    elapsedSeconds += PROGRESS_TICK_SECONDS;
+                    printAbovePrompt("⏳ Still working… " + elapsedSeconds + "s" + describeSessionPhase(sessionId));
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException e) {
+                log.debugf("CLI progress ticker stopped for %s: %s", sessionId, LogUtil.rootMessage(e));
+            }
+        });
+    }
+
+    private void printAbovePrompt(String line) {
+        LineReader reader = lineReader;
+        if (reader != null) {
+            reader.printAbove(line);
+        } else {
+            System.out.println(line);
+        }
+    }
+
+    /**
+     * Renders the coarse activity phase recorded by the agent loop,
+     * e.g. {@code " · running read_file"}. Empty when nothing is running or phase is blank.
+     */
+    static String describePhase(String phase) {
+        String label = ActivityPhase.label(phase);
+        return label.isBlank() ? "" : " · " + label;
+    }
+
+    String describeSessionPhase(String sessionId) {
+        if (agentStore == null) {
+            return "";
+        }
+        return agentStore
+                .getActiveWork(sessionId)
+                .map(ActiveWork::phase)
+                .map(ChatCommand::describePhase)
+                .orElse("");
     }
 
     static String formatTerminalResult(AgentResult result) {

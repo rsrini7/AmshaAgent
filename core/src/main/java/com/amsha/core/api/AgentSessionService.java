@@ -1,10 +1,10 @@
 package com.amsha.core.api;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,12 +21,10 @@ import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
-import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.core.api.dto.ServiceResult;
-import com.amsha.core.api.dto.SessionStatusResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.domain.model.AgentCheckpoint;
@@ -41,6 +39,7 @@ import com.amsha.core.pipeline.TurnRequest;
 import com.amsha.core.scope.ActiveWorkspaceContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
+import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.session.SessionCatalogService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.MdcManaged;
@@ -75,6 +74,12 @@ public class AgentSessionService {
     private final ActiveWorkspaceContext activeWorkspaceContext;
     private final SessionTestLabelStore sessionTestLabelStore;
     private final int maxResumeIterations;
+
+    @Inject
+    @InputSanitizer.PII
+    Instance<InputSanitizer> piiSanitizerInstance;
+
+    InputSanitizer piiSanitizer;
 
     private static final String REST_USER_NAME = ApiConstants.REST_USER_NAME;
     private static final String REST_API_SESSION_PREFIX = "rest-api-";
@@ -440,25 +445,26 @@ public class AgentSessionService {
 
         try {
             String canonicalRole = AgentRoleEnum.fromString(role).toScopedName();
-            var checkpointOpt = loadStatusCheckpoint(sessionId, canonicalRole);
-            if (checkpointOpt.isEmpty()) {
-                return ServiceResult.success(
-                        Map.of("sessionId", sessionId, "status", CheckpointStatus.NOT_STARTED.name()));
-            }
-            var cp = checkpointOpt.get();
-            List<ReasoningStep> steps = agentStore.loadSteps(cp.getId());
-            return ServiceResult.success(
-                    new SessionStatusResponse(sessionId, cp.getStatus().name(), steps, cp.getFailReason()));
+            return SessionStatusResolver.resolve(agentStore, sessionId, canonicalRole, resolveSanitizer());
         } catch (Exception e) {
             return ServiceResult.error("SYSTEM", e.getMessage());
         }
     }
 
-    private Optional<AgentCheckpoint> loadStatusCheckpoint(String sessionId, String canonicalRole) {
-        if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
-            return agentStore.findLatestNonArchivedCheckpoint(sessionId);
+    private InputSanitizer resolveSanitizer() {
+        if (piiSanitizer != null) {
+            return piiSanitizer;
         }
-        return agentStore.load(sessionId, canonicalRole);
+        if (piiSanitizerInstance != null) {
+            if (piiSanitizerInstance.isResolvable()) {
+                return piiSanitizerInstance.get();
+            }
+            var it = piiSanitizerInstance.iterator();
+            if (it.hasNext()) {
+                return it.next();
+            }
+        }
+        return null;
     }
 
     public ServiceResult<Object> terminateSession(String sessionId, String userId) {

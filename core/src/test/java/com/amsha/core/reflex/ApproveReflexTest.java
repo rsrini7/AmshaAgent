@@ -272,8 +272,10 @@ class ApproveReflexTest {
         // Fix: Use specific IDs to avoid misidentifying cron ID as session ID
         when(statefulAgentStore.findLatestAwaitingApproval("session-1")).thenReturn(Optional.of(cp));
         when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.empty());
-        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining("session-1"))
                 .thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining("cron-123"))
+                .thenReturn(Optional.empty());
 
         // MOCK THE GUARD TO FAIL (Someone else is already resuming)
         when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(false);

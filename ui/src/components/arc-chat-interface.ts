@@ -963,8 +963,15 @@ export class ArcChatInterface extends LitElement {
         return;
       }
 
-      this._progressPhase = 'Status checked';
-      this._progressDetail = `Backend status: ${backendStatus}${status.failReason ? ` (${status.failReason})` : ''}. The request was not resent.`;
+      // The backend now reports live execution (goal + phase) instead of a stale
+      // terminal checkpoint, so surface what the agent is actually working on.
+      const liveDetail = [status.activeGoal?.trim() || '', status.activePhase?.trim() || '']
+        .filter(Boolean)
+        .join(' · ');
+      this._progressPhase = backendStatus === 'IN_PROGRESS' ? 'Still working' : 'Status checked';
+      this._progressDetail = `Backend status: ${backendStatus}${liveDetail ? ` — ${liveDetail}` : ''}${
+        status.failReason ? ` (${status.failReason})` : ''
+      }. The request was not resent.`;
       this._progressTrail = [
         ...this._progressTrail,
         { phase: this._progressPhase, detail: this._progressDetail },

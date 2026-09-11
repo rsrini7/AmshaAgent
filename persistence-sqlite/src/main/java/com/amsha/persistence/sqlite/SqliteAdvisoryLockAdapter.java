@@ -76,4 +76,20 @@ public class SqliteAdvisoryLockAdapter implements AdvisoryLockPort {
                         LockJdbiDao.class,
                         dao -> dao.countActive(lockKey, TemporalUtils.formatIsoLex(Instant.now())) > 0));
     }
+
+    @Override
+    public boolean renew(String lockKey, int timeoutSeconds) {
+        log.tracef("renew key=%s timeout=%d", lockKey, timeoutSeconds);
+        return retryWrapper.withRetry(
+                "renew-lock-" + lockKey,
+                3,
+                50,
+                () -> jdbi.withExtension(
+                        LockJdbiDao.class,
+                        dao -> dao.renew(
+                                        lockKey,
+                                        ownerId,
+                                        TemporalUtils.formatIsoLex(Instant.now().plusSeconds(timeoutSeconds)))
+                                > 0));
+    }
 }

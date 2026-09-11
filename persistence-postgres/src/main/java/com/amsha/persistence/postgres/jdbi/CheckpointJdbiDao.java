@@ -70,6 +70,12 @@ public interface CheckpointJdbiDao {
 
     @SqlQuery(
             "SELECT " + ALL_COLUMNS
+                    + " FROM agent_checkpoint WHERE (session_id = :rootSessionId OR session_id LIKE :prefixPattern) AND status IN ('IN_PROGRESS', 'RESUMING', 'AWAITING_APPROVAL', 'AWAITING_RETRY') ORDER BY checkpoint_id ASC")
+    List<CheckpointDto> findActiveBySessionTree(
+            @Bind("rootSessionId") String rootSessionId, @Bind("prefixPattern") String prefixPattern);
+
+    @SqlQuery(
+            "SELECT " + ALL_COLUMNS
                     + " FROM agent_checkpoint WHERE session_id = :sessionId AND status = 'AWAITING_APPROVAL' ORDER BY checkpoint_id DESC LIMIT 1")
     Optional<CheckpointDto> findLatestAwaiting(@Bind("sessionId") String sessionId);
 

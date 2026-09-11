@@ -3,6 +3,21 @@ import { SkillDto } from './generated/models/SkillDto';
 import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto, NetworkProfilePolicyDto, ProviderCatalogModel } from './types';
 import { ExecutionRunSummaryDto, ExecutionTraceDto } from '../types/trace';
 
+/**
+ * Status snapshot returned by GET /sessions/{id}/status/{role}.
+ * `activeGoal` / `activePhase` are only present while the agent loop is actually
+ * executing in memory, so the UI can show what the agent is working on instead of
+ * a stale terminal status.
+ */
+export interface SessionStatusResponse {
+  sessionId: string;
+  status: string;
+  steps?: unknown[];
+  failReason?: string | null;
+  activeGoal?: string | null;
+  activePhase?: string | null;
+}
+
 export class ArcApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -248,8 +263,8 @@ export class ArcClient {
   async getSessionStatus(
     sessionId: string,
     role = 'coordinator',
-  ): Promise<{ sessionId: string; status: string; steps?: unknown[]; failReason?: string | null }> {
-    return this.request<{ sessionId: string; status: string; steps?: unknown[]; failReason?: string | null }>(
+  ): Promise<SessionStatusResponse> {
+    return this.request<SessionStatusResponse>(
       `/sessions/${encodeURIComponent(sessionId)}/status/${encodeURIComponent(role)}`,
       {},
       ArcClient.HITL_REQUEST_TIMEOUT_MS,

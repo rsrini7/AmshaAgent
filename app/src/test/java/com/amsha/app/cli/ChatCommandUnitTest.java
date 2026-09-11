@@ -57,6 +57,17 @@ class ChatCommandUnitTest {
     }
 
     @Test
+    void testDescribePhase() {
+        assertEquals("", ChatCommand.describePhase(null));
+        assertEquals("", ChatCommand.describePhase("  "));
+        assertEquals(" · running read_file", ChatCommand.describePhase("TOOL:read_file"));
+        assertEquals(" · running tools", ChatCommand.describePhase("PARALLEL_TOOLS"));
+        assertEquals(" · reading tool results", ChatCommand.describePhase("OBSERVING"));
+        assertEquals(" · writing the answer", ChatCommand.describePhase("FINISHING"));
+        assertEquals(" · thinking", ChatCommand.describePhase("RUNNING"));
+    }
+
+    @Test
     void testOnShutdownCleanWhenNoSession() {
         assertDoesNotThrow(() -> chatCommand.onShutdown(null));
     }

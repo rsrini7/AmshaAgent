@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointDtoHelper;
@@ -24,6 +25,12 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
 @SuppressWarnings("PMD.ExcessiveClassLength") // Data access adapter — many store methods can't be split
 public class FsCheckpointStoreAdapter implements CheckpointStorePort {
+
+    private static final Set<String> ACTIVE_TREE_STATUSES = Set.of(
+            CheckpointStatus.IN_PROGRESS.name(),
+            CheckpointStatus.RESUMING.name(),
+            CheckpointStatus.AWAITING_APPROVAL.name(),
+            CheckpointStatus.AWAITING_RETRY.name());
 
     @Inject
     FilesystemFileStore store;
@@ -96,6 +103,17 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
                                 && !CheckpointStatus.FAILED.name().equals(c.status())
                                 && !CheckpointStatus.DENIED.name().equals(c.status())
                                 && !CheckpointStatus.ARCHIVED.name().equals(c.status())))
+                .toList();
+    }
+
+    @Override
+    public List<CheckpointDto> findActiveBySessionTree(String rootSessionId) {
+        if (rootSessionId == null) return List.of();
+        String delegatePrefix = rootSessionId + ":delegate:";
+        return helper.loadAll().stream()
+                .filter(c -> c.sessionId() != null
+                        && (c.sessionId().equals(rootSessionId) || c.sessionId().startsWith(delegatePrefix)))
+                .filter(c -> c.status() != null && ACTIVE_TREE_STATUSES.contains(c.status()))
                 .toList();
     }
 

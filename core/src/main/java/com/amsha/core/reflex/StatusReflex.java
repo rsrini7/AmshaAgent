@@ -3,8 +3,6 @@ package com.amsha.core.reflex;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -15,15 +13,22 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.GovernanceStrategy;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.security.InputSanitizer;
+import com.amsha.core.state.ActiveWork;
+import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CompactionStorePort;
+import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 @ReflexPriority(500)
 public class StatusReflex implements AgentReflex {
+
+    /** Goals longer than this are truncated in the status line. */
+    private static final int MAX_GOAL_LENGTH = ActiveWork.MAX_GOAL_LENGTH;
 
     @Inject
     StatefulAgentStore statefulAgentStore;
@@ -33,6 +38,10 @@ public class StatusReflex implements AgentReflex {
 
     @Inject
     GovernanceStrategy governanceStrategy;
+
+    @Inject
+    @InputSanitizer.PII
+    InputSanitizer piiSanitizer;
 
     @ConfigProperty(name = "amsha.llm.provider", defaultValue = "openai")
     String provider = "openai";
@@ -63,7 +72,30 @@ public class StatusReflex implements AgentReflex {
             statefulAgentStore.load(sessionId, role.toScopedName()).ifPresent(checkpoints::add);
         }
 
-        String status = resolveStatus(checkpoints);
+        statefulAgentStore.findLatestNonArchivedCheckpoint(sessionId).ifPresent(cp -> addCheckpoint(checkpoints, cp));
+        statefulAgentStore.findActiveCheckpointsInSessionTree(sessionId).forEach(cp -> addCheckpoint(checkpoints, cp));
+
+        statefulAgentStore
+                .findLatestAwaitingApproval(sessionId)
+                .or(() -> statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(
+                        sessionId + AgentSentinels.DELEGATE_SESSION_SENTINEL))
+                .filter(cp -> SessionTree.contains(sessionId, cp.getSessionId()))
+                .ifPresent(cp -> addCheckpoint(checkpoints, cp));
+
+        boolean isResuming = statefulAgentStore.isBatchResuming(sessionId);
+        String fallbackGoal = checkpoints.stream()
+                .filter(this::isActiveCheckpoint)
+                .map(AgentCheckpoint::getOriginalGoal)
+                .filter(goal -> goal != null && !goal.isBlank())
+                .findFirst()
+                .orElse(null);
+        ActiveWork resolved = ActiveWork.resolve(
+                statefulAgentStore.getActiveWork(sessionId),
+                statefulAgentStore.getActiveGoal(sessionId),
+                statefulAgentStore.getActivePhase(sessionId),
+                fallbackGoal);
+        ActiveWork work = ActiveWork.of(sanitizeGoal(resolved.goal()), sanitizePhase(resolved.phase()));
+        String status = resolveStatus(checkpoints, isResuming, work);
 
         double budgetUsd = governanceStrategy.getBudgetUsd();
         double cost = governanceStrategy.getSessionCost(sessionId);
@@ -105,7 +137,7 @@ public class StatusReflex implements AgentReflex {
      *
      * 1. COMPROMISED  - security violation; surfaces immediately regardless of sort
      * 2. AWAITING_APPROVAL - human in the loop; must not be hidden
-     * 3. IN_PROGRESS  - active execution
+     * 3. IN_PROGRESS  - active in-memory execution or running checkpoint
      * 4. Newest-updated checkpoint status (fallback sort)
      * 5. NOT_STARTED  - no checkpoints exist for this session
      *
@@ -114,7 +146,11 @@ public class StatusReflex implements AgentReflex {
      * also returns CheckpointStatus.NOT_STARTED for the same condition.
      */
     private String resolveStatus(List<AgentCheckpoint> checkpoints) {
-        if (checkpoints.isEmpty()) {
+        return resolveStatus(checkpoints, false, ActiveWork.EMPTY);
+    }
+
+    private String resolveStatus(List<AgentCheckpoint> checkpoints, boolean isResuming, ActiveWork activeWork) {
+        if (checkpoints.isEmpty() && !isResuming) {
             return CheckpointStatus.NOT_STARTED.name();
         }
 
@@ -125,28 +161,83 @@ public class StatusReflex implements AgentReflex {
             }
         }
 
-        // Priority 2 & 3 - active states trump terminal states
+        // Priority 2 - active human-in-the-loop approvals must not be hidden
+        for (AgentCheckpoint cp : checkpoints) {
+            if (cp.getStatus() == CheckpointStatus.AWAITING_APPROVAL) {
+                return formatActiveStatus(CheckpointStatus.AWAITING_APPROVAL, workFor(cp, activeWork));
+            }
+            if (cp.getStatus() == CheckpointStatus.AWAITING_RETRY) {
+                return formatActiveStatus(CheckpointStatus.AWAITING_RETRY, workFor(cp, activeWork));
+            }
+        }
+
+        // Priority 3 - active in-memory execution trumps terminal checkpoint states
+        if (isResuming) {
+            return formatInProgressStatus(activeWork);
+        }
+
+        // Priority 3b - persisted resuming or in-progress checkpoints
         for (AgentCheckpoint cp : checkpoints) {
             CheckpointStatus s = cp.getStatus();
-            if (s == CheckpointStatus.RESUMING) {
-                // Ignore stale resuming checkpoints older than 5 minutes
-                if (cp.getUpdatedAt() != null
-                        && Duration.between(cp.getUpdatedAt(), Instant.now()).toMinutes() > 5) {
-                    continue;
-                }
-                return s.name();
-            }
-            if (s == CheckpointStatus.AWAITING_APPROVAL || s == CheckpointStatus.IN_PROGRESS) {
-                return s.name();
+            if ((s == CheckpointStatus.RESUMING || s == CheckpointStatus.IN_PROGRESS)
+                    && !StatefulAgentStore.isStaleActiveCheckpoint(cp)) {
+                return formatActiveStatus(s, workFor(cp, activeWork));
             }
         }
 
         // Priority 4 - most recently updated terminal checkpoint
-        checkpoints.sort((c1, c2) -> {
-            if (c1.getUpdatedAt() == null) return 1;
-            if (c2.getUpdatedAt() == null) return -1;
-            return c2.getUpdatedAt().compareTo(c1.getUpdatedAt());
-        });
-        return checkpoints.getFirst().getStatus().name();
+        return checkpoints.stream()
+                .filter(cp -> cp.getStatus() != null
+                        && cp.getStatus().isTerminal()
+                        && !StatefulAgentStore.isActiveStatus(cp.getStatus()))
+                .max((c1, c2) -> {
+                    if (c1.getUpdatedAt() == null) return -1;
+                    if (c2.getUpdatedAt() == null) return 1;
+                    return c1.getUpdatedAt().compareTo(c2.getUpdatedAt());
+                })
+                .map(cp -> cp.getStatus().name())
+                .orElse(CheckpointStatus.NOT_STARTED.name());
+    }
+
+    static String formatInProgressStatus(ActiveWork activeWork) {
+        return formatActiveStatus(CheckpointStatus.IN_PROGRESS, activeWork);
+    }
+
+    private static String formatActiveStatus(CheckpointStatus status, ActiveWork activeWork) {
+        if (activeWork == null || activeWork.isEmpty()) {
+            return status.name();
+        }
+        return status.name() + " (" + activeWork.describe(MAX_GOAL_LENGTH) + ")";
+    }
+
+    private static void addCheckpoint(List<AgentCheckpoint> checkpoints, AgentCheckpoint candidate) {
+        if (candidate == null) return;
+        if (checkpoints.stream()
+                .noneMatch(cp -> cp.getId() != null && cp.getId().equals(candidate.getId()))) {
+            checkpoints.add(candidate);
+        }
+    }
+
+    private boolean isActiveCheckpoint(AgentCheckpoint checkpoint) {
+        return checkpoint != null
+                && StatefulAgentStore.isActiveStatus(checkpoint.getStatus())
+                && !StatefulAgentStore.isStaleActiveCheckpoint(checkpoint);
+    }
+
+    private String sanitizeGoal(String goal) {
+        return piiSanitizer != null && goal != null ? piiSanitizer.sanitize(goal) : goal;
+    }
+
+    private String sanitizePhase(String phase) {
+        if (phase == null || phase.isBlank()) return phase;
+        // Phase labels are internally generated (e.g. "TOOL:read_file"), but sanitize
+        // defensively in case a tool name leaks user-derived content.
+        return piiSanitizer != null ? piiSanitizer.sanitize(phase) : phase;
+    }
+
+    /** Prefers the checkpoint's own goal; falls back to the live-work goal. */
+    private ActiveWork workFor(AgentCheckpoint checkpoint, ActiveWork activeWork) {
+        String goal = checkpoint.getOriginalGoal();
+        return goal == null || goal.isBlank() ? activeWork : activeWork.withGoal(sanitizeGoal(goal));
     }
 }

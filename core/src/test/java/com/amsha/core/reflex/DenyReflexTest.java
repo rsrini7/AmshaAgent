@@ -284,8 +284,11 @@ class DenyReflexTest {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setSessionId("session-1");
         cp.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+        when(statefulAgentStore.findLatestAwaitingApproval("cron-123")).thenReturn(Optional.empty());
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining("session-1"))
                 .thenReturn(Optional.of(cp));
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining("cron-123"))
+                .thenReturn(Optional.empty());
 
         when(checkpointApprovalService.denyAll(anyString(), anyString())).thenReturn(cp);
 
