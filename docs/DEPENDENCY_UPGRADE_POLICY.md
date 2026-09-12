@@ -53,7 +53,7 @@ before changing:
 | Apache Lucene | `10.5.1` | Native image initialization, reflection, FS search, and full FS validation |
 | DJL Hugging Face tokenizers | `0.36.0` | MPNet tokenization, truncation/max-sequence, and embedding regression tests |
 | ONNX Runtime | `1.29.0` | Native library loading, model inference, provenance, and ONNX release gates |
-| Bouncy Castle | `1.85.2` | Platform alignment, security-provider tests, and JVM/native startup |
+| Bouncy Castle | `1.85.2` | Platform-managed by `quarkus-bom:3.39.3`. Root `pom.xml` `<bouncycastle.version>` is still `1.84` and MUST be bumped to `1.85.2` during the 3.39 migration (plan §3, invariant 6 / §7, criterion 3). Silent-downgrade risk is **resolved only after that pin change is applied and verified — not yet closed**. Security-provider + JVM/native startup evidence still required. |
 | Bucket4j | `8.19.0` | Rate-limit, authentication, and REST behavior tests |
 | OpenAPI Generator | `7.25.0` | Generated TypeScript DTO diff, UI type-check, UI build, and UI tests |
 
