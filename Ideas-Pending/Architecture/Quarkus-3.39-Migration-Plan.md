@@ -1,13 +1,13 @@
 # Quarkus 3.38.3 → 3.39.3 Migration Plan (Migration #3)
 
-- **Status**: Decision-pending (dry-run verified, BOM coordinates confirmed; migration path not yet ratified per policy / Issue 10)
+- **Status**: Ratified — Path A staging checkpoint (local native verification complete; CI release gates deferred)
 - **Date**: 2026-09-12 (Asia/Kolkata)
 - **Decision owners**: Amsha Agent maintainers
 - **Source platform**: Quarkus `3.38.3` (regular stream)
 - **Target platform**: Quarkus `3.39.3` (regular stream; base for the upcoming `3.40 LTS`)
 - **Precedent ADR**: [ADR-Quarkus-Upgrade-Strategy](./ADR-Quarkus-Upgrade-Strategy.md) (covers the 3.27.2 → 3.27.5.1 → 3.33.3.1 → 3.38.3 migrations)
 - **Research note**: [Quarkus 3.38 Upgrade Research](./Quarkus-Upgrade-Research.md)
-- **Verification Evidence**: `app/target/rewrite/rewrite.yaml`, `app/target/rewrite/rewrite.log`, `target/rewrite/rewrite.patch`
+- **Verification Evidence**: Local checkpoint record (workspace evidence, ignored by Git): `.scratch/quarkus-upgrade/evidence/06-3.39.3/EVIDENCE.md`; generated updater artifacts: `app/target/rewrite/rewrite.yaml`, `app/target/rewrite/rewrite.log`, `target/rewrite/rewrite.patch`
 
 ## 0. Decision gate — read this first (policy tension)
 
@@ -38,22 +38,14 @@ Two valid paths:
   hop, LTS).** Cleanest under a strict reading of "LTS-only." Only sensible if
   3.40 LTS ships within days and the team prefers a single LTS landing.
 
-**Decision status: PENDING human ratification.** This plan does not yet endorse a
-path. The governing `DEPENDENCY_UPGRADE_POLICY.md` and Issue 10 require an
-LTS-only path targeting `3.40 LTS`, whereas `3.39.3` is a non-LTS stream. Before
-any execution step runs:
-
-- **If Path A is ratified**, the policy MUST first be explicitly amended to permit a
-  non-LTS 3.39 staging step (and Issue 10 updated to record it); **or**
-- **Path B** is taken — wait for `3.40 LTS`, then migrate `3.38.3 → 3.40 LTS` directly.
-
-Either choice is reversible; the `3.38.3` artifact remains the rollback boundary.
-The Phase 0–4 procedure below applies to whichever path is ratified.
-
-**Policy follow-up (action item):** if Path A is ratified, amend
-`DEPENDENCY_UPGRADE_POLICY.md` (and Issue 10) to record the 3.39 staging decision
-before any promotion, so the "LTS-only" line stops contradicting the running
-state. This plan does not edit that policy file.
+**Decision status: RATIFIED — Path A (Quarkus 3.39.3 Staging Checkpoint).** Ratified on
+2026-09-12. Path A adopts Quarkus `3.39.3` as a verified staging checkpoint ahead of
+the imminent `3.40 LTS` release to surface integration changes (Quarkiverse MCP Server 2.0.0,
+LangChain4j 1.19.0, Apache Camel 4.22, Bouncy Castle 1.85.2). `DEPENDENCY_UPGRADE_POLICY.md`
+has been amended in this commit; the local Issue 10 tracker entry (ignored by Git) has also
+been updated to record 3.39.3 as the active baseline and staging stepping stone to 3.40 LTS.
+The `3.38.3` artifact remains the rollback boundary until
+3.39.3 is formally promoted.
 
 ## 1. Current state (verified 2026-09-12)
 

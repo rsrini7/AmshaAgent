@@ -134,7 +134,7 @@ public class GovernedLangChainHttpClient implements HttpClient {
             SuccessfulHttpResponse success = SuccessfulHttpResponse.builder()
                     .statusCode(response.statusCode())
                     .headers(response.headers().map())
-                    .body(null)
+                    .body((String) null)
                     .build();
             listener.onOpen(success);
 

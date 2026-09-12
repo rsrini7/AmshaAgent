@@ -259,7 +259,7 @@ What was the project name I told you about?
 
 **Expect:** Bot recalls "Amsha Agent" and "Quarkus 3.27.2" without needing to be told again.
 
-> The `3.27.2` value above is intentionally fixed historical memory-test data; it is not the current application version. The current stack is Quarkus `3.38.3`.
+> The `3.27.2` value above is intentionally fixed historical memory-test data; it is not the current application version. The current stack is Quarkus `3.39.3`.
 
 > The chat memory store (rolling window = 20 messages) is backed by `PersistentChatMemoryStore`
 > in SQLite WAL mode. `SystemMessage` objects are never stored - only `UserMessage` and
@@ -1214,7 +1214,7 @@ operation is not permitted.
 
 ### 22.1 Ingest a document
 
-> The Quarkus `3.27.2` text in this ingestion fixture is intentionally fixed historical test data; the current application stack is Quarkus `3.38.3`.
+> The Quarkus `3.27.2` text in this ingestion fixture is intentionally fixed historical test data; the current application stack is Quarkus `3.39.3`.
 
 **Send:**
 ```
