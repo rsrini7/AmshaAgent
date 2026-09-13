@@ -31,6 +31,8 @@ jobs:
           python3 scripts/test_repo_root.py
           python3 scripts/test_dist_wrappers.py
           python3 scripts/test_autotest_runners.py
+          python3 scripts/test_freeze_sarvam_static.py
+          python3 scripts/test_prove_sarvam_offline.py
           python3 rest-http/scripts/test_common_http.py
 
   jvm-validation:
