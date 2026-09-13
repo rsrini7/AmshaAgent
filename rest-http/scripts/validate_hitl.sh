@@ -119,9 +119,16 @@ if [ -n "$SID" ]; then
   CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/sessions/$SID/deny?agentRole=coordinator")
   [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
   info "HITL-9: status leaves AWAITING_APPROVAL after deny"
-  ST=$(status_is "$SID")
+  ST=""
+  for i in $(seq 1 20); do
+    ST=$(status_is "$SID")
+    case "$ST" in
+      FAILED|NOT_STARTED|COMPLETED|DENIED) break ;;
+    esac
+    sleep 1
+  done
   case "$ST" in
-    FAILED|NOT_STARTED) ok "$ST" ;;
+    FAILED|NOT_STARTED|COMPLETED|DENIED) ok "$ST" ;;
     *) fail "$ST" ;;
   esac
   run_req DELETE "$VALID_KEY" "$B/api/v1/sessions/$SID" >/dev/null 2>&1

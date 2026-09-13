@@ -11,6 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
@@ -234,7 +236,23 @@ public class WorkspaceManager {
      */
     void markCheckpointsFailed(String sessionId) {
         try {
-            checkpointStore.markCheckpointsFailed(sessionId);
+            // Delegated sessions have their own checkpoints. Terminating only
+            // the root leaves child HITL rows visible and permanently
+            // approvable after the parent has been cleaned up.
+            List<String> sessionTree = checkpointStore.findActiveBySessionTree(sessionId).stream()
+                    .map(checkpoint -> checkpoint.sessionId())
+                    .filter(childSessionId -> childSessionId != null && !childSessionId.isBlank())
+                    .distinct()
+                    .toList();
+            if (sessionTree.isEmpty()) {
+                sessionTree = List.of(sessionId);
+            } else if (!sessionTree.contains(sessionId)) {
+                sessionTree = new ArrayList<>(sessionTree);
+                sessionTree.addFirst(sessionId);
+            }
+            for (String treeSessionId : sessionTree) {
+                checkpointStore.markCheckpointsFailed(treeSessionId);
+            }
         } catch (IllegalStateException e) {
             // Database connection pool already closed - JVM is shutting down, checkpoint
             // status update is best-effort only. Process is dying anyway.

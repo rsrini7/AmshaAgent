@@ -150,10 +150,10 @@ audit_state() {
     code="$(request GET "$API_BASE/audit?sessionId=$session_id&size=200" "" false "$AUDIT_REQUEST_TIMEOUT_SECONDS")"
     if [ "$code" != "200" ]; then
         printf 'unavailable'
-    elif grep -q 'TOOL_BLOCKED' "$RESP_FILE"; then
-        printf 'blocked'
     elif grep -q 'DELEGATION_DISPATCHED' "$RESP_FILE"; then
         printf 'dispatched'
+    elif grep -q 'TOOL_BLOCKED' "$RESP_FILE"; then
+        printf 'blocked'
     else
         printf 'pending'
     fi
@@ -249,7 +249,9 @@ for entry in "${ROLE_MATRIX[@]}"; do
     dispatched=false
     blocked=false
     approval_sent=false
+    poll=0
     for _ in $(seq 1 "$AUDIT_POLL_COUNT"); do
+        poll=$((poll + 1))
         audit_result="$(audit_state "$SESSION_ID")"
         if [ "$audit_result" = dispatched ]; then
             dispatched=true
@@ -265,9 +267,14 @@ for entry in "${ROLE_MATRIX[@]}"; do
         # Approval-required roles pause before garuda executes. The run-async
         # response cannot report that pending state until the callback returns,
         # so retry the approval endpoint independently during the audit poll.
-        if role_requires_approval "$role" && [ "$approval_sent" = false ]; then
+        # A successful parent approval may return 202 while a delegated child
+        # is awaiting its own approval. Retry the parent endpoint periodically:
+        # AgentSessionApprovalHandler cascades the decision to that child once
+        # its checkpoint has been persisted. A 409 during the short window
+        # before the child exists is expected and must not stop observation.
+        if role_requires_approval "$role" \
+                && { [ "$approval_sent" = false ] || [ $((poll % 3)) -eq 0 ]; }; then
             approval_code="$(request POST "$API_BASE/sessions/$SESSION_ID/approve?agentRole=$role" "" true "$APPROVAL_REQUEST_TIMEOUT_SECONDS")"
-            [ "$approval_code" = "200" ] || [ "$approval_code" = "202" ] || true
             if [ "$approval_code" = "200" ] || [ "$approval_code" = "202" ]; then
                 approval_sent=true
             fi
