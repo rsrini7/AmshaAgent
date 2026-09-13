@@ -14,11 +14,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 # Keep direct execution importable while preserving module-mode execution.
-SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+_lib_dir = Path(__file__).resolve().parents[1] / "lib"
+if str(_lib_dir) not in sys.path:
+    sys.path.insert(0, str(_lib_dir))
+from repo_root import get_repo_root
+SCRIPT_ROOT = get_repo_root(__file__)
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
-from scripts import freeze_sarvam_static as freezer
+from scripts.quality import freeze_sarvam_static as freezer
 
 
 class FreezeStaticTests(unittest.TestCase):

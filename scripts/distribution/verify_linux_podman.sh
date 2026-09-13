@@ -3,6 +3,15 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/../lib/repo_root.sh" ]; then
+  # shellcheck source=../lib/repo_root.sh
+  source "$SCRIPT_DIR/../lib/repo_root.sh"
+  REPO_ROOT="$(get_repo_root "$SCRIPT_DIR")"
+else
+  REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+fi
+
 cleanup() {
   echo "🧹 Cleaning up eclipse-temurin:25-jdk image..."
   podman rmi eclipse-temurin:25-jdk || true
@@ -11,8 +20,8 @@ cleanup() {
 trap cleanup EXIT
 
 if [ "$#" -lt 1 ]; then
-  echo "Usage: scripts/verify_linux_podman.sh <target> [native-binary] [evidence.json]"
-  echo "Example: scripts/verify_linux_podman.sh linux-arm64"
+  echo "Usage: scripts/distribution/verify_linux_podman.sh <target> [native-binary] [evidence.json]"
+  echo "Example: scripts/distribution/verify_linux_podman.sh linux-arm64"
   exit 1
 fi
 
@@ -21,11 +30,13 @@ BINARY="${2:-dist/amsha-sqlite}"
 EVIDENCE="${3:-data/smoke/matrix-${TARGET}.json}"
 
 echo "🚀 Starting Podman container for $TARGET verification..."
-podman run --rm -v "$(pwd):/workspace" --tmpfs /tmp -w /workspace eclipse-temurin:25-jdk bash -c "
+podman run --rm -v "$REPO_ROOT:/workspace" --tmpfs /tmp -w /workspace \
+  -e "VERIFY_TARGET=$TARGET" -e "VERIFY_BINARY=$BINARY" -e "VERIFY_EVIDENCE=$EVIDENCE" \
+  eclipse-temurin:25-jdk bash -c '
   echo '📦 Installing required utilities in container...'
   apt-get update -qq && apt-get install -y -qq python3 curl jq bc file gdb
-  
-  echo '🧪 Running matrix tests for $TARGET...'
+
+  echo "🧪 Running matrix tests for $VERIFY_TARGET..."
   export AMSHA_TOOLS_PLAYWRIGHT_ENABLED=false
   export OMP_NUM_THREADS=1
   export OMP_WAIT_POLICY=PASSIVE
@@ -33,7 +44,7 @@ podman run --rm -v "$(pwd):/workspace" --tmpfs /tmp -w /workspace eclipse-temuri
   export MAVEN_OPTS="-Dmaven.repo.local=/tmp/m2"
   export ONNX_MAX_RSS_GROWTH_MB=128
   export AMSHA_RUN_JVM_EVIDENCE_TESTS=false
-  ./scripts/verify_native_matrix.sh record \"$TARGET\" \"$BINARY\" \"$EVIDENCE\"
-"
+  ./scripts/verify_native_matrix.sh record "\$VERIFY_TARGET" "\$VERIFY_BINARY" "\$VERIFY_EVIDENCE"
+'
 
 echo "✅ Done!"

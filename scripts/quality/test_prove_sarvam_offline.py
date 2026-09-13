@@ -13,7 +13,11 @@ import zipfile
 from unittest.mock import patch
 from pathlib import Path
 
-SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+_lib_dir = Path(__file__).resolve().parents[1] / "lib"
+if str(_lib_dir) not in sys.path:
+    sys.path.insert(0, str(_lib_dir))
+from repo_root import get_repo_root
+SCRIPT_ROOT = get_repo_root(__file__)
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 

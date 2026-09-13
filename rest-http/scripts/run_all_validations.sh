@@ -43,15 +43,20 @@ SSE_SETTINGS_SCRIPT="$SCRIPT_DIR/validate_sse_settings.sh"
 ONBOARDING_SCRIPT="$SCRIPT_DIR/validate_onboarding.sh"
 ONNX_SCRIPT="$SCRIPT_DIR/validate_onnx.sh"
 DATA_COLLECTION_SCRIPT="$SCRIPT_DIR/validate_data_collection.sh"
+ADVANCED_IDENTITY_SCRIPT="$SCRIPT_DIR/validate_advanced_identity.sh"
+
+# Source common environment for base URL, data dir, and credential handling
+source "$SCRIPT_DIR/common_env.sh"
 
 check_app() {
   local check_base="${TEST_BASE:-http://localhost:8080}"
   curl -s -m 3 -o /dev/null -w "%{http_code}" "$check_base/api/v1/mcp/status" \
-    -H "X-Amsha-API-Key: JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=" 2>/dev/null
+    -H "X-Amsha-API-Key: ${CI_KEY}" 2>/dev/null
 }
 
 run_validator() {
   local name="$1" script="$2"
+  shift 2 2>/dev/null || true
   if [ ! -f "$script" ]; then
     echo "  ⚠️  $name: script not found ($script)"
     return
@@ -59,7 +64,7 @@ run_validator() {
   echo ""; echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo " RUNNING: $name"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  bash "$script" 2>&1
+  bash "$script" "$@" 2>&1
   local rc=$?
   TOTAL=$((TOTAL + 1))
   if [ $rc -eq 0 ]; then
@@ -79,7 +84,7 @@ PY
 }
 
 # ── Parse args ──
-RUN_ALL=true; FAST=false; LLM=false; RUN_DELEGATION=false
+RUN_ALL=true; FAST=false; LLM=false; RUN_DELEGATION=false; RUN_ADVANCED_IDENTITY=false
 for arg in "$@"; do
   case $arg in
     --reflex) RUN_ALL=false; RUN_REFLEX=true ;;
@@ -103,6 +108,7 @@ for arg in "$@"; do
     --onboarding)   RUN_ALL=false; RUN_ONBOARDING=true ;;
     --onnx)         RUN_ALL=false; RUN_ONNX=true ;;
     --data-collection) RUN_ALL=false; RUN_DATA_COLLECTION=true ;;
+    --advanced-identity) RUN_ALL=false; RUN_ADVANCED_IDENTITY=true ;;
     --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_SKILLS_ADMISSION=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
     --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_DELEGATION=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true; RUN_DATA_COLLECTION=true ;;
     --list)
@@ -127,15 +133,16 @@ for arg in "$@"; do
       echo "  --onnx         validate_onnx.sh               (runtime, inference, bundle, vector index, classifier controls; requires local model)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
       echo "  --data-collection validate_data_collection.sh  (needs LLM)"
+      echo "  --advanced-identity validate_advanced_identity.sh (destructive owner removal tests; opt-in only)"
       echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding"
       echo "  --llm          memory + web + roles + cron + rag + budget + hitl + data-collection"
-      echo "  (no args)      run ALL validators"
+      echo "  (no args)      run ALL validators (excludes destructive tests)"
  echo " --fast includes deterministic validate_mcp_fast.sh MCP handshake checks"
  exit 0
- ;; 
+ ;;
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --onnx --cron --fast --llm --list --help"
+      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --onnx --cron --advanced-identity --fast --llm --list --help"
       echo "  --delegation validate_delegation.sh (all 12 personas, needs LLM)"
       exit 0
       ;;
@@ -270,6 +277,18 @@ fi
 
 if [ "$RUN_DATA_COLLECTION" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "DATA COLLECTION" "$DATA_COLLECTION_SCRIPT"
+fi
+
+if [ "$RUN_ADVANCED_IDENTITY" = true ]; then
+  if [ "${AMSHA_ALLOW_DESTRUCTIVE_TESTS:-false}" != "true" ]; then
+    echo "Error: --advanced-identity requires AMSHA_ALLOW_DESTRUCTIVE_TESTS=true." >&2
+    exit 2
+  fi
+  if [ -z "${TEST_OWNER_KEY:-}" ] || [ -z "${TEST_WORKSPACE_ID:-}" ] || [ -z "${TEST_OWNER_IDS:-}" ]; then
+    echo "Error: --advanced-identity requires TEST_OWNER_KEY, TEST_WORKSPACE_ID, and TEST_OWNER_IDS." >&2
+    exit 2
+  fi
+  run_validator "ADVANCED IDENTITY (DESTRUCTIVE)" "$ADVANCED_IDENTITY_SCRIPT" --advanced-identity
 fi
 
 # ── Summary ──

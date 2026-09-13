@@ -3,7 +3,13 @@
 ## Usage
 
 ```bash
-# SQLite (default) — full run
+# Unified parameterized runner
+autotest/run.sh --backend sqlite
+autotest/run.sh --backend pg --rows 1-20
+autotest/run.sh --suite skillsjars
+autotest/run.sh --suite loka
+
+# SQLite (default) — full run via Python directly
 python3 autotest.py -f telegram-test-amsha.txt -j results.json -l run.log -v --backend sqlite
 
 # PostgreSQL — auto-starts Podman container
@@ -21,14 +27,18 @@ python3 autotest.py --skip-categories browse,code_exec -j quick.json --backend s
 
 ## Shell Wrappers
 
-| Script | Backend | Rows |
-|---|---|---|
-| `autotest-sqlite.sh` | SQLite | All |
-| `autotest-pg.sh` | PostgreSQL | All |
-| `autotest-fs.sh` | Filesystem | All |
-| `autotest-sqlite-rows.sh` | SQLite | 1-20 |
-| `autotest-pg-rows.sh` | PostgreSQL | 1-20 |
-| `autotest-fs-rows.sh` | Filesystem | 1-20 |
+The following wrappers forward to `autotest/run.sh`:
+
+| Script | Backend | Rows | Suite |
+|---|---|---|---|
+| `autotest-sqlite.sh` | SQLite | All | Telegram |
+| `autotest-pg.sh` | PostgreSQL | All | Telegram |
+| `autotest-fs.sh` | Filesystem | All | Telegram |
+| `autotest-sqlite-rows.sh` | SQLite | 1-20 | Telegram |
+| `autotest-pg-rows.sh` | PostgreSQL | 1-20 | Telegram |
+| `autotest-fs-rows.sh` | Filesystem | 1-20 | Telegram |
+| `autotest-skillsjars.sh` | SQLite | All | SkillsJars |
+| `autotest-loka.sh` | SQLite | All | Loka |
 
 ## Remarks
 

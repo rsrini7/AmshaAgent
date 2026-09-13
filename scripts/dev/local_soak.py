@@ -17,13 +17,13 @@ budget, graceful shutdown at the end. Any violation -> non-zero exit.
 
 Usage examples:
   # Attach to an already-running instance (dev server, booted binary):
-  python3 scripts/local_soak.py --base-url http://127.0.0.1:8080 --duration-minutes 30
+    python3 scripts/dev/local_soak.py --base-url http://127.0.0.1:8080 --duration-minutes 30
 
   # Launch the native artifact in a scratch data dir and soak for 2 hours:
-  python3 scripts/local_soak.py --binary dist/amsha-sqlite --duration-minutes 120
+    python3 scripts/dev/local_soak.py --binary dist/amsha-sqlite --duration-minutes 120
 
   # Add deep functional probes every 10th cycle:
-  python3 scripts/local_soak.py --base-url http://127.0.0.1:8080 \
+    python3 scripts/dev/local_soak.py --base-url http://127.0.0.1:8080 \
       --deep-cmd 'TEST_BASE={BASE} bash rest-http/scripts/validate_onnx.sh'
 """
 
@@ -40,6 +40,11 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+_LIB_DIR = Path(__file__).resolve().parents[1] / "lib"
+if str(_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(_LIB_DIR))
+from repo_root import get_repo_root
 
 WARN_THRESHOLD = {"ERROR": 0}  # any new ERROR line fails the cycle
 
@@ -201,7 +206,7 @@ def main() -> int:
 
     probe_podman_preflight()
 
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = get_repo_root(__file__)
     scratch = Path(args.data_dir).resolve()
     scratch.mkdir(parents=True, exist_ok=True)
     env_file = (repo_root / args.env_file).resolve()

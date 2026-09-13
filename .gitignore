@@ -45,6 +45,7 @@ workspaces/
 data*/
 !**/scripts/data/
 lib/
+!scripts/lib/
 
 # Environment Variables
 .env
@@ -92,6 +93,7 @@ autotest/logs/
 
 .mise/tasks/headroom/logs/
 .mise/tasks/headroom/pids/
+data/headroom/
 
 !.headroom/config/*.json
 .headroom/*.db

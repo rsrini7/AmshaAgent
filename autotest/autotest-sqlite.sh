@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-cd "$(dirname "$0")/.."
-python3 autotest/autotest.py -f autotest/files/telegram-test-amsha.txt -j autotest/logs/results-sqlite.json -l autotest/logs/run-sqlite.log -v --port 8999 --backend sqlite
+# Forwarding shim to parameterized autotest runner
+exec "$(dirname "$0")/run.sh" --backend sqlite --suite telegram "$@"

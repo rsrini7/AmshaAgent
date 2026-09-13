@@ -3,7 +3,10 @@
 #MISE description = "Show status of all Headroom proxies"
 
 $ErrorActionPreference = 'Stop'
-$PidsDir = "$PSScriptRoot/pids"
+. "$PSScriptRoot/headroom-common.ps1"
+$repoRoot = (Resolve-Path "$PSScriptRoot/../../..").Path
+$PidsDir = Join-Path $repoRoot "data/headroom/pids"
+$LegacyPidsDir = "$PSScriptRoot/pids"
 
 $PortMap = @{
     "openrouter" = 8788;
@@ -51,10 +54,18 @@ function Get-HeadroomActualBackend {
         }
     }
 
-    return $ProviderName
+    return 'unknown'
 }
 
-if (-not (Test-Path $PidsDir)) {
+$pidFiles = @()
+if (Test-Path $PidsDir) {
+    $pidFiles += Get-ChildItem $PidsDir -Filter "*.pid"
+}
+if (Test-Path $LegacyPidsDir) {
+    $pidFiles += Get-ChildItem $LegacyPidsDir -Filter "*.pid"
+}
+
+if ($pidFiles.Count -eq 0) {
     Write-Host "No Headroom proxies have been started."
     Write-Host "  Start all: mise run headroom:start-all"
     exit 0
@@ -62,13 +73,7 @@ if (-not (Test-Path $PidsDir)) {
 
 $running = 0
 $stopped = 0
-$files = Get-ChildItem $PidsDir -Filter "*.pid"
-
-if ($files.Count -eq 0) {
-    Write-Host "No Headroom proxy PID files found."
-    Write-Host "  Start all: mise run headroom:start-all"
-    exit 0
-}
+$files = $pidFiles
 
 Write-Host ""
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -79,8 +84,13 @@ foreach ($file in $files) {
     $name = $file.BaseName
     $pidVal = Get-Content $file.FullName
     $port = $PortMap[$name]
-    $proc = Get-Process -Id $pidVal -ErrorAction SilentlyContinue
-    if ($proc) {
+        $proc = $null
+        $isExpectedProxy = $false
+        if ($pidVal -match '^\d+$') {
+            $proc = Get-Process -Id ([int]$pidVal) -ErrorAction SilentlyContinue
+            $isExpectedProxy = Test-HeadroomProxyProcess -ProcessId ([int]$pidVal) -Port $port
+        }
+        if ($proc -and $isExpectedProxy) {
         $uptime = (Get-Date) - $proc.StartTime
         $uptimeStr = "{0:D2}h {1:D2}m {2:D2}s" -f $uptime.Hours, $uptime.Minutes, $uptime.Seconds
         Write-Host "  ✅ $name  PID $pidVal  port $port  uptime $uptimeStr"
@@ -109,6 +119,8 @@ foreach ($file in $files) {
             } catch {
                 Write-Host "     health: received non-JSON response"
             }
+        } elseif ($proc) {
+            Write-Host " ⚠️ $name PID $pidVal is not the expected Headroom proxy; refusing to inspect it."
         } else {
             Write-Host "     health: not reachable"
         }

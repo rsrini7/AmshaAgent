@@ -12,7 +12,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [ -f "$SCRIPT_DIR/../lib/repo_root.sh" ]; then
+  # shellcheck source=../lib/repo_root.sh
+  source "$SCRIPT_DIR/../lib/repo_root.sh"
+  PROJECT_ROOT="$(get_repo_root "$SCRIPT_DIR")"
+else
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+fi
 
 SERENA_DIR="${HOME}/.serena"
 JDTLS_WORKSPACES_DIR="${SERENA_DIR}/language_servers/static/EclipseJDTLS/workspaces"
@@ -111,7 +117,7 @@ find_workspace_dirs() {
         # We find launcher jar if available
         local launcher_jar
         launcher_jar="$(find "${SERENA_DIR}/language_servers/static/EclipseJDTLS" -name "org.eclipse.equinox.launcher_*.jar" 2>/dev/null | head -n 1 || true)"
-        
+
         local computed_hash=""
         if [ -n "$launcher_jar" ] && command -v python3 >/dev/null 2>&1; then
             computed_hash="$(python3 -c "

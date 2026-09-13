@@ -592,7 +592,7 @@ These are the durable takeaways that apply to every future checkpoint:
 | ArchUnit needs `archunit-junit6` module | `archunit-junit5` targets JUnit Platform 1.x | Switch artifact at JUnit-6 checkpoints |
 | Orphaned temp daemons squat ephemeral ports | Zonky embedded-PG hang class (blocked in `verifyReady`) | `lsof -nP -iTCP:<port>` before assuming a code bug; sweep `/tmp/amsha-*` orphans |
 | Moderne CLI license-gated for private repos | Source-available testing recipes unusable without a license | Use direct Maven rewrite plugin + Central jars instead |
-| Soak tooling required | Smokes prove instantiation, not sustainability | `scripts/local_soak.py` watches health/auth/log-delta/RSS/deep probes over duration |
+| Soak tooling required | Smokes prove instantiation, not sustainability | `scripts/dev/local_soak.py` watches health/auth/log-delta/RSS/deep probes over duration |
 
 ## 8. Verification matrix
 
