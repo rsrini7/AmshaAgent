@@ -148,6 +148,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             GovernedLangChainHttpClientBuilderFactory.class
         },
         classNames = {
+            "com.amsha.llm.providers.SpecializedChatModelFactory",
             "com.amsha.llm.providers.catalog.StaticProviderCatalogAdapter$RawProvider",
             "com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider$BoundedAudioSubscriber",
             "com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider$ResponseTooLargeException",

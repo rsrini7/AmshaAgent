@@ -14,21 +14,14 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 
-import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 
 import com.amsha.app.security.ApiKeyRegistry;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
-import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
@@ -36,8 +29,6 @@ import com.amsha.persistence.api.IdentityInvitationStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
@@ -47,8 +38,6 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 @ApplicationScoped
 @RunOnVirtualThread
 public class IdentityResource {
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     @Inject
     IdentityStorePort identityStore;
@@ -117,7 +106,6 @@ public class IdentityResource {
     @POST
     @Path("/workspaces/{workspaceId}/invitations")
     public Response createInvitation(@PathParam("workspaceId") String workspaceId, CreateInvitationRequest req) {
-
         String userId = securityContext.getUserPrincipal().getName();
         if (userId == null || "anonymous".equals(userId)) {
             return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -138,47 +126,20 @@ public class IdentityResource {
                     .build();
         }
 
-        if (req == null
-                || req.role() == null
-                || !Set.of("OWNER", "ADMIN", "MEMBER").contains(req.role().toUpperCase(Locale.ROOT))) {
-            return Response.status(Response.Status.FORBIDDEN)
-                    .entity(new ErrorResponse("INVALID_ROLE", "Invalid membership role requested."))
-                    .build();
+        Response roleError = IdentityResourceHelper.validateInvitationRole(role, req != null ? req.role() : null);
+        if (roleError != null) {
+            return roleError;
         }
         String invitedRole = req.role().toUpperCase(Locale.ROOT);
 
-        // Only OWNER can invite/grant OWNER role
-        if ("OWNER".equals(invitedRole) && !"OWNER".equals(role)) {
-            return Response.status(Response.Status.FORBIDDEN)
-                    .entity(new ErrorResponse("FORBIDDEN", "Only workspace owners can invite new owners."))
-                    .build();
-        }
-        // Inviter can only grant roles they hold (OWNER holds OWNER, ADMIN, MEMBER; ADMIN holds ADMIN, MEMBER)
-        if (!"OWNER".equals(role)) {
-            if (!"ADMIN".equals(invitedRole) && !"MEMBER".equals(invitedRole)) {
-                return Response.status(Response.Status.FORBIDDEN)
-                        .entity(new ErrorResponse(
-                                "FORBIDDEN", "You cannot invite a user with a role higher than yours."))
-                        .build();
-            }
-        }
-
         // Create invitation
-        byte[] tokenBytes = new byte[32];
-        String rawToken;
-        try {
-            new SecureRandom().nextBytes(tokenBytes);
-            rawToken = "inv-" + Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
-        } finally {
-            Arrays.fill(tokenBytes, (byte) 0);
-        }
+        String rawToken = IdentityResourceHelper.generateInvitationToken();
         String tokenDigest = apiKeyRegistry.computeDigest(rawToken);
 
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(3600 * 24); // 24 hours
 
-        String invitationId =
-                "inv_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String invitationId = IdentityResourceHelper.generateInvitationId();
         IdentityInvitationDto invitation = new IdentityInvitationDto(
                 invitationId,
                 workspaceId,
@@ -235,22 +196,7 @@ public class IdentityResource {
         if (invitation.optionalEmailConstraint() != null
                 && !invitation.optionalEmailConstraint().isBlank()) {
             List<ExternalIdentityDto> externalIds = identityStore.listExternalIdentitiesByUserId(userId);
-            boolean emailMatched = false;
-            for (ExternalIdentityDto ext : externalIds) {
-                String claims = ext.safeClaims();
-                if (claims != null && claims.contains("\"email\"")) {
-                    VerifiedEmail verifiedEmail = parseVerifiedEmail(claims);
-                    if (verifiedEmail != null
-                            && verifiedEmail.verified()
-                            && invitation
-                                    .optionalEmailConstraint()
-                                    .equalsIgnoreCase(verifiedEmail.email().trim())) {
-                        emailMatched = true;
-                        break;
-                    }
-                }
-            }
-            if (!emailMatched) {
+            if (!IdentityResourceHelper.matchesEmailConstraint(externalIds, invitation.optionalEmailConstraint())) {
                 return Response.status(Response.Status.FORBIDDEN)
                         .entity(new ErrorResponse(
                                 "EMAIL_CONSTRAINT_MISMATCH",
@@ -313,7 +259,6 @@ public class IdentityResource {
     @DELETE
     @Path("/workspaces/{workspaceId}/members/{memberId}")
     public Response removeMember(@PathParam("workspaceId") String workspaceId, @PathParam("memberId") String memberId) {
-
         String userId = securityContext.getUserPrincipal().getName();
         if (userId == null || "anonymous".equals(userId)) {
             return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -339,25 +284,14 @@ public class IdentityResource {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
-        if ("ADMIN".equals(role) && "OWNER".equals(targetMembership.get().role())) {
-            return Response.status(Response.Status.FORBIDDEN)
-                    .entity(new ErrorResponse("FORBIDDEN", "Admins cannot remove workspace owners."))
-                    .build();
-        }
-
-        // Last active owner protection
-        if ("OWNER".equals(targetMembership.get().role())) {
-            List<WorkspaceMembershipDto> workspaceMembers = identityStore.listMembershipsByWorkspaceId(workspaceId);
-            long ownerCount = workspaceMembers.stream()
-                    .filter(m -> "OWNER".equals(m.role()) && "ACTIVE".equals(m.status()))
-                    .count();
-            if (ownerCount <= 1) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity(new ErrorResponse(
-                                "LAST_OWNER_REMOVAL_BLOCKED",
-                                "Cannot remove or demote the last active owner of the workspace."))
-                        .build();
-            }
+        List<WorkspaceMembershipDto> workspaceMembers =
+                "OWNER".equals(targetMembership.get().role())
+                        ? identityStore.listMembershipsByWorkspaceId(workspaceId)
+                        : List.of();
+        Response removalError =
+                IdentityResourceHelper.validateMemberRemoval(role, targetMembership.get(), workspaceMembers);
+        if (removalError != null) {
+            return removalError;
         }
 
         if (identityStore.deleteMembershipIfNotLastOwner(workspaceId, memberId) == 0) {
@@ -466,33 +400,7 @@ public class IdentityResource {
         }
 
         List<WorkspaceMembershipDto> members = identityStore.listMembershipsByWorkspaceId(workspaceId);
-        Instant now = Instant.now();
-        int revokedCount = 0;
-        for (WorkspaceMembershipDto member : members) {
-            if (!"ACTIVE".equals(member.status())) {
-                continue;
-            }
-            for (ApiCredentialDto cred : apiCredentialStore.listByUserId(member.userId())) {
-                if (cred.revokedAt() != null) {
-                    continue;
-                }
-                if (cred.expiresAt() != null && cred.expiresAt().isBefore(now)) {
-                    continue;
-                }
-                apiCredentialStore.save(new ApiCredentialDto(
-                        cred.credentialId(),
-                        cred.userId(),
-                        cred.keyDigest(),
-                        cred.roleSet(),
-                        cred.revision(),
-                        cred.expiresAt(),
-                        now,
-                        cred.createdAt(),
-                        now));
-                apiKeyRegistry.unregisterByDigest(cred.keyDigest());
-                revokedCount++;
-            }
-        }
+        int revokedCount = IdentityResourceHelper.rotateActiveCredentials(members, apiCredentialStore, apiKeyRegistry);
 
         auditService.recordMandatory(
                 "rotate-workspace-credentials",
@@ -503,20 +411,6 @@ public class IdentityResource {
 
         return Response.ok(new RotateCredentialsResponse(true, revokedCount)).build();
     }
-
-    private static VerifiedEmail parseVerifiedEmail(String claims) {
-        if (claims == null) return null;
-        try {
-            Map<String, Object> parsed = JSON.readValue(claims, new TypeReference<Map<String, Object>>() {});
-            Object email = parsed.get("email");
-            if (!(email instanceof String value) || value.isBlank()) return null;
-            return new VerifiedEmail(value, Boolean.TRUE.equals(parsed.get("email_verified")));
-        } catch (Exception _) {
-            return null;
-        }
-    }
-
-    private record VerifiedEmail(String email, boolean verified) {}
 
     public record ErrorResponse(String code, String message) {}
 

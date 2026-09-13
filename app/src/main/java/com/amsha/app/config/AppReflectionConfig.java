@@ -55,7 +55,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "com.amsha.app.mcp.McpImportResource$ApplyRequest",
             "com.amsha.app.mcp.McpSetupResource$IssueRequest",
             "com.amsha.app.mcp.McpSetupResource$RedeemRequest",
-            "com.amsha.app.mcp.McpSetupResource$RedeemResponse"
+            "com.amsha.app.mcp.McpSetupResource$RedeemResponse",
+            "com.amsha.app.api.IdentityResourceHelper",
+            "com.amsha.app.api.IdentityResourceHelper$VerifiedEmail"
         },
         targets = {
             SkillResource.MessageResponse.class,
