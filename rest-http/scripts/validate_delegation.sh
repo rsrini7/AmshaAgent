@@ -177,7 +177,7 @@ echo '════════════════════════�
 ROLE_MATRIX=(
     'coordinator|researcher|Research the current difference between SQLite WAL and PostgreSQL durability.'
     'researcher|coordinator|Schedule a daily task for a health check; do not schedule it yourself.'
-    'coder|researcher|Use the unavailable github capability to look up the latest API for a Java library.'
+    'coder|researcher|Ask the researcher to summarize current Java library API compatibility guidance.'
     'debugger|coder|Write the Java fix for this bug after delegation: a null value reaches UserService line 42.'
     'architect|coder|Write production Java code for a UserDto record; you must not code, so delegate the implementation.'
     'synthesizer|architect|Produce an ADR for event-driven versus direct calls; have the architect handle the design.'
