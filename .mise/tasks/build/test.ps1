@@ -78,13 +78,13 @@ if ($srcItem) {
         # Phase 0: Format code (Spotless + FQN replacement)
         python3 ./scripts/fix_fqns.py
         & $mvnw spotless:apply --no-transfer-progress -q
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($LASTEXITCODE -ne 0) { throw "build:ui:copy failed with exit code $LASTEXITCODE." }
         Write-Host '✅  Code formatted (Spotless + FQN replacement).'
 
         $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
         $env:MAVEN_ARGS = "-ntp"
         & $mvnw clean verify -am "-Dquarkus.test.profile=test"
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($LASTEXITCODE -ne 0) { throw "Test build failed with exit code $LASTEXITCODE." }
         Write-Host '✅  Tests complete.'
     } finally {
     if ($envBackup -and (Test-Path '.env.build-backup')) {

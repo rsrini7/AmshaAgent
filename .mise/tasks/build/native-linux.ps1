@@ -138,7 +138,7 @@ if ($strategy -eq 'container') {
 
         $env:MAVEN_OPTS = $mOpts
         & $mvnw clean verify -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($LASTEXITCODE -ne 0) { throw "Linux native build failed with exit code $LASTEXITCODE." }
         if ($args -contains '--clean' -or $args -contains '-c') {
             mise run dist:dist -- --clean
         } else {
@@ -180,7 +180,7 @@ if ($strategy -eq 'container') {
         mise use --path mise.toml java@graalvm-community-25.0.2
         $env:MAVEN_OPTS = $mOpts
         & $mvnw clean verify -Pnative -pl app -am -DskipTests "-Damsha.persistence.backend=sqlite" "-Dquarkus.profile=prod" "-Dquarkus.native.native-image-xmx=${targetGB}g" $containerFlag
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($LASTEXITCODE -ne 0) { throw "Linux native build failed with exit code $LASTEXITCODE." }
         if ($args -contains '--clean' -or $args -contains '-c') {
             mise run dist:dist -- --clean
         } else {

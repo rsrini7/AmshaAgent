@@ -87,16 +87,40 @@ echo ""
 echo "── FLOW B: Phase 64-C3 rag_chunk isolation ──"
 info "RAG-C3: compaction_summary has no 'rag:' rows (expect 0)"
 # This check is best-effort: only runs if a DB path is provided.
-if [ -n "${AMSHA_DATA_DIR:-}" ] && command -v sqlite3 >/dev/null 2>&1; then
+RAG_BACKEND="${AMSHA_PERSISTENCE_BACKEND:-}"
+if [ -z "$RAG_BACKEND" ] && [ -n "${AMSHA_DATA_DIR:-}" ]; then
+  case "$(basename "$AMSHA_DATA_DIR")" in
+    data-postgres) RAG_BACKEND="postgres" ;;
+    data-filesystem|data-fs) RAG_BACKEND="fs" ;;
+  esac
+fi
+if [ "$RAG_BACKEND" = "postgres" ]; then
+  if command -v psql >/dev/null 2>&1; then
+    if RC=$(PGPASSWORD="${AMSHA_PG_PASSWORD:-changeme}" psql -X -qAt \
+      -h "${AMSHA_PG_HOST:-localhost}" \
+      -p "${AMSHA_PG_PORT:-5432}" \
+      -U "${AMSHA_PG_USER:-amsha}" \
+      -d "${AMSHA_PG_DB:-amsha}" \
+      -c "SELECT COUNT(*) FROM compaction_summary WHERE session_id LIKE 'rag:%';" 2>/dev/null); then
+      [ "$RC" = "0" ] && ok "0" || fail "found $RC rag:-prefixed rows"
+    else
+      echo "  ℹ️  [OPTIONAL] PostgreSQL query unavailable — skipping RAG-C3 isolation query"
+    fi
+  else
+    echo "  ℹ️  [OPTIONAL] psql is not installed — skipping PostgreSQL RAG-C3 isolation query"
+  fi
+elif [ -n "$RAG_BACKEND" ] && [ "$RAG_BACKEND" != "sqlite" ]; then
+  echo "  ℹ️  [SKIP] RAG-C3 SQLite isolation query is not applicable to backend '$RAG_BACKEND'"
+elif [ -n "${AMSHA_DATA_DIR:-}" ] && command -v sqlite3 >/dev/null 2>&1; then
   DB="$AMSHA_DATA_DIR/amsha-meta.db"
   if [ -f "$DB" ]; then
     RC=$(sqlite3 "$DB" "SELECT COUNT(*) FROM compaction_summary WHERE session_id LIKE 'rag:%';" 2>/dev/null)
     [ "$RC" = "0" ] && ok "0" || fail "found $RC rag:-prefixed rows"
   else
-    echo "  ⚠️  DB not found at $DB — skipping isolation SQL check"
+    echo "  ℹ️  [OPTIONAL] DB not found at $DB — skipping SQLite isolation query"
   fi
 else
-  echo "  ℹ️  [OPTIONAL] Set AMSHA_DATA_DIR to verify rag_chunk isolation via sqlite3"
+  echo "  ℹ️  [OPTIONAL] Set AMSHA_DATA_DIR and install sqlite3 to verify SQLite isolation"
 fi
 
 echo "───────────────────────────────────────────"

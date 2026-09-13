@@ -69,11 +69,11 @@ try {
     }
 
 mise run build:ui:copy
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($LASTEXITCODE -ne 0) { throw "Native build step failed with exit code $LASTEXITCODE." }
 
 $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow'
 & $mvnw clean verify -Pnative -pl app -am -DskipTests "-Damsha.build.backend=postgres" "-Damsha.persistence.backend=postgres" "-Dquarkus.profile=prod,postgresql" '-Dquarkus.native.container-build=false' "-Dquarkus.native.native-image-xmx=${targetGB}g" @nativeAdditionalBuildArgs
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($LASTEXITCODE -ne 0) { throw "PostgreSQL native build failed with exit code $LASTEXITCODE." }
     Write-Host "✅  PostgreSQL native build complete: app/target/amsha-app-0.1.0-SNAPSHOT$suffix"
     Write-Host '▶   Copying to dist/amsha-pg...'
     if (-not (Test-Path 'dist')) { New-Item -ItemType Directory -Path 'dist' -Force | Out-Null }
@@ -87,7 +87,12 @@ $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
 # Amsha Agent PostgreSQL backend configuration.
 # QUARKUS_PROFILE is baked into the binary; only add runtime overrides here.
 "@
-    Set-Content -Path "dist/.env" -Value $envContent -NoNewline
+    if (-not (Test-Path "dist/.env")) {
+        Set-Content -Path "dist/.env" -Value $envContent -NoNewline
+        Write-Host '✅ Created dist/.env with backend defaults.'
+    } else {
+        Write-Host 'ℹ️ Preserving existing dist/.env; build tasks do not overwrite runtime configuration.'
+    }
     Write-Host '✅  PostgreSQL binary: dist/amsha-pg'
 } finally {
     if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) {

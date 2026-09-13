@@ -48,7 +48,7 @@ if (Test-Path '.env') {
 try {
     $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
     & $mvnw clean install -am -DskipTests '-Dquarkus.profile=filesystem' --no-transfer-progress -T $threads
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    if ($LASTEXITCODE -ne 0) { throw "Filesystem build failed with exit code $LASTEXITCODE." }
     Write-Host '✅  Filesystem build complete.'
 } finally {
     if ($envBackup -and (Test-Path '.env.build-backup')) {
