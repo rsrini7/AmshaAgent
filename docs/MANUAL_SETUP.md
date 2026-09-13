@@ -425,10 +425,10 @@ $env:MAVEN_OPTS = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw clean install -pl amsha-app -am -DskipTests
+./mvnw clean install -pl app -am -DskipTests
 
 # Windows PowerShell
-.\mvnw.cmd clean install -pl amsha-app -am -DskipTests
+.\mvnw.cmd clean install -pl app -am -DskipTests
 ```
 
 Output: `app/target/quarkus-app/quarkus-run.jar`
@@ -484,7 +484,7 @@ Dev mode uses the `%dev` profile: no container isolation, live code reload, Quar
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Djvm.args=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8" \
   "-Dquarkus.args=serve" \
   "-Dquarkus.profile=dev" \
@@ -495,7 +495,7 @@ Dev mode uses the `%dev` profile: no container isolation, live code reload, Quar
 ```powershell
 # Windows PowerShell
 $jvmArgs = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8"
-.\mvnw.cmd quarkus:dev -pl amsha-app -am `
+.\mvnw.cmd quarkus:dev -pl app -am `
   "-Djvm.args=$jvmArgs" `
   "-Dquarkus.args=serve" `
   "-Dquarkus.profile=dev" `
@@ -517,7 +517,7 @@ Requires `TELEGRAM_BOT_TOKEN` set in `.env`.
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Djvm.args=..." \
   "-Dquarkus.args=ask your goal here --role coordinator" \
   "-Dquarkus.profile=dev" \
@@ -527,7 +527,7 @@ Requires `TELEGRAM_BOT_TOKEN` set in `.env`.
 
 ```powershell
 # Windows PowerShell
-.\mvnw.cmd quarkus:dev -pl amsha-app -am `
+.\mvnw.cmd quarkus:dev -pl app -am `
   "-Djvm.args=$jvmArgs" `
   "-Dquarkus.args=ask your goal here --role coordinator" `
   "-Dquarkus.profile=dev" `
@@ -687,7 +687,7 @@ export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED \
   --enable-native-access=ALL-UNNAMED \
   -Dsun.misc.unsafe.memory.access=allow"
 
-./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
+./mvnw clean package -Pnative -pl app -am -DskipTests \
   -Dquarkus.native.container-build=true
 
 # Restore .env
@@ -702,11 +702,11 @@ Switch to GraalVM first (see [Section 13](#13-jdk-management)), then:
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
+./mvnw clean package -Pnative -pl app -am -DskipTests \
   -Dquarkus.native.container-build=false
 
 # Windows PowerShell
-.\mvnw.cmd clean package -Pnative -pl amsha-app -am -DskipTests `
+.\mvnw.cmd clean package -Pnative -pl app -am -DskipTests `
   "-Dquarkus.native.container-build=false"
 ```
 
@@ -715,7 +715,7 @@ Switch back to Temurin after (see [Section 13](#13-jdk-management)).
 ### 10.3 Build - Low Memory (6 GB Heap Cap)
 
 ```bash
-./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
+./mvnw clean package -Pnative -pl app -am -DskipTests \
   -Dquarkus.native.container-build=false \
   "-Dquarkus.native.additional-build-args=-J-Xmx6g"
 ```
@@ -1042,7 +1042,7 @@ done < .env
 Disable the Dev UI and console:
 
 ```bash
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Dquarkus.args=serve" \
   "-Dquarkus.console.enabled=false" \
   "-Dquarkus.devui.enabled=false" \
@@ -1086,7 +1086,7 @@ Expected with Netty on JDK 22+. Ensure all `--add-opens` and `-Dsun.misc.unsafe.
 
 ```bash
 # Reduce heap cap (default is 8 GB)
-./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
+./mvnw clean package -Pnative -pl app -am -DskipTests \
   "-Dquarkus.native.additional-build-args=-J-Xmx6g"
 
 # Or increase Podman machine memory before building

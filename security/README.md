@@ -1,6 +1,6 @@
 # Amsha Security Module (`amsha-security`)
 
-Implementation of the [`amsha-security-api`](../security-api/README.md) contracts: secret vault, key derivation, governed outbound transport, autonomy policy, and bootstrap credential issuance. Extracted from `amsha-core` (stream S7 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../Ideas-Pending/Architecture/ADR-extract-core-subsystems.md)).
+Implementation of the [`amsha-security-api`](../security-api/README.md) contracts: secret vault, key derivation, governed outbound transport, autonomy policy, and bootstrap credential issuance. Extracted from `amsha-core` (stream S7 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../docs/adr/architecture/ADR-extract-core-subsystems.md)).
 
 This is an **impl-tier** module: it depends on `amsha-security-api` and on `amsha-core` only for audit/observability interfaces, as permitted by the two-tier boundary policy. The BouncyCastle dependency lives here, not in core.
 

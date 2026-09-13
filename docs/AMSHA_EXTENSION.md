@@ -246,7 +246,7 @@ case "analyst" -> analystTemplate;
 ```bash
 python3 ./scripts/fix_fqns.py
 ./mvnw compile -DskipTests -q
-./mvnw test -pl amsha-core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"
+./mvnw test -pl core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"
 ```
 
 ### Step 7 - Register for native image reflection (if applicable)

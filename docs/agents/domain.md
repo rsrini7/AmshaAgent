@@ -6,25 +6,27 @@ This is a single-context repository.
 
 - Read root `CONTEXT.md` when it exists.
 - Read relevant ADRs matching root or topic-local
-  `Ideas-Pending/**/ADR-*.md` paths.
-- Preserve the existing ADR naming and location convention; do not introduce
-  `docs/adr/`.
+  `docs/adr/**/ADR-*.md` paths.
 - If `CONTEXT.md` is absent, proceed silently. Domain-modeling workflows create
   it lazily when project-specific terminology is resolved.
 
 ## Layout
+
+- `CONTEXT.md` — project glossary and ubiquitous language, when present.
+- `docs/README.md` — central documentation index with status and navigation.
+- `docs/adr/**/ADR-*.md` — architectural decisions (accepted, implemented, or proposed);
+  subdirectories group decisions by subsystem (`architecture/`, `providers/`, `features/`, `tools/`, `domain/`).
+- `docs/research/` — evaluated options and negative knowledge (historical evaluations that must not be repeated).
+- `docs/proposals/` — active implementation proposals and RFCs.
+- `docs/roadmap/` — backlog and future ideas.
+- `docs/Architecture_Invariants.md` — mandatory cross-cutting architectural
+  constraints.
 
 ## Working-memory trust boundary
 
 `.workbuddy-ai/memory/` is private, ignored working memory. It may contain stale conclusions, partial command output, or incident notes and is not an architectural authority. Agents must verify every actionable claim against the current source, staged diff, ADR, tests, and runtime state before using it.
 
 Working memory and review reports must contain redacted references only. Never write API keys, access tokens, passwords, authorization headers, raw provider responses, prompts, or secret-bearing malformed input into memory, reports, or committed documentation. If historical notes contain credential-like material, redact or rotate it before sharing or preserving the notes.
-
-- `CONTEXT.md` — project glossary and ubiquitous language, when present.
-- `Ideas-Pending/**/ADR-*.md` — architectural decisions and proposed decisions;
-  topic folders may co-locate their ADR with supporting evidence.
-- `docs/Architecture_Invariants.md` — mandatory cross-cutting architectural
-  constraints.
 
 ## Consumer rules
 

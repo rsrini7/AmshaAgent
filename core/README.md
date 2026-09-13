@@ -6,7 +6,7 @@ reflexes, safety guards, and tool interfaces.
 ## Module Extraction Status
 
 Under the `extract-core-subsystems` program (see
-[`Ideas-Pending/Architecture/ADR-extract-core-subsystems.md`](../Ideas-Pending/Architecture/ADR-extract-core-subsystems.md)),
+[`docs/adr/architecture/ADR-extract-core-subsystems.md`](../docs/adr/architecture/ADR-extract-core-subsystems.md)),
 large shared surfaces moved out of this module. Contracts consumed from here now live in dedicated API jars,
 and heavy implementations moved into tier-2 modules:
 

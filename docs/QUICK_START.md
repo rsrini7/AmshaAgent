@@ -18,20 +18,20 @@ cp .env.example .env
 #          set AMSHA_VAULT_PEPPER (32+ random chars)
 
 # Start in chat mode with hot reload
-./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=chat"
+./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
 ```
 
 ## Other Modes
 
 ```bash
 # One-shot ask
-./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=ask 'list all github repos'"
+./mvnw quarkus:dev -pl app -am "-Dquarkus.args=ask 'list all github repos'"
 
 # REST daemon
-./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=serve"
+./mvnw quarkus:dev -pl app -am "-Dquarkus.args=serve"
 
 # Telegram bot (requires TELEGRAM_BOT_TOKEN)
-./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=attach telegram"
+./mvnw quarkus:dev -pl app -am "-Dquarkus.args=attach telegram"
 ```
 
 ## Packaged JAR

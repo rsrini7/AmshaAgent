@@ -96,7 +96,7 @@ draft or promote web selections into the system vault.
 ### JVM development
 
 ```bash
-./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=serve"
+./mvnw quarkus:dev -pl app -am "-Dquarkus.args=serve"
 ```
 
 Use `chat` for the interactive CLI, `ask "..."` for one request, or
@@ -236,5 +236,5 @@ automation details.
 - [Quick Start](./QUICK_START.md)
 - [Configuration Reference](./CONFIGURATION.md)
 - [Manual Setup](./MANUAL_SETUP.md)
-- [Configuration Sources and Precedence ADR](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md)
+- [Configuration Sources and Precedence ADR](./adr/domain/ADR-Onboarding-Configuration-Source-and-Precedence.md)
 - [Architecture Invariants](./Architecture_Invariants.md)

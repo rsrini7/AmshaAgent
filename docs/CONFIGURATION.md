@@ -44,7 +44,7 @@ The web onboarding wizard never edits `.env`. It stores drafts and staged secret
 the configured persistence/vault layers; `AMSHA_LLM_VAULT_PRIORITY` controls whether
 committed system-vault LLM settings override environment configuration. The CLI
 first-run wizard is environment bootstrap and may patch the distribution `.env`.
-See [ADR: Onboarding Configuration Sources and Precedence](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md)
+See [ADR: Onboarding Configuration Sources and Precedence](./adr/domain/ADR-Onboarding-Configuration-Source-and-Precedence.md)
 for the complete lifecycle and credential-scope rules.
 
 Authenticated onboarding status and settings also report non-secret effective LLM provenance

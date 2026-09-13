@@ -59,7 +59,7 @@ cp .env.example .env
 # At minimum: AMSHA_GROQ_API_KEY=gsk_... (Groq), AMSHA_VAULT_PEPPER=<random>
 
 # Dev mode (hot reload, no sandbox isolation)
-./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=chat"
+./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
 
 # Or build and run a packaged JAR
 ./mvnw clean package -DskipTests

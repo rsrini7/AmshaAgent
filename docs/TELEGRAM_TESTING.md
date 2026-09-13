@@ -79,7 +79,7 @@ AMSHA_AUDIT_HMAC_KEY=<32+ char random string>
 **Dev mode (hot reload, no Podman isolation):**
 
 ```bash
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Dquarkus.args=attach" \
   "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```

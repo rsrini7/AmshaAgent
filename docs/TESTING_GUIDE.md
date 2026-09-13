@@ -45,50 +45,50 @@ Amsha Agent has **1664 tests** across the multi-module reactor.
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw clean test -pl amsha-app -am
+./mvnw clean test -pl app -am
 
 # Windows PowerShell
-.\mvnw.cmd clean test -pl amsha-app -am
+.\mvnw.cmd clean test -pl app -am
 ```
 
 ### 1.2 Run a specific module
 
 ```bash
 # Only amsha-core (zero Quarkus startup - fast)
-./mvnw clean test -pl amsha-core
+./mvnw clean test -pl core
 
 # Only amsha-app (starts full CDI context via @QuarkusTest)
-./mvnw clean test -pl amsha-app -am
+./mvnw clean test -pl app -am
 ```
 
 ### 1.3 Run a single test class
 
 ```bash
 # Use -am to include upstream module dependencies
-./mvnw clean test -pl amsha-core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=AuditHmacChainTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=AgentResourceTest  "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=AuditHmacChainTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=AgentResourceTest  "-Dsurefire.failIfNoSpecifiedTests=false"
 ```
 
 ### 1.4 Phase 64 - run specific new/modified test classes
 
 ```bash
 # Tier A
-./mvnw clean test -pl amsha-core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=CompactionSummaryRepositoryTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=CompactionHandlerTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=ReasoningStepParserTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=TelegramMarkdownV2RendererTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=AgentDispatchHandlerTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-channel-api -am -Dtest=ChannelTypeTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=CompactionSummaryRepositoryTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=CompactionHandlerTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=ReasoningStepParserTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=TelegramMarkdownV2RendererTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=AgentDispatchHandlerTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl channel-api -am -Dtest=ChannelTypeTest "-Dsurefire.failIfNoSpecifiedTests=false"
 # Tier B
-./mvnw clean test -pl amsha-core -am -Dtest=AuditEventRepositoryTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=DevSecretSeederTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=SessionRegistryTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=AuditEventRepositoryTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=DevSecretSeederTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=SessionRegistryTest "-Dsurefire.failIfNoSpecifiedTests=false"
 # Tier C & D
-./mvnw clean test -pl amsha-rag  -am -Dtest=GlobalKnowledgeBaseTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=ChannelCronNotificationDispatcherTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=SqliteRetryTemplateTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl rag  -am -Dtest=GlobalKnowledgeBaseTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=ChannelCronNotificationDispatcherTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=SqliteRetryTemplateTest "-Dsurefire.failIfNoSpecifiedTests=false"
 ```
 
 ### 1.5 Test profile specifics (`%test`)
@@ -138,7 +138,7 @@ AMSHA_TELEGRAM_BOT_TOKEN=...  # required for attach telegram mode only
 
 ```bash
 # Serve mode (REST only, no Telegram)
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Dquarkus.args=serve" \
   "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
@@ -2263,7 +2263,7 @@ Run after any significant code change. Combine automated + manual.
 ### Automated (1664 tests — must remain green)
 
 ```bash
-./mvnw clean test -pl amsha-app -am
+./mvnw clean test -pl app -am
 ```
 
 **Key test classes to verify:**

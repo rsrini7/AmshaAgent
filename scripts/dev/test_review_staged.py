@@ -56,6 +56,15 @@ def main() -> None:
         )
         assert unchanged_check.returncode != 0, "expected staged content to remain present"
 
+        # Regression test: hyphenated path slugs containing 'task-' must not
+        # trigger false-positive secret detections.
+        (repo / "docs.txt").write_text(
+            "schedule-task-hitl-under-supervised\n", encoding="utf-8"
+        )
+        git("add", "docs.txt", cwd=repo)
+        result = run("--fast", "--repo-root", str(repo), "--evidence-dir", str(evidence), cwd=ROOT)
+        assert result.returncode == 0, result.stderr + result.stdout
+
         # Build the fixture in pieces so this test vector is not itself
         # reported as a credential-shaped staged addition.
         secret_value = "sk-" + "12345678901234567890"
@@ -67,6 +76,42 @@ def main() -> None:
         assert result.returncode == 1, result.stdout
         assert secret_value not in result.stdout
         assert secret_value not in result.stderr
+
+        # Test project-scoped secret key detection
+        proj_secret_value = "sk-proj-" + "12345678901234567890"
+        git("rm", "-f", "unsafe.txt", cwd=repo)
+        (repo / "unsafe_proj.txt").write_text(
+            "apiKey=" + proj_secret_value + "\n", encoding="utf-8"
+        )
+        git("add", "unsafe_proj.txt", cwd=repo)
+        result = run("--fast", "--repo-root", str(repo), "--evidence-dir", str(evidence), cwd=ROOT)
+        assert result.returncode == 1, result.stdout
+        assert proj_secret_value not in result.stdout
+        assert proj_secret_value not in result.stderr
+
+        # Test Anthropic-prefixed token detection
+        ant_secret_value = "sk-ant-api03-" + "12345678901234567890"
+        git("rm", "-f", "unsafe_proj.txt", cwd=repo)
+        (repo / "unsafe_ant.txt").write_text(
+            "apiKey=" + ant_secret_value + "\n", encoding="utf-8"
+        )
+        git("add", "unsafe_ant.txt", cwd=repo)
+        result = run("--fast", "--repo-root", str(repo), "--evidence-dir", str(evidence), cwd=ROOT)
+        assert result.returncode == 1, result.stdout
+        assert ant_secret_value not in result.stdout
+        assert ant_secret_value not in result.stderr
+
+        # Test live-prefixed token detection
+        live_secret_value = "sk-live-" + "12345678901234567890"
+        git("rm", "-f", "unsafe_ant.txt", cwd=repo)
+        (repo / "unsafe_live.txt").write_text(
+            "apiKey=" + live_secret_value + "\n", encoding="utf-8"
+        )
+        git("add", "unsafe_live.txt", cwd=repo)
+        result = run("--fast", "--repo-root", str(repo), "--evidence-dir", str(evidence), cwd=ROOT)
+        assert result.returncode == 1, result.stdout
+        assert live_secret_value not in result.stdout
+        assert live_secret_value not in result.stderr
 
     help_result = subprocess.run([str(SCRIPT), "--help"], text=True, capture_output=True, check=False)
     assert help_result.returncode == 0

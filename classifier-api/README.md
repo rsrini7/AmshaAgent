@@ -1,6 +1,6 @@
 # Amsha Classifier API Module (`amsha-classifier-api`)
 
-Pure SPI contracts for shadow classifiers in Amsha Agent. Extracted from `amsha-core` (stream S6 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../Ideas-Pending/Architecture/ADR-extract-core-subsystems.md), including the §8 deviation note).
+Pure SPI contracts for shadow classifiers in Amsha Agent. Extracted from `amsha-core` (stream S6 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../docs/adr/architecture/ADR-extract-core-subsystems.md), including the §8 deviation note).
 
 `amsha-classifier-api` contains **zero dependencies on `amsha-core`**. The production implementations (ONNX shadow classifiers) live in `amsha-local-ml-onnx`; the dispatchers that invoke them remain in `amsha-core`.
 

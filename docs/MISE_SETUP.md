@@ -34,7 +34,7 @@
 Instead of remembering:
 
 ```bash
-./mvnw quarkus:dev -pl amsha-app -am -Dquarkus.args=serve -Damsha.rag.vec-extension-path=../lib/vec0 ...
+./mvnw quarkus:dev -pl app -am -Dquarkus.args=serve -Damsha.rag.vec-extension-path=../lib/vec0 ...
 ```
 
 You just type:

@@ -75,8 +75,6 @@ rsync -a --delete \
     --exclude 'Prompts' \
     --exclude 'docs' \
     --exclude 'docs-main' \
-    --exclude 'docs-test' \
-    --exclude 'Ideas-Pending' \
     --exclude 'ProjectWorkflowDocs' \
     --exclude 'bruno-collections' \
     --exclude 'rest-http' \

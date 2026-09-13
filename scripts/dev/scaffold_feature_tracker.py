@@ -29,7 +29,7 @@ def scaffold_generic_feature(slug: str, title: str, iterations: int, category: s
     """Scaffolds a generic ADR, spec.md, and ordered issue tracker files for any feature."""
     today = datetime.date.today().isoformat()
     slug_clean = slug.strip().lower().replace("_", "-")
-    cat_dir = REPO_ROOT / f"Ideas-Pending/{category}"
+    cat_dir = REPO_ROOT / f"docs/adr/{category.lower()}"
     cat_dir.mkdir(parents=True, exist_ok=True)
 
     adr_path = cat_dir / f"ADR-{slug_clean}.md"
@@ -84,7 +84,7 @@ Describe the proposed architecture, module relationships, and SPI boundaries.
         spec_content = f"""# Feature Specification: {title}
 
 - **Feature Slug**: `{slug_clean}`
-- **Master ADR**: `Ideas-Pending/{category}/ADR-{slug_clean}.md`
+- **Master ADR**: `docs/adr/{category.lower()}/ADR-{slug_clean}.md`
 - **Status**: **In Progress**
 - **Date**: {today}
 
@@ -390,7 +390,7 @@ The extraction MUST use this file-level manifest. No wildcard deletion or packag
     spec_content = """# Feature Specification: Extract Built-in Tools and Sandbox Execution from amsha-core
 
 - **Feature Slug**: `extract-tools-and-sandbox`
-- **Master ADR**: `Ideas-Pending/Tools/ADR-Tools-Builtin-and-Sandbox-Modularization.md`
+- **Master ADR**: `docs/adr/tools/ADR-Tools-Builtin-and-Sandbox-Modularization.md`
 - **Status**: **Approved / Ready for Implementation**
 - **Date**: 2026-08-20
 
@@ -783,7 +783,7 @@ new image settings must also be represented in the distribution bootstrap and
     }
 
     # Refuse to overwrite an existing tracker unless the caller explicitly opts in.
-    adr_path = REPO_ROOT / "Ideas-Pending/Tools/ADR-Tools-Builtin-and-Sandbox-Modularization.md"
+    adr_path = REPO_ROOT / "docs/adr/tools/ADR-Tools-Builtin-and-Sandbox-Modularization.md"
     spec_path = REPO_ROOT / ".scratch/extract-tools-and-sandbox/spec.md"
     issues_dir = REPO_ROOT / ".scratch/extract-tools-and-sandbox/issues"
     targets = [adr_path, spec_path] + [issues_dir / filename for filename in issues]
@@ -820,7 +820,7 @@ def main():
     parser.add_argument("--slug", type=str, help="Feature slug (e.g. 'extract-reflex')")
     parser.add_argument("--title", type=str, help="Feature title (e.g. 'Extract Reflex Subsystem')")
     parser.add_argument("--iterations", type=int, default=5, help="Number of iteration issue files to scaffold")
-    parser.add_argument("--category", type=str, default="Features", help="Ideas-Pending category folder")
+    parser.add_argument("--category", type=str, default="features", help="docs/adr category folder")
     parser.add_argument("--tools", action="store_true", help="Scaffold Tools & Sandbox modularization tracker preset")
     parser.add_argument("--force", action="store_true", help="Allow --tools to overwrite existing tracker files")
     args = parser.parse_args()

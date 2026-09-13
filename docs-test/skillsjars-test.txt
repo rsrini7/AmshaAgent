@@ -1,9 +1,0 @@
-/start
-
-/reset
-
-/skills
-
-delegate to remote-browser navigate to https://example.com and get the page title
-
-/reset

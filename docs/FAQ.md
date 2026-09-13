@@ -826,17 +826,17 @@ Mockito's inline mock agent (used for mocking final classes and static methods) 
 ### Q: How do I run only a specific test module without rebuilding everything?
 
 ```bash
-# Run only amsha-core tests
-mvn test -pl amsha-core
+# Run only core tests
+mvn test -pl core
 
-# Run only amsha-app integration tests
-mvn verify -pl amsha-app -am
+# Run only app integration tests
+mvn verify -pl app -am
 
 # Run a single test class
-mvn test -pl amsha-core -Dtest=SandboxCircuitBreakerTest
+mvn test -pl core -Dtest=SandboxCircuitBreakerTest
 
 # Run with LLM debug logging enabled
-mvn verify -pl amsha-app -am -Damsha.debug.llm=true
+mvn verify -pl app -am -Damsha.debug.llm=true
 ```
 
 ---

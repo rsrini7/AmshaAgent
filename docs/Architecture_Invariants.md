@@ -1736,7 +1736,7 @@ Always verify with a runtime startup log check when adding CDI beans from a new 
 
 ### 16.4 Session Management (§16.4 INVARIANT)
 Onboarding configuration source and precedence are defined in [ADR: Onboarding
-Configuration Sources and Precedence](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md).
+Configuration Sources and Precedence](adr/domain/ADR-Onboarding-Configuration-Source-and-Precedence.md).
 Web drafts stage owner-scoped secrets before commit; LLM activation with vault
 priority promotes selected values into system-vault keys, while the CLI bootstrap
 wizard patches deployment `.env` values.

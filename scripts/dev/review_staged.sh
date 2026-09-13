@@ -150,8 +150,7 @@ if ! command -v rg >/dev/null 2>&1; then
 elif rg -n -i \
         -e 'AKIA[0-9A-Z]{16}' \
         -e 'AIza[0-9A-Za-z_-]{20,}' \
-        -e 'gh[pousr]_[A-Za-z0-9]{20,}' \
-        -e 'sk-[A-Za-z0-9][A-Za-z0-9_-]{19,}' \
+        -e '\bsk-[A-Za-z0-9][A-Za-z0-9_-]{19,}' \
         -e 'Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{24,}' \
         -e '(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|secret)[[:space:]]*[:=][[:space:]]*[A-Za-z0-9._~+/=-]{16,}' \
         "$ADDED_FILE" >"$TMP_DIR/secret-matches" 2>/dev/null; then

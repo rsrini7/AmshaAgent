@@ -14,7 +14,7 @@ This directory contains `.http` files covering every REST API surface of Amsha A
 
 ```bash
 # Serve mode (REST + no Telegram)
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Dquarkus.args=serve" \
   "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
