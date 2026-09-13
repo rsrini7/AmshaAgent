@@ -23,6 +23,11 @@ from datetime import datetime, timezone
 from typing import Optional
 import subprocess
 
+_LIB_DIR = pathlib.Path(__file__).resolve().parents[1] / "lib"
+if str(_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(_LIB_DIR))
+from repo_root import get_repo_root
+
 # ─── Enums ────────────────────────────────────────────────────────────────────
 class Outcome(str, Enum):
     PASS    = "PASS"
@@ -354,7 +359,11 @@ def verify_response_from_log(log_path: str, prompt: str,
     C) amsha-cli.log  — StateMachine goal<PROMPT> ... CliResultBridge signaling
     """
     if not os.path.exists(log_path):
-        return None
+        alt = get_repo_root(__file__) / log_path
+        if alt.exists():
+            log_path = str(alt)
+        else:
+            return None
     try:
         with open(log_path, "r", errors="replace") as f:
             content = f.read()
@@ -616,19 +625,23 @@ def _log(msg: str, log_f):
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    script_dir = pathlib.Path(__file__).resolve().parent
+    repo_root = get_repo_root(__file__)
+    default_test_file = str(script_dir / "files" / "telegram-test-amsha.txt")
+
     parser = argparse.ArgumentParser(
         description="Amsha Agent Automated Test Harness v3.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
         Examples:
-          python autotest.py -f telegram-test-amsha-2.txt
-          python autotest.py -r 14-30 -d 3 -v
-          python autotest.py --skip-categories security,cron
-          python autotest.py -j results.json -l run.log
-          python autotest.py --autonomy full
+          python scripts/autotest/autotest.py -f scripts/autotest/files/telegram-test-amsha.txt
+          python scripts/autotest/autotest.py -r 14-30 -d 3 -v
+          python scripts/autotest/autotest.py --skip-categories security,cron
+          python scripts/autotest/autotest.py -j results.json -l run.log
+          python scripts/autotest/autotest.py --autonomy full
         """))
 
-    parser.add_argument("-f","--file",           default="telegram-test-amsha-2.txt")
+    parser.add_argument("-f","--file",           default=default_test_file)
     parser.add_argument("-d","--delay",          type=float, default=4.0)
     parser.add_argument("-a","--approval-delay", type=float, default=2.0)
     parser.add_argument("-t","--timeout",        type=float, default=120.0)
@@ -647,8 +660,14 @@ def main():
     parser.add_argument("--fail-fast",           action="store_true")
     args = parser.parse_args()
 
-    if not os.path.exists(args.file):
-        print(f"\u274c Test file not found: {args.file}"); sys.exit(1)
+    test_file_path = pathlib.Path(args.file)
+    if not test_file_path.exists():
+        fallback_path = script_dir / "files" / args.file
+        if fallback_path.exists():
+            test_file_path = fallback_path
+        else:
+            print(f"\u274c Test file not found: {args.file}"); sys.exit(1)
+    args.file = str(test_file_path)
 
     skip_cats: set[PromptCategory] = set()
     if args.skip_categories:
@@ -691,8 +710,7 @@ def main():
         cmd += ["--autonomy", "FULL"]
 
     # Resolve project root (directory containing mise.toml)
-    script_dir = pathlib.Path(__file__).resolve().parent
-    project_root = script_dir.parent if (script_dir.parent / "mise.toml").exists() else script_dir
+    project_root = repo_root
     proc = subprocess.Popen(
         cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=str(project_root))

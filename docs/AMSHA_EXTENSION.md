@@ -238,7 +238,7 @@ case "analyst" -> analystTemplate;
 ### Step 5 - Update documentation
 
 1. **`AGENTS.md`** - Ensure Section 7 covers the new persona
-2. **`telegram-test-amsha.txt`** - Add test cases
+2. **`scripts/autotest/files/telegram-test-amsha.txt`** - Add test cases
 3. **`04_agent_roles.http`** - Add HTTP test cases
 
 ### Step 6 - Verify

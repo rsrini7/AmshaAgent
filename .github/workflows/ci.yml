@@ -30,6 +30,7 @@ jobs:
         run: |
           python3 scripts/test_repo_root.py
           python3 scripts/test_dist_wrappers.py
+          python3 scripts/test_autotest_runners.py
           python3 rest-http/scripts/test_common_http.py
 
   jvm-validation:

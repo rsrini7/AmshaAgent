@@ -1,6 +1,6 @@
 # Amsha Script & Tooling Consolidation — Analysis & Refactoring Proposal
 
-> **Scope**: `scripts/`, `autotest/`, `rest-http/scripts/`, `.mise/tasks/**`, and the
+> **Scope**: `scripts/`, `scripts/autotest/`, `rest-http/scripts/`, `.mise/tasks/**`, and the
 > root-level `rebrand.sh`.
 >
 > **Goal**: A modular, de-duplicated, and reliable script architecture that
@@ -20,7 +20,7 @@ The following counts are reproducible using the commands in the table:
 | Root | Files | Role | Verification Command | Condition & Ground Truth |
 |---|---|---|---|---|
 | `scripts/` | **34** | Core implementation home (distribution, runtime smoke, quality gates, model provisioning) | `find scripts -maxdepth 1 -type f \| wc -l` | Flat structure with multiple fixed repository-root assumptions. Heavily referenced by [AGENTS.md](../AGENTS.md) and companion tests (`test_*.py`). |
-| `autotest/` | **8** `.sh` + `autotest.py` (35 KB) + 3 test fixtures | Telegram end-to-end test harness | `find autotest -maxdepth 1 -name "*.sh" \| wc -l` | Wrappers hardcode backends (`sqlite`, `pg`, `fs`), row limits (`1-20`), and suites (`telegram`, `skillsjars`, `loka`). |
+| `scripts/autotest/` | **8** `.sh` + `autotest.py` (35 KB) + 3 test fixtures | Telegram end-to-end test harness | `find scripts/autotest -maxdepth 1 -name "*.sh" \| wc -l` | Wrappers hardcode backends (`sqlite`, `pg`, `fs`), row limits (`1-20`), and suites (`telegram`, `skillsjars`, `loka`). |
 | `rest-http/scripts/` | **26** (23 `validate_*.sh` + `run_all_validations.sh` + `common_env.sh` + `find_missing_env.py`) | Live REST API validation suite | `find rest-http/scripts -maxdepth 1 -type f \| wc -l` | 17 scripts define `info()`, 10 define `run_req()`, 14 write to static `/tmp/resp`. Heavily referenced across docs and runners. |
 | `.mise/tasks/**` | **151** tasks + 21 logs/errs + 5 artifacts | Task runner entry points | `find .mise/tasks -type f \| sed -n 's/..*\.//p' \| sort \| uniq -c` | **125 `.ps1`**, **21 `.sh`**, **5 `.py`**, **1 `.md`**, **21 `.log`/`.err`** in `headroom/logs/`, **2 `.pyc`**, **2 `.DS_Store`**. |
 | `/rebrand.sh` | **1** | ArcClaw -> Amsha Agent rename migration | `ls -la rebrand.sh` | Root-level stray. Contains `--verify` flag useful for auditing new contributions. |
@@ -104,7 +104,7 @@ review_staged.sh          (MANDATORY: verifies staged changes before commit)
 | **F5** | **Subdirectory moves silently break repo-root resolution** | Multiple scripts use fixed `parent.parent` or `dirname/..` assumptions. Moving them to `scripts/quality/` makes some resolve `scripts/` as the root. | **High (Architecture)** — Requires a tested repository-root resolver (`lib/repo_root.py` and `lib/repo_root.sh`) before any file moves. |
 | **F6** | **Incomplete target hierarchy and missing script mappings** | Previous proposal omitted 7+ scripts (`classifier_training.sh`, `export_golden_corpus.py`, `scaffold_feature_tracker.py`, `loop_smoke.sh`, `verify_linux_podman.sh`, `verify_native_matrix.*`, `verify_onnx_release_provenance.sh`). | **High (Completeness)** — Every single script must have an explicit mapping and shim policy. |
 | **F7** | **Orphaned and stray scripts** | `rebrand.sh` at repo root; `scripts/parse_thread_dump.py` (18 LOC) and `.mise/scripts/get_podman_host.sh` are unreferenced anywhere in the codebase. | **Low (Hygiene)** — Audit for ad-hoc/manual diagnostic utility; retain or archive in a dedicated cleanup change per Step 8. |
-| **F8** | **Autotest wrapper fragmentation** | 8 wrapper scripts (`autotest-*.sh`) hardcode permutations of backends (`sqlite`, `pg`, `fs`), row limits (`1-20`), and test suites (`telegram`, `skillsjars`, `loka`). | **Medium (Maintainability)** — Parameterize into `autotest/run.sh`. |
+| **F8** | **Autotest wrapper fragmentation** | 8 wrapper scripts (`autotest-*.sh`) hardcode permutations of backends (`sqlite`, `pg`, `fs`), row limits (`1-20`), and test suites (`telegram`, `skillsjars`, `loka`). | **Medium (Maintainability)** — Parameterize into `scripts/autotest/run.sh`. |
 | **F9** | **MCP validation already has `--fast` delegation** | [`validate_mcp.sh`](../rest-http/scripts/validate_mcp.sh) already delegates `--fast` to [`validate_mcp_fast.sh`](../rest-http/scripts/validate_mcp_fast.sh). | **Architecture Non-Issue** — Keep separate; preserve specialized SSE and mock-server handling. |
 | **F10** | **CI is not hermetic without server lifecycle management** | Running `run_all_validations.sh --fast` in CI requires a pre-built binary, background process, health check, and teardown trap. | **High (CI Architecture)** — Model CI lifecycle after `scripts/run_dist_backend.sh`. |
 
@@ -205,7 +205,7 @@ flowchart TD
     S3["3. Relocate Headroom state<br/>(Update status/stop/common/README)"] --> S4
     S4["4. Incrementally extract common_http.sh<br/>(Mock server unit tests, method-aware retry)"] --> S5
     S5["5. Guard validate_advanced_identity.sh<br/>(Explicit --advanced-identity + confirm)"] --> S5b
-    S5b["5b. Parameterize autotest runners<br/>(Consolidate into autotest/run.sh)"] --> S6
+    S5b["5b. Parameterize autotest runners<br/>(Consolidate into scripts/autotest/run.sh)"] --> S6
     S6["6. Design hermetic CI lifecycle<br/>(Separate build/run/test/kill workflow)"] --> S7
     S7["7. Move scripts with 100% shims<br/>(Run all contract tests & verify_docs.py)"] --> S8
     S8["8. Explicit orphan disposition<br/>(Audit parse_thread_dump & get_podman_host)"]
@@ -238,8 +238,8 @@ flowchart TD
 - Test default, fast, missing-confirmation, partial-credential, and fully-enabled paths, asserting that only the fully-enabled path starts the destructive requests and that every explicitly selected but invalid path fails.
 
 ### Step 5b: Parameterize Autotest Runners
-- Consolidate the 8 hardcoded wrapper scripts (`autotest/autotest-*.sh`) into a single parameterized entry point `autotest/run.sh` accepting `--backend` (sqlite, pg, fs), `--rows` (e.g. `1-20`), and `--suite` (`telegram`, `skillsjars`, `loka`).
-- Replace existing `autotest-*.sh` scripts with thin forwarding shims calling `autotest/run.sh` to preserve backward compatibility for automated tests and developer workflows.
+- Consolidate the 8 hardcoded wrapper scripts (`scripts/autotest/autotest-*.sh`) into a single parameterized entry point `scripts/autotest/run.sh` accepting `--backend` (sqlite, pg, fs), `--rows` (e.g. `1-20`), and `--suite` (`telegram`, `skillsjars`, `loka`).
+- Replace existing `autotest-*.sh` scripts with thin forwarding shims calling `scripts/autotest/run.sh` to preserve backward compatibility for automated tests and developer workflows.
 
 ### Step 6: Hermetic CI Definition
 - Design `.github/workflows/ci.yml` incorporating full server lifecycle orchestration (build, start, wait-for-health, test, teardown, archive logs).
@@ -261,7 +261,7 @@ flowchart TD
 - Moved Python scripts resolve the same repository root from root and nested working directories, and `verify_docs.py` still scans the full repository.
 - REST helper tests prove bounded retries, no unsafe POST retry, request isolation under concurrency, composable cleanup, and preserved MCP/SSE behavior.
 - Default validation never executes destructive identity requests; the dual-gated advanced path is the only path that can do so.
-- `autotest/run.sh` unifies all 8 previous runner permutations, and existing `autotest-*.sh` entry points delegate cleanly with preserved exit codes and options.
+- `scripts/autotest/run.sh` unifies all 8 previous runner permutations, and existing `autotest-*.sh` entry points delegate cleanly with preserved exit codes and options.
 - CI starts and stops its own isolated server, uses the correct JVM/native artifact, propagates one environment-backed key through preflight and child validators, returns nonzero on test failure or missing credentials, and emits no secret-bearing diagnostics.
 
 ---

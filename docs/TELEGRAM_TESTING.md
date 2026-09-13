@@ -40,7 +40,7 @@
 
 ## Quick Smoke Test (10 minutes)
 
-For rapid regression, use `telegram-test-amsha.txt` — a numbered list of 126 messages covering major Telegram features. Paste messages into Telegram sequentially and verify responses match expectations.
+For rapid regression, use `telegram-test-amsha.txt` (`scripts/autotest/files/telegram-test-amsha.txt`) — a numbered list of 126 messages covering major Telegram features. Paste messages into Telegram sequentially and verify responses match expectations.
 
 **What it covers:**
 - Identity extraction and memory (messages 1-9, 57-66)
