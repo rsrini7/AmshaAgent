@@ -16,7 +16,6 @@ import static org.mockito.Mockito.when;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.AnnotationLiteral;
 
-import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +38,7 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.mockito.Mockito;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -264,19 +264,14 @@ class McpClientServiceTest {
 
     @Test
     void testExtractTextResultFallback() throws Exception {
-        Method extract = McpClientService.class.getDeclaredMethod("extractTextResult", String.class);
-        extract.setAccessible(true);
-
         String jsonWithoutContent = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"status\":\"ok\"}}";
-        String res = (String) extract.invoke(service, jsonWithoutContent);
+        String res = service.extractTextResult(jsonWithoutContent);
         assertTrue(res.contains("status"));
     }
 
     @Test
-    void testHealthCheckRunsNoThrow() throws Exception {
-        Method healthCheck = McpClientService.class.getDeclaredMethod("healthCheck");
-        healthCheck.setAccessible(true);
-        assertDoesNotThrow(() -> healthCheck.invoke(service));
+    void testHealthCheckRunsNoThrow() {
+        assertDoesNotThrow(() -> service.healthCheck());
     }
 
     @Test
@@ -338,6 +333,28 @@ class McpClientServiceTest {
         assertDoesNotThrow(() -> service.clearHttpConnectionState("test-srv"));
         assertDoesNotThrow(() -> service.clearHttpConnectionState("test-srv", "user-1"));
         assertFalse(service.httpServerUrl("test-srv").isPresent());
+    }
+
+    @Test
+    void testRegistrationFailureRecordsConnectExceptionMetric() {
+        stubFullConnect("metric-session");
+        service.registry = mock(DynamicToolCapabilityRegistry.class);
+        Mockito.doThrow(new RuntimeException("Registry failure"))
+                .when(service.registry)
+                .registerForUser(any(), any());
+
+        assertThrows(McpConnectionException.class, () -> service.connect("metric-test-server", wireMock.baseUrl()));
+
+        assertEquals(
+                1.0,
+                service.meterRegistry
+                        .counter(
+                                "amsha.mcp.tool.load.failure",
+                                "server",
+                                "metric-test-server",
+                                "phase",
+                                "connect_exception")
+                        .count());
     }
 
     private static McpConnectionHeaderSecretRefDto headerRef(

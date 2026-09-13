@@ -1,22 +1,26 @@
 package com.amsha.mcp.transport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.AnnotationLiteral;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import com.amsha.mcp.tool.DynamicToolCapability;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.tool.api.ToolCategory;
@@ -26,19 +30,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 public class McpStdioReconnectTest {
 
     private McpClientService service;
-    private ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper();
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setup() {
         service = new McpClientService();
+        service.registry = new DynamicToolCapabilityRegistry();
         service.objectMapper = mapper;
         service.meterRegistry = new SimpleMeterRegistry();
 
@@ -53,61 +57,73 @@ public class McpStdioReconnectTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void testF19_CleanupAndReconnectOnDeadProcess() throws Exception {
         // 1. Setup mock dead state
         String serverName = "dead-server";
 
-        Process mockProcess = mock(Process.class);
-        OutputStream mockOut = mock(OutputStream.class);
+        Process mockDeadProcess = mock(Process.class);
+        OutputStream mockDeadOut = mock(OutputStream.class);
         // This reader will return null (EOF) immediately
-        BufferedReader mockReader = new BufferedReader(new StringReader(""));
+        BufferedReader mockDeadReader = new BufferedReader(new StringReader(""));
 
-        // Inject into private maps
-        setPrivateField(service, "processes", mapOf(serverName, mockProcess));
-        setPrivateField(service, "processWriters", mapOf(serverName, mockOut));
-        setPrivateField(service, "processReaders", mapOf(serverName, mockReader));
+        // Register into stdio transport via package-private test seam
+        var config = service.stdioTransport()
+                .createConfig("cmd", Collections.emptyList(), Collections.emptyMap(), ToolCategory.NETWORK, "owner-1");
+        service.stdioTransport()
+                .registerProcessForTesting(serverName, mockDeadProcess, mockDeadOut, mockDeadReader, config);
 
-        // Setup config for reconnect
-        Map<String, Object> cfgMap = (Map<String, Object>) getPrivateField(service, "stdioConfigs");
-        cfgMap.put(serverName, createStdioConfig("cmd", Collections.emptyList(), Collections.emptyMap()));
+        // Pre-register old tool in registry to verify metadata refresh upon reconnect
+        service.registry.registerForUser(
+                "owner-1",
+                new DynamicToolCapability(
+                        "tool", "old desc", serverName, McpTransportType.STDIO, false, "{}", ToolCategory.NETWORK));
 
-        // 2. Mock connectStdio to "re-alive" the process
-        McpClientService spyService = Mockito.spy(service);
-        // We can't really call the real connectStdio in a unit test easily as it starts a process
-        // but we want to verify it's CALLED.
-        doNothing().when(spyService).connectStdio(anyString(), anyString(), anyList(), anyMap(), any());
+        // Setup replacement process for reconnection via transport process starter seam
+        Process mockReplacementProcess = mock(Process.class);
+        when(mockReplacementProcess.isAlive()).thenReturn(true);
+        when(mockReplacementProcess.destroyForcibly()).thenReturn(mockReplacementProcess);
+        when(mockReplacementProcess.getOutputStream()).thenReturn(new ByteArrayOutputStream());
 
-        // 3. Invoke. First attempt fails due to EOF in sendRequestStdio.
-        // cleanupStdio(serverName) is called.
-        // Exception propagates to @Retry (not active here since we're calling directly or mocking).
-        // Actually, we need to test that sendRequestStdio calls cleanupStdio.
+        String ndjsonResponses = """
+                {"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2024-11-05","serverInfo":{"name":"replacement-server","version":"1.0"}}}
+                {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"tool","description":"reconnected desc","inputSchema":{"type":"object"}}]}}
+                {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"invoked reconnected tool"}]}}
+                """;
+        when(mockReplacementProcess.getInputStream())
+                .thenReturn(new ByteArrayInputStream(ndjsonResponses.getBytes(StandardCharsets.UTF_8)));
 
+        service.stdioTransport().setProcessStarterForTesting(pb -> mockReplacementProcess);
+
+        // 2. First invoke: fails due to EOF on the dead process
         try {
-            spyService.invoke(serverName, "tool", "{}");
-        } catch (Exception e) {
-            // expected on first try if no retry logic active
+            service.invoke(serverName, "tool", "{}");
+        } catch (Exception _) {
+            // expected on first try because dead process closed connection
         }
 
-        // 4. Verify cleanup was called
-        Map<String, Process> processes = (Map<String, Process>) getPrivateField(service, "processes");
-        assertEquals(0, processes.size(), "Process should have been removed from map after EOF");
-        verify(mockProcess).destroyForcibly();
+        // 3. Verify dead process was cleaned up and destroyed
+        Map<String, Process> processes = service.stdioTransport().getProcessesForTesting();
+        assertEquals(0, processes.size(), "Dead process should have been removed from map after EOF");
+        verify(mockDeadProcess).destroyForcibly();
+
+        // 4. Second invoke: triggers reconnection directly through transport's reconnect seam
+        String result = service.invoke(serverName, "tool", "{}");
+
+        // 5. Assert replacement process is started and active
+        assertEquals(1, processes.size(), "Replacement process should be registered in active processes");
+        assertEquals(mockReplacementProcess, processes.get(serverName), "Active process should be replacement process");
+
+        // 6. Assert tool metadata is re-registered with updated description
+        var toolCap = service.registry.find("owner-1", "tool").orElseThrow();
+        assertEquals("reconnected desc", toolCap.description(), "Tool metadata should be re-registered on reconnect");
+
+        // 7. Assert tool invocation succeeded on the reconnected process
+        assertEquals("invoked reconnected tool", result);
     }
 
     @Test
     void reconnectCanRefreshChangedToolMetadata() throws Exception {
         service.registry = new DynamicToolCapabilityRegistry();
-        Method registerTools = McpClientService.class.getDeclaredMethod(
-                "registerTools",
-                String.class,
-                JsonNode.class,
-                McpTransportType.class,
-                ToolCategory.class,
-                String.class,
-                boolean.class,
-                Set.class);
-        registerTools.setAccessible(true);
 
         JsonNode initial = mapper.readTree("{\"tools\":[{\"name\":\"search\",\"description\":\"old\","
                 + "\"inputSchema\":{\"type\":\"object\"}}]}");
@@ -115,8 +131,7 @@ public class McpStdioReconnectTest {
                 + "\"inputSchema\":{\"type\":\"object\",\"properties\":{"
                 + "\"query\":{\"type\":\"string\"}}}}]}");
 
-        registerTools.invoke(
-                service,
+        service.registerTools(
                 "stdio-server",
                 initial,
                 McpTransportType.STDIO,
@@ -124,8 +139,7 @@ public class McpStdioReconnectTest {
                 "owner",
                 false,
                 Set.of("search"));
-        registerTools.invoke(
-                service,
+        service.registerTools(
                 "stdio-server",
                 refreshed,
                 McpTransportType.STDIO,
@@ -136,30 +150,5 @@ public class McpStdioReconnectTest {
 
         assertEquals(
                 "new", service.registry.find("owner", "search").orElseThrow().description());
-    }
-
-    private Object createStdioConfig(String cmd, Object args, Object env) throws Exception {
-        Class<?> configClass = Class.forName("com.amsha.mcp.transport.McpClientService$StdioConfig");
-        var ctor = configClass.getDeclaredConstructors()[0];
-        ctor.setAccessible(true);
-        return ctor.newInstance(cmd, args, env, ToolCategory.NETWORK, null);
-    }
-
-    private void setPrivateField(Object target, String fieldName, Object value) throws Exception {
-        Field field = McpClientService.class.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
-
-    private Object getPrivateField(Object target, String fieldName) throws Exception {
-        Field field = McpClientService.class.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        return field.get(target);
-    }
-
-    private <K, V> ConcurrentHashMap<K, V> mapOf(K key, V value) {
-        ConcurrentHashMap<K, V> map = new ConcurrentHashMap<>();
-        map.put(key, value);
-        return map;
     }
 }
