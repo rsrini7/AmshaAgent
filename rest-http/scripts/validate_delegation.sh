@@ -240,7 +240,7 @@ for entry in "${ROLE_MATRIX[@]}"; do
         FAIL=$((FAIL + 1))
         continue
     fi
-    goal="Call garuda now and delegate to $target. $task Do not answer directly before the specialist returns."
+    goal="This is a mandatory delegation capability probe. Your first action MUST be to call garuda with agent $target. Do not call sandbox_exec or any other tool first, and do not answer directly before the specialist returns. $task"
     # Allow one follow-up turn for heavier personas to dispatch after their
     # first reasoning/tool step, while the audit event remains the assertion.
     payload="{\"goal\":\"$goal\",\"agentRole\":\"$role\",\"maxIterations\":$MAX_ITERATIONS}"

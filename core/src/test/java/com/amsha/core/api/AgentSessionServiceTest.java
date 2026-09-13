@@ -254,6 +254,53 @@ class AgentSessionServiceTest {
     }
 
     @Test
+    void testApprove_inProgressParentCascadesAwaitingDelegateWithoutResumingParent() {
+        AgentCheckpoint parent = new AgentCheckpointRecord();
+        parent.setStatus(CheckpointStatus.IN_PROGRESS);
+        parent.setChannelPlatformId(TEST_USER);
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(parent));
+
+        String delegateId = "sess1" + AgentSentinels.DELEGATE_SESSION_SENTINEL + "saraswati:123";
+        AgentCheckpoint delegate = new AgentCheckpointRecord();
+        delegate.setSessionId(delegateId);
+        delegate.setAgentRole("researcher");
+        delegate.setChannelPlatformId(TEST_USER);
+        delegate.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL)).thenReturn(List.of(delegate));
+        when(checkpointApprovalService.approveAll(eq(delegateId), anyString())).thenReturn(delegate);
+
+        ServiceResult<Object> sr = service.approve("sess1", TEST_USER, "coordinator");
+
+        assertTrue(sr.isSuccess());
+        assertEquals("APPROVED", ((Map<?, ?>) sr.value()).get("status"));
+        verify(checkpointApprovalService).triggerResume(delegate);
+        verify(agentLoop, never()).run(anyString(), anyString(), anyString(), any(), anyInt(), any());
+    }
+
+    @Test
+    void testDeny_inProgressParentCascadesAwaitingDelegateWithoutResumingParent() {
+        AgentCheckpoint parent = new AgentCheckpointRecord();
+        parent.setStatus(CheckpointStatus.IN_PROGRESS);
+        parent.setChannelPlatformId(TEST_USER);
+        when(agentStore.load(anyString(), anyString())).thenReturn(Optional.of(parent));
+
+        String delegateId = "sess1" + AgentSentinels.DELEGATE_SESSION_SENTINEL + "saraswati:123";
+        AgentCheckpoint delegate = new AgentCheckpointRecord();
+        delegate.setSessionId(delegateId);
+        delegate.setAgentRole("researcher");
+        delegate.setChannelPlatformId(TEST_USER);
+        delegate.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_APPROVAL)).thenReturn(List.of(delegate));
+        when(checkpointApprovalService.denyAll(eq(delegateId), anyString())).thenReturn(delegate);
+
+        ServiceResult<Object> sr = service.deny("sess1", TEST_USER, "coordinator");
+
+        assertTrue(sr.isSuccess());
+        assertEquals("DENIED", ((Map<?, ?>) sr.value()).get("status"));
+        verify(checkpointApprovalService).triggerResume(delegate);
+    }
+
+    @Test
     void testDeny_success_routesThroughApprovalService() {
         AgentCheckpoint cp = new AgentCheckpointRecord();
         cp.setId(123L);

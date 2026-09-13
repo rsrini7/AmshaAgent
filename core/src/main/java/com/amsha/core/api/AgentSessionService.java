@@ -21,7 +21,6 @@ import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.CheckpointResolutionException;
 import com.amsha.core.agent.loop.CheckpointResumeHandler;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
-import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.core.api.dto.ServiceResult;
@@ -44,7 +43,6 @@ import com.amsha.core.session.SessionCatalogService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.MdcManaged;
 import com.amsha.persistence.api.CheckpointStatus;
-import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.AgentSentinels;
 
@@ -331,112 +329,33 @@ public class AgentSessionService {
         };
     }
 
-    private static boolean isAlreadyResolved(CheckpointResolutionException e) {
-        return e.getStatusCode() == 409
-                && e.getMessage() != null
-                && e.getMessage().startsWith("Approval decision already resolved");
-    }
-
     public ServiceResult<Object> approve(String sessionId, String userId, String agentRole) {
         var sessionError = validateSession(sessionId, userId);
-        if (sessionError.isPresent()) return sessionError.get();
-
-        try {
-            Callable<ServiceResult<Object>> op = () -> {
-                String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
-                var checkpoint = agentStore.load(sessionId, canonicalRole);
-                if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                    return ServiceResult.error("NO_PENDING_APPROVAL", "No pending approval");
-                }
-
-                try {
-                    checkpointApprovalService.approveAll(sessionId, "Human approved via REST");
-                } catch (CheckpointResolutionException alreadyResolved) {
-                    // The parent checkpoint carries no undecided tools (e.g. its pause was
-                    // propagated from a delegated sub-session): approve awaiting delegates instead.
-                    if (!isAlreadyResolved(alreadyResolved)) throw alreadyResolved;
-                    int cascaded = new DelegateApprovalCascade(agentStore, checkpointApprovalService, auditService)
-                            .approveAwaitingDelegates(sessionId, userId, canonicalRole);
-                    if (cascaded == 0) throw alreadyResolved;
-                }
-                auditService.recordMandatory(
-                        sessionId,
-                        userId,
-                        canonicalRole,
-                        SecurityEventType.APPROVAL_GRANTED,
-                        "via=REST role=" + agentRole);
-                String channel = ChannelType.REST_API.name();
-
-                return WorkspaceContext.<ServiceResult<Object>>run(
-                        sessionId, userId, sessionId, AutonomyLevel.FULL, canonicalRole, channel, () -> {
-                            String resumeGoal = checkpointResumeHandler.resolveResumeGoal(sessionId, canonicalRole);
-                            int resumeIterations = checkpoint.get().getMaxIterations() != null
-                                    ? Math.max(
-                                            maxResumeIterations,
-                                            checkpoint.get().getMaxIterations())
-                                    : maxResumeIterations;
-                            MessageContext context = createRestContext(sessionId, userId, resumeGoal);
-                            context.setResumeSignal(true);
-                            AgentResult result = agentLoop.run(
-                                    sessionId, agentRole, resumeGoal, reasoningEngine, resumeIterations, context);
-                            return new ServiceResult<>(responseMapper.mapResult(result, false), null, null);
-                        });
-            };
-            return withSelectedWorkspace(() -> WorkspaceScopeHolder.call(sessionId, op));
-        } catch (CheckpointResolutionException e) {
-            // A resolution race (duplicate or overlapping approve after the checkpoint already
-            // resolved) is a client-observable conflict, never a server failure. Mirrors the
-            // benign-race handling in HitlService.isResolutionRace.
-            log.warnf("Approve raced with an already-resolved checkpoint for session %s", sessionId);
-            return ServiceResult.error(resolutionErrorCode(e), e.getMessage());
-        } catch (Exception e) {
-            log.errorf("Approve failed: %s", LogUtil.rootMessage(e));
-            return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
+        if (sessionError.isPresent()) {
+            return sessionError.get();
         }
+        return approvalHandler().approve(sessionId, userId, agentRole);
     }
 
     public ServiceResult<Object> deny(String sessionId, String userId, String agentRole) {
         var sessionError = validateSession(sessionId, userId);
-        if (sessionError.isPresent()) return sessionError.get();
-
-        try {
-            Callable<ServiceResult<Object>> op = () -> {
-                String canonicalRole = AgentRoleEnum.fromString(agentRole).toScopedName();
-                var checkpoint = agentStore.load(sessionId, canonicalRole);
-                if (checkpoint.isEmpty() || checkpoint.get().getStatus() != CheckpointStatus.AWAITING_APPROVAL) {
-                    return ServiceResult.error("NO_PENDING_APPROVAL", "No pending approval");
-                }
-                AgentCheckpoint cp;
-                try {
-                    cp = checkpointApprovalService.denyAll(sessionId, "Human denied via REST");
-                } catch (CheckpointResolutionException alreadyResolved) {
-                    // The parent checkpoint carries no undecided tools (e.g. its pause was
-                    // propagated from a delegated sub-session): deny awaiting delegates instead.
-                    if (!isAlreadyResolved(alreadyResolved)) throw alreadyResolved;
-                    int cascaded = new DelegateApprovalCascade(agentStore, checkpointApprovalService, auditService)
-                            .denyAwaitingDelegates(sessionId, userId, canonicalRole);
-                    if (cascaded == 0) throw alreadyResolved;
-                    cp = checkpoint.orElseThrow();
-                }
-                auditService.recordMandatory(
-                        sessionId,
-                        userId,
-                        canonicalRole,
-                        SecurityEventType.APPROVAL_DENIED,
-                        "via=REST role=" + agentRole);
-                checkpointApprovalService.triggerResume(cp);
-                return ServiceResult.success(Map.of("status", ToolDecision.DENIED.name(), "session", sessionId));
-            };
-            return withSelectedWorkspace(() -> WorkspaceScopeHolder.call(sessionId, op));
-        } catch (CheckpointResolutionException e) {
-            // Same benign-race mapping as approve(): an overlapping deny after resolution
-            // is a conflict, never a server failure.
-            log.warnf("Deny raced with an already-resolved checkpoint for session %s", sessionId);
-            return ServiceResult.error(resolutionErrorCode(e), e.getMessage());
-        } catch (Exception e) {
-            log.errorf("Deny failed: %s", LogUtil.rootMessage(e));
-            return ServiceResult.error("SYSTEM", e.getMessage() != null ? e.getMessage() : "Internal error");
+        if (sessionError.isPresent()) {
+            return sessionError.get();
         }
+        return approvalHandler().deny(sessionId, userId, agentRole);
+    }
+
+    private AgentSessionApprovalHandler approvalHandler() {
+        return new AgentSessionApprovalHandler(
+                agentLoop,
+                reasoningEngine,
+                agentStore,
+                responseMapper,
+                checkpointResumeHandler,
+                checkpointApprovalService,
+                auditService,
+                activeWorkspaceContext,
+                maxResumeIterations);
     }
 
     public ServiceResult<Object> getStatus(String sessionId, String userId, String role) {

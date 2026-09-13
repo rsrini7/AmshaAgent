@@ -10,17 +10,32 @@
 set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_env.sh"
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/amsha_validate_hitl.XXXXXX")"
+RESP_FILE="$RUN_DIR/resp"
+cleanup() { rm -rf -- "$RUN_DIR"; }
+trap cleanup EXIT INT TERM
 FAIL=0; PASS=0; RL_WAIT=62
 
 info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$(format_http_code "$1")"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" "$@"; }
-sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
+mute()  { curl -s -m "$CURL_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" "$@"; }
+sid()   { python3 -c "import json; print(json.load(open('$RESP_FILE')).get('sessionId',''))" 2>/dev/null; }
 task_id() {
-  python3 -c "import json; d=json.load(open('/tmp/resp')); rows=d if isinstance(d,list) else d.get('items',d.get('tasks',[])) if isinstance(d,dict) else []; print((rows or [{}])[0].get('taskId',''))" 2>/dev/null
+  python3 - "$RESP_FILE" "$1" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as response:
+    payload = json.load(response)
+rows = payload if isinstance(payload, list) else payload.get("items", []) if isinstance(payload, dict) else []
+for row in rows:
+    if isinstance(row, dict) and str(row.get("sessionId", "")) == sys.argv[2]:
+        print(row.get("taskId", ""))
+        break
+PY
 }
-is_sandbox_offline() { grep -q "SANDBOX_OFFLINE" /tmp/resp; }
+is_sandbox_offline() { grep -q "SANDBOX_OFFLINE" "$RESP_FILE"; }
 
 create_session() {
   local c
@@ -38,7 +53,7 @@ trigger_approval() {
 }
 status_is() {
   mute -X GET -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/sessions/$1/status/coordinator" >/dev/null 2>&1
-  python3 -c "import json; print(json.load(open('/tmp/resp')).get('status',''))" 2>/dev/null
+ python3 -c "import json; print(json.load(open('$RESP_FILE')).get('status',''))" 2>/dev/null
 }
 run_req() {
   local method="$1" key="$2" url="$3" data="$4"
@@ -123,7 +138,7 @@ if [ -n "$SID" ]; then
   info "HITL-11: list pending approvals (GET /hitl)"
   CODE=$(run_req GET "$VALID_KEY" "$B/api/v1/hitl?page=0&size=20")
   [ "$CODE" = "200" ] && ok "$CODE" || fail "$CODE"
-  TID=$(task_id)
+  TID=$(task_id "$SID")
   if [ -n "$TID" ]; then
     info "HITL-12: approve by taskId"
     CODE=$(run_req POST "$VALID_KEY" "$B/api/v1/hitl/$TID/approve")

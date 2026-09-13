@@ -11,6 +11,10 @@
 set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_env.sh"
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/amsha_validate_web.XXXXXX")"
+RESP_FILE="$RUN_DIR/resp"
+cleanup() { rm -rf -- "$RUN_DIR"; }
+trap cleanup EXIT INT TERM
 FAIL=0; PASS=0; SLEEP=7; RL_WAIT=62
 
 info()  { printf "%-4s %-40s " "" "$1"; }
@@ -18,8 +22,8 @@ ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 okh()   { printf "✅ HTTP %s (HITL→approved)\n" "$1"; PASS=$((PASS+1)); }
 warn()  { printf "⚠️  HTTP %s (%s)\n" "$1" "$2"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m 15 -o /tmp/resp -w "%{http_code}" "$@"; }
-sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
+mute()  { curl -s -m 15 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
+sid()   { python3 -c "import json; print(json.load(open('$RESP_FILE')).get('sessionId',''))" 2>/dev/null; }
 
 create_session() {
   local c
@@ -31,14 +35,14 @@ create_session() {
 }
 
 run_raw() {
-  curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" \
+  curl -s -m "$CURL_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" \
     -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
     -X POST "$B/api/v1/sessions/$1/run" \
     -d "{\"goal\":\"$2\",\"agentRole\":\"$3\",\"maxIterations\":$4}"
 }
 
 approve() {
-  curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" \
+  curl -s -m "$CURL_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" \
     -H "X-Amsha-API-Key: $KEY" \
     -X POST "$B/api/v1/sessions/$1/approve?agentRole=$2"
 }
