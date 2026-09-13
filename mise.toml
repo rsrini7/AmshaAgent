@@ -99,9 +99,19 @@ shell = "pwsh -NonInteractive -Command"
 quiet = true
 run = """
 $ErrorActionPreference = 'Stop'
-if (Test-Path '.env.build-backup') {
-    if (Test-Path '.env') { Remove-Item '.env' -Force }
-    Rename-Item '.env.build-backup' '.env'
+    if (Test-Path '.env.build-backup') {
+      if (Test-Path '.env') {
+        $recoveryStamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
+        $recoveryPath = ".env.recovery-$recoveryStamp"
+        $recoveryIndex = 0
+        while (Test-Path $recoveryPath) {
+          $recoveryIndex++
+          $recoveryPath = ".env.recovery-$recoveryStamp-$recoveryIndex"
+        }
+        Move-Item '.env' $recoveryPath
+        Write-Host "⚠️ Preserved current .env as $recoveryPath before recovery."
+      }
+      Rename-Item '.env.build-backup' '.env'
     Write-Host '⚠️  Recovered stranded .env.build-backup from a previously aborted build.'
 }
 """

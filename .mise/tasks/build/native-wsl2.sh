@@ -25,10 +25,39 @@ mkdir -p "$BUILD_DIR"
 # ── The .env Shield ──────────────────────────────────────────────────
 # Renaming the local .env ensures it is NEVER synced to the build dir,
 # even if rsync flags are misconfigured, and prevents Quarkus from loading it.
+recovery_path_for_current_env() {
+    local recovery_stamp="$(date -u +%Y%m%d-%H%M%S)-$$"
+    local recovery_path=".env.recovery-${recovery_stamp}"
+    local recovery_index=0
+    while [ -e "$recovery_path" ]; do
+        recovery_index=$((recovery_index + 1))
+        recovery_path=".env.recovery-${recovery_stamp}-${recovery_index}"
+    done
+    printf '%s' "$recovery_path"
+}
+if [ -e ".env.build-backup" ]; then
+    if [ -e ".env" ]; then
+        recovery_path="$(recovery_path_for_current_env)"
+        mv .env "$recovery_path"
+        echo "⚠️  Preserved current .env as ${recovery_path} before recovery."
+    fi
+    mv .env.build-backup .env
+    echo "⚠️  Recovered stranded .env.build-backup before starting new build."
+fi
 if [ -f ".env" ]; then
     echo "🛡️  Shielding .env (temporarily renaming to .env.build-backup)..."
     mv .env .env.build-backup
-    trap 'mv .env.build-backup .env 2>/dev/null || true' EXIT
+    restore_env() {
+        if [ -f ".env.build-backup" ]; then
+            if [ -e ".env" ]; then
+                recovery_path="$(recovery_path_for_current_env)"
+                mv .env "$recovery_path"
+                echo "⚠️  Preserved current .env as ${recovery_path} before restore."
+            fi
+            mv .env.build-backup .env
+        fi
+    }
+    trap restore_env EXIT
 fi
 
 # Exclude .env explicitly. 

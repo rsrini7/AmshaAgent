@@ -8,7 +8,17 @@ Write-Host 'ℹ️   build:native-local-fs: Filesystem backend, local GraalVM, n
 
 # --- Auto-Heal stranded backups before shielding ---
 if (Test-Path '.env.build-backup') {
-    if (Test-Path '.env') { Remove-Item '.env' -Force }
+    if (Test-Path '.env') {
+        $recoveryStamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
+        $recoveryPath = ".env.recovery-$recoveryStamp"
+        $recoveryIndex = 0
+        while (Test-Path $recoveryPath) {
+            $recoveryIndex++
+            $recoveryPath = ".env.recovery-$recoveryStamp-$recoveryIndex"
+        }
+        Move-Item '.env' $recoveryPath
+        Write-Host "⚠️  Preserved current .env as $recoveryPath before recovery."
+    }
     Rename-Item '.env.build-backup' '.env'
     Write-Host '⚠️  Recovered stranded .env.build-backup before starting new build.'
 }
@@ -80,7 +90,21 @@ $env:MAVEN_OPTS = '--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
     Set-Content -Path "dist/.env" -Value $envContent -NoNewline
     Write-Host '✅  Filesystem binary: dist/amsha-fs'
 } finally {
-    if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) { Rename-Item '.env.build-backup' '.env'; Write-Host 'ℹ️   .env restored.' }
+    if ($envBackup -eq $true -and (Test-Path '.env.build-backup')) {
+        if (Test-Path '.env') {
+            $recoveryStamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
+            $recoveryPath = ".env.recovery-$recoveryStamp"
+            $recoveryIndex = 0
+            while (Test-Path $recoveryPath) {
+                $recoveryIndex++
+                $recoveryPath = ".env.recovery-$recoveryStamp-$recoveryIndex"
+            }
+            Move-Item '.env' $recoveryPath
+            Write-Host "⚠️  Preserved current .env as $recoveryPath before restore."
+        }
+        Rename-Item '.env.build-backup' '.env'
+        Write-Host 'ℹ️   .env restored.'
+    }
     elseif ($envBackup -eq 'build.env') { Remove-Item '.env' -ErrorAction SilentlyContinue; Write-Host 'ℹ️   Temporary build.env copy removed.' }
     mise use --path mise.toml java@temurin-25
     Write-Host '✅  Switched back to Temurin 25.'

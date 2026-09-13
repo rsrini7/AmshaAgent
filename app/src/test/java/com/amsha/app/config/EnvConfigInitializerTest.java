@@ -1,5 +1,6 @@
 package com.amsha.app.config;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -7,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,6 +35,25 @@ class EnvConfigInitializerTest {
         assertTrue(report.contains("env=" + envFile.toAbsolutePath().normalize()));
         assertFalse(report.contains("old-secret"));
         assertFalse(report.contains("new-secret"));
+    }
+
+    @Test
+    void patchEnvFileCreatesTimestampedBackupBeforeUpdating(@TempDir Path tempDir) throws IOException {
+        Path envFile = tempDir.resolve(".env");
+        String original = "AMSHA_FEATURE=false\n";
+        Files.writeString(envFile, original);
+
+        EnvConfigInitializer.patchEnvFile(envFile, "AMSHA_FEATURE", "true", EnvConfigInitializer.PatchMode.UPDATE);
+
+        assertEquals("AMSHA_FEATURE=true\n", Files.readString(envFile));
+        List<Path> backups;
+        try (Stream<Path> files = Files.list(tempDir)) {
+            backups = files.filter(path -> path.getFileName().toString().startsWith(".env.backup-"))
+                    .toList();
+        }
+        assertEquals(1, backups.size());
+        assertTrue(backups.getFirst().getFileName().toString().matches("\\.env\\.backup-\\d{8}-\\d{9}"));
+        assertEquals(original, Files.readString(backups.getFirst()));
     }
 
     @Test

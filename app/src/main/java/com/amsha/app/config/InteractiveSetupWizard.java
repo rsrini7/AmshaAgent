@@ -7,7 +7,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
@@ -87,7 +86,7 @@ public class InteractiveSetupWizard {
         if (!Files.exists(envFile)) {
             try (InputStream in = InteractiveSetupWizard.class.getResourceAsStream("/env-example")) {
                 if (in != null) {
-                    Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
+                    Files.copy(in, envFile);
                     EnvConfigInitializer.reportEnvFileCreated(envFile, "bundled .env.example template");
                 }
             } catch (IOException e) {

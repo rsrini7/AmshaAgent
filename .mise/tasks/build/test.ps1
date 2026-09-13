@@ -24,6 +24,21 @@ Write-Host "🧠 ${availGB}G avail, ${cpu} CPUs → JIT heap:${jitGB}G, parallel
 
 # --- Shield .env (secrets) from the tests ---
 $envBackup = $null
+if (Test-Path '.env.build-backup') {
+    if (Test-Path '.env') {
+        $recoveryStamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
+        $recoveryPath = ".env.recovery-$recoveryStamp"
+        $recoveryIndex = 0
+        while (Test-Path $recoveryPath) {
+            $recoveryIndex++
+            $recoveryPath = ".env.recovery-$recoveryStamp-$recoveryIndex"
+        }
+        Move-Item '.env' $recoveryPath
+        Write-Host "⚠️  Preserved current .env as $recoveryPath before recovery."
+    }
+    Rename-Item '.env.build-backup' '.env'
+    Write-Host '⚠️  Recovered stranded .env.build-backup before starting new build.'
+}
 if (Test-Path '.env') {
     Rename-Item '.env' '.env.build-backup'
     $envBackup = $true
@@ -73,6 +88,17 @@ if ($srcItem) {
         Write-Host '✅  Tests complete.'
     } finally {
     if ($envBackup -and (Test-Path '.env.build-backup')) {
+        if (Test-Path '.env') {
+            $recoveryStamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
+            $recoveryPath = ".env.recovery-$recoveryStamp"
+            $recoveryIndex = 0
+            while (Test-Path $recoveryPath) {
+                $recoveryIndex++
+                $recoveryPath = ".env.recovery-$recoveryStamp-$recoveryIndex"
+            }
+            Move-Item '.env' $recoveryPath
+            Write-Host "⚠️  Preserved current .env as $recoveryPath before restore."
+        }
         Rename-Item '.env.build-backup' '.env'
         Write-Host 'ℹ️   .env restored.'
     }

@@ -53,6 +53,7 @@ lib/
 .env.local
 .env.build*
 .env.backup*
+.env.recovery*
 
 # Node.js
 node_modules/

@@ -3,11 +3,14 @@ package com.amsha.app.config;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -33,6 +36,8 @@ public class EnvConfigInitializer {
             "AMSHA_API_KEYS_CI",
             "AMSHA_API_KEYS_ADMIN");
     private static final String CHANGE_LOG_SUFFIX = ".changes.log";
+    private static final DateTimeFormatter BACKUP_TIMESTAMP_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmssSSS").withZone(ZoneOffset.UTC);
 
     public static void loadDotEnv(Path dir) {
         Path envFile = dir.resolve(".env");
@@ -156,18 +161,46 @@ public class EnvConfigInitializer {
 
                 if (needsPatch) {
                     content = pattern.matcher(content).replaceAll(Matcher.quoteReplacement(newLine));
-                    Files.writeString(envFile, content);
+                    writeWithBackup(envFile, content);
                     reportChange(envFile, key, valueState(currentValue), valueState(value));
                 }
             } else {
                 String separator = content.endsWith(System.lineSeparator()) ? "" : System.lineSeparator();
-                Files.writeString(
-                        envFile, separator + key + "=" + value + System.lineSeparator(), StandardOpenOption.APPEND);
+                writeWithBackup(envFile, content + separator + key + "=" + value + System.lineSeparator());
                 reportChange(envFile, key, "<unset>", valueState(value));
             }
         } catch (IOException e) {
             log.warnf("[Amsha Agent] Could not update .env: %s", LogUtil.rootMessage(e));
         }
+    }
+
+    private static void writeWithBackup(Path envFile, String content) throws IOException {
+        Path target = envFile.toAbsolutePath().normalize();
+        createTimestampedBackup(target);
+        Path temporary = Files.createTempFile(target.getParent(), ".env-", ".tmp");
+        try {
+            Files.copy(target, temporary, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING);
+            Files.writeString(temporary, content);
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static Path createTimestampedBackup(Path envFile) throws IOException {
+        String timestamp = BACKUP_TIMESTAMP_FORMATTER.format(Instant.now());
+        Path backup;
+        int suffix = 0;
+        do {
+            String suffixText = suffix == 0 ? "" : "-" + suffix;
+            backup = envFile.resolveSibling(envFile.getFileName() + ".backup-" + timestamp + suffixText);
+            suffix++;
+        } while (Files.exists(backup));
+        return Files.copy(envFile, backup, StandardCopyOption.COPY_ATTRIBUTES);
     }
 
     /**
