@@ -200,12 +200,11 @@ jobs:
           python-version: "3.12"
 
       # `verify` is required, not `package`: it is the only phase that reaches the PMD
-      # `complexity-gate` execution and the JaCoCo gate in app/pom.xml
-      # (scripts/verify_jacoco_coverage.py --minimum 0.70). `package` runs neither, so a
-      # coverage regression would pass unnoticed.
+      # `complexity-gate` execution and the JaCoCo gate in app/pom.xml. `package` runs neither,
+      # so a coverage regression would pass unnoticed.
       #
       # stdin is redirected because bootstrap code can issue a blocking System.in.read();
-      # the JUnit default timeout (PT5M) and Surefire forked-process budget (900 s) are the
+      # the JUnit default timeout (5 m) and Surefire forked-process budget (900 s) are the
       # backstops if anything still hangs.
       - name: Run test suite and coverage gate
         run: ./mvnw --batch-mode verify < /dev/null
@@ -214,9 +213,19 @@ jobs:
       # tests demonstrably ran but which records zero covered lines means the coverage agent
       # never attached - or the fork was killed before it could dump. The gate inside `verify`
       # only warns about this; make it fatal in CI so the hole cannot silently reopen.
-      # The minimum mirrors `jacoco.minimum.line.coverage` in the root pom.
       - name: Fail if any tested module was left uninstrumented
-        run: python3 ./scripts/verify_jacoco_coverage.py --minimum 0.70 --strict-instrumentation
+        run: |
+          # Read the floor from the root pom instead of duplicating it here. A hardcoded copy is
+          # exactly how the previous value drifted: CI said 0.70 while the real number was 74.51%,
+          # leaving four points of unguarded slack. Single source of truth, and fail loudly if the
+          # extraction ever breaks rather than silently testing against an empty minimum.
+          MINIMUM=$(sed -n 's/.*<jacoco\.minimum\.line\.coverage>\(.*\)<\/jacoco\.minimum\.line\.coverage>.*/\1/p' pom.xml | head -1)
+          if [ -z "$MINIMUM" ]; then
+            echo "Could not read jacoco.minimum.line.coverage from pom.xml" >&2
+            exit 1
+          fi
+          echo "Coverage floor read from pom.xml: $MINIMUM"
+          python3 ./scripts/verify_jacoco_coverage.py --minimum "$MINIMUM" --strict-instrumentation
 
       - name: Upload test reports on failure
         if: failure()

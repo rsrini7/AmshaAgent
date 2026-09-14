@@ -774,11 +774,12 @@ new image settings must also be represented in the distribution bootstrap and
    - Update `docs/assets/amsha_module_architecture.svg` to reflect 23 modules.
 5. **Doc Verification**:
    - `python3 ./scripts/verify_docs.py` (0 errors, 0 warnings).
-   - Check JaCoCo coverage gate (`verify_jacoco_coverage.py --minimum 0.70`).
+   - Check JaCoCo coverage gate (`verify_jacoco_coverage.py --minimum 0.74`; the authoritative
+     value is `jacoco.minimum.line.coverage` in the root `pom.xml`).
 
 ## Verification
 - `python3 ./scripts/verify_docs.py`
-- `python3 ./scripts/verify_jacoco_coverage.py --minimum 0.70`
+- `python3 ./scripts/verify_jacoco_coverage.py --minimum 0.74`
 """
     }
 

@@ -1,6 +1,7 @@
 # Java Test Coverage — Deep Analysis and Prioritized Action Plan
 
-> **Scope**: multi-module Maven reactor (29 modules, JDK 25, Quarkus 3.39.3)
+> **Scope**: multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator,
+> JDK 25, Quarkus 3.39.3)
 > **Method**: full-reactor test execution + JaCoCo 0.8.15 line/branch/method analysis, cross-referenced with a
 > static test-reference scan
 > **Measured**: 2026-09-14
@@ -28,10 +29,18 @@
 > `mise run test:summary` aggregates `target/surefire-reports/TEST-*.xml` and will over-report by the same mechanism
 > if stale files are present; always `clean` before quoting it.
 
-**Why "70%" looked plausible and was nevertheless meaningless.** `70%` is the value hard-coded as the *gate
-threshold* in `pom.xml` (`<jacoco.minimum.line.coverage>0.70</jacoco.minimum.line.coverage>`). The measured number
-happened to land just above it — but for two wrong reasons: `onboarding` (2,685 lines, 4.5% of the reactor) was
-recorded as 0% covered, and the gate that consumed the number was not running at all.
+> **Run-to-run stability.** An independent re-run of `clean verify` measured **74.52%** (44,708 lines) against the
+> **74.51%** (44,706) quoted above — a two-line difference. The metric is therefore stable to ~2 lines, and the
+> `0.74` gate floor sits ~300 lines below it. Quote the lower figure as the baseline; the gap is noise, not drift.
+
+**Why "70%" looked plausible and was nevertheless meaningless.** `70%` was the value hard-coded as the *gate
+threshold* in `pom.xml`. The measured number happened to land just above it — but for two wrong reasons:
+`onboarding` (2,685 lines, 4.5% of the reactor) was recorded as 0% covered, and the gate that consumed the number
+was not running at all.
+
+> **The floor has since been raised to `0.74`.** With both defects fixed, `0.70` was four points below reality and
+> permitted a silent 4.5pp decline. `pom.xml` now carries `0.74` with a comment explaining the headroom; CI reads
+> the value from the POM rather than duplicating it. See §10 item 2.
 
 **Branch coverage (58.31%) is now the weakest axis and the highest-value target.** Line coverage is respectable;
 the untested work is concentrated in *decision logic* — error paths, retries, fallbacks, and multi-backend
@@ -215,11 +224,19 @@ pom.xml                          jacoco-maven-plugin 0.8.15
   report         (verify)        → target/site/jacoco/jacoco.csv
   antrun         (initialize)    → touch target/jacoco.exec   ← creates a 0-byte file
 app/pom.xml                      antrun (verify)
-  → scripts/verify_jacoco_coverage.py --minimum 0.70
-scripts/quality/verify_jacoco_coverage.py   sums LINE_MISSED/LINE_COVERED across modules; fails < 70%
-scripts/quality/analyze_jacoco_coverage.py  ranks gaps; --target default 0.72
+  → scripts/verify_jacoco_coverage.py --minimum 0.74
+scripts/quality/verify_jacoco_coverage.py   sums LINE_MISSED/LINE_COVERED across modules; fails < 74%
+scripts/quality/analyze_jacoco_coverage.py  ranks gaps; --target default 0.80
 mise run test:summary                       surefire counts + jacoco summary + UI coverage
 ```
+
+> The `0.74` floor is defined once, in `pom.xml` as `jacoco.minimum.line.coverage`. `app/pom.xml` passes the
+> property through, and the CI step reads it out of the POM with `sed` rather than hardcoding a copy — the old
+> duplicated `0.70` is how the floor silently drifted four points below reality.
+>
+> `analyze_jacoco_coverage.py` was realigned in the same pass: its `--target` default moved `0.72` → `0.80` (the
+> goal recommended in §8, and now above the gate) and its badge colour bands moved `0.70` → `0.74`, so the badge
+> can no longer read "green" at a coverage level the build would reject.
 
 **Integrity problems in this pipeline — with current status:**
 
@@ -227,16 +244,17 @@ mise run test:summary                       surefire counts + jacoco summary + U
   the only phase that reaches the gate. The pre-existing `jvm-validation` job still builds with `-DskipTests` and
   exercises the running JAR over HTTP — that job is a smoke test, not a coverage check, and both are needed.
 - ~~**`verify` never completed.**~~ **Fixed (§1.2.1).** The gate was bound to a phase the build never reached.
+- ~~**`--minimum 0.70` was four points stale.**~~ **Fixed.** The floor is now `0.74` against a measured 74.51%
+  (§10 item 2).
+- ~~**`analyze_jacoco_coverage.py --target` defaulted to `0.72`.**~~ **Fixed.** Now `0.80`, above the gate; the
+  badge colour bands moved to `0.74` with it.
 - **The `touch jacoco.exec` step still masks missing instrumentation.** Its stated purpose is to stop JaCoCo from
   skipping reports for modules with no tests. The side effect is that a module whose agent silently fails
   produces a *valid-looking but empty* report showing 0% — indistinguishable from "no tests exist". This is exactly
   what hid the `onboarding` defect for months. `--strict-instrumentation` (0.5) now catches it, but the underlying
   `touch` remains a footgun worth revisiting.
-- **`--minimum 0.70` is a single reactor-wide number, and it is now four points stale.** A 90%-covered module can
-  subsidise a 30%-covered one, so per-module regressions are invisible; and with the true value at 74.51%, the floor
-  permits a four-point decline before it fires. See §10 item 2.
-- **`analyze_jacoco_coverage.py --target` defaults to `0.72`**, *below* the measured 74.51%, so the tool now offers
-  no stretch goal at all.
+- **`--minimum` is a single reactor-wide number.** A 90%-covered module can still subsidise a 30%-covered one, so
+  per-module regressions are invisible. See §10 item 3.
 
 ---
 
@@ -659,17 +677,24 @@ fallback), not more happy-path completions.
 
 1. **CI enforcement (non-negotiable).** ✅ **In place** — the `java-tests` job runs `./mvnw verify` on every push
    and fails on the coverage gate. It must stay on `verify`: `package` reaches neither PMD nor JaCoCo.
-2. **Ratchet, don't just threshold.** `jacoco.minimum.line.coverage` is still `0.70` while the real number is
-   **74.51%** — four points of slack that a regression could quietly consume. Raise it to **0.74** now, then
-   0.75 → 0.78 → 0.80 as §9 lands. A floor set below the actual value is not a ratchet.
+2. **Ratchet, don't just threshold.** ✅ **In place** — `jacoco.minimum.line.coverage` was `0.70` while the real
+   number was **74.51%**, four points of slack a regression could quietly consume. It is now **`0.74`**, leaving
+   ~0.5pp (~300 lines) of deliberate headroom so incidental churn does not trip the gate. Continue raising it as
+   §9 lands: 0.74 → 0.75 → 0.78 → 0.80. Do not set it flush against the measured value — the gate compares the raw
+   ratio and would fire on rounding.
 3. **Per-module floor.** Add `--module`-level minimums (start at 60%) so `classifier-api` at 100% cannot
    subsidise `persistence-postgres` at 66%.
 4. **Add a branch gate.** Line coverage is **74.51%** while branch is **58.31%** — a 16-point gap that a
-   line-only gate cannot see. Gate branch separately (start at 58%, target 62%).
+   line-only gate cannot see. Gate branch separately (start at 58%, target 62%). This is the largest remaining
+   hole in the enforcement story.
 5. **Fail on empty module reports.** ✅ **In place** — `--strict-instrumentation` runs as a fatal CI step. This is
    the specific guard for the §1.2.2 failure class; keep it fatal.
 6. **Report the badge from a real run.** `analyze_jacoco_coverage.py --badge` exists; publish it only from CI.
-7. **Exclude non-logic from the target, explicitly.** Rather than a blanket 80%, define the denominator to
+   The README badge was hand-corrected to 74.51% on 2026-09-14 — it should be generated, not typed.
+7. **Align `analyze_jacoco_coverage.py` with the gate.** ✅ **In place** — `--target` moved `0.72` → `0.80` (the §8
+   goal, and above the gate) and the badge colour bands moved `0.70` → `0.74`. Keep both above
+   `jacoco.minimum.line.coverage`: the analyzer must not report "target met" for a level the build rejects.
+8. **Exclude non-logic from the target, explicitly.** Rather than a blanket 80%, define the denominator to
    exclude `*ReflectionConfig`, `*Metrics`, `*Constants`, and DTO records — then hold *logic* classes to a
    higher bar (85%).
 

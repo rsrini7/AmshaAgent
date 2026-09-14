@@ -269,7 +269,9 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 After `mise run build:test` or `mise run test:ui`, run `mise run test:summary` to view total test counts
 and coverage across both Java and UI suites. For detailed breakdowns:
-- **Java**: `python3 ./scripts/analyze_jacoco_coverage.py --target 0.72` (`--module <mod>`, `--top 10`, `--badge`, `--json`).
+- **Java**: `python3 ./scripts/analyze_jacoco_coverage.py --target 0.80` (`--module <mod>`, `--top 10`, `--badge`, `--json`).
+  The default target tracks the goal in [`docs/TEST_COVERAGE_ANALYSIS.md`](./docs/TEST_COVERAGE_ANALYSIS.md) §8; the build gate itself is
+  `jacoco.minimum.line.coverage` in the root `pom.xml`.
 - **UI**: `mise run test:ui` (runs Vitest with V8 coverage) and `python3 ./scripts/analyze_ui_coverage.py --target 0.50` (`--top 10`, `--badge`, `--badge-tests`, `--json`).
 
 ### ❓ Reference

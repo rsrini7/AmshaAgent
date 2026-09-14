@@ -69,8 +69,13 @@ def main() -> int:
     parser.add_argument(
         "--target",
         type=float,
-        default=0.72,
-        help="desired reactor line coverage as a fraction (default: 0.72)",
+        default=0.80,
+        help=(
+            "desired reactor line coverage as a fraction (default: 0.80, the goal recommended in "
+            "docs/TEST_COVERAGE_ANALYSIS.md section 8). Must stay above the build gate "
+            "(`jacoco.minimum.line.coverage` in the root pom, currently 0.74) or the analyzer will "
+            "report 'target met' for a level the build rejects."
+        ),
     )
     parser.add_argument("--top", type=int, default=25, help="number of coverage gaps to show")
     parser.add_argument("--module", help="limit ranked gaps to one Maven module")
@@ -106,7 +111,9 @@ def main() -> int:
     pct = covered / total if total else 0.0
 
     if args.badge:
-        color = "brightgreen" if pct >= 0.70 else "yellow" if pct >= 0.50 else "red"
+        # Colour bands track the build gate (jacoco.minimum.line.coverage, currently 0.74): the badge
+        # must not read "green" at a coverage level the build would reject.
+        color = "brightgreen" if pct >= 0.74 else "yellow" if pct >= 0.50 else "red"
         print(f"![Coverage](https://img.shields.io/badge/Coverage-{pct * 100:.2f}%25-{color}.svg?style=flat)")
         return 0
 
