@@ -42,6 +42,102 @@ was not running at all.
 > permitted a silent 4.5pp decline. `pom.xml` now carries `0.74` with a comment explaining the headroom; CI reads
 > the value from the POM rather than duplicating it. See §10 item 2.
 
+> **Phase 1 progress (same day).** Coverage has since risen to **75.43%** (45,253 / 59,997) — **+127 lines,
+> +0.22pp** — measured from 6,414 tests in 904 suites, 0 failures, 0 errors, 7 skipped, with the `0.74` gate
+> green and unchanged. Branch coverage is **59.14%** and method **79.35%**. The work targeted the lowest-covered
+> classes in `core.agent.loop` / `core.tools` / `core.lifecycle`, most of which turned out to be unit-testable:
+> their collaborators arrive through **package-private fields or constructors** over port interfaces, so a plain
+> JUnit test in the same package can inject mocks with no Quarkus container.
+>
+> | Class | Before | After | Lines gained |
+> |---|---|---|---|
+> | `DynamicToolSchemaParser` | 0.0% | **100.0%** | 54 |
+> | `CronFailureCleanup` | 28.0% | **100.0%** | 72 |
+> | `ToolStepEscalationHandler` | 2.6% | **100.0%** | 37 |
+> | `ToolSchemaProvider` | 40.4% | **100.0%** | 34 |
+> | `LoopResultHandler` | 56.5% | **99.4%** | 69 |
+> | `ParallelBatchResumeHandler` | 67.1% | **100.0%** | 53 |
+> | `ToolStepHandler` | 71.0% | **100.0%** | 61 |
+> | `CheckpointResumeHandler` | 50.0% | **76.8%** | 66 |
+> | `ParallelToolStepExecutor` | 52.3% | **58.0%** | 14 |
+>
+> 114 of the 127 gained lines come from the two classes closed out last — `ToolStepHandler` (61) and
+> `ParallelBatchResumeHandler` (53), both now **fully line-covered** — covering the blocked-guard branch and its
+> repeat-termination rule, the delegate-session GitHub fast path, the whole auto-heal matrix (missing language,
+> validation rejection, failed re-execution, failed recovery, guard short circuit), the approval short circuit,
+> and on the resume side every parse-fallback, per-tool decision, delegation redirect, guard decision and
+> invocation outcome. 267 missed lines across the first five classes fell to **1**; the two largest remaining
+> classes in `core.agent.loop` (`CheckpointResumeHandler`, 540 lines, and `ParallelToolStepExecutor`, 503 lines)
+> each gained from the cron-lease guards, failure-notification, resume-budget and dispatch paths, but both still
+> need a CDI container or a `ManagedExecutor` fixture to reach their async bodies — see §1.3.
+>
+> The headline figure above is deliberately **left at 74.51%**: it is the measurement that anchored the ratchet,
+> and overwriting it would erase the evidence that the floor was set correctly. `0.74` is still the gate, and the
+> next step (`0.74` → `0.75`) is now within reach — `0.75` leaves ~0.43pp (~260 lines) of headroom, against
+> run-to-run jitter of ~2 lines, so it can be raised deliberately rather than reflexively.
+
+### 1.3 Dead code found while raising coverage
+
+Two guards in `CheckpointResumeHandler` cannot be exercised and should be deleted or simplified rather than
+"covered":
+
+1. **The blank-resume-goal guards (lines 178–181 and 455–459) are unreachable.**
+   `ResumeStrategyDispatcher.resolveResumeGoal` never returns `null` or blank — it falls back to
+   `AgentSentinels.GOAL_RESUME_APPROVED` — so `resumeGoal == null || resumeGoal.isBlank()` is always false.
+2. **`fallbackResultDispatch`'s CLI branch (lines 409–417) is unreachable.** It recomputes the *identical*
+   `isCli` condition already evaluated false at line 354 before the fallback can be reached, so the branch can
+   never be taken.
+
+Relatedly, the `if (result instanceof AgentResult.AwaitingApproval)` checks at lines 361–366 and 411–415 have
+**identical bodies in both arms** — the condition changes nothing. Tests now pin the behaviour, but the branches
+are redundant.
+
+### 1.4 A crash found while raising coverage
+
+Writing the resume-path tests surfaced a genuine defect, not a coverage gap.
+
+**`ParallelBatchResumeHandler` line 97 throws `NullPointerException` when a batch call has no `callId`.**
+
+```java
+Map<String, JsonNode> preExecuted = Map.of();          // line 84 — immutable, empty
+...
+String preExecutedKey = preExecuted.containsKey(call.callId()) ? call.callId() : call.toolName();
+```
+
+`Map.of()` is immutable and its `containsKey` calls `Objects.requireNonNull` on the key, so a `null` `callId`
+raises a message-less `NullPointerException` **before** the `call.toolName()` fallback that the expression was
+clearly written to provide. The observed frames are:
+
+```
+java.lang.NullPointerException
+    at java.base/java.util.Objects.requireNonNull(Objects.java:220)
+    at java.base/java.util.ImmutableCollections$MapN.containsKey(ImmutableCollections.java:1451)
+    at com.amsha.core.agent.loop.ParallelBatchResumeHandler.resumeParallelBatch(ParallelBatchResumeHandler.java:97)
+```
+
+The exception is raised outside the per-call `try` block (which starts at line 130), so it escapes
+`resumeParallelBatch` entirely and fails the whole HITL resume rather than degrading one call.
+
+This is inconsistent with the rest of the codebase, which treats a null call ID as expected input:
+
+- `BatchDecisionUtil.decisionKey(call)` — *"Matches checkpoint keying when a provider omitted call IDs."*
+- `ParallelToolStepExecutor.resultKey(call)` — `call.callId() == null || call.callId().isBlank() ? call.toolName() : call.callId()`
+
+The minimal fix is to mirror `resultKey`:
+
+```java
+String preExecutedKey = call.callId() != null && preExecuted.containsKey(call.callId())
+        ? call.callId()
+        : call.toolName();
+```
+
+**Reachability is unproven.** `ParallelToolCallCollapser` (line 249) synthesises an ID when the provider omits
+one, so the main LLM path always produces a non-null `callId`. The exposure is therefore a checkpoint whose
+`pendingToolParametersJson` was written by another producer — an older build, or a hand-edited/imported
+checkpoint. Given that the two neighbouring helpers defend against exactly this case, the guard is worth adding
+regardless; but the fix has **not** been applied here, and the test suite deliberately does not pin the NPE with
+`assertThrows` (doing so would make the fix fail the build). Decide whether to harden or leave it.
+
 **Branch coverage (58.31%) is now the weakest axis and the highest-value target.** Line coverage is respectable;
 the untested work is concentrated in *decision logic* — error paths, retries, fallbacks, and multi-backend
 parity — not in untouched classes.
@@ -606,6 +702,27 @@ was wrong, not as outstanding work.
 | `core.lifecycle.CronFailureCleanup` | 72 | **28%** | Unit: cleanup on failure, retry exhaustion |
 | `core.tools.ToolSchemaProvider` | 113 LOC untested | — | Unit |
 | `core.routing.ModelRouter`, `NetworkProfilePolicyValidator` (135 LOC untested) | 57 | 67% | Unit: routing fallback, invalid profile |
+
+**Status (2026-09-14).** Done, all verified by a green `clean verify`:
+
+| Class | Missed before | Line coverage now | Test file |
+|---|---:|---:|---|
+| `DynamicToolSchemaParser` | 54 | **100%** | `DynamicToolSchemaParserTest` (new) |
+| `CronFailureCleanup` | 72 | **100%** | `CronFailureCleanupTest` (2 → 30 tests) |
+| `ToolStepEscalationHandler` | 37 | **100%** | `ToolStepEscalationHandlerTest` (new) |
+| `ToolSchemaProvider` | 34 | **100%** | `ToolSchemaProviderTest` (new) |
+| `ParallelBatchResumeHandler` | 53 | **100%** | `ParallelBatchResumeHandlerTest` (2 → 19 tests) |
+| `ToolStepHandler` | 61 | **100%** | `ToolStepHandlerInvocationTest` (new) + existing `ToolStepHandlerGuardTest` |
+| `LoopResultHandler` | 70 | **99.4%** | `LoopResultHandlerTest` (3 → 39 tests) |
+| `CheckpointResumeHandler` | 123 | **76.8%** | `CheckpointResumeHandlerUnitTest` (17 → 35 tests) |
+| `ParallelToolStepExecutor` | 116 | **58.0%** | `ParallelToolStepExecutorTest` (3 → 8 tests) |
+| `ToolRegistry` | 83 | **87.8%** | `ToolRegistryUnitTest` (extended) |
+
+Still open in this phase: `AgentSessionApprovalHandler` (223 LOC), `DelegateApprovalCascade` (158 LOC),
+`PendingToolFailureHandler`, `ThinkingState`, `BatchResultAggregator`, and the remaining loop state vocabulary;
+plus the async bodies of `CheckpointResumeHandler` / `ParallelToolStepExecutor` noted in §1.3. The `ToolRegistry`
+and `LoopResultHandler` figures in the table above are the **pre-work** numbers — both have since been addressed.
+
 
 ### Phase 2 — Security-critical and execution-boundary code
 
