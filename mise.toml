@@ -122,16 +122,24 @@ dir = "{{config_root}}"
 quiet = true
 shell = "bash -c"
 run = """
-TEST_SUMMARY=$(rg -u -g "**/target/surefire-reports/TEST-*.xml" "<testsuite" . 2>/dev/null | awk -F' ' '{
-    for(i=1; i<=NF; i++) {
-        if($i ~ /tests=/)    { split($i, a, "\\x22"); t += a[2] }
-        if($i ~ /errors=/)   { split($i, a, "\\x22"); e += a[2] }
-        if($i ~ /failures=/) { split($i, a, "\\x22"); f += a[2] }
-        if($i ~ /skipped=/)  { split($i, a, "\\x22"); s += a[2] }
+# NOTE: this aggregation deliberately uses only POSIX `find`/`grep`/`awk`. It previously used
+# `rg`, which is not declared in [tools] and therefore absent on a clean checkout — and because
+# stderr was discarded, the task printed a confident "Total: 0" instead of failing. Keep the
+# dependency set to tools that are guaranteed present, and never let "no data" look like "zero".
+if [ "$(find . -path "*/target/surefire-reports/TEST-*.xml" -type f 2>/dev/null | wc -l | tr -d ' ')" -eq 0 ]; then
+    echo "Java Tests: no surefire reports found - run './mvnw test' first." >&2
+else
+    TEST_SUMMARY=$(find . -path "*/target/surefire-reports/TEST-*.xml" -type f -exec grep -h "<testsuite" {} + 2>/dev/null | awk -F' ' '{
+        for(i=1; i<=NF; i++) {
+            if($i ~ /tests=/)    { split($i, a, "\\x22"); t += a[2] }
+            if($i ~ /errors=/)   { split($i, a, "\\x22"); e += a[2] }
+            if($i ~ /failures=/) { split($i, a, "\\x22"); f += a[2] }
+            if($i ~ /skipped=/)  { split($i, a, "\\x22"); s += a[2] }
+        }
     }
-}
-END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d", t, f, e, s }')
-echo "Java Tests: $TEST_SUMMARY"
+    END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d | Suites: %d", t, f, e, s, NR }')
+    echo "Java Tests: $TEST_SUMMARY"
+fi
 python3 ./scripts/analyze_jacoco_coverage.py --summary 2>/dev/null
 if [ -f "ui/coverage/coverage-summary.json" ] || [ -f "ui/coverage/junit.xml" ]; then
     echo "---"

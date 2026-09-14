@@ -1,13 +1,5 @@
 AMSHA_LLM_API_KEY: "dummy-test-key"
 
-quarkiverse:
-  mcp:
-    server:
-      http:
-        enabled: false
-      stdio:
-        enabled: false
-
 amsha:
   auto-seed-secrets: false
   llm:
@@ -64,6 +56,21 @@ quarkus:
     timeout: 5S
   scheduler:
     enabled: false
+  # The stdio MCP transport reads System.in on a NON-DAEMON thread and only returns on EOF
+  # (StdioMcpMessageHandler). If it stays enabled during tests that thread blocks in
+  # readLine() forever, the forked JVM never terminates after System.exit(0), Surefire
+  # force-kills it once forkedProcessExitTimeoutInSeconds elapses, and the JaCoCo shutdown
+  # hook never runs - leaving target/jacoco.exec at 0 bytes and this module reporting 0%
+  # coverage while all its tests pass.
+  #
+  # The real prefix is `quarkus.mcp.server.stdio`
+  # (io.quarkiverse.mcp:quarkus-mcp-server-stdio, McpStdioRuntimeConfig). This file used to
+  # say `quarkiverse.mcp.server.stdio`, which is not a known config root: it was ignored
+  # silently, with no "Unrecognized configuration key" warning to give it away.
+  mcp:
+    server:
+      stdio:
+        enabled: false
   datasource:
     db-kind: sqlite
     jdbc:

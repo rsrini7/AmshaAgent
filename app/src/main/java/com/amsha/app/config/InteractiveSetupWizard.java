@@ -487,6 +487,15 @@ public class InteractiveSetupWizard {
 
     private static String readLineWithFallback(Console console, String prompt) {
         if (console != null) return console.readLine(prompt);
+        // No console attached (pipe, service manager, container without a TTY, test
+        // harness). Only consume input that is already buffered — calling read() on an
+        // idle stdin blocks forever, which would hang bootstrap with no timeout guard.
+        // Treat "nothing buffered" as "skip this prompt".
+        try {
+            if (System.in.available() == 0) return null;
+        } catch (IOException _) {
+            return null;
+        }
         System.err.print(prompt);
         System.err.flush();
         try (ByteArrayOutputStream line = new ByteArrayOutputStream()) {

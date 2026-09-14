@@ -39,7 +39,10 @@
 
 ## 1. Running the Test Suite
 
-Amsha Agent has **1664 tests** across the multi-module reactor.
+Amsha Agent has **6,200+ tests** across the multi-module reactor (measured 2026-09-14 after `clean verify`:
+6,199 tests in 900 suites, 0 failures, 0 errors, 7 skipped). This number is intentionally given as a floor —
+derive the exact current count with `mise run test:summary` (see [§1.6](#16-target-0-failures-0-errors-no-drop-in-test-count)),
+and run it after a `clean` build: the task aggregates surefire XML and will count leftover report files otherwise.
 
 ### 1.1 Run all tests
 
@@ -106,9 +109,17 @@ When the `%test` profile is active:
 - Fault tolerance is disabled (`quarkus.smallrye-fault-tolerance.enabled: false`)
 - `DevSecretSeederStartup` bean is absent - it is `@IfBuildProfile("dev")` only (Phase 64-B2)
 
-### 1.6 Target: 1664+ green, 0 failures
+### 1.6 Target: 0 failures, 0 errors, no drop in test count
 
-After any code change, the full suite must remain at or above 1664 passing tests. Do not accept a lower count — missing tests indicate a compilation failure or a deleted test case.
+After any code change, the full suite must report **0 failures and 0 errors**, and the total test count must not
+decrease. Do not accept a lower count — a drop indicates a compilation failure or a deleted test case.
+
+The absolute count is deliberately *not* pinned to a literal here. It changes with every added test, and a stale
+number is worse than none (this section previously read "1664", which had drifted by ~4,500 tests). Derive it:
+
+```bash
+mise run test:summary   # surefire totals + reactor JaCoCo coverage
+```
 
 ---
 
@@ -2260,7 +2271,7 @@ Run after deploying all Budget Governance fixes.
 
 Run after any significant code change. Combine automated + manual.
 
-### Automated (1664 tests — must remain green)
+### Automated (full suite — must remain green)
 
 ```bash
 ./mvnw clean test -pl app -am
@@ -2514,4 +2525,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 1664 tests · 28 Maven modules · 21 tools · 18 LLM providers · Tiered Memory · Answer Quality Guard*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 6,200+ tests · 28 Maven modules · 21 tools · 18 LLM providers · Tiered Memory · Answer Quality Guard*

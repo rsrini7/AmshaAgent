@@ -51,9 +51,34 @@ def line_counts(report: Path) -> tuple[int, int]:
     return missed, covered
 
 
+def executed_test_count(module: Path) -> int:
+    """Count tests reported by Surefire.
+
+    Distinguishes "this module has no tests" (fine) from "tests ran but the coverage
+    agent never attached" (a silent measurement failure that must not be averaged in
+    as 0% coverage).
+    """
+    reports = module / "target" / "surefire-reports"
+    if not reports.is_dir():
+        return 0
+    total = 0
+    for report in reports.glob("TEST-*.xml"):
+        try:
+            suite = ET.parse(report).getroot()
+        except ET.ParseError:
+            continue
+        total += int(suite.get("tests", 0) or 0)
+    return total
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--minimum", type=float, required=True)
+    parser.add_argument(
+        "--strict-instrumentation",
+        action="store_true",
+        help="Fail when a module with passing tests reports zero coverage (agent never attached).",
+    )
     args = parser.parse_args()
 
     if not 0 <= args.minimum <= 1:
@@ -72,6 +97,7 @@ def main() -> int:
     missed = 0
     covered = 0
     missing = []
+    uninstrumented = []
 
     for module in reactor_modules(root):
         report = module / "target" / "site" / "jacoco" / "jacoco.csv"
@@ -79,12 +105,36 @@ def main() -> int:
             module_missed, module_covered = line_counts(report)
             missed += module_missed
             covered += module_covered
+            if (
+                module_covered == 0
+                and module_missed > 0
+                and has_production_classes(module)
+                and executed_test_count(module) > 0
+            ):
+                uninstrumented.append(module.name)
         elif has_production_classes(module):
             missing.append(module.name)
 
     if missing:
         print(f"Missing JaCoCo reports for Java modules: {', '.join(missing)}", file=sys.stderr)
         return 1
+
+    if uninstrumented:
+        detail = (
+            "JaCoCo recorded zero covered lines for modules whose tests did run, so the coverage "
+            f"agent never attached: {', '.join(uninstrumented)}"
+        )
+        hint = (
+            "These modules are counted as 0% covered, which understates the reactor figure. "
+            "Verify the module's Surefire <argLine> composes with jacoco:prepare-agent "
+            "(the parent uses late evaluation '@{argLine}')."
+        )
+        if args.strict_instrumentation:
+            print(detail, file=sys.stderr)
+            print(hint, file=sys.stderr)
+            return 1
+        print(f"WARNING: {detail}", file=sys.stderr)
+        print(hint, file=sys.stderr)
 
     total = missed + covered
     if total == 0:

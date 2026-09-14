@@ -1,6 +1,8 @@
 package com.amsha.app.config;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +22,8 @@ public class PlaywrightCliInstaller {
     private static final Logger log = Logger.getLogger(PlaywrightCliInstaller.class);
 
     private static final String NPM_INSTALL_TIMEOUT_SEC = "120";
+    private static final long INSTALL_TIMEOUT_SECONDS = 120;
+    private static final long BROWSER_INSTALL_TIMEOUT_SECONDS = 300;
     private static final String NODE_MIN_VERSION = "20";
 
     public static void ensureCliInstalled() {
@@ -128,9 +132,9 @@ public class PlaywrightCliInstaller {
             ProcessBuilder pb = new ProcessBuilder(npmCmd);
             pb.redirectErrorStream(true);
             pb.environment().put("NPM_CONFIG_TIMEOUT", NPM_INSTALL_TIMEOUT_SEC);
-            Process p = pb.start();
-            String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            int exit = p.waitFor();
+            CommandResult result = runBounded(pb, INSTALL_TIMEOUT_SECONDS);
+            int exit = result.exitCode();
+            String output = result.output();
 
             if (exit == 0) {
                 System.err.println("  ✓ @playwright/cli installed.");
@@ -162,12 +166,42 @@ public class PlaywrightCliInstaller {
     private static String exec(List<String> cmd) throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(platformCommand(cmd));
         pb.redirectErrorStream(true);
-        Process p = pb.start();
-        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        int exit = p.waitFor();
-        if (exit != 0) throw new IOException("exit " + exit + ": " + out.trim());
-        return out;
+        CommandResult result = runBounded(pb, BROWSER_INSTALL_TIMEOUT_SECONDS);
+        if (result.exitCode() != 0) {
+            throw new IOException(
+                    "exit " + result.exitCode() + ": " + result.output().trim());
+        }
+        return result.output();
     }
+
+    /**
+     * Runs a command with a hard timeout, draining stdout on a virtual thread so a chatty
+     * child process cannot deadlock against a full pipe buffer. Returns exit code {@code -1}
+     * when the timeout elapses (the process is destroyed first).
+     */
+    private static CommandResult runBounded(ProcessBuilder pb, long timeoutSeconds)
+            throws IOException, InterruptedException {
+        Process p = pb.start();
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        Thread drainer = Thread.ofVirtual().start(() -> {
+            try (InputStream in = p.getInputStream()) {
+                in.transferTo(sink);
+            } catch (IOException _) {
+                // Child exited early; whatever was buffered is enough for diagnostics.
+            }
+        });
+
+        if (!p.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            p.destroyForcibly();
+            p.waitFor(5, TimeUnit.SECONDS);
+            drainer.join(1000);
+            return new CommandResult(-1, "timed out after " + timeoutSeconds + "s");
+        }
+        drainer.join(5000);
+        return new CommandResult(p.exitValue(), sink.toString(StandardCharsets.UTF_8));
+    }
+
+    private record CommandResult(int exitCode, String output) {}
 
     private static boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");

@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +66,29 @@ class InteractiveSetupWizardTest {
             System.setIn(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
             assertDoesNotThrow(() -> InteractiveSetupWizard.run(tempDir, new String[0]));
         }
+    }
+
+    @Test
+    void testRunWithNoConsoleAndNoBufferedInputDoesNotBlock(@TempDir Path tempDir) {
+        System.clearProperty("AMSHA_LLM_PROVIDER");
+        // Reproduces a non-TTY stdin (pipe, service manager, container, test harness) where
+        // System.console() is null and nothing is buffered. The wizard must skip its prompts
+        // rather than issue a blocking read(), which previously hung bootstrap indefinitely.
+        System.setIn(new InputStream() {
+            @Override
+            public int read() {
+                throw new AssertionError("blocking read() must not be called when no input is available");
+            }
+
+            @Override
+            public int available() {
+                return 0;
+            }
+        });
+
+        assertTimeoutPreemptively(
+                Duration.ofSeconds(10),
+                () -> assertDoesNotThrow(() -> InteractiveSetupWizard.run(tempDir, new String[0])));
     }
 
     @Test

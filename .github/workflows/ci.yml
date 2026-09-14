@@ -176,6 +176,66 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  java-tests:
+    name: Java Tests & Coverage Gate
+    needs: quality-checks
+    runs-on: ubuntu-latest
+    # Local full-reactor `verify` runs in ~10-15 min; 45 bounds a hung fork without
+    # masking a genuinely slow runner.
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "25"
+          cache: "maven"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # `verify` is required, not `package`: it is the only phase that reaches the PMD
+      # `complexity-gate` execution and the JaCoCo gate in app/pom.xml
+      # (scripts/verify_jacoco_coverage.py --minimum 0.70). `package` runs neither, so a
+      # coverage regression would pass unnoticed.
+      #
+      # stdin is redirected because bootstrap code can issue a blocking System.in.read();
+      # the JUnit default timeout (PT5M) and Surefire forked-process budget (900 s) are the
+      # backstops if anything still hangs.
+      - name: Run test suite and coverage gate
+        run: ./mvnw --batch-mode verify < /dev/null
+
+      # Regression guard for the "onboarding 0-byte jacoco.exec" class of bug: a module whose
+      # tests demonstrably ran but which records zero covered lines means the coverage agent
+      # never attached - or the fork was killed before it could dump. The gate inside `verify`
+      # only warns about this; make it fatal in CI so the hole cannot silently reopen.
+      # The minimum mirrors `jacoco.minimum.line.coverage` in the root pom.
+      - name: Fail if any tested module was left uninstrumented
+        run: python3 ./scripts/verify_jacoco_coverage.py --minimum 0.70 --strict-instrumentation
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-surefire-reports
+          path: "**/target/surefire-reports/**"
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload coverage report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-jacoco-report
+          path: "**/target/site/jacoco/**"
+          if-no-files-found: ignore
+          retention-days: 7
+
   native-validation:
     name: Native Build Validation
     needs: quality-checks
