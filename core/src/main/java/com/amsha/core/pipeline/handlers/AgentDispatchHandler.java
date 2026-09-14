@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import com.amsha.channel.api.ApprovalPrompt;
 import com.amsha.channel.api.ChannelPlugin;
+import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.loop.AgentLoop;
@@ -327,10 +328,17 @@ public class AgentDispatchHandler implements MessageHandler {
                 .find(context.getChannelType())
                 .map(ChannelPlugin::sender)
                 .ifPresentOrElse(
-                        s -> s.sendRaw(context.getUser(), "❌ An internal error occurred. Please try again."),
-                        () -> log.warnf(
-                                "AgentDispatchHandler: no ChannelPlugin for type %s - error reply dropped",
-                                context.getChannelType()));
+                        s -> s.sendRaw(context.getUser(), "❌ An internal error occurred. Please try again."), () -> {
+                            if (ChannelType.REST_API.equals(context.getChannelType())) {
+                                log.debugf(
+                                        "AgentDispatchHandler: no ChannelPlugin for type %s - error reply handled via REST response",
+                                        context.getChannelType());
+                            } else {
+                                log.warnf(
+                                        "AgentDispatchHandler: no ChannelPlugin for type %s - error reply dropped",
+                                        context.getChannelType());
+                            }
+                        });
         return HandleResult.STOP;
     }
 
@@ -356,9 +364,17 @@ public class AgentDispatchHandler implements MessageHandler {
                                 speechDeliveryService.deliver(context, s, context.getUser(), result, output);
                             }
                         },
-                        () -> log.warnf(
-                                "AgentDispatchHandler: no ChannelPlugin for type %s - result reply dropped",
-                                context.getChannelType()));
+                        () -> {
+                            if (ChannelType.REST_API.equals(context.getChannelType())) {
+                                log.debugf(
+                                        "AgentDispatchHandler: no ChannelPlugin for type %s - result reply handled via REST response",
+                                        context.getChannelType());
+                            } else {
+                                log.warnf(
+                                        "AgentDispatchHandler: no ChannelPlugin for type %s - result reply dropped",
+                                        context.getChannelType());
+                            }
+                        });
     }
 
     static String normalizeGoal(String goal) {

@@ -439,4 +439,21 @@ class CockpitHealthResourceTest {
         assertEquals("CONFIGURED", codexSummary.status());
         assertEquals("chatgpt.com", codexSummary.baseUrl());
     }
+
+    @Test
+    void databaseSummaryReportsUpWhenFsBackendConfigured() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        resource.runtimeBackend = "fs";
+        when(dataSourceInstance.isResolvable()).thenReturn(false);
+        when(healthChecksInstance.iterator()).thenAnswer(inv -> List.of().iterator());
+        when(providersInstance.iterator())
+                .thenAnswer(inv -> List.<AgentChatModelProvider>of().iterator());
+
+        Response response = resource.getHealth();
+        CockpitHealthResponse body = (CockpitHealthResponse) response.getEntity();
+
+        assertEquals("UP", body.database().status());
+        assertFalse(body.database().poolEnabled());
+        assertEquals("fs", body.database().backend());
+    }
 }

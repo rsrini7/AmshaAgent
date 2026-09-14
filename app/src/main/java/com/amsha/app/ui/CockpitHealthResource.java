@@ -183,7 +183,7 @@ public class CockpitHealthResource {
                     // Metrics might not be enabled or supported on this connection
                 }
             }
-        } else if ("filesystem".equalsIgnoreCase(runtimeBackend)) {
+        } else if ("filesystem".equalsIgnoreCase(runtimeBackend) || "fs".equalsIgnoreCase(runtimeBackend)) {
             status = "UP";
             poolEnabled = false;
         } else {

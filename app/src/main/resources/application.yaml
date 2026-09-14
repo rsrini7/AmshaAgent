@@ -1472,7 +1472,7 @@ mp:
         backend: fs
   quarkus:
     datasource:
-      enabled: false
+      active: false
     flyway:
       enabled: false
     log:

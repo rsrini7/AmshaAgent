@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.amsha.channel.api.ChannelPlugin;
+import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.message.UserMessages;
@@ -70,11 +71,17 @@ public class MessagePipeline {
                     channelPluginRegistry
                             .find(context.getChannelType())
                             .map(ChannelPlugin::sender)
-                            .ifPresentOrElse(
-                                    s -> s.sendRaw(context.getUser(), UserMessages.INTERNAL_ERROR),
-                                    () -> log.warnf(
+                            .ifPresentOrElse(s -> s.sendRaw(context.getUser(), UserMessages.INTERNAL_ERROR), () -> {
+                                if (ChannelType.REST_API.equals(context.getChannelType())) {
+                                    log.debugf(
+                                            "MessagePipeline: no sender for type %s - error handled via REST response",
+                                            context.getChannelType());
+                                } else {
+                                    log.warnf(
                                             "MessagePipeline: no sender for type %s - error notification dropped",
-                                            context.getChannelType()));
+                                            context.getChannelType());
+                                }
+                            });
                 } catch (Exception notifyEx) {
                     log.warnf(
                             "Failed to send pipeline error notification to chat %s: %s",

@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import com.amsha.channel.api.ChannelCommand;
 import com.amsha.channel.api.ChannelPlugin;
+import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.channel.ChannelPluginRegistry;
@@ -189,9 +190,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     .ifPresentOrElse(
                             s -> s.sendRaw(
                                     context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
-                            () -> log.warnf(
-                                    "CommandDispatchHandler: no sender for type %s - error reply dropped",
-                                    context.getChannelType()));
+                            () -> logNoSenderError(context.getChannelType()));
             return HandleResult.STOP;
         }
 
@@ -202,8 +201,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     .find(context.getChannelType())
                     .map(ChannelPlugin::sender)
                     .ifPresentOrElse(
-                            s -> s.sendRaw(context.getUser(), response),
-                            () -> log.warnf(WARN_NO_SENDER, context.getChannelType()));
+                            s -> s.sendRaw(context.getUser(), response), () -> logNoSender(context.getChannelType()));
             return HandleResult.STOP;
         }
 
@@ -213,7 +211,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     .map(ChannelPlugin::sender)
                     .ifPresentOrElse(
                             s -> s.sendRaw(context.getUser(), "❓ Did you mean `/crons`? Use that to list tasks."),
-                            () -> log.warnf(WARN_NO_SENDER, context.getChannelType()));
+                            () -> logNoSender(context.getChannelType()));
             return HandleResult.STOP;
         }
 
@@ -252,7 +250,7 @@ public class CommandDispatchHandler implements MessageHandler {
                     .ifPresentOrElse(
                             s -> s.sendRaw(
                                     context.getUser(), "⚠️ Command failed due to an internal error. Please try again."),
-                            () -> log.warnf(WARN_NO_SENDER, context.getChannelType()));
+                            () -> logNoSender(context.getChannelType()));
             return;
         }
 
@@ -265,8 +263,26 @@ public class CommandDispatchHandler implements MessageHandler {
                         .map(ChannelPlugin::sender)
                         .ifPresentOrElse(
                                 s -> s.sendRaw(context.getUser(), response),
-                                () -> log.warnf(WARN_NO_SENDER, context.getChannelType()));
+                                () -> logNoSender(context.getChannelType()));
             });
+        }
+    }
+
+    private void logNoSender(ChannelType channelType) {
+        if (ChannelType.REST_API.equals(channelType)) {
+            log.debugf(WARN_NO_SENDER, channelType);
+        } else {
+            log.warnf(WARN_NO_SENDER, channelType);
+        }
+    }
+
+    private void logNoSenderError(ChannelType channelType) {
+        if (ChannelType.REST_API.equals(channelType)) {
+            log.debugf(
+                    "CommandDispatchHandler: no sender for type %s - error reply handled via REST response",
+                    channelType);
+        } else {
+            log.warnf("CommandDispatchHandler: no sender for type %s - error reply dropped", channelType);
         }
     }
 }
