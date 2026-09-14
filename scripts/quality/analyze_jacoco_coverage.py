@@ -62,6 +62,35 @@ def additional_lines(covered: int, total: int, target: float) -> int:
     return max(0, math.ceil(target * total - covered - 1e-12))
 
 
+def missed_lines_by_gap(root: Path, selected: list[CoverageGap]) -> dict[CoverageGap, "ClassLines"]:
+    """Parse each module's jacoco.xml once and attach missed line numbers to the gaps.
+
+    Returns a mapping only for gaps whose module produced an XML report. The per-module
+    XML is parsed at most once even when several selected gaps live in the same module.
+    """
+    module_by_name = {m.name: m for m in reactor_modules(root)}
+    parsed: dict[Path, ET.Element] = {}
+    out: dict[CoverageGap, "ClassLines"] = {}
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from jacoco_lines import find_class_lines_in_root
+
+    for gap in selected:
+        module = module_by_name.get(gap.module)
+        if module is None:
+            continue
+        xml = module / "target" / "site" / "jacoco" / "jacoco.xml"
+        if not xml.is_file():
+            continue
+        root_el = parsed.get(xml)
+        if root_el is None:
+            root_el = ET.parse(xml).getroot()
+            parsed[xml] = root_el
+        lines = find_class_lines_in_root(root_el, f"{gap.package}.{gap.class_name}", missed_only=True)
+        if lines is not None:
+            out[gap] = lines
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Analyze reactor JaCoCo CSV reports and rank classes with uncovered lines."
@@ -82,6 +111,15 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     parser.add_argument("--badge", action="store_true", help="emit shields.io Markdown badge")
     parser.add_argument("--summary", action="store_true", help="emit single-line coverage summary")
+    parser.add_argument(
+        "--lines",
+        action="store_true",
+        help=(
+            "attach the actual missed JaCoCo line numbers to each reported gap by parsing the "
+            "module's jacoco.xml. Makes the gap report directly actionable (you see which lines to "
+            "target) instead of only a count. Slower because it reads XML per module; implied by --json."
+        ),
+    )
     args = parser.parse_args()
     if not 0 <= args.target <= 1:
         parser.error("--target must be between 0 and 1")
@@ -126,6 +164,14 @@ def main() -> int:
     selected = ranked[: args.top]
 
     if args.json:
+        # --json implies --lines: the machine-readable gap should carry the line numbers.
+        line_map = missed_lines_by_gap(root, selected)
+    elif args.lines:
+        line_map = missed_lines_by_gap(root, selected)
+    else:
+        line_map = {}
+
+    if args.json:
         print(
             json.dumps(
                 {
@@ -134,7 +180,15 @@ def main() -> int:
                     "coverage": pct,
                     "target": args.target,
                     "additional_covered_lines_needed": needed,
-                    "gaps": [asdict(gap) | {"coverage": gap.coverage} for gap in selected],
+                    "gaps": [
+                        asdict(gap)
+                        | {
+                            "coverage": gap.coverage,
+                            "source_file": (line_map[gap].source_name if gap in line_map else None),
+                            "missed_line_numbers": (line_map[gap].missed if gap in line_map else None),
+                        }
+                        for gap in selected
+                    ],
                 },
                 indent=2,
             )
@@ -155,6 +209,10 @@ def main() -> int:
             f"{gap.missed_lines:7d} {gap.covered_lines:7d} {gap.coverage:7.2%}  "
             f"{gap.module}:{qualified_name}"
         )
+        if gap in line_map:
+            ln = line_map[gap]
+            print(f"        source: {ln.source_name}")
+            print(f"        missed ({len(ln.missed)}): {ln.missed}")
     return 0
 
 

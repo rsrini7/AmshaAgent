@@ -42,12 +42,12 @@ was not running at all.
 > permitted a silent 4.5pp decline. `pom.xml` now carries `0.74` with a comment explaining the headroom; CI reads
 > the value from the POM rather than duplicating it. See §10 item 2.
 
-> **Phase 1 progress (same day).** Coverage has since risen to **75.43%** (45,253 / 59,997) — **+127 lines,
-> +0.22pp** — measured from 6,414 tests in 904 suites, 0 failures, 0 errors, 7 skipped, with the `0.74` gate
-> green and unchanged. Branch coverage is **59.14%** and method **79.35%**. The work targeted the lowest-covered
-> classes in `core.agent.loop` / `core.tools` / `core.lifecycle`, most of which turned out to be unit-testable:
-> their collaborators arrive through **package-private fields or constructors** over port interfaces, so a plain
-> JUnit test in the same package can inject mocks with no Quarkus container.
+> **Phase 1 progress (same day).** Coverage has since risen to **76.10%** (45,657 / 59,997) — **+951 lines,
+> +1.59pp** over the 74.51% baseline above — measured from 6,528 tests in 905 suites, 0 failures, 0 errors,
+> 7 skipped, with the `0.74` gate green and unchanged. Branch coverage is **59.62%** and method **79.62%**. The
+> work targeted the lowest-covered classes in `core.agent.loop` / `core.tools` / `core.lifecycle`, most of which
+> turned out to be unit-testable: their collaborators arrive through **package-private fields or constructors**
+> over port interfaces, so a plain JUnit test in the same package can inject mocks with no Quarkus container.
 >
 > | Class | Before | After | Lines gained |
 > |---|---|---|---|
@@ -58,39 +58,202 @@ was not running at all.
 > | `LoopResultHandler` | 56.5% | **99.4%** | 69 |
 > | `ParallelBatchResumeHandler` | 67.1% | **100.0%** | 53 |
 > | `ToolStepHandler` | 71.0% | **100.0%** | 61 |
+> | `ThinkingState` | 46.4% | **100.0%** | 45 |
 > | `CheckpointResumeHandler` | 50.0% | **76.8%** | 66 |
-> | `ParallelToolStepExecutor` | 52.3% | **58.0%** | 14 |
+> | `ParallelToolStepExecutor` | 52.3% | **99.2%** | 114 |
+> | `StepDecisionRouter` | 57.4% | **98.3%** | 47 |
+> | `ExecutionFailureRecoveryService` | 59.2% | **100.0%** | 49 |
+> | `PendingToolResumeExecutor` | 79.7% | **100.0%** | 47 |
+> | `DelegatedCompletionHandoff` | 66.2% | **97.8%** | 42 |
+> | `BrowserPreflightHandler` | 73.6% | **98.8%** | 41 |
 >
-> 114 of the 127 gained lines come from the two classes closed out last — `ToolStepHandler` (61) and
-> `ParallelBatchResumeHandler` (53), both now **fully line-covered** — covering the blocked-guard branch and its
-> repeat-termination rule, the delegate-session GitHub fast path, the whole auto-heal matrix (missing language,
-> validation rejection, failed re-execution, failed recovery, guard short circuit), the approval short circuit,
-> and on the resume side every parse-fallback, per-tool decision, delegation redirect, guard decision and
-> invocation outcome. 267 missed lines across the first five classes fell to **1**; the two largest remaining
-> classes in `core.agent.loop` (`CheckpointResumeHandler`, 540 lines, and `ParallelToolStepExecutor`, 503 lines)
-> each gained from the cron-lease guards, failure-notification, resume-budget and dispatch paths, but both still
-> need a CDI container or a `ManagedExecutor` fixture to reach their async bodies — see §1.3.
+> The seven classes closed out most recently — `ThinkingState` (45), `StepDecisionRouter` (47),
+> `ExecutionFailureRecoveryService` (49), `PendingToolResumeExecutor` (47), `ParallelToolStepExecutor` (102),
+> `DelegatedCompletionHandoff` (45) and `BrowserPreflightHandler` (43) — took the loop's routing, recovery,
+> HITL-resume, delegation-bridge and first-turn-preflight layer from the least-exercised part of the engine to near-total coverage. Between them they cover the runner loop's four escape hatches (the write-intent directive
+> injection, the no-progress breaker with its deterministic `ingest_document` fallback, the rate-limit retry
+> budget, and the structured-output self-correction budget); every `FinishOutcome` variant the router can
+> actually receive (`Completed` — including the SYNTHESIZER rebuild — `RetryLeak`, `Correction`, `SalvageFailed`,
+> `ExecuteLeakedTool`, `InjectToolCall`, and the deliberate fall-through for `SynthesisCorrection`); the
+> session-halt short circuit; the `AWAITING_APPROVAL` WAL-visibility retry, its corruption failure and its
+> interrupt-restore branch; the whole Shiva auto-heal path — the overload chain, the retry/accumulate loop with
+> its extracted-code carry-forward, code-block extraction, structural validation rejection, non-`Finished`
+> result formatting, delegation-throw handling and the non-code error skip; the single-pending-tool resume path
+> end to end: the checkpoint-history prepend that preserves HITL context, the delegation redirect for a tool the
+> resuming persona may not use (including its unparseable-parameter and unserialisable-request failure modes),
+> all four guard arms (`Allow`, `Blocked`, `PauseForApproval`, `Deduplicate`), the `retry-after` backoff-and-retry
+> loop, the delegated-approval pause with its payload-validation and persistence-failure guards, the bounded
+> web-retrieval fallback (`browser_navigate` → `web_fetch` → one search), and the halt/abort paths; and, in
+> `ParallelToolStepExecutor`, the whole parallel-batch lifecycle — the batch MDC scope and its teardown, the
+> observer fan-out, the pre-execution budget check, the rate-limit-backing-off warning, the per-category
+> `ManagedExecutor` selection, the session-halt cancellation sweep, all three `future.get` failure arms (timeout
+> with its `amsha.agent.tool.timeout` metric, `ExecutionException`, and the interrupt that restores the flag for
+> the caller), the HITL split into pre-executable and pending halves with both of its outcomes, and the
+> delegated-pause checkpoint that re-arms the call for replay; and, in `DelegatedCompletionHandoff`, the whole
+> child-to-parent bridge — every input it must refuse (a non-terminal child, a missing child session, no active
+> parent checkpoint, a sequential parent not waiting on a delegation), the batch-call match with its
+> agent-name lookup and single-call fallback, the replayed-delegation guard, the persist-failure degradation, the
+> sibling-still-active readiness flag, both child-result mappings (structured and failed), and the sequential
+> capture that clears the pending delegation; and, in `BrowserPreflightHandler`, the whole first-turn preflight
+> ladder — the empty-history gate, all four guard arms at the preflight boundary (`Allow`, `Blocked`,
+> `PauseForApproval`, `Deduplicate`), the `RequiresApprovalException` catch that pauses on the exception's own
+> frame rather than a synthesised one, the deliberate swallow that degrades an unexpected tool failure to the
+> normal reasoning path, the failed-`ToolResponse` arm with its internal-directive stripping, the invalid-timezone
+> fallback, the recurring-request cron arm, the `SUGGESTED_CRON` / `SUGGESTED_NEXT_FIRE_TIME` scope bindings, the
+> researcher-only browser-navigation gate with its URL detection, and the gist resolver's possessive-username and
+> stop-word-exhaustion paths.
+> 761 missed lines across the fourteen classes taken to completion fell to **10** — one in `LoopResultHandler`,
+> the two in `StepDecisionRouter`, the two in `ParallelToolStepExecutor`, the three in
+> `DelegatedCompletionHandoff` and the two in `BrowserPreflightHandler` that cannot be reached at all (see §1.3).
+> `CheckpointResumeHandler` (540 lines) gained from the cron-lease guards, failure-notification, resume-budget and
+> dispatch paths, but still needs a CDI container to reach its async body — see §1.3. It is now the largest
+> remaining gap in the package.
 >
 > The headline figure above is deliberately **left at 74.51%**: it is the measurement that anchored the ratchet,
 > and overwriting it would erase the evidence that the floor was set correctly. `0.74` is still the gate, and the
-> next step (`0.74` → `0.75`) is now within reach — `0.75` leaves ~0.43pp (~260 lines) of headroom, against
-> run-to-run jitter of ~2 lines, so it can be raised deliberately rather than reflexively.
+> next step (`0.74` → `0.75`) is now well within reach — `0.75` sits ~1.10pp (~660 lines) below measured
+> coverage, against run-to-run jitter of ~2 lines, so it can be raised deliberately rather than reflexively.
 
 ### 1.3 Dead code found while raising coverage
 
-Two guards in `CheckpointResumeHandler` cannot be exercised and should be deleted or simplified rather than
-"covered":
+Nine guards cannot be exercised and should be deleted or simplified rather than "covered":
 
-1. **The blank-resume-goal guards (lines 178–181 and 455–459) are unreachable.**
+1. **The blank-resume-goal guards (lines 178–181 and 455–459 of `CheckpointResumeHandler`) are unreachable.**
    `ResumeStrategyDispatcher.resolveResumeGoal` never returns `null` or blank — it falls back to
    `AgentSentinels.GOAL_RESUME_APPROVED` — so `resumeGoal == null || resumeGoal.isBlank()` is always false.
-2. **`fallbackResultDispatch`'s CLI branch (lines 409–417) is unreachable.** It recomputes the *identical*
-   `isCli` condition already evaluated false at line 354 before the fallback can be reached, so the branch can
-   never be taken.
+2. **`CheckpointResumeHandler.fallbackResultDispatch`'s CLI branch (lines 409–417) is unreachable.** It
+   recomputes the *identical* `isCli` condition already evaluated false at line 354 before the fallback can be
+   reached, so the branch can never be taken.
+3. **`StepDecisionRouter`'s parallel-invariant guard (lines 127–131) is unreachable.** This is the last
+   remaining uncovered code in the class, and it is the reason `StepDecisionRouter` stops at 98.3% rather than
+   100%:
 
-Relatedly, the `if (result instanceof AgentResult.AwaitingApproval)` checks at lines 361–366 and 411–415 have
-**identical bodies in both arms** — the condition changes nothing. Tests now pin the behaviour, but the branches
-are redundant.
+   ```java
+   private Optional<RoutingOutcome> handleFinishOutcome(
+           AgentExecutionContext context,
+           List<ReasoningStep> history,
+           ReasoningStep.FinishStep currentStep,   // <- statically a FinishStep
+           int llmSchemaErrorCount) {
+       if (currentStep.isParallelBatch()) {        // always false
+           log.errorf("PARALLEL INVARIANT VIOLATION: session %s parallel batch step reached FINISH handler.", ...);
+       }
+   ```
+
+   `ReasoningStep.isParallelBatch()` is `default boolean isParallelBatch() { return this instanceof ParallelStep; }`,
+   and `FinishStep` is not a `ParallelStep` — both are direct records implementing the sealed `ReasoningStep`
+   interface. The parameter is statically typed `FinishStep`, so the condition is a compile-time constant. The
+   only caller narrows the same way (`route` matches `currentStep instanceof ReasoningStep.FinishStep`), so no
+   input can reach the body. Note that line 127 itself *is* reported covered — the `if` is evaluated on every
+   FINISH turn, it just never branches true — which is exactly why "the line is green" is not evidence that a
+   guard works. The check is a leftover from when the parameter was a plain `ReasoningStep` (which is what
+   `FinishActionHandler.handle` still accepts), so the fix is to delete the guard rather than to contort a test.
+
+Relatedly, the `if (result instanceof AgentResult.AwaitingApproval)` checks at lines 361–366 and 411–415 of
+`CheckpointResumeHandler` have **identical bodies in both arms** — the condition changes nothing. Tests now pin
+the behaviour, but the branches are redundant.
+
+4. **`ParallelToolStepExecutor.handleHitlBatch`'s missing-response fallbacks (lines 434 and 439) are
+   unreachable.** This is the only reason the class stops at 99.2% rather than 100%:
+
+   ```java
+   if (split.hitlPending().isEmpty()) {                 // line 429 — every call was pre-executed
+       List<ParallelToolCall> completed = new ArrayList<>();
+       for (ParallelToolCall call : calls) {            // line 431 — all of `calls`
+           ToolResponse resp = preResults.get(resultKey(call));   // line 432
+           if (resp == null) {                                    // line 433
+               resp = preResults.get(call.toolName());            // line 434  <- dead
+           }
+           if (resp != null) {
+               completed.add(call.withResult(resp.output(), resp.success()));
+           } else {
+               completed.add(call.withResult("Tool execution missing response", false));  // line 439  <- dead
+           }
+       }
+   ```
+
+   The pre-execution loop (lines 410–427) writes `preResults` under `resultKey(call)`, and this loop reads it
+   under the *same* `resultKey(call)`, so every call in `calls` has an entry — including a call whose
+   pre-execution *threw*, because the `catch` still stores a `ToolResponse.failure`. The `resp == null` case
+   would require a call present in `calls` but absent from `split.preExecutable()`, which cannot happen on this
+   path: reaching line 429 at all means `hitlPending()` is empty, and `PreExecutionFilter.split` partitions
+   `calls` exhaustively. Note that line 433 *is* reported covered — the `if` is evaluated on every iteration, it
+   just never branches true. As with item 3, the fix is to delete the two fallbacks rather than to contort a test.
+
+5. **`DelegatedCompletionHandoff` lines 68, 229 and 251 are unreachable**, which is the whole of its residual
+   gap (the class stops at 97.8%, not 100%). Three separate reasons, all of them "a guard that re-checks what its
+   caller already guaranteed":
+
+   ```java
+   // line 59 — findChildCall() only ever returns a call that is ABSENT from the results map
+   ParallelToolCall childCall = findChildCall(calls, childSessionId, parent.getPreExecutedResults());
+   // line 65 — ...re-read from the same source, so it is the identical map
+   Map<String, JsonNode> results = readResults(parent.getPreExecutedResults());
+   String callKey = callKey(childCall);
+   if (results.containsKey(callKey) || results.containsKey(childCall.toolName())) {
+       return Optional.empty();   // line 68 — always false
+   }
+   ```
+
+   Inside `findChildCall`, the returned call satisfies `!results.containsKey(callKey(call)) &&
+   !results.containsKey(call.toolName())` by construction (lines 186–188), and the `calls.size() == 1` fallback
+   applies the same test before returning `only` (line 194). Since line 65 re-reads the *same*
+   `getPreExecutedResults()` string, line 67 can never be true.
+
+   Line 229 is the `marker < 0` early return in `childAgent(childSessionId)`. Its only caller is `findChildCall`
+   (line 183), whose only caller is `capture` — and `capture` has already returned at line 43 unless
+   `childSessionId.indexOf(DELEGATE_SESSION_SENTINEL) > 0` (line 42). `childAgent` looks for the *same* sentinel
+   in the *same* string, so `marker < 0` is impossible by the time it runs.
+
+   Line 251 is the `default -> throw new IllegalArgumentException("Non-terminal delegated result")` arm of
+   `toToolResponse`. Both of its call sites (lines 71 and 103) are downstream of `isTerminal(result)` at line 39,
+   and `isTerminal` enumerates exactly the three variants the switch handles (`Finished`, `StructuredFinished`,
+   `Failed`) — so the arm is a compile-time impossibility and the switch is already exhaustive over its real
+   domain.
+
+   Note the pattern common to all three: the guard is *correct* and cheap, but it duplicates a decision its
+   caller already made. Each is worth deleting (or replacing with an assertion the compiler can check) rather
+   than covering.
+
+6. **`BrowserPreflightHandler.buildStep`'s null-goal guard (line 240) is unreachable.** `AgentExecutionContext`'s
+   constructor is `this.goal = Objects.requireNonNull(goal, "goal must not be null")`, so `goal == null` at line
+   239 can never hold:
+
+   ```java
+   String goal = context.goal();
+   if (goal == null) {          // line 239 — evaluated on every browser preflight
+       return Optional.empty(); // line 240 — never taken
+   }
+   ```
+
+   As with items 3 and 4, line 239 itself *is* reported covered — the condition is evaluated on every call that
+   reaches it, it just never branches true. The guard is not merely redundant but actively misleading: it implies
+   the goal is optional at this boundary when the type invariant already forbids it. (`buildGithubGistStep`'s
+   `goal == null || goal.isBlank()` at line 259 has the same dead half, but its `isBlank()` operand *is*
+   reachable — a whitespace-only goal — so only the `null` half is redundant there.)
+
+7. **`BrowserPreflightHandler.buildGithubGistStep`'s `hasGithubIntent` guard (line 274) is unreachable.** The gate
+   immediately before it requires `GET_GIST_INTENT_PATTERN` to match, and that pattern is
+   `(?i)\b(?:get|fetch|list|show|retrieve|pull|find|read|check|display)\b.*\bgists?\b` — it ends in the literal
+   word `gist`/`gists`, so any text that passes it necessarily contains the substring `gist`:
+
+   ```java
+   if (!GET_GIST_INTENT_PATTERN.matcher(normalized).find()) {
+       return Optional.empty();                                    // line 266 — reachable
+   }
+   String target = extractGistTarget(normalized);
+   String lower = normalized.toLowerCase(Locale.ROOT);
+   boolean hasGithubIntent =
+           lower.contains("github") || lower.contains("gh") || lower.contains("gist") || target != null;
+   if (!hasGithubIntent) {                                         // line 273 — always false
+       return Optional.empty();                                    // line 274 — never taken
+   }
+   ```
+
+   The `"gist"` disjunct is implied by the gate that has just passed, so `hasGithubIntent` is a constant `true` at
+   line 273 — and, once again, line 273 is reported covered while its body is not. The guard's stated intent
+   ("only route to the github tool when the text actually mentions GitHub") is already enforced one gate earlier;
+   the fix is to delete it, or to fold the `github`/`gh` test into `GET_GIST_INTENT_PATTERN` where it would
+   genuinely narrow the match set.
 
 ### 1.4 A crash found while raising coverage
 
@@ -137,6 +300,19 @@ one, so the main LLM path always produces a non-null `callId`. The exposure is t
 checkpoint. Given that the two neighbouring helpers defend against exactly this case, the guard is worth adding
 regardless; but the fix has **not** been applied here, and the test suite deliberately does not pin the NPE with
 `assertThrows` (doing so would make the fix fail the build). Decide whether to harden or leave it.
+
+**Two abort paths in `PendingToolResumeExecutor` escape as unchecked exceptions rather than as results.** Both
+`failIfHalted` (line 341) and the interrupt-restore branch of `waitBeforeRetry` (line 350) throw a
+`RuntimeException`, and both sit where no handler remains: `failIfHalted` is called at the top of the retry loop,
+*outside* the `try` that wraps `executeAttempt`, and the backoff throw happens *inside* the `catch` block that
+would otherwise route to `handleResumeExecutionError`. The exception therefore propagates out of `execute`,
+through `ResumeStrategyDispatcher.handle` (which does not catch) and out of `CheckpointResumeHandler.handle`.
+This reads as deliberate for the halt case — aborting a killed session with a control-flow exception is a
+defensible choice — but the backoff-interrupt case is less obviously intentional: a resume interrupted mid-backoff
+is arguably a `Failed` result rather than an uncaught throw. The tests pin the **current** behaviour
+(`execute_haltedSessionAbortsBeforeTheToolIsInvoked`,
+`execute_interruptDuringBackoffAbortsWithAnUncheckedException`) instead of asserting a preferred one, and no fix
+is proposed.
 
 **Branch coverage (58.31%) is now the weakest axis and the highest-value target.** Line coverage is respectable;
 the untested work is concentrated in *decision logic* — error paths, retries, fallbacks, and multi-backend
@@ -713,15 +889,38 @@ was wrong, not as outstanding work.
 | `ToolSchemaProvider` | 34 | **100%** | `ToolSchemaProviderTest` (new) |
 | `ParallelBatchResumeHandler` | 53 | **100%** | `ParallelBatchResumeHandlerTest` (2 → 19 tests) |
 | `ToolStepHandler` | 61 | **100%** | `ToolStepHandlerInvocationTest` (new) + existing `ToolStepHandlerGuardTest` |
+| `ThinkingState` | 45 | **100%** | `ThinkingStateTest` (new, 22 tests) |
+| `ExecutionFailureRecoveryService` | 49 | **100%** | `ExecutionFailureRecoveryServiceTest` (38 → 53 tests) |
+| `PendingToolResumeExecutor` | 47 | **100%** | `PendingToolResumeExecutorTest` (8 → 23 tests) |
+| `DelegatedCompletionHandoff` | 45 | **97.8%** | `DelegatedCompletionHandoffTest` (3 → 20 tests); the residual 3 lines are unreachable — §1.3 |
+| `StepDecisionRouter` | 49 | **98.3%** | `StepDecisionRouterTest` (9 → 22 tests); the residual 2 lines are unreachable — §1.3 |
 | `LoopResultHandler` | 70 | **99.4%** | `LoopResultHandlerTest` (3 → 39 tests) |
 | `CheckpointResumeHandler` | 123 | **76.8%** | `CheckpointResumeHandlerUnitTest` (17 → 35 tests) |
-| `ParallelToolStepExecutor` | 116 | **58.0%** | `ParallelToolStepExecutorTest` (3 → 8 tests) |
+| `ParallelToolStepExecutor` | 116 | **99.2%** | `ParallelToolStepExecutorTest` (3 → 21 tests) + existing `ParallelToolStepExecutorPreExecTest`; the residual 2 lines are unreachable — §1.3 |
+| `BrowserPreflightHandler` | 43 | **98.8%** | `BrowserPreflightHandlerTest` (5 → 23 tests); the residual 2 lines are unreachable — §1.3 |
 | `ToolRegistry` | 83 | **87.8%** | `ToolRegistryUnitTest` (extended) |
 
 Still open in this phase: `AgentSessionApprovalHandler` (223 LOC), `DelegateApprovalCascade` (158 LOC),
-`PendingToolFailureHandler`, `ThinkingState`, `BatchResultAggregator`, and the remaining loop state vocabulary;
-plus the async bodies of `CheckpointResumeHandler` / `ParallelToolStepExecutor` noted in §1.3. The `ToolRegistry`
+`PendingToolFailureHandler`, `BatchResultAggregator`, and the remaining loop state vocabulary;
+plus the async body of `CheckpointResumeHandler` noted in §1.3. The `ToolRegistry`
 and `LoopResultHandler` figures in the table above are the **pre-work** numbers — both have since been addressed.
+`ThinkingState`, `ExecutionFailureRecoveryService`, `StepDecisionRouter`, `PendingToolResumeExecutor`,
+`ParallelToolStepExecutor`, `DelegatedCompletionHandoff` and `BrowserPreflightHandler` are the first entries from
+the "loop state
+vocabulary" and "highest line mass" rows to
+be closed out. `ParallelToolStepExecutor` was the largest single gap in the package (102 missed, 58.0%) and was
+long assumed to need a real thread pool; it does not — its collaborators are constructor-injected, and because
+the class only ever uses its `ManagedExecutor` as a plain `Executor`, a mocked pool that runs each task inline
+(or never runs it at all, which is what makes the timeout and interrupt arms deterministic) is sufficient.
+`DelegatedCompletionHandoff` (45 missed, 66.2%) is a `final class` over two collaborators, so a plain
+`mock(StatefulAgentStore.class)` plus a real `ObjectMapper` reaches every path except its three dead guards.
+`BrowserPreflightHandler` (43 missed, 73.6%) is the same shape — four constructor-injected collaborators, one
+package-private `@ConfigProperty` timezone field a same-package test can assign directly, and the deterministic
+`CronTimeResolver` behind the schedule arm — so its entire three-step preflight ladder (schedule → gist → browser)
+is reachable without a container; only its two dead guards remain.
+The next largest remaining gaps in `core.agent.loop` are `CheckpointResumeHandler` (57 missed, 76.8%) — which
+still needs a CDI container for its async body — followed by `AgentStateMachineRunner` (45 missed, 76.4%) and
+`EngineStepHandler` (40, 79.8%), neither of which needs a container.
 
 
 ### Phase 2 — Security-critical and execution-boundary code

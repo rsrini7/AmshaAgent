@@ -1,7 +1,18 @@
 package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.inject.Instance;
+
+import java.util.List;
+
+import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
@@ -9,6 +20,9 @@ import com.amsha.tool.api.ToolResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -17,11 +31,34 @@ class ExecutionFailureRecoveryServiceTest {
 
     private ExecutionFailureRecoveryService service;
 
+    @Mock
+    Instance<AgentLoop> agentLoopInstance;
+
+    @Mock
+    AgentLoop agentLoop;
+
     @BeforeEach
     void setUp() {
         service = new ExecutionFailureRecoveryService();
         service.autoHealEnabled = true;
         service.maxAutoHealAttempts = 2;
+    }
+
+    /** Wires the two collaborators the delegation path touches. */
+    private void wireDelegation() {
+        service.reasoningEngine = Mockito.mock(ReasoningEngine.class);
+        service.agentLoop = agentLoopInstance;
+        when(agentLoopInstance.get()).thenReturn(agentLoop);
+    }
+
+    /** Stubs the Shiva delegation to answer with the supplied raw response. */
+    private void shivaAnswers(String answer) {
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(ReasoningEngine.class), anyInt()))
+                .thenReturn(AgentResult.finished(answer, List.of()));
+    }
+
+    private static String fenced(String code) {
+        return "Here is the fix:\n```python\n" + code + "\n```";
     }
 
     @Test
@@ -328,5 +365,202 @@ class ExecutionFailureRecoveryServiceTest {
     void buildHealGoal_mentionsSandboxExec() {
         String goal = service.buildHealGoal("int x = 1;", "java", "error", 1);
         assertTrue(goal.contains("sandbox_exec"));
+    }
+
+    @Test
+    void shouldAttemptRecovery_disabled_forNonCodeFilesystemError() {
+        ToolResponse response = ToolResponse.failure(1, "bash: /tmp/out.txt: Permission denied");
+        assertFalse(service.shouldAttemptRecovery("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
+    }
+
+    @Test
+    void shouldAttemptRecovery_disabled_forMissingFileError() {
+        ToolResponse response = ToolResponse.failure(127, "cp: No such file or directory");
+        assertFalse(service.shouldAttemptRecovery("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
+    }
+
+    @Test
+    void shouldAttemptRecovery_enabled_forCompileErrorThatMerelyMentionsAPath() {
+        ToolResponse response = ToolResponse.failure(1, "main.go:7:2: undefined: fmt.Printn");
+        assertTrue(service.shouldAttemptRecovery("coder", ToolCapability.SANDBOX_EXEC.toolName(), response));
+    }
+
+    // ── attemptRecovery / singleHealAttempt ─────────────────────────────
+
+    @Test
+    void attemptRecovery_extractsAndValidatesAFix() {
+        wireDelegation();
+        shivaAnswers(fenced("print('fixed code that is definitely long enough')"));
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "print('broken')",
+                "python",
+                "SyntaxError: bad input",
+                null,
+                null,
+                "goal");
+
+        assertTrue(result.success());
+        assertEquals(1, result.attemptsUsed());
+        assertTrue(result.fixedCode().contains("fixed code"));
+        assertNull(result.errorIfFailed());
+    }
+
+    @Test
+    void attemptRecovery_withoutGoalContext_stillRecovers() {
+        wireDelegation();
+        shivaAnswers(fenced("print('eight arg overload fixed the code')"));
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-2", "user-1", "chat-1", "print('broken')", "python", "SyntaxError", null, null);
+
+        assertTrue(result.success());
+        assertEquals(1, result.attemptsUsed());
+    }
+
+    @Test
+    void attemptRecovery_responseWithoutFencedCode_fails() {
+        wireDelegation();
+        shivaAnswers("I could not reproduce the problem, sorry.");
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-3", "user-1", "chat-1", "print('broken')", "python", "SyntaxError", null, null, "goal");
+
+        assertFalse(result.success());
+        assertTrue(result.errorIfFailed().contains("no code was found"));
+    }
+
+    @Test
+    void attemptRecovery_identicalCode_failsAndDoesNotSurfaceTheExtractedCode() {
+        wireDelegation();
+        String unchanged = "print('broken code that is long enough to be a block')";
+        shivaAnswers(fenced(unchanged));
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-4", "user-1", "chat-1", unchanged, "python", "SyntaxError", null, null, "goal");
+
+        assertFalse(result.success());
+        assertTrue(result.errorIfFailed().contains("identical"));
+        // extractedCode is an internal hand-off between attempts: the public entry point always
+        // returns the accumulated-error failure, whose extractedCode is null.
+        assertNull(result.extractedCode());
+    }
+
+    @Test
+    void attemptRecovery_nonFinishedResult_formatsTheEngineError() {
+        wireDelegation();
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(ReasoningEngine.class), anyInt()))
+                .thenReturn(AgentResult.loopExceeded(3, List.of()));
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-5", "user-1", "chat-1", "print('broken')", "python", "SyntaxError", null, null, "goal");
+
+        assertFalse(result.success());
+        assertTrue(result.errorIfFailed().contains("exceeded max iterations (3)"));
+    }
+
+    @Test
+    void attemptRecovery_delegationThrows_failsWithTheDelegationMessage() {
+        wireDelegation();
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(ReasoningEngine.class), anyInt()))
+                .thenThrow(new IllegalStateException("podman is offline"));
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-6", "user-1", "chat-1", "print('broken')", "python", "SyntaxError", null, null, "goal");
+
+        assertFalse(result.success());
+        assertTrue(result.errorIfFailed().contains("Debug delegation failed"));
+        assertTrue(result.errorIfFailed().contains("podman is offline"));
+    }
+
+    @Test
+    void attemptRecovery_secondAttemptSucceeds_accumulatesTheFirstFailure() {
+        wireDelegation();
+        String unchanged = "print('broken code that is long enough to be a block')";
+        String fixed = "print('fixed code that is definitely long enough')";
+        when(agentLoop.run(anyString(), anyString(), anyString(), any(ReasoningEngine.class), anyInt()))
+                .thenReturn(AgentResult.finished(fenced(unchanged), List.of()))
+                .thenReturn(AgentResult.finished(fenced(fixed), List.of()));
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-7", "user-1", "chat-1", unchanged, "python", "SyntaxError", null, null, "goal");
+
+        assertTrue(result.success());
+        assertEquals(2, result.attemptsUsed());
+        assertEquals(fixed, result.fixedCode());
+        // The extracted-but-invalid code from attempt 1 is carried into attempt 2's prompt rather
+        // than being re-parsed out of the error message.
+        ArgumentCaptor<String> goal = ArgumentCaptor.forClass(String.class);
+        verify(agentLoop, times(2)).run(anyString(), anyString(), goal.capture(), any(ReasoningEngine.class), anyInt());
+        assertTrue(goal.getAllValues().get(1).contains(unchanged));
+    }
+
+    @Test
+    void attemptRecovery_allAttemptsFail_returnsTheAccumulatedError() {
+        wireDelegation();
+        String unchanged = "print('broken code that is long enough to be a block')";
+        shivaAnswers(fenced(unchanged));
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-8", "user-1", "chat-1", unchanged, "python", "SyntaxError", null, null, "goal");
+
+        assertFalse(result.success());
+        assertTrue(result.errorIfFailed().contains("Previous fix attempt 1 also failed"));
+        assertTrue(result.errorIfFailed().contains("identical"));
+    }
+
+    @Test
+    void attemptRecovery_honoursAnExplicitAttemptBudget() {
+        wireDelegation();
+        String unchanged = "print('broken code that is long enough to be a block')";
+        shivaAnswers(fenced(unchanged));
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-9", "user-1", "chat-1", unchanged, "python", "SyntaxError", null, null, "goal", 3);
+
+        assertFalse(result.success());
+        assertTrue(result.errorIfFailed().contains("Previous fix attempt 2 also failed"));
+    }
+
+    @Test
+    void attemptRecovery_javaFixWithoutMain_isRejectedAsInvalid() {
+        wireDelegation();
+        shivaAnswers("```java\npublic class Main {\n    public void run() { System.out.println(1); }\n}\n```");
+
+        ExecutionFailureRecoveryService.RecoveryResult result = service.attemptRecovery(
+                "sess-10",
+                "user-1",
+                "chat-1",
+                "public class Main { void run() {} }",
+                "java",
+                "error",
+                null,
+                null,
+                "goal");
+
+        assertFalse(result.success());
+        assertTrue(result.errorIfFailed().contains("main()"));
+        assertNull(result.extractedCode());
+    }
+
+    // ── formatAgentResultError remaining arms ───────────────────────────
+
+    @Test
+    void formatAgentResultError_awaitingRetry() {
+        AgentResult result = AgentResult.awaitingRetry("sess", 1500, List.of());
+        String msg = service.formatAgentResultError(result);
+        assertTrue(msg.contains("retry after"));
+        assertTrue(msg.contains("1s"));
+    }
+
+    @Test
+    void formatAgentResultError_unknownResult() {
+        AgentResult result = AgentResult.finished("done", List.of());
+        String msg = service.formatAgentResultError(result);
+        assertTrue(msg.contains("Unknown Shiva result"));
+        assertTrue(msg.contains("Finished"));
     }
 }
