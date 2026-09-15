@@ -2586,6 +2586,113 @@ Lines 268 and 278–284 are **working code that this test harness cannot reach**
 where the process runs from a parent of the data directory with a relative setting, which a unit test cannot
 reproduce without relocating the JVM's working directory. They are "unreachable from the test CWD", not dead.
 
+#### Phase 5 status (2026-09-15) — `OidcIdentityProvider`, and why the JAX-RS client path resists unit tests
+
+`OidcIdentityProvider` **119 → 107 missed / 70 covered (39.5%)**, 28 tests in the extended
+`OidcIdentityProviderTest` (was 10). What was added pins real security behaviour: the RS256-only algorithm guard
+(including a header with no `alg` at all), every arm of id_token claim validation (missing / non-numeric `exp`,
+issuer match and skip, `aud` as string / list / wrong type / absent, nonce match, mismatch and skip), JWT payload
+decoding (valid, wrong segment count, undecodable segment), the PKCE S256 derivation against the **RFC 7636
+appendix B vector**, and authorization-URL construction (blank PKCE/nonce omitted, null state and empty client id
+encoded as empty rather than the text `null`, configured redirect outranking the request one, blank config falling
+back to the request one, percent-encoding of special characters).
+
+**Finding — the `authenticate` path cannot be reached from a plain unit test, and the reason is the JSON body
+reader.** `authenticate` drives a JAX-RS `ClientBuilder.newBuilder()…build()` client. Outside the Quarkus runtime
+that client has no `MessageBodyReader` for `Map` + `application/json`, so *every* request fails before any
+provider logic runs:
+
+```
+Response could not be mapped to type interface java.util.Map for response with media type application/json.
+Hints: Consider adding one the 'quarkus-rest-client-jackson' or 'quarkus-rest-client-jsonb' extensions
+```
+
+This was established the hard way, not assumed: the first attempt drove the provider against a real local
+`HttpServer` acting as the IdP, with genuinely RS256-signed JWTs produced from a real RSA key pair — token form
+encoding, the Bearer header, the JWKS document, key selection and RSA verification all built and ready. Ten tests
+failed on the mapping step and the other ten errored on it; none of the provider's own logic was ever entered.
+`quarkus-rest-client-jackson` *is* in the local repository, but Quarkus wires its providers through the container
+rather than plain `ServiceLoader`, so it does not help a bare client — and the classic-RESTEasy alternative is not
+in the local repository, which also rules out adding it while the build runs offline.
+
+The remaining ~107 lines are therefore `authenticate`, `validateAndExtractIdToken`, `verifyIdTokenSignature`,
+`findJwksKey` and `resolveClientSecret` — including the signature verification itself. **Closing them needs a
+`@QuarkusTest` plus a stub-IdP `QuarkusTestResourceLifecycleManager`** (the resource starts the HTTP stub and
+returns the `amsha.auth.idp.oidc.*` overrides, since the port is not known until it binds). **No
+`QuarkusTestResourceLifecycleManager` exists anywhere in this module** — the 47 `@QuarkusTest` classes all use
+static `QuarkusTestProfile` overrides instead — so this would introduce a new test-infrastructure pattern rather
+than extend an existing one. Deliberately not worked around by mocking the client: the field is `private final`, so
+replacing it would require reflection into a final field, and the value under test *is* the real request-and-verify
+path.
+
+**The same gap is why the sibling provider is dark.** `GithubIdentityProviderTest` is a plain unit test that covers
+only provider identity, the disabled guard and the authorization URL — `GithubIdentityProvider` still carries **50
+missed lines**, its own HTTP path. This is a module-wide property of JAX-RS-client-calling code, not a defect in
+either test class, and the two should be closed together.
+
+#### Phase 5 status (2026-09-15) — `ChatCommand`, and the two terminal seams that were hiding it
+
+`ChatCommand` **195 → 17 missed / 209 covered (92.5%)**, and its helper `CliInputSupport` **9 → 1 missed / 28
+covered (96.6%)**. `ChatCommandUnitTest` grew from 6 tests to 44. This was the largest single class left in the
+module and, at the start, essentially dark: `run()`, `runChatLoop`, `chatLoop`, `chatLoopFallback`,
+`resolveCliUserId`, `dispatchToWorkflow`, `waitForHitlResult`, `startProgressTicker`, `printAbovePrompt` and
+`onShutdown` all had zero coverage.
+
+**What was covered, and how.** Three distinct seams were needed.
+
+1. *The loop body*, via mocked `LineReader` / `Terminal` passed straight to the package-private
+   `chatLoopInner`: `/exit` and `/quit`, end-of-stream (`readLine` returning `null`), blank input, Ctrl-C
+   (`UserInterruptException` → `continue`), and the approval guard that refuses new input while
+   `hitlPending` is set but still lets `/approve` and `/deny` through.
+2. *The entry point*, via a static substitution of `TerminalBuilder`. `run()` is unreachable in a Surefire fork
+   because `chatLoop` calls `TerminalBuilder.builder().system(true).build()` and JLine's `readLine()` then blocks
+   forever with no TTY — the reason the sibling `ChatCommandApprovalTest` is `@Disabled`. Mocking
+   `TerminalBuilder.builder()` to fail is not a contrivance: it is exactly the non-TTY environment the class is
+   written to survive, and it drives the documented fallback (`catch` → `chatLoopFallback` →
+   `CliInputSupport.runFallback`). Input is then supplied as a `ByteArrayInputStream`, so nothing can block. This
+   one helper covers `run()` end to end — all four session-resolution branches (`--session-id`, `--new-session`,
+   `--last-session` with and without a catalogued entry, and the default), the banner, the `ScopedValue` wiring,
+   the `finally` cleanup and the `[Terminated]` line — plus `runChatLoop` and `chatLoop`'s fallback path.
+3. *The interactive branch of `chatLoop`*, via a static substitution of `LineReaderBuilder`. With the terminal
+   building successfully and `LineReaderBuilder.builder()…build()` returning a mocked reader, the JLine wiring
+   lines run without ever entering JLine's internals, so there is no hang risk at all.
+
+**Finding — `AnsiConsole.systemInstall()` writes to the native file descriptor, which quietly defeats both
+`System.setOut` and Surefire's capture.** The first version of the entry-point tests asserted on the captured
+stdout and failed with empty output; Surefire's report had `system-out` length 0, and the fork's dumpstream said:
+
+```
+Corrupted channel by directly writing to native stream in forked JVM 1.
+Stream '✦ Amsha Agent Interactive Terminal'.
+```
+
+Jansi's `systemInstall()` takes over fd 1 rather than wrapping the current `System.out`, so the banner bypasses
+the test's redirect entirely — and every `run()` test pollutes the Surefire channel. `AnsiConsole` is therefore
+neutralised in the same static-mock scope as `TerminalBuilder`. Nothing about Jansi is under test; substituting
+it is what makes the assertions on captured output honest rather than accidental.
+
+**Two test-design corrections worth recording.** First, `AgentResult.awaitingApproval(...)` is declared on the
+*interface*, so it returns `AgentResult`, not the `AwaitingApproval` record — a helper declared as
+`AwaitingApproval` does not compile, and `Optional.of(helper())` then produces the wrong `Optional` type.
+Second, three assertions originally read `hitlPending` immediately after `dispatchToWorkflow`; that flag is
+cleared by the HITL waiter's own virtual thread, so the assertion is a race. They now poll with a bounded
+`awaitTrue`, and assert on the *printed result* the waiter produces rather than on the transient flag.
+
+**Residual 17 lines — all verified, none faked.**
+
+| Lines | What | Why it stays dark |
+| --- | --- | --- |
+| 230–232 | `runChatLoop`'s `catch (Exception e)` | Unreachable. `chatLoop` catches every `Exception` from its own body; its `catch` block's only two calls cannot throw (`log.warnf`, and a `runFallback` that wraps its read in its own `try`), and its `finally` body is two field assignments — `CliJobNotifier.setTerminalPrinter` is verified to be `terminalPrinter = printer`. Only an `Error`, which `catch (Exception)` would not take anyway, can escape. |
+| 392–393 | The HITL waiter's `catch (InterruptedException e)` | Unreachable. The waiter is an anonymous virtual thread with no handle, and the one production cancellation path — `ChatCommand.onShutdown` → `CliResultBridge.cancel` — calls `waiter.cancel(true)` on a `CompletableFuture`, which completes it exceptionally with `CancellationException` (caught on line 388) and never interrupts the thread. `CompletableFuture` ignores the `mayInterruptIfRunning` flag. |
+| 417–433 | `startProgressTicker`'s tick body and both catch arms | Deliberate exclusion. The body sits behind `Thread.sleep(Duration.ofSeconds(PROGRESS_TICK_SECONDS))` with `PROGRESS_TICK_SECONDS = 20` — a compile-time constant, so it is inlined at the call site and cannot be shortened by reflection. Covering the tick needs ≥20 s of real wall clock, and covering both the "still working" line and the "result arrived during the sleep" early return needs two such runs. Buying a cosmetic progress line with 20–40 s of sleep on every reactor run — and timing-sensitive assertions — is a bad trade, so it is recorded rather than paid for. |
+
+`CliInputSupport`'s single residual line is 27, `console.readLine(...)`, the branch taken only when a real
+`Console` is attached. The fallback tests assert `System.console() == null` as an assumption rather than risk
+blocking on an operator's terminal.
+
+**Module effect.** `app` **2,306 → 1,836 missed, 69.17% → 75.45%** across the four slices; module suite
+**986 → 1,024 tests, 0 failures, 3 skipped**. The class that remains the largest target is `HitlService` (127).
+
 ### Phase 6 — Cross-cutting invariant tests *(cheap, high value)*
 
 | Test | Rationale | Est. effort |

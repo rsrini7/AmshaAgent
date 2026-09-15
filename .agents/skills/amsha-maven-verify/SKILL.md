@@ -2115,6 +2115,98 @@ cannot reach them without relocating the JVM's working directory.
 `AuthResource` 56, `GithubIdentityProvider` 50, `BootstrapOrchestrator` 46, `AmshaCli` 45, `EnvConfigInitializer` 43,
 `McpImportResource` 42, `IdentityResource` 40, `CliUtils` 37, `HitlResource` 36, `ModelArenaResource` 36.
 
+#### `app` notes (2026-09-15, Phase 5 third slice — `OidcIdentityProvider`, and the JAX-RS client wall)
+
+`OidcIdentityProvider` **119 → 107 missed / 70 covered (39.5%)**; module **2,057 → 2,045 missed, 72.50% → 72.66%**;
+`OidcIdentityProviderTest` 10 → **28 tests**; module suite **986 / 0 / 0 / 3 skipped**.
+
+**⚠️ A JAX-RS client has NO JSON `MessageBodyReader` outside the Quarkus container — so every
+`ClientBuilder.newBuilder()…build()` call fails before your code runs.** This is the single biggest reason
+security-critical HTTP providers in `app` are dark. The exact failure, which you will hit on the FIRST request:
+
+```
+Response could not be mapped to type interface java.util.Map for response with media type application/json.
+Hints: Consider adding one the 'quarkus-rest-client-jackson' or 'quarkus-rest-client-jsonb' extensions
+```
+
+`quarkus-rest-client-jackson` IS in `~/.m2`, but Quarkus wires providers through the container, not plain
+`ServiceLoader`, so a bare client gets nothing; the classic-RESTEasy alternative is not in the local repository,
+which also rules it out while building `-o` (offline). **Check this BEFORE investing in a stub server.** The cost
+of finding out late: a full stub IdP — real `HttpServer`, real RSA key pair, genuinely RS256-signed JWTs, form
+encoding, Bearer header, JWKS document, key selection — built and ready, then 20 tests failing/erroring on the
+mapping step with none of the provider's own logic ever entered.
+
+**What IS reachable from a plain unit test in `app`** (no container, no network): `final` static utilities and
+package-private statics (`assertRsaSigned`, `s256Challenge`, `decodeJwtPayload`, `validateIdTokenClaims` in
+`OidcIdentityProvider`), URL builders, and anything reading `@ConfigProperty` fields set by reflection. That was
+worth +12 lines here — the RS256-only guard, every claim-validation arm, PKCE S256 against the **RFC 7636
+appendix B vector**, null/blank encoding, redirect precedence — but the other ~107 lines are the HTTP path.
+
+**Remedy (not yet built — it is new infrastructure, not a slice).** A `@QuarkusTest` plus a stub-IdP
+`QuarkusTestResourceLifecycleManager`: `start()` binds the `HttpServer`, then returns the
+`amsha.auth.idp.oidc.*` overrides, because the port is not known until it binds. **No
+`QuarkusTestResourceLifecycleManager` exists anywhere in `app`** — all 47 `@QuarkusTest` classes use static
+`QuarkusTestProfile.getConfigOverrides()` instead. Do NOT instead mock the `Client`: the field is
+`private final`, so replacing it needs reflection into a final field, and the value under test *is* the real
+request-and-verify path.
+
+**The same wall explains `GithubIdentityProvider`'s 50 missed lines** — its test is a plain unit test covering
+identity, the disabled guard and the authorization URL only. Close both providers together.
+
+#### `app` notes (2026-09-15, Phase 5 fourth slice — `ChatCommand`, and the two terminal seams)
+
+`ChatCommand` **195 → 17 missed / 209 covered (92.5%)**; `CliInputSupport` **9 → 1 missed**;
+`ChatCommandUnitTest` 6 → **44 tests**; module **2,045 → 1,836 missed, 72.66% → 75.45%**; module suite
+**1,024 / 0 / 0 / 3 skipped**.
+
+**⚠️ The "interactive CLI is untestable" conclusion is false — there are three seams, and the third is the one
+people miss.** `ChatCommandApprovalTest` is `@Disabled` because JLine's `readLine()` blocks forever in a Surefire
+fork with no TTY. That is true of `run()`, but it only costs you the *entry point*, and even that is recoverable.
+
+1. **Loop body** — pass mocked `LineReader` / `Terminal` straight to the package-private `chatLoopInner`. Covers
+   `/exit`, `null` read, blank input, `UserInterruptException`, and the approval guard. No terminal involved.
+2. **Entry point** — `mockStatic(TerminalBuilder.class)` and make `builder().system(true).build()` throw
+   `IOException`, then feed stdin as a `ByteArrayInputStream`. This is not a contrivance: it *is* the non-TTY
+   environment the class is written to survive, so it exercises the documented fallback
+   (`catch` → `chatLoopFallback` → `CliInputSupport.runFallback`). One helper covers `run()` end to end, all four
+   session-resolution branches, `runChatLoop`, and `chatLoop`'s fallback path.
+3. **The interactive branch of `chatLoop`** — also `mockStatic(LineReaderBuilder.class)` and stub the fluent chain
+   (`terminal`/`completer`/`history`/`variable` each `thenReturn(builder)`, then `build()` → a mocked `LineReader`).
+   The JLine wiring lines then execute without ever entering JLine's internals, so there is **no hang risk**. This
+   is the seam that makes the successful-terminal path testable at all.
+
+**⚠️ `AnsiConsole.systemInstall()` writes to the NATIVE file descriptor — it defeats `System.setOut` AND Surefire's
+capture.** Symptom: assertions on captured stdout fail with empty output, the surefire XML has `system-out` length
+0, and the fork's dumpstream fills with:
+
+```
+Corrupted channel by directly writing to native stream in forked JVM 1.
+Stream '✦ Amsha Agent Interactive Terminal'.
+```
+
+Jansi takes over fd 1 rather than wrapping the current `System.out`. Fix: `mockStatic(AnsiConsole.class)` in the
+same try-with-resources scope as `TerminalBuilder`. Nothing about Jansi is under test, and leaving it in place both
+breaks the assertions and pollutes the Surefire channel on every run.
+
+**Two API traps hit while writing these tests.** (a) `AgentResult.awaitingApproval(...)` is declared on the
+*interface*, so it returns `AgentResult`, **not** the `AwaitingApproval` record — a helper typed as the record does
+not compile, and `Optional.of(thatHelper())` yields the wrong `Optional` type. Cast where the record is needed.
+(b) A flag cleared by a background virtual thread (here `hitlPending`, cleared in the HITL waiter's `finally`) must
+never be asserted immediately after the triggering call — poll with a bounded helper and assert on the printed
+result instead.
+
+**Residual 17 lines, each verified rather than assumed** — the discipline matters more than the count:
+
+| Lines | What | Why |
+| --- | --- | --- |
+| 230–232 | `runChatLoop`'s `catch (Exception e)` | **Unreachable.** `chatLoop` catches every `Exception` from its own body; its `catch` body's two calls cannot throw, and its `finally` is two field assignments (`CliJobNotifier.setTerminalPrinter` verified to be `terminalPrinter = printer`). Only an `Error` escapes — which `catch (Exception)` would not take. |
+| 392–393 | HITL waiter's `catch (InterruptedException e)` | **Unreachable.** The waiter is an anonymous virtual thread with no handle, and the only cancellation path — `onShutdown` → `CliResultBridge.cancel` — calls `waiter.cancel(true)` on a **`CompletableFuture`**, which completes exceptionally with `CancellationException` (caught earlier) and never interrupts. `CompletableFuture` ignores `mayInterruptIfRunning`. |
+| 417–433 | `startProgressTicker` tick body + both catches | **Deliberate exclusion.** Behind `Thread.sleep(Duration.ofSeconds(PROGRESS_TICK_SECONDS))` with the constant **20**. A compile-time constant is inlined at the call site, so reflection cannot shorten it. Needs ≥20 s wall clock, and two runs to hit both the "still working" line and the early return. Not worth it for a progress spinner. |
+
+`CliInputSupport`'s one residual line is `console.readLine(...)` — the branch taken only with a real `Console`.
+Guard such tests with `Assumptions.assumeTrue(System.console() == null)`, or a developer running from a real
+terminal blocks the build on their own keystrokes.
+
 ## Reporting the Verdict
 
 Summarize as a table:
