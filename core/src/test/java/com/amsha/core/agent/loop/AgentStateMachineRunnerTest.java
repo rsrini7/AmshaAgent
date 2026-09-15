@@ -21,12 +21,15 @@ import dev.langchain4j.exception.InvalidRequestException;
 
 import jakarta.enterprise.inject.Instance;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.function.Consumer;
 
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.LangChainReasoningEngine;
@@ -48,6 +51,7 @@ import com.amsha.core.security.DestructiveVocabularyFilter;
 import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.core.task.TaskManager;
 import com.amsha.core.tool.DynamicToolLookup;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.TextPatternUtils;
@@ -550,5 +554,193 @@ class AgentStateMachineRunnerTest {
         assertFalse(
                 result.steps().stream().anyMatch(s -> "OBSERVE".equals(s.action())),
                 "OBSERVE ReAct keyword must NOT be persisted to reasoning history");
+    }
+
+    // --- Phase 1 coverage: previously-missed branches in the SAW state machine runner ---
+
+    /**
+     * Exercises the runFinishPass *retry* arm: the first LLM step is a non-FINISH step, so the
+     * outer Completed arm is skipped and the method falls through to the retry pass. The retry
+     * FINISH yields a Completed outcome, exercising the saveAnswer + return path (lines 169-178).
+     */
+    @Test
+    void testRunFinishPassRetriesToCompleted() {
+        ReasoningStep toolStep = ReasoningStep.pending("thought", "tool", Map.of(), 100, 100);
+        ReasoningStep finishStep =
+                ReasoningStep.pending("done", ReasoningStep.FINISH, Map.of("answer", "Hello"), 100, 100);
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenReturn(toolStep)
+                .thenReturn(finishStep);
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "coordinator",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+
+        AgentResult result = runner.runFinishPass(ctx, engine, new ArrayList<>());
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertEquals("Hello", ((AgentResult.Finished) result).answer());
+        verify(writer).saveAnswer("s1", "Hello");
+    }
+
+    /**
+     * SAW Backlog Refinement: a coordinator goal classified into more than one domain must be
+     * refined into a task list (lines 266-274). classifierService/taskManager are @Inject-private
+     * fields, so they are wired by reflection here the way CDI would in production.
+     */
+    @Test
+    void testRunRefinesBacklogForComplexCoordinatorGoal() throws Exception {
+        TaskClassifierService classifierServiceMock = mock(TaskClassifierService.class);
+        TaskManager taskManagerMock = mock(TaskManager.class);
+        when(classifierServiceMock.classify(anyString()))
+                .thenReturn(
+                        List.of(TaskClassifierService.TaskDomain.CODING, TaskClassifierService.TaskDomain.SECURITY));
+
+        setPrivateField("classifierService", classifierServiceMock);
+        setPrivateField("taskManager", taskManagerMock);
+
+        ReasoningStep finishStep =
+                ReasoningStep.pending("done", ReasoningStep.FINISH, Map.of("answer", "done"), 100, 100);
+        when(engine.nextStep(any(), anyString(), anyString(), anyList())).thenReturn(finishStep);
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "coordinator",
+                "Implement a distributed task coordination service spanning coding and security domains with cross-team ownership",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+        AgentResult result = runner.run(ctx, engine, List.of());
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        verify(taskManagerMock).createTask(anyString(), anyString());
+    }
+
+    /**
+     * A BudgetExceededException raised from inside a state's execute (here, during ThinkingState
+     * which has its iteration span open) propagates out of executeStateMachine and is caught by the
+     * dedicated BudgetExceeded catch, mapping to a BUDGET_EXCEEDED failure (lines 300-304). This is
+     * distinct from testBudgetExceededAborts, where the exception is swallowed inside EngineStepHandler
+     * rather than reaching the loop catch.
+     */
+    @Test
+    void testStateMachineBudgetExceededIsCaught() {
+        when(intentDetector.isWriteIntent(anyString())).thenThrow(new BudgetExceededException("Budget blown"));
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "coordinator",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+        AgentResult result = runner.run(ctx, engine, List.of());
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        assertEquals(AgentResult.FailureCategory.BUDGET_EXCEEDED, ((AgentResult.Failed) result).category());
+    }
+
+    /**
+     * A generic exception thrown from inside a state's execute while the iteration span is open
+     * must be recorded on the span, rethrown to the generic catch, and the OTel scope/span must be
+     * closed in the finally block (lines 305-316, 350-352, 368, 371). The throw is produced by
+     * intentDetector during ThinkingState, which overrides isInsideIterationSpan() == true.
+     */
+    @Test
+    void testStateMachineGenericExceptionIsCaughtAndSpanClosed() {
+        when(intentDetector.isWriteIntent(anyString())).thenThrow(new RuntimeException("boom"));
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "coordinator",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+        AgentResult result = runner.run(ctx, engine, List.of());
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        assertEquals(AgentResult.FailureCategory.SYSTEM_ERROR, ((AgentResult.Failed) result).category());
+    }
+
+    /**
+     * An exception thrown by an observer's onStepStart must be swallowed inside notifyStepStart
+     * (lines 383-386) so a misbehaving observer can never abort the loop. The null-session guard on
+     * line 377-378 is intentionally NOT covered: AgentExecutionContext's constructor enforces a
+     * non-null sessionId, so that branch is dead (mirrors BrowserPreflightHandler's dead guards).
+     */
+    @Test
+    void testObserverOnStepStartExceptionIsSwallowed() {
+        AgentObserver throwingObserver = mock(AgentObserver.class);
+        Mockito.doThrow(new RuntimeException("observer boom"))
+                .when(throwingObserver)
+                .onStepStart(anyString(), anyString());
+        Mockito.doAnswer(inv -> {
+                    ((Consumer<AgentObserver>) inv.getArgument(0)).accept(throwingObserver);
+                    return null;
+                })
+                .when(observers)
+                .forEach(any());
+
+        ReasoningStep finishStep =
+                ReasoningStep.pending("done", ReasoningStep.FINISH, Map.of("answer", "ok"), 100, 100);
+        when(engine.nextStep(any(), anyString(), anyString(), anyList())).thenReturn(finishStep);
+
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "s1",
+                "u1",
+                "c1",
+                "coordinator",
+                "goal",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                5,
+                0,
+                null,
+                null,
+                null,
+                null);
+        AgentResult result = runner.run(ctx, engine, List.of());
+
+        // Loop still completes; the observer exception was caught inside notifyStepStart.
+        assertInstanceOf(AgentResult.Finished.class, result);
+    }
+
+    private void setPrivateField(String name, Object value) throws Exception {
+        Field f = AgentStateMachineRunner.class.getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(runner, value);
     }
 }

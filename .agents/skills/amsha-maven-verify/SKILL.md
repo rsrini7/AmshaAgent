@@ -133,6 +133,12 @@ Phase-1 test additions: 74.51% line / 58.31% branch / 78.85% method, 6,199 tests
 900 suites — so run-to-run jitter is ~2 lines and Phase 1 has gained +951 lines so
 far. `mise run test:summary` reproduces all of these in one shot.)
 
+As of **2026-09-15 (Phase 1 Tasks #8–#10)** the `core` module alone measures **83.8%** line coverage
+(19,676 / 23,486) — well above the `0.74` floor — so the approval/HITL cluster (#11–#13:
+`AgentSessionApprovalHandler`, `DelegateApprovalCascade`, `PendingToolFailureHandler`, `BatchResultAggregator`,
+and the remaining loop-state vocabulary) is **optional polish, not gate-blocking**. The reactor-wide figure in CI
+is what the gate enforces.
+
 The gate is `app/pom.xml` → `scripts/verify_jacoco_coverage.py`, bound to `verify`.
 Its floor is the `jacoco.minimum.line.coverage` property in the root `pom.xml`
 (**0.74** as of 2026-09-14; it was 0.70, which sat four points below reality).
@@ -496,6 +502,32 @@ upstream*, a `default` arm over a closed set the caller has already narrowed, a 
 constructor already enforces**, or a disjunct **implied by the regex that gated entry**. Grep for the guard's
 operands before assuming a test is missing — and note that in every one of these five cases the `if` line itself
 is reported **covered** while its body is not, so a green line is not evidence that the guard works.
+
+### Dead-code findings recorded during Phase 1 (2026-09-15)
+
+These surfaced while closing out Tasks #8–#10 (`DelegateToAgentTool`, `LeakedToolCallParser`) and are documented
+here so a future coverage run does not re-investigate them. All are reported as findings, **never faked**.
+
+- **`DelegateToAgentTool` lines 164–165** (shutdown guard): only reachable when `Arc.container()` is non-null
+  *and* not running. In a plain unit test `Arc.container()` is `null`, so `AgentGuards.isShuttingDown()` returns
+  `false` and the guard body is **unit-test-unreachable** (it is live in production). Leave it; do not contort a
+  test to reach it.
+- **`DelegateToAgentTool` lines 415–418** (CODER verification-gate max-depth skip): `depth` is re-derived from
+  the session id (line 206) *before* the gate, and a CODER delegation only reaches the gate at `depth == 0` (the
+  auto-debug recursion always targets `DEBUGGER`, never `CODER`), so `depth + 1 > maxDelegationDepth` is never
+  true → **dead**.
+- **`DelegateToAgentTool` lines 427–429** (`catch (IllegalArgumentException)` around
+  `AgentRoleEnum.fromString("debugger")`): `"debugger"` is a constant role, so the lookup never throws → the
+  `catch` is **dead**.
+- **`LeakedToolCallParser` lines 362 & 366**: JaCoCo closing-brace artifacts, not real dead code. Line 362 is the
+  closing `}` of the `for` loop in `parseToolcallTagCall` (357–362) and line 366 is the `return` inside its
+  `catch`; the adjacent lines 364–365 (catch body) and 367 (terminal `return`) are both covered, proving the path
+  runs — only the braces carry no executable instruction of their own.
+
+(Earlier set, from §1.3 of `docs/TEST_COVERAGE_ANALYSIS.md`: `CheckpointResumeHandler` 178–181 / 455–459 /
+409–417, `StepDecisionRouter` 127–131, `ParallelToolStepExecutor` 434 / 439, `DelegatedCompletionHandoff` 68 /
+229 / 251, `BrowserPreflightHandler` 240 / 274, plus the `ParallelBatchResumeHandler` line-97 NPE risk — a *real*
+defect, not dead code, worth hardening.)
 
 ### 1. Get the per-class numbers, not the package numbers
 

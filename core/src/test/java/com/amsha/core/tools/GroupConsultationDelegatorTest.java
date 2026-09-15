@@ -1,21 +1,30 @@
 package com.amsha.core.tools;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.inject.Instance;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
+import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
 import com.amsha.core.agent.loop.TaskClassifierService;
+import com.amsha.core.agent.reasoning.ReasoningEngine;
+import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentGroup;
 import com.amsha.core.agent.role.AgentGroupRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -34,6 +43,10 @@ class GroupConsultationDelegatorTest {
     private final GroupConsultationService groupConsultationService = mock(GroupConsultationService.class);
     private final GroupAnalyticsService groupAnalytics = mock(GroupAnalyticsService.class);
     private final TaskClassifierService taskClassifier = mock(TaskClassifierService.class);
+    private final AgentLoop agentLoopMock = mock(AgentLoop.class);
+    private final Instance<AgentLoop> agentLoopInstance = mock(Instance.class);
+    private final ReasoningEngine reasoningEngine = mock(ReasoningEngine.class);
+    private final DelegationProcessor delegationProcessor = mock(DelegationProcessor.class);
     private final GroupConsultationDelegator delegator = new GroupConsultationDelegator();
 
     @BeforeEach
@@ -42,6 +55,10 @@ class GroupConsultationDelegatorTest {
         delegator.groupConsultationEngine = groupConsultationEngine;
         delegator.groupAnalytics = groupAnalytics;
         delegator.taskClassifier = taskClassifier;
+        delegator.agentLoop = agentLoopInstance;
+        when(agentLoopInstance.isResolvable()).thenReturn(true);
+        when(agentLoopInstance.get()).thenReturn(agentLoopMock);
+        delegator.reasoningEngine = reasoningEngine;
         delegator.delegationProcessor = null;
     }
 
@@ -79,6 +96,134 @@ class GroupConsultationDelegatorTest {
         assertEquals(GOAL, delegator.prepareGoal(context(), SESSION_ID, LEAD_ROLE_ID, GOAL));
 
         verify(groupAnalytics).recordOutcome(eq(group.groupId()), eq(List.of("security")), eq(0), eq(1), eq(false));
+    }
+
+    @Test
+    void isGroupLead_delegatesToService() {
+        when(groupConsultationService.isGroupLead(LEAD_ROLE_ID)).thenReturn(true);
+        assertTrue(delegator.isGroupLead(LEAD_ROLE_ID));
+        when(groupConsultationService.isGroupLead(LEAD_ROLE_ID)).thenReturn(false);
+        assertFalse(delegator.isGroupLead(LEAD_ROLE_ID));
+    }
+
+    @Test
+    void prepareGoal_noGroupFound_returnsOriginalGoal() {
+        AgentGroup group = availableGroup();
+        when(groupConsultationEngine.hasGroupRegistry()).thenReturn(true);
+        when(groupConsultationService.getGroup(LEAD_ROLE_ID)).thenReturn(Optional.of(group));
+        when(groupConsultationEngine.findGroupById(group.groupId())).thenReturn(Optional.empty());
+        delegator.delegationProcessor = null;
+
+        assertEquals(GOAL, delegator.prepareGoal(context(), SESSION_ID, LEAD_ROLE_ID, GOAL));
+    }
+
+    @Test
+    void prepareGoal_noGroupFound_usesDelegationProcessorEnhancement() {
+        AgentGroup group = availableGroup();
+        when(groupConsultationEngine.hasGroupRegistry()).thenReturn(true);
+        when(groupConsultationService.getGroup(LEAD_ROLE_ID)).thenReturn(Optional.of(group));
+        when(groupConsultationEngine.findGroupById(group.groupId())).thenReturn(Optional.empty());
+        delegator.delegationProcessor = delegationProcessor;
+        when(delegationProcessor.enhanceGoalWithGroupConsultation(LEAD_ROLE_ID, GOAL))
+                .thenReturn(GOAL + " [consulted]");
+
+        assertEquals(GOAL + " [consulted]", delegator.prepareGoal(context(), SESSION_ID, LEAD_ROLE_ID, GOAL));
+    }
+
+    @Test
+    void prepareGoal_noSubTasks_returnsOriginalGoal() {
+        AgentGroup group = availableGroup();
+        when(groupConsultationEngine.hasGroupRegistry()).thenReturn(true);
+        when(groupConsultationService.getGroup(LEAD_ROLE_ID)).thenReturn(Optional.of(group));
+        when(groupConsultationEngine.findGroupById(group.groupId())).thenReturn(Optional.of(group));
+        when(groupConsultationEngine.buildSubTasks(group, GOAL)).thenReturn(Map.of());
+
+        assertEquals(GOAL, delegator.prepareGoal(context(), SESSION_ID, LEAD_ROLE_ID, GOAL));
+    }
+
+    @Test
+    void prepareGoal_runsMemberFinishedResult() {
+        AgentGroup group = availableGroup();
+        Map<String, String> subTasks = Map.of("sentinel", "Review security risks");
+        var consultation = new GroupConsultationEngine.GroupConsultationResult(
+                group.groupId(), Map.of("sentinel", "No critical risk found"), null, 1, 0);
+        stubConsultationInvokingRunner(
+                group, subTasks, consultation, runner -> runMember(runner, "coder", "Review security risks"));
+        when(agentLoopMock.run(any(), any(), any(), any(), anyInt(), any()))
+                .thenReturn(AgentResult.finished("answer", new ArrayList<>()));
+
+        String prepared = delegator.prepareGoal(context(), SESSION_ID, LEAD_ROLE_ID, GOAL);
+
+        assertTrue(prepared.startsWith(GOAL + "\n\n"));
+    }
+
+    @Test
+    void prepareGoal_runsMemberUnknownRoleSkips() {
+        AgentGroup group = availableGroup();
+        Map<String, String> subTasks = Map.of("sentinel", "Review security risks");
+        var consultation = new GroupConsultationEngine.GroupConsultationResult(
+                group.groupId(), Map.of("sentinel", "No critical risk found"), null, 1, 0);
+        stubConsultationInvokingRunner(
+                group, subTasks, consultation, runner -> runMember(runner, "not-a-valid-role", "goal"));
+
+        String prepared = delegator.prepareGoal(context(), SESSION_ID, LEAD_ROLE_ID, GOAL);
+
+        assertTrue(prepared.startsWith(GOAL + "\n\n"));
+    }
+
+    @Test
+    void prepareGoal_runsMemberFailedResult() {
+        AgentGroup group = availableGroup();
+        Map<String, String> subTasks = Map.of("sentinel", "Review security risks");
+        var consultation = new GroupConsultationEngine.GroupConsultationResult(
+                group.groupId(), Map.of("sentinel", "No critical risk found"), null, 1, 0);
+        stubConsultationInvokingRunner(group, subTasks, consultation, runner -> runMember(runner, "coder", "goal"));
+        when(agentLoopMock.run(any(), any(), any(), any(), anyInt(), any()))
+                .thenReturn(AgentResult.failed("boom", AgentResult.FailureCategory.SYSTEM_ERROR, new ArrayList<>()));
+
+        String prepared = delegator.prepareGoal(context(), SESSION_ID, LEAD_ROLE_ID, GOAL);
+
+        assertTrue(prepared.startsWith(GOAL + "\n\n"));
+    }
+
+    @Test
+    void prepareGoal_runsMemberAwaitingApprovalHitsDefault() {
+        AgentGroup group = availableGroup();
+        Map<String, String> subTasks = Map.of("sentinel", "Review security risks");
+        var consultation = new GroupConsultationEngine.GroupConsultationResult(
+                group.groupId(), Map.of("sentinel", "No critical risk found"), null, 1, 0);
+        stubConsultationInvokingRunner(group, subTasks, consultation, runner -> runMember(runner, "coder", "goal"));
+        when(agentLoopMock.run(any(), any(), any(), any(), anyInt(), any()))
+                .thenReturn(AgentResult.loopExceeded(5, new ArrayList<>()));
+
+        String prepared = delegator.prepareGoal(context(), SESSION_ID, LEAD_ROLE_ID, GOAL);
+
+        assertTrue(prepared.startsWith(GOAL + "\n\n"));
+    }
+
+    private void stubConsultationInvokingRunner(
+            AgentGroup group,
+            Map<String, String> subTasks,
+            GroupConsultationEngine.GroupConsultationResult consultation,
+            Consumer<GroupConsultationEngine.SubAgentRunner> invoke) {
+        when(groupConsultationEngine.hasGroupRegistry()).thenReturn(true);
+        when(groupConsultationService.getGroup(LEAD_ROLE_ID)).thenReturn(Optional.of(group));
+        when(groupConsultationEngine.findGroupById(group.groupId())).thenReturn(Optional.of(group));
+        when(groupConsultationEngine.buildSubTasks(group, GOAL)).thenReturn(subTasks);
+        when(groupConsultationEngine.consultGroup(eq(group.groupId()), eq(GOAL), eq(subTasks), any()))
+                .thenAnswer(inv -> {
+                    invoke.accept(inv.getArgument(3));
+                    return consultation;
+                });
+        when(taskClassifier.classify(GOAL)).thenReturn(List.of(TaskClassifierService.TaskDomain.SECURITY));
+    }
+
+    private static void runMember(GroupConsultationEngine.SubAgentRunner runner, String id, String goal) {
+        try {
+            runner.run(id, goal);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private AgentGroup availableGroup() {

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
@@ -109,6 +110,169 @@ class AgentTaskToolTest {
         assertFalse(resp.success());
         assertEquals(400, resp.exitCode());
         assertTrue(resp.output().contains("Unknown action"));
+    }
+
+    // --- Task #6: cover the remaining reachable actions / branches (get, update, delete, list_active) ---
+
+    @Test
+    void executeListActiveReturnsFormattedTasks() {
+        TaskFile t1 =
+                new TaskFile("/tasks/a.md", "Fix bug", TaskState.IN_PROGRESS, Instant.now(), Instant.now(), "body");
+        when(taskManager.listActiveTasks()).thenReturn(List.of(t1));
+
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "list_active"));
+
+        assertTrue(resp.success());
+        assertTrue(resp.output().contains("Fix bug"));
+    }
+
+    @Test
+    void executeListActiveReturnsEmptyMessage() {
+        when(taskManager.listActiveTasks()).thenReturn(List.of());
+
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "list_active"));
+
+        assertTrue(resp.success());
+        assertTrue(resp.output().contains("No active tasks"));
+    }
+
+    @Test
+    void executeGetReturnsTaskDetails() {
+        TaskFile task =
+                new TaskFile("/tasks/x.md", "Do thing", TaskState.TODO, Instant.now(), Instant.now(), "body text");
+        when(taskManager.getTask("x.md")).thenReturn(Optional.of(task));
+
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "get", "taskId", "x.md"));
+
+        assertTrue(resp.success());
+        assertTrue(resp.output().contains("Do thing"));
+        assertTrue(resp.output().contains("body text"));
+    }
+
+    @Test
+    void executeGetReturnsNotFound() {
+        when(taskManager.getTask("missing.md")).thenReturn(Optional.empty());
+
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "get", "taskId", "missing.md"));
+
+        assertFalse(resp.success());
+        assertEquals(404, resp.exitCode());
+        assertTrue(resp.output().contains("Task not found"));
+    }
+
+    @Test
+    void executeGetReturnsFailureWhenTaskIdMissing() {
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "get"));
+
+        assertFalse(resp.success());
+        assertEquals(400, resp.exitCode());
+        assertTrue(resp.output().contains("'taskId' is required"));
+    }
+
+    @Test
+    void executeUpdateReturnsSuccess() {
+        TaskFile updated =
+                new TaskFile("/tasks/u.md", "Edit", TaskState.TODO, Instant.now(), Instant.now(), "new body");
+        when(taskManager.updateBody("u.md", "new body")).thenReturn(updated);
+
+        ToolResponse resp =
+                tool.execute(ctx(), Map.of("action", "update", "taskId", "u.md", "description", "new body"));
+
+        assertTrue(resp.success());
+        assertTrue(resp.output().contains("Updated task: Edit"));
+        verify(auditService)
+                .record(
+                        eq(SESSION_ID),
+                        eq(USER_ID),
+                        eq("coordinator"),
+                        eq(SecurityEventType.TOOL_EXECUTED),
+                        contains("update task="));
+    }
+
+    @Test
+    void executeUpdateReturnsFailureWhenTaskIdMissing() {
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "update", "description", "body"));
+
+        assertFalse(resp.success());
+        assertEquals(400, resp.exitCode());
+        assertTrue(resp.output().contains("'taskId' is required"));
+    }
+
+    @Test
+    void executeUpdateReturnsFailureWhenDescriptionMissing() {
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "update", "taskId", "u.md"));
+
+        assertFalse(resp.success());
+        assertEquals(400, resp.exitCode());
+        assertTrue(resp.output().contains("'description' is required"));
+    }
+
+    @Test
+    void executeDeleteReturnsSuccess() {
+        when(taskManager.deleteTask("d.md")).thenReturn(true);
+
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "delete", "taskId", "d.md"));
+
+        assertTrue(resp.success());
+        assertTrue(resp.output().contains("Deleted task: d.md"));
+        verify(auditService)
+                .record(
+                        eq(SESSION_ID),
+                        eq(USER_ID),
+                        eq("coordinator"),
+                        eq(SecurityEventType.TOOL_EXECUTED),
+                        contains("deleted task="));
+    }
+
+    @Test
+    void executeDeleteReturnsNotFound() {
+        when(taskManager.deleteTask("d.md")).thenReturn(false);
+
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "delete", "taskId", "d.md"));
+
+        assertFalse(resp.success());
+        assertEquals(404, resp.exitCode());
+        assertTrue(resp.output().contains("Task not found"));
+    }
+
+    @Test
+    void executeDeleteReturnsFailureWhenTaskIdMissing() {
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "delete"));
+
+        assertFalse(resp.success());
+        assertEquals(400, resp.exitCode());
+        assertTrue(resp.output().contains("'taskId' is required"));
+    }
+
+    @Test
+    void executeTransitionReturnsFailureWhenTaskIdMissing() {
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "transition", "newStatus", "completed"));
+
+        assertFalse(resp.success());
+        assertEquals(400, resp.exitCode());
+        assertTrue(resp.output().contains("'taskId' is required"));
+    }
+
+    @Test
+    void executeTransitionReturnsFailureWhenNewStatusMissing() {
+        ToolResponse resp = tool.execute(ctx(), Map.of("action", "transition", "taskId", "t.md"));
+
+        assertFalse(resp.success());
+        assertEquals(400, resp.exitCode());
+        assertTrue(resp.output().contains("'newStatus' is required"));
+    }
+
+    @Test
+    void executeTransitionReturnsFailureWhenManagerRejectsTransition() {
+        when(taskManager.transitionTo("terminal.md", TaskState.COMPLETED))
+                .thenThrow(new IllegalStateException("Cannot transition terminal task"));
+
+        ToolResponse resp =
+                tool.execute(ctx(), Map.of("action", "transition", "taskId", "terminal.md", "newStatus", "completed"));
+
+        assertFalse(resp.success());
+        assertEquals(400, resp.exitCode());
+        assertTrue(resp.output().contains("Cannot transition terminal task"));
     }
 
     private ToolExecutionContext ctx() {

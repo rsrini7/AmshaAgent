@@ -900,10 +900,48 @@ was wrong, not as outstanding work.
 | `BrowserPreflightHandler` | 43 | **98.8%** | `BrowserPreflightHandlerTest` (5 → 23 tests); the residual 2 lines are unreachable — §1.3 |
 | `ToolRegistry` | 83 | **87.8%** | `ToolRegistryUnitTest` (extended) |
 
+**Status (2026-09-15) — Tasks #8–#10 (additional `core.agent.loop` / `core.tools` targets).**
+
+All verified by a green `./mvnw -o -pl core clean verify` (3,234 tests, 0 failures; aggregate `core` line
+coverage **83.8%** — 19,676 / 23,486 — comfortably above the `0.74` floor).
+
+| Class | Missed before | Line coverage now | Test file |
+|---|---:|---:|---|
+| `PersonaEscalationService` | 1 | **100%** (0 missed, 181 covered) | `PersonaEscalationServiceTest` (extended) |
+| `GroupConsultationDelegator` | 36 | **100%** (0 missed, 66 covered) | `GroupConsultationDelegatorTest` (extended, 11 tests) |
+| `RateLimitRetryScheduler` | 35 | 6 missed (all dead) / 86 covered | `RateLimitRetrySchedulerTest` (extended, 13 tests) |
+| `CronSessionStatusSync` | 33 | 1 missed (dead) / 87 covered | `CronSessionStatusSyncTest` (extended, 20 tests) |
+| `ToolGovernanceGuard` | 33 | **100%** (0 missed, 53 covered) | `ToolGovernanceGuardTest` (new, 12 tests) |
+| `DelegateToAgentTool` | 33 | 8 missed (6 dead + 2 unit-unreachable) / 172 covered | `DelegateToAgentToolTest` (extended, 16 tests) |
+| `LeakedToolCallParser` | 32 | 2 missed [362, 366] (JaCoCo closing-brace artifacts) / 254 covered | `LeakedToolCallParserTest` (9) + `LeakedToolCallParserUnitTest` (25) |
+
+Dead / unreachable lines reported (not faked — per the dead-guard discipline):
+
+- `RateLimitRetryScheduler` 165–167 & 209–211: `catch (Exception)` immediately after `catch (RuntimeException)` where
+  the `try` body throws no checked exceptions → unreachable defensive guards.
+- `CronSessionStatusSync.applyTerminal` 152: `default` branch of a `switch` over all six `AgentResult` subtypes
+  (the explicit `case`s cover every sealed subtype) → unreachable.
+- `DelegateToAgentTool` 415–418: CODER verification-gate max-depth skip — `depth` is re-derived from the session id
+  (line 206) *before* the gate, and a CODER delegation only reaches the gate at `depth == 0` (the auto-debug
+  recursion always targets `DEBUGGER`, never `CODER`), so `depth + 1 > maxDelegationDepth` is never true → dead.
+- `DelegateToAgentTool` 427–429: `catch (IllegalArgumentException)` around `AgentRoleEnum.fromString("debugger")` —
+  `"debugger"` is a constant role, so the lookup never throws → dead.
+- `DelegateToAgentTool` 164–165: shutdown guard — only reachable when `Arc.container()` is non-null *and* not running;
+  in a plain unit test `Arc.container()` is `null`, so the guard body is unit-test-unreachable (live in production).
+- `LeakedToolCallParser` 362 & 366: JaCoCo closing-brace artifacts, not real dead code. Line 362 is the closing `}`
+  of the `for` loop in `parseToolcallTagCall` (357–362) and line 366 is the `return` inside its `catch`; the
+  adjacent lines 364–365 (catch body) and 367 (terminal `return`) are both covered, so the code path provably
+  executes — only the braces carry no executable instruction of their own, which is why JaCoCo flags them.
+
 Still open in this phase: `AgentSessionApprovalHandler` (223 LOC), `DelegateApprovalCascade` (158 LOC),
 `PendingToolFailureHandler`, `BatchResultAggregator`, and the remaining loop state vocabulary;
 plus the async body of `CheckpointResumeHandler` noted in §1.3. The `ToolRegistry`
 and `LoopResultHandler` figures in the table above are the **pre-work** numbers — both have since been addressed.
+
+> **Gate status (2026-09-15).** With `core` at **83.8%** line coverage (19,676 / 23,486) the `0.74` floor is cleared
+> with ~10pp headroom, so `AgentSessionApprovalHandler` / `DelegateApprovalCascade` / `PendingToolFailureHandler` /
+> `BatchResultAggregator` and the remaining loop-state vocabulary (tasks #11–#13) are **optional polish**, not
+> gate-blocking. They remain valuable for hardening the approval/HITL paths but can be scheduled independently.
 `ThinkingState`, `ExecutionFailureRecoveryService`, `StepDecisionRouter`, `PendingToolResumeExecutor`,
 `ParallelToolStepExecutor`, `DelegatedCompletionHandoff` and `BrowserPreflightHandler` are the first entries from
 the "loop state

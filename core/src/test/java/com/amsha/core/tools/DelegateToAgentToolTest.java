@@ -19,10 +19,13 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.audit.AuditService;
+import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointDtoHelper;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.ToolOperation;
 import com.amsha.tool.api.AgentSentinels;
@@ -38,6 +41,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.opentelemetry.api.trace.Span;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S1192")
@@ -392,5 +397,173 @@ class DelegateToAgentToolTest {
         tool.execute(ctx, params);
         verify(checkpointCrud)
                 .save(argThat(dto -> dto.parentCheckpointId() != null && dto.parentCheckpointId() == 100L));
+    }
+
+    private ToolExecutionContext coordinatorCtx() {
+        return new ToolExecutionContext(
+                SESSION_ID,
+                USER_ID,
+                CHAT_ID,
+                "coordinator",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    @Test
+    void execute_unknownAgent_normalizeThrows() {
+        ToolExecutionContext ctx = coordinatorCtx();
+        ToolResponse res = tool.execute(ctx, Map.of("agent", "ghost", "goal", "do something"));
+        assertFalse(res.success());
+        assertEquals(400, res.exitCode());
+    }
+
+    @Test
+    void execute_groupConsultMode_enhancesGoal() throws Exception {
+        when(groupConsultationDelegator.isGroupLead(anyString())).thenReturn(true);
+        when(groupConsultationDelegator.prepareGoal(any(), any(), any(), any())).thenReturn("enhanced goal");
+        when(agentLoop.run(
+                        anyString(),
+                        eq(AgentRoleEnum.DEBUGGER.toScopedName()),
+                        anyString(),
+                        eq(reasoningEngine),
+                        anyInt(),
+                        any(MessageContext.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
+
+        ToolResponse res =
+                tool.execute(coordinatorCtx(), Map.of("agent", "shiva", "goal", "debug", "mode", "group_consult"));
+        assertTrue(res.success());
+        assertTrue(res.output().contains("ok"));
+    }
+
+    @Test
+    void execute_readonlyLevel_delegates() throws Exception {
+        when(agentLoop.run(
+                        anyString(),
+                        eq(AgentRoleEnum.DEBUGGER.toScopedName()),
+                        anyString(),
+                        eq(reasoningEngine),
+                        anyInt(),
+                        any(MessageContext.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
+
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                SESSION_ID,
+                USER_ID,
+                CHAT_ID,
+                "coordinator",
+                AutonomyLevel.READONLY,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        ToolResponse res = tool.execute(ctx, Map.of("agent", "shiva", "goal", "debug"));
+        assertTrue(res.success());
+        assertTrue(res.output().contains("ok"));
+    }
+
+    @Test
+    void execute_parentCheckpointWithInboundAudio_marksAudio() throws Exception {
+        CheckpointDto audioCp = CheckpointDtoHelper.create(
+                "audio-session",
+                "coordinator",
+                "ACTIVE",
+                "FULL",
+                null,
+                "goal",
+                2,
+                "{\"" + TurnDispatchService.DATA_INBOUND_AUDIO + "\":true}");
+        when(checkpointCrud.findBySessionAndRole(eq("audio-session"), eq("coordinator")))
+                .thenReturn(Optional.of(audioCp));
+        when(agentLoop.run(
+                        anyString(),
+                        eq(AgentRoleEnum.DEBUGGER.toScopedName()),
+                        anyString(),
+                        eq(reasoningEngine),
+                        anyInt(),
+                        any(MessageContext.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
+
+        ToolExecutionContext ctx = new ToolExecutionContext(
+                "audio-session",
+                USER_ID,
+                CHAT_ID,
+                "coordinator",
+                AutonomyLevel.FULL,
+                "trace-1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+        ToolResponse res = tool.execute(ctx, Map.of("agent", "shiva", "goal", "debug"));
+        assertTrue(res.success());
+        assertTrue(res.output().contains("ok"));
+    }
+
+    @Test
+    void execute_successfulDelegation_recordsSpanAttributes() throws Exception {
+        when(otelContext.childSpan(anyString(), anyString())).thenReturn(mock(Span.class));
+        when(agentLoop.run(
+                        anyString(),
+                        eq(AgentRoleEnum.DEBUGGER.toScopedName()),
+                        anyString(),
+                        eq(reasoningEngine),
+                        anyInt(),
+                        any(MessageContext.class)))
+                .thenReturn(AgentResult.finished("ok", List.of()));
+
+        ToolResponse res = tool.execute(coordinatorCtx(), Map.of("agent", "shiva", "goal", "debug"));
+        assertTrue(res.success());
+        assertTrue(res.output().contains("ok"));
+    }
+
+    @Test
+    void execute_subAgentThrowsBudgetExceeded_propagates() {
+        when(otelContext.childSpan(anyString(), anyString())).thenReturn(mock(Span.class));
+        when(agentLoop.run(any(), any(), any(), eq(reasoningEngine), anyInt(), any()))
+                .thenThrow(new BudgetExceededException("budget exceeded"));
+
+        assertThrows(
+                BudgetExceededException.class,
+                () -> tool.execute(coordinatorCtx(), Map.of("agent", "shiva", "goal", "debug")));
+    }
+
+    @Test
+    void execute_subAgentThrowsRuntimeException_returnsFailure() {
+        when(otelContext.childSpan(anyString(), anyString())).thenReturn(mock(Span.class));
+        when(agentLoop.run(any(), any(), any(), eq(reasoningEngine), anyInt(), any()))
+                .thenThrow(new RuntimeException("boom"));
+
+        ToolResponse res = tool.execute(coordinatorCtx(), Map.of("agent", "shiva", "goal", "debug"));
+        assertFalse(res.success());
+        assertEquals(500, res.exitCode());
+    }
+
+    @Test
+    void execute_coderStructuredFinished_verificationSucceeds() throws Exception {
+        when(verificationGate.verify(any(), any())).thenReturn(new VerificationGate.VerificationResult(true, ""));
+        when(agentLoop.run(
+                        anyString(),
+                        eq(AgentRoleEnum.CODER.toScopedName()),
+                        anyString(),
+                        eq(reasoningEngine),
+                        anyInt(),
+                        any(MessageContext.class)))
+                .thenReturn(AgentResult.structuredFinished("class Answer {}", Map.of("fields", 1), List.of()));
+
+        ToolResponse res = tool.execute(coordinatorCtx(), Map.of("agent", "brahma", "goal", "write code"));
+        assertTrue(res.success());
+        assertTrue(res.output().contains("Answer"));
     }
 }

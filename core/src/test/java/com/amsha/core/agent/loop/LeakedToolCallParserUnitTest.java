@@ -139,4 +139,91 @@ class LeakedToolCallParserUnitTest {
         assertTrue(call.isPresent());
         assertEquals("web_fetch", call.get().toolName());
     }
+
+    // ── Branch coverage for the various parse helpers (defensive / not-found / error paths) ──
+
+    @Test
+    void bareTopLevelArrayUnknownTool_isEmpty() {
+        String answer = "[{\"name\":\"ghost\",\"arguments\":{}}]";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void invalidJsonObject_isEmpty() {
+        String answer = "{\"name\": }";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void dsmlUnknownTool_isEmpty() {
+        String answer = "invoke name=\"ghost\"><parameter name=\"x\">y</parameter></invoke>";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void xmlFunctionUnknownTool_isEmpty() {
+        String answer = "<function=\"ghost\"><parameter name=\"x\">y</parameter></function>";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void xmlJsonInvalidBody_isEmpty() {
+        String answer = "<tool_call>{ this is not json }</tool_call>";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void xmlToolNameParamsUnknownTool_isEmpty() {
+        String answer = "<tool_call><tool_name>ghost</tool_name><parameters>{\"x\":\"y\"}</parameters></tool_call>";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void xmlToolNameParamsInvalidJson_isEmpty() {
+        String answer = "<tool_call><tool_name>web_fetch</tool_name><parameters>{invalid}</parameters></tool_call>";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void xmlToolNameParamsPlainParameters_parses() {
+        String answer = "<tool_call><tool_name>web_fetch</tool_name><parameters>"
+                + "<parameter name=\"command\">ls -la</parameter></parameters></tool_call>";
+        Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);
+        assertTrue(call.isPresent());
+        assertEquals("web_fetch", call.get().toolName());
+        assertEquals("ls -la", call.get().arguments().get("command"));
+    }
+
+    @Test
+    void toolcallTagInvalidBody_isEmpty() {
+        String answer = "<toolcall>{ not json }</toolcall>";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void codeBlockWithNonJsonContent_isEmpty() {
+        String answer = "```\nhello world\n```";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void nvidiaToolCallsInvalidJson_isEmpty() {
+        String answer = "TOOLCALLS web_fetch {not valid json}";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
+
+    @Test
+    void nakedFunctionCallJsonStyleArgs_parses() {
+        String answer = "execute_shell(\"command\": \"ls\")";
+        Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);
+        assertTrue(call.isPresent());
+        assertEquals("execute_shell", call.get().toolName());
+        assertEquals("ls", call.get().arguments().get("command"));
+    }
+
+    @Test
+    void toolcallTagArrayUnknownTool_isEmpty() {
+        String answer = "<toolcall>[{\"name\":\"ghost\",\"arguments\":{}}]</toolcall>";
+        assertTrue(parser.extractLeakedToolCall(answer).isEmpty());
+    }
 }
