@@ -279,4 +279,29 @@ class PostgresLlmProfileStoreAdapterTest {
         assertEquals(1, store.deleteRouteAssignment(prefix + "-r4"));
         assertTrue(store.findRouteAssignment(prefix + "-r4").isEmpty());
     }
+
+    /**
+     * {@code ordered_profile_ids} is a {@code TEXT} JSON array parsed by {@code RouteRowMapper.parseList}.
+     * Writing is total, reading is not: a route whose JSON is corrupt must still be readable, degrading that
+     * one column to an empty list. Returning empty rather than throwing keeps the rest of the routing table
+     * inspectable so an operator can repair the row.
+     */
+    @Test
+    void aCorruptOrderedProfileIdsColumnDegradesToAnEmptyList() {
+        String prefix = "pg-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        String routeId = prefix + "-r5";
+        store.saveRouteAssignment(new ModelRouteAssignmentDto(
+                routeId, "USER", prefix + "-user-5", "DEFAULT", null, List.of(prefix + "-p5"), true, 1, now, now));
+
+        jdbi.useHandle(h -> h.execute(
+                "UPDATE model_route_assignment SET ordered_profile_ids = ? WHERE id = ?", "[not json", routeId));
+
+        ModelRouteAssignmentDto read = store.findRouteAssignment(routeId).orElseThrow();
+
+        assertTrue(read.orderedProfileIds().isEmpty(), "an unparseable column must degrade, not throw");
+        // The sibling columns are untouched, which is what proves the degradation is per-column.
+        assertEquals("USER", read.scopeType());
+        assertTrue(read.enabled());
+    }
 }

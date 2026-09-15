@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import jakarta.enterprise.inject.Instance;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -303,7 +304,7 @@ class ApprovalCheckpointManagerTest {
     //    audio media, malformed JSON, and the trace/domain-event publish paths) ──
 
     private static Map<String, Object> selfReferencingMap() {
-        Map<String, Object> m = new java.util.HashMap<>();
+        Map<String, Object> m = new HashMap<>();
         m.put("self", m); // Jackson FAIL_ON_SELF_REFERENCES throws on serialization
         return m;
     }

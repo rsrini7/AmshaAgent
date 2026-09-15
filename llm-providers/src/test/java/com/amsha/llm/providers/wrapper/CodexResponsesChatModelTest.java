@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 
 import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
@@ -15,6 +16,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.FinishReason;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -39,7 +41,12 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
 
 /**
  * Loopback test for direct ChatGPT Plus Responses SSE transport ({@link CodexResponsesChatModel}).
@@ -212,5 +219,166 @@ class CodexResponsesChatModelTest {
                         .messages(List.of(UserMessage.from("Ping remote")))
                         .build()));
         assertTrue(ex.getMessage().contains("Governed outbound transport"));
+    }
+
+    // ---- request payload shape ----
+
+    @Test
+    void anAssistantMessageWithTextIsIncludedInTheRequestPayload() throws Exception {
+        modelWithTransport()
+                .chat(ChatRequest.builder()
+                        .messages(List.of(UserMessage.from("hi"), AiMessage.from("I am the assistant")))
+                        .build());
+
+        JsonNode input = objectMapper.readTree(capturedBodies.get(0)).path("input");
+        assertEquals(2, input.size());
+        assertEquals("assistant", input.get(1).path("role").asText());
+        assertEquals("I am the assistant", input.get(1).path("content").asText());
+    }
+
+    // ---- SSE event handling ----
+
+    @Test
+    void textAndToolCallInOneStreamProduceAMessageCarryingBoth() {
+        stubSse("""
+                data: {"type":"response.output_text.delta","delta":"thinking..."}
+
+                data: {"type":"response.output_item.added","item":{"type":"function_call","name":"reverse_text","call_id":"call_9"}}
+
+                data: {"type":"response.function_call_arguments.delta","delta":"{\\"input\\":\\"hi\\"}"}
+
+                data: {"type":"response.output_item.done","item":{"type":"function_call","name":"reverse_text","call_id":"call_9"}}
+
+                data: {"type":"response.completed","response":{"usage":{"input_tokens":7,"output_tokens":3,"total_tokens":10}}}
+
+                """, 200);
+
+        ChatResponse response = chat("Reverse 'hi'");
+
+        assertEquals(FinishReason.TOOL_EXECUTION, response.finishReason());
+        assertEquals("thinking...", response.aiMessage().text());
+        assertEquals(1, response.aiMessage().toolExecutionRequests().size());
+        // The stream reported usage, so the character-count estimate must not be used.
+        assertEquals(7, response.tokenUsage().inputTokenCount().intValue());
+        assertEquals(10, response.tokenUsage().totalTokenCount().intValue());
+    }
+
+    @Test
+    void outputTextDoneSuppliesTheTextWhenNoDeltaArrived() {
+        stubSse("data: {\"type\":\"response.output_text.done\",\"text\":\"complete text\"}\n\n", 200);
+
+        ChatResponse response = chat("hi");
+
+        assertEquals("complete text", response.aiMessage().text());
+        assertEquals(FinishReason.STOP, response.finishReason());
+    }
+
+    @Test
+    void messageOutputItemTextIsExtractedFromItsContentParts() {
+        stubSse("""
+                data: {"type":"response.output_item.done","item":{"type":"message","content":[{"type":"output_text","text":"from parts"},{"type":"output_text","text":"!"}]}}
+
+                """, 200);
+
+        assertEquals("from parts!", chat("hi").aiMessage().text());
+    }
+
+    @Test
+    void anErrorEventFailsTheChatWithTheUpstreamMessage() {
+        stubSse("data: {\"type\":\"error\",\"message\":\"rate limited\"}\n\n", 200);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> chat("hi"));
+
+        assertTrue(ex.getMessage().contains("Codex SSE Error"));
+        assertTrue(ex.getMessage().contains("rate limited"));
+    }
+
+    // ---- transport and status handling ----
+
+    @Test
+    void aNon200ResponsesStatusIsReportedWithItsCode() {
+        stubSse("upstream boom", 503);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> chat("hi"));
+
+        assertTrue(ex.getMessage().contains("HTTP 503"));
+    }
+
+    @Test
+    void anUnexpectedFailureIsWrappedWithItsRootMessage() {
+        CodexResponsesChatModel model = new CodexResponsesChatModel(
+                "http://[not-a-host", "tok", null, "gpt-5.6-luna", 1024, Duration.ofSeconds(5), 0.0, governedTransport);
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> model.chat(request("hi")));
+
+        assertFalse(ex instanceof IllegalStateException, "only IllegalStateException escapes unwrapped");
+        assertTrue(ex.getMessage().contains("Failed to execute Codex chat request"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theConvenienceConstructorResolvesTheTransportFromCdi() {
+        InstanceHandle<GovernedTransportService> handle = Mockito.mock(InstanceHandle.class);
+        Mockito.when(handle.isAvailable()).thenReturn(true);
+        Mockito.when(handle.get()).thenReturn(governedTransport);
+        ArcContainer container = Mockito.mock(ArcContainer.class);
+        Mockito.when(container.instance(GovernedTransportService.class)).thenReturn(handle);
+        stubSse("data: {\"type\":\"response.output_text.delta\",\"delta\":\"via cdi\"}\n\n", 200);
+
+        try (MockedStatic<Arc> arc = Mockito.mockStatic(Arc.class)) {
+            arc.when(Arc::container).thenReturn(container);
+
+            // The 7-argument constructor has no transport parameter, so it must come from CDI.
+            CodexResponsesChatModel model = new CodexResponsesChatModel(
+                    endpoint, "tok", "acct", "gpt-5.6-luna", 1024, Duration.ofSeconds(5), 0.0);
+
+            assertEquals("via cdi", model.chat(request("hi")).aiMessage().text());
+        }
+    }
+
+    @Test
+    void aBrokenCdiContainerLeavesTheTransportUnresolved() {
+        try (MockedStatic<Arc> arc = Mockito.mockStatic(Arc.class)) {
+            arc.when(Arc::container).thenThrow(new IllegalStateException("no arc container"));
+
+            CodexResponsesChatModel model = new CodexResponsesChatModel(
+                    endpoint, "tok", "acct", "gpt-5.6-luna", 1024, Duration.ofSeconds(5), 0.0);
+
+            IllegalStateException ex = assertThrows(IllegalStateException.class, () -> model.chat(request("hi")));
+            assertTrue(ex.getMessage().contains("Governed outbound transport"));
+        }
+    }
+
+    // ---- helpers ----
+
+    private CodexResponsesChatModel modelWithTransport() {
+        return new CodexResponsesChatModel(
+                endpoint,
+                "test-oauth-access-token",
+                "test-account-id-123",
+                "gpt-5.6-luna",
+                1024,
+                Duration.ofSeconds(5),
+                0.0,
+                governedTransport);
+    }
+
+    private static ChatRequest request(String prompt) {
+        return ChatRequest.builder().messages(List.of(UserMessage.from(prompt))).build();
+    }
+
+    private ChatResponse chat(String prompt) {
+        return modelWithTransport().chat(request(prompt));
+    }
+
+    /** Serves a fixed SSE payload instead of going through the loopback handler. */
+    @SuppressWarnings("unchecked")
+    private void stubSse(String ssePayload, int status) {
+        HttpResponse<InputStream> response = Mockito.mock(HttpResponse.class);
+        Mockito.when(response.statusCode()).thenReturn(status);
+        Mockito.when(response.body()).thenReturn(new ByteArrayInputStream(ssePayload.getBytes(StandardCharsets.UTF_8)));
+        Mockito.doReturn(response)
+                .when(governedTransport)
+                .send(anyString(), any(), any(), any(), anyBoolean(), any(), any());
     }
 }

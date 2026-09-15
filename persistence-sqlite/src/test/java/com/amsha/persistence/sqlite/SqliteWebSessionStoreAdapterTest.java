@@ -68,4 +68,30 @@ class SqliteWebSessionStoreAdapterTest {
         assertEquals(0, store.deleteByUserId(""));
         assertEquals(0, store.deleteExpired(null));
     }
+
+    @Test
+    void deleteByUserIdRemovesEverySessionOfThatUser() {
+        String userId = "user-bulk-" + UUID.randomUUID();
+        for (int i = 0; i < 2; i++) {
+            String suffix = i + "-" + UUID.randomUUID();
+            assertTrue(store.save(new WebSessionDto(
+                    "web-bulk-" + suffix,
+                    userId,
+                    "digest-bulk-" + suffix,
+                    "csrf-" + suffix,
+                    Instant.now().plusSeconds(3600),
+                    Instant.now().plusSeconds(86400),
+                    null,
+                    null,
+                    "{}",
+                    1,
+                    Instant.now(),
+                    Instant.now())));
+        }
+        assertEquals(2, store.listByUserId(userId).size());
+
+        assertEquals(2, store.deleteByUserId(userId));
+
+        assertTrue(store.listByUserId(userId).isEmpty());
+    }
 }

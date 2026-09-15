@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -657,7 +658,7 @@ class GovernedHttpClientTest {
     void customCaMode_validCertificate_buildsSslContextAndProceeds() {
         SecretVault vault = Mockito.mock(SecretVault.class);
         VaultKey key = Mockito.mock(VaultKey.class);
-        when(key.get()).thenReturn(java.util.Base64.getDecoder().decode(TEST_CA_DER_BASE64));
+        when(key.get()).thenReturn(Base64.getDecoder().decode(TEST_CA_DER_BASE64));
         when(vault.get("ca-ref", "u")).thenReturn(Optional.of(key));
         GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
                 .purpose(OutboundPurpose.PROVIDER_API_CALL)

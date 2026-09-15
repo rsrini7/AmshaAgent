@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
@@ -134,5 +137,45 @@ class ProviderOnboardingAdapterTest {
                 "local", "Local", "local", "NONE", "http://localhost", false, true, List.of(), Map.of());
         assertEquals("NONE", local.authScheme());
         assertSame(local.attributes(), Map.copyOf(local.attributes()));
+    }
+
+    @Test
+    void validateRejectsACustomBaseUrlThatIsNotParseable() {
+        String model =
+                adapter.descriptor("openai").orElseThrow().modelCatalog().get(0).id();
+
+        // An unclosed IPv6 literal makes URI parsing itself throw, rather than merely yielding no host.
+        ProviderValidationResult r = adapter.validate(
+                new ConnectionValidationRequest("openai", model, "http://[not-a-host", true, List.of()));
+
+        assertFalse(r.eligible());
+        assertTrue(r.errors().stream().anyMatch(e -> e.contains("absolute HTTP(S) URL")));
+    }
+
+    @Test
+    void discoverModelsFallsBackToTheStaticCatalogWithoutALiveService() {
+        List<ModelEntry> advertised = adapter.descriptor("openai").orElseThrow().modelCatalog();
+
+        // No live service is wired in a plain unit test, so the advertised catalog is the answer.
+        assertSame(advertised, adapter.discoverModels("openai", null, "sk-x", "user-1"));
+    }
+
+    @Test
+    void discoverModelsForAnUnknownProviderIsEmpty() {
+        assertEquals(List.of(), adapter.discoverModels("no-such-provider", null, null, null));
+    }
+
+    @Test
+    void discoverModelsDelegatesToTheLiveServiceWhenPresent() {
+        StaticProviderCatalogAdapter withLive = new StaticProviderCatalogAdapter();
+        LiveProviderCatalogService live = mock(LiveProviderCatalogService.class);
+        List<ModelEntry> fallback = withLive.descriptor("openai").orElseThrow().modelCatalog();
+        List<ModelEntry> liveModels = List.of(new ModelEntry("gpt-5-live", "GPT-5 Live"));
+        when(live.discoverModels("openai", "https://gw.example.com/v1", "sk-x", "user-1", fallback))
+                .thenReturn(liveModels);
+        withLive.liveCatalogService = live;
+
+        assertSame(liveModels, withLive.discoverModels("openai", "https://gw.example.com/v1", "sk-x", "user-1"));
+        verify(live).discoverModels("openai", "https://gw.example.com/v1", "sk-x", "user-1", fallback);
     }
 }

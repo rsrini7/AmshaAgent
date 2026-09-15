@@ -141,4 +141,20 @@ class SqliteOnboardingDraftStoreAdapterTest {
                         .map(OnboardingDraftDto::draftId)
                         .toList());
     }
+
+    @Test
+    void aCorruptJsonColumnDegradesToAnEmptyListInsteadOfFailingTheRead() {
+        store.save(draft("corrupt-1", "owner-c", OnboardingDraftState.DRAFT));
+
+        // Simulate a value written by an older or foreign writer: text, but not valid JSON.
+        jdbi.useHandle(h -> h.execute(
+                "UPDATE onboarding_draft SET completed_step_ids = ? WHERE draft_id = ?", "{not json", "corrupt-1"));
+
+        OnboardingDraftDto read = store.findById("corrupt-1").orElseThrow();
+
+        assertTrue(
+                read.completedStepIds().isEmpty(),
+                "a malformed JSON column must degrade to an empty list rather than failing the read");
+        assertEquals(List.of("ns1"), read.selectedNonSecretIds(), "an intact sibling JSON column must still parse");
+    }
 }

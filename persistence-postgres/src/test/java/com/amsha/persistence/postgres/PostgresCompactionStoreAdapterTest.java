@@ -77,4 +77,10 @@ class PostgresCompactionStoreAdapterTest {
         when(dao.search("usr-1", "q", 10)).thenReturn(List.of());
         assertTrue(adapter.search("usr-1", "q", 10).isEmpty());
     }
+
+    @Test
+    void theProtectedNoArgConstructorBuildsAnUnconfiguredInstance() {
+        // Same package as the adapter, so the protected constructor is reachable without reflection.
+        assertDoesNotThrow(() -> new PostgresCompactionStoreAdapter());
+    }
 }

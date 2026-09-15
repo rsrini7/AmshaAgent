@@ -3,6 +3,7 @@ package com.amsha.persistence.fs;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -167,5 +168,19 @@ class FsOnboardingDraftStoreAdapterTest {
                 adapter.findExpired(Instant.now()).stream()
                         .map(OnboardingDraftDto::draftId)
                         .toList());
+    }
+
+    @Test
+    void deleteReportsAMissAndWrapsAnIoFailure() throws IOException {
+        assertEquals(0, adapter.delete("no-such-draft"), "an absent draft deletes nothing");
+
+        // A non-empty directory where the draft file is expected makes deleteIfExists fail.
+        Path draftPath = tempDir.resolve("onboarding").resolve("drafts").resolve("d-blocked.json");
+        Files.createDirectories(draftPath);
+        Files.writeString(draftPath.resolve("child.txt"), "x");
+
+        UncheckedIOException ex = assertThrows(UncheckedIOException.class, () -> adapter.delete("d-blocked"));
+
+        assertTrue(ex.getMessage().startsWith("Failed to delete draft d-blocked"), ex.getMessage());
     }
 }

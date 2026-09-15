@@ -375,6 +375,28 @@ class FsAuditEventStoreAdapterDeepTest {
         }
 
         @Test
+        void findAll_appliesTheTimestampWindow() throws Exception {
+            getEvents(sessionIndex).add(createIndexEntry(UUID.randomUUID().toString(), "idem1", "TYPE", Instant.now()));
+            setIndex(sessionIndex);
+            mockStoreReadOptional();
+            Instant now = Instant.now();
+
+            assertEquals(
+                    1,
+                    adapter.findAll("session-1", null, now.minusSeconds(60), now.plusSeconds(60), 0, 100)
+                            .size(),
+                    "an event inside the window survives both bounds");
+            assertTrue(
+                    adapter.findAll("session-1", null, now.plusSeconds(60), null, 0, 100)
+                            .isEmpty(),
+                    "an event before `from` is dropped");
+            assertTrue(
+                    adapter.findAll("session-1", null, null, now.minusSeconds(60), 0, 100)
+                            .isEmpty(),
+                    "an event after `to` is dropped");
+        }
+
+        @Test
         void findAll_noSessionId_scansAllSessions() throws Exception {
             when(store.listDirs(any())).thenReturn(List.of("session-1", "session-2"));
             getEvents(sessionIndex).add(createIndexEntry(UUID.randomUUID().toString(), "idem1", "TYPE", Instant.now()));

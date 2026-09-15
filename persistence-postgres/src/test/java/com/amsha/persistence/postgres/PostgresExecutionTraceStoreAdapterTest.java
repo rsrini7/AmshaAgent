@@ -4,9 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -16,10 +20,14 @@ import java.util.UUID;
 import com.amsha.persistence.api.ExecutionTraceDto;
 import com.amsha.persistence.postgres.jdbi.ExecutionTraceJdbiDao;
 
+import org.jdbi.v3.core.Handle;
+import org.jdbi.v3.core.HandleConsumer;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.extension.ExtensionCallback;
 import org.jdbi.v3.core.extension.ExtensionConsumer;
+import org.jdbi.v3.core.statement.PreparedBatch;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -166,5 +174,64 @@ class PostgresExecutionTraceStoreAdapterTest {
         assertEquals(12L, adapter.pruneExcessRuns(50));
         assertEquals(0L, adapter.pruneExcessRuns(0));
         assertEquals(0L, adapter.pruneExcessRuns(-1));
+    }
+
+    // =========================================================================
+    // saveBatch and the remaining blank guards
+    // =========================================================================
+
+    @Test
+    @DisplayName("saveBatch skips null and empty lists without opening a handle")
+    void testSaveBatchSkipsNullAndEmptyLists() {
+        assertDoesNotThrow(() -> adapter.saveBatch(null));
+        assertDoesNotThrow(() -> adapter.saveBatch(List.of()));
+
+        // No stub is installed in this test, so this is a real assertion that the guard ran before any
+        // connection was requested.
+        verifyNoInteractions(jdbi);
+    }
+
+    @Test
+    @DisplayName("saveBatch binds every DTO into one prepared batch and executes it once")
+    void testSaveBatchBindsAndExecutesOneBatch() {
+        Handle handle = mock(Handle.class);
+        PreparedBatch batch = mock(PreparedBatch.class);
+        when(handle.prepareBatch(anyString())).thenReturn(batch);
+        when(batch.bindMethods(any())).thenReturn(batch);
+        doAnswer(inv -> {
+                    HandleConsumer<RuntimeException> consumer = inv.getArgument(0);
+                    consumer.useHandle(handle);
+                    return null;
+                })
+                .when(jdbi)
+                .useHandle(any());
+
+        ExecutionTraceDto first = makeDto("sess-1", "sess-1:turn-1", 1, 0);
+        ExecutionTraceDto second = makeDto("sess-1", "sess-1:turn-1", 1, 1);
+
+        adapter.saveBatch(List.of(first, second));
+
+        verify(batch).bindMethods(first);
+        verify(batch).bindMethods(second);
+        verify(batch, times(2)).add();
+        verify(batch).execute();
+    }
+
+    @Test
+    @DisplayName("blank run and session ids short-circuit without querying")
+    void testBlankArgumentsShortCircuit() {
+        assertTrue(adapter.findByRunIdBounded(null, 0, null, 0, 10).isEmpty());
+        assertTrue(adapter.findByRunIdBounded("   ", 0, null, 0, 10).isEmpty());
+        assertDoesNotThrow(() -> adapter.deleteBySessionId(null));
+        assertDoesNotThrow(() -> adapter.deleteBySessionId("   "));
+
+        verifyNoInteractions(jdbi);
+    }
+
+    @Test
+    @DisplayName("the protected no-arg constructor builds an unconfigured instance")
+    void theProtectedNoArgConstructorBuildsAnUnconfiguredInstance() {
+        // Same package as the adapter, so the protected constructor is reachable without reflection.
+        assertDoesNotThrow(() -> new PostgresExecutionTraceStoreAdapter());
     }
 }

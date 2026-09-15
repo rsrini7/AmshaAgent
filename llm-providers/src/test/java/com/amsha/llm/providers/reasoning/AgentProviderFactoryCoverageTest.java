@@ -1,6 +1,7 @@
 package com.amsha.llm.providers.reasoning;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 
 import java.lang.reflect.Field;
@@ -11,6 +12,7 @@ import java.util.stream.Stream;
 
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.helper.AgyTokenResolver;
 import com.amsha.llm.providers.helper.ClaudeCodeTokenResolver;
@@ -102,6 +104,157 @@ class AgentProviderFactoryCoverageTest {
 
         assertNotNull(factory.create());
         assertNotNull(factory.create("gemini-1.5-pro"));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Cloudflare resolves its base URL from an account ID, because the Workers AI endpoint embeds the
+    // account in the path. This is pure string logic and needs no CDI container.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void cloudflareSubstitutesTheAccountIdIntoTheBaseUrl() throws Exception {
+        CloudflareProviderFactory factory = new CloudflareProviderFactory();
+        initializeFields(factory);
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
+        set(factory, "accountId", Optional.of("acc-123"));
+
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/acc-123/ai/v1", factory.resolveEffectiveBaseUrl());
+    }
+
+    @Test
+    void cloudflareSanitizesAnAccountIdCopiedFromTheDashboardUrl() throws Exception {
+        CloudflareProviderFactory factory = new CloudflareProviderFactory();
+        initializeFields(factory);
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
+        set(factory, "accountId", Optional.of("accounts/acc-123/ai/v1"));
+
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/acc-123/ai/v1", factory.resolveEffectiveBaseUrl());
+    }
+
+    @Test
+    void cloudflareFallsBackToSystemPropertiesForTheAccountId() throws Exception {
+        String property = "AMSHA_CLOUDFLARE_ACCOUNT_ID";
+        String previous = System.getProperty(property);
+        CloudflareProviderFactory factory = new CloudflareProviderFactory();
+        initializeFields(factory);
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
+        set(factory, "accountId", Optional.empty());
+
+        try {
+            System.setProperty(property, "prop-acc");
+            assertEquals(
+                    "https://api.cloudflare.com/client/v4/accounts/prop-acc/ai/v1", factory.resolveEffectiveBaseUrl());
+        } finally {
+            if (previous == null) {
+                System.clearProperty(property);
+            } else {
+                System.setProperty(property, previous);
+            }
+        }
+    }
+
+    @Test
+    void cloudflareRejectsAnUnresolvableAccountId() throws Exception {
+        // The ladder ends in System.getenv, which is not settable from a test; skip rather than assert
+        // against whatever the ambient environment happens to hold.
+        assumeTrue(System.getenv("AMSHA_CLOUDFLARE_ACCOUNT_ID") == null, "env account ID is set on this machine");
+
+        CloudflareProviderFactory factory = new CloudflareProviderFactory();
+        initializeFields(factory);
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
+        set(factory, "accountId", Optional.empty());
+
+        assertThrows(IllegalStateException.class, factory::resolveEffectiveBaseUrl);
+    }
+
+    @Test
+    void cloudflareRejectsABaseUrlThatStaysMalformedAfterSubstitution() throws Exception {
+        CloudflareProviderFactory factory = new CloudflareProviderFactory();
+        initializeFields(factory);
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/accounts/{account_id}//ai/v1");
+        set(factory, "accountId", Optional.of("acc-123"));
+
+        assertThrows(IllegalStateException.class, factory::resolveEffectiveBaseUrl);
+    }
+
+    @Test
+    void cloudflareNormalizesATrailingBraceAndDuplicatedPathSegments() throws Exception {
+        CloudflareProviderFactory factory = new CloudflareProviderFactory();
+        initializeFields(factory);
+
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/accounts/acc/ai/v1}");
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/acc/ai/v1", factory.resolveEffectiveBaseUrl());
+
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/accounts/acc/ai/v1/ai/v1");
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/acc/ai/v1", factory.resolveEffectiveBaseUrl());
+
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/accounts/acc/v1/v1");
+        assertEquals("https://api.cloudflare.com/client/v4/accounts/acc/v1", factory.resolveEffectiveBaseUrl());
+    }
+
+    @Test
+    void cloudflareRejectsAnIllegalBraceInTheMiddleOfTheUrl() throws Exception {
+        CloudflareProviderFactory factory = new CloudflareProviderFactory();
+        initializeFields(factory);
+        set(factory, "baseUrl", "https://api.cloudflare.com/client/v4/v1}corrupt");
+
+        assertThrows(IllegalStateException.class, factory::resolveEffectiveBaseUrl);
+        // baseUrl() is the defensive wrapper: a resolution failure degrades to the configured value
+        // rather than propagating out of the provider metadata surface.
+        assertEquals("https://api.cloudflare.com/client/v4/v1}corrupt", factory.baseUrl());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The credential-free local providers expose convenience constructors used by callers that build
+    // them outside CDI.
+    // ---------------------------------------------------------------------------------------------
+
+    @Test
+    void ollamaConvenienceConstructorsPopulateTheInjectedFields() {
+        AgentLlmConfig config = mock(AgentLlmConfig.class);
+        Mockito.when(config.structuredOutputMode()).thenReturn(StructuredOutputMode.NATIVE);
+
+        OllamaProviderFactory threeArg = new OllamaProviderFactory(config, "http://localhost:11434", "llama3");
+        OllamaProviderFactory fourArg = new OllamaProviderFactory(config, "http://localhost:11434", "llama3", null);
+
+        assertEquals(ModelDefaults.PROVIDER_OLLAMA, threeArg.providerName());
+        assertEquals("http://localhost:11434", threeArg.baseUrl());
+        assertEquals("http://localhost:11434", fourArg.baseUrl());
+        assertEquals(StructuredOutputMode.NATIVE, fourArg.structuredOutputMode());
+    }
+
+    @Test
+    void llamaCppConvenienceConstructorsPopulateTheInjectedFields() {
+        AgentLlmConfig config = mock(AgentLlmConfig.class);
+        Mockito.when(config.structuredOutputMode()).thenReturn(StructuredOutputMode.NATIVE);
+
+        LlamaCppProviderFactory threeArg = new LlamaCppProviderFactory(config, "http://localhost:8080/v1", "local");
+        LlamaCppProviderFactory fourArg =
+                new LlamaCppProviderFactory(config, "http://localhost:8080/v1", "local", null);
+
+        assertEquals(ModelDefaults.PROVIDER_LLAMACPP, threeArg.providerName());
+        assertEquals("http://localhost:8080/v1", threeArg.baseUrl());
+        assertEquals("http://localhost:8080/v1", fourArg.baseUrl());
+        assertEquals(StructuredOutputMode.NATIVE, fourArg.structuredOutputMode());
+    }
+
+    /**
+     * The generic OpenAI-compatible provider has three distinct fail-closed arms; the reflective
+     * smoke test above only ever reaches the first (a missing base URL), because it leaves every
+     * {@code Optional} empty.
+     */
+    @Test
+    void genericOpenAiReportsEachMissingConfigurationValueSpecifically() throws Exception {
+        GenericOpenAiProviderFactory factory = new GenericOpenAiProviderFactory();
+        initializeFields(factory);
+
+        set(factory, "baseUrl", Optional.of("http://localhost:11434/v1"));
+        set(factory, "modelName", Optional.of("test-model"));
+        set(factory, "apiKey", Optional.empty());
+        assertThrows(IllegalStateException.class, factory::create);
+
+        set(factory, "apiKey", Optional.of("test-api-key"));
+        assertThrows(IllegalStateException.class, () -> factory.create(""));
     }
 
     private static void initializeFields(Object target) throws Exception {

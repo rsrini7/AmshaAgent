@@ -57,4 +57,28 @@ class BoundedAudioSubscriberTest {
         assertThrows(Exception.class, future::get);
         verify(subscription).cancel();
     }
+
+    @Test
+    void chunksArrivingAfterCompletionAreIgnored() throws Exception {
+        BoundedAudioSubscriber sub = new BoundedAudioSubscriber(100);
+        Flow.Subscription subscription = mock(Flow.Subscription.class);
+        sub.onSubscribe(subscription);
+        sub.onNext(List.of(ByteBuffer.wrap(new byte[10])));
+        sub.onComplete();
+        sub.onNext(List.of(ByteBuffer.wrap(new byte[10]))); // late chunk must not be appended
+
+        assertArrayEquals(new byte[10], sub.getBody().toCompletableFuture().get());
+    }
+
+    @Test
+    void upstreamErrorFailsTheBodyFuture() {
+        BoundedAudioSubscriber sub = new BoundedAudioSubscriber(100);
+        Flow.Subscription subscription = mock(Flow.Subscription.class);
+        sub.onSubscribe(subscription);
+        sub.onError(new IllegalStateException("upstream reset"));
+
+        CompletableFuture<byte[]> future = sub.getBody().toCompletableFuture();
+        assertTrue(future.isCompletedExceptionally());
+        assertThrows(Exception.class, future::get);
+    }
 }

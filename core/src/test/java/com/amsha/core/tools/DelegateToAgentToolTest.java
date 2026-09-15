@@ -39,10 +39,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.opentelemetry.api.trace.Span;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S1192")
@@ -565,5 +568,27 @@ class DelegateToAgentToolTest {
         ToolResponse res = tool.execute(coordinatorCtx(), Map.of("agent", "brahma", "goal", "write code"));
         assertTrue(res.success());
         assertTrue(res.output().contains("Answer"));
+    }
+
+    /**
+     * Covers the shutdown-race guard at the top of {@code execute}. {@link
+     * com.amsha.core.util.AgentGuards#isShuttingDown()} is {@code Arc.container() != null &&
+     * !container.isRunning()}, so the container has to exist and report "not running" — a plain unit
+     * test has no container at all and would take the other arm.
+     */
+    @Test
+    void execute_abortsWhenTheCdiContainerIsShuttingDown() {
+        ArcContainer container = mock(ArcContainer.class);
+        when(container.isRunning()).thenReturn(false);
+        try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+            arc.when(Arc::container).thenReturn(container);
+
+            ToolResponse res = tool.execute(coordinatorCtx(), Map.of("agent", "shiva", "goal", "debug"));
+
+            assertFalse(res.success());
+            assertEquals(503, res.exitCode());
+            assertTrue(res.output().contains("System is shutting down. Delegation aborted."));
+            verifyNoInteractions(agentLoop);
+        }
     }
 }

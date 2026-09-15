@@ -960,6 +960,54 @@ The next largest remaining gaps in `core.agent.loop` are `CheckpointResumeHandle
 still needs a CDI container for its async body — followed by `AgentStateMachineRunner` (45 missed, 76.4%) and
 `EngineStepHandler` (40, 79.8%), neither of which needs a container.
 
+#### Phase 1 status (2026-09-15) — the carry-over trio, closed
+
+The three classes Phase 1 handed forward were re-measured before any work was done, and **two of the three
+roadmap figures were already stale** — they had been closed in an earlier session and never struck from the
+list. This is the fifth recorded instance of the "re-measure per class after every slice" rule paying for
+itself; the roadmap's numbers are a work list, not a measurement.
+
+| Class | Roadmap | Actual (fresh CSV) | After this slice |
+|---|---:|---:|---:|
+| `core.tools.ToolGovernanceGuard` | 33 | **0** (53/53 lines) | 0 — already closed |
+| `core.agent.loop.LeakedToolCallParser` | 32 | **0** (256/256 lines + 7 anonymous `TypeReference`) | 0 — already closed |
+| `core.tools.DelegateToAgentTool` | 33 | **8** | **6** (both remaining guards dead) |
+
+Only two of the eight remaining `DelegateToAgentTool` lines were reachable.
+
+**The shutdown-race guard (lines 164–165) is reachable.** `AgentGuards.isShuttingDown()` is
+`Arc.container() != null && !container.isRunning()`, so a plain unit test — which has no container at all —
+always takes the `false` arm. The container has to *exist* and *report not running*, which `mockStatic(Arc.class)`
+supplies:
+
+```java
+ArcContainer container = mock(ArcContainer.class);
+when(container.isRunning()).thenReturn(false);
+try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+    arc.when(Arc::container).thenReturn(container);
+    ToolResponse res = tool.execute(coordinatorCtx(), Map.of("agent", "shiva", "goal", "debug"));
+    assertEquals(503, res.exitCode());
+    assertTrue(res.output().contains("System is shutting down. Delegation aborted."));
+    verifyNoInteractions(agentLoop);
+}
+```
+
+**Two dead guards (6 lines) are reported, not faked.** Both sit in `executeNormalDelegation`'s
+verification-gate tail:
+
+| Lines | Guard | Why it cannot fire |
+|---|---|---|
+| 415, 417, 418 | `if (depth + 1 > maxDelegationDepth)` → skip the auto-debug recursion | **Unreachable-true.** `execute()` already gates `depth >= maxDelegationDepth` and returns early, so `executeNormalDelegation` is entered with `depth <= maxDelegationDepth - 1`, which makes `depth + 1 > maxDelegationDepth` unsatisfiable. The only other call site is the self-recursion at line 432, and that hardcodes the `shiva`/`DEBUGGER` role — so the enclosing `AgentRoleEnum.CODER.equals(targetRole)` block is never re-entered at a raised depth. Probed over 210 reachable `(depth, maxDelegationDepth)` combinations (`maxDelegationDepth` −5…20, `depth` 0…30): **0 counterexamples.** |
+| 427, 428, 429 | `catch (IllegalArgumentException)` around `AgentRoleEnum.fromString("debugger")` | **Dead catch.** The argument is a compile-time literal that always resolves: `DEBUGGER` is in `BUILT_IN`, and its definition's `canonicalName` is `AgentPersona.SHIVA.roleId()` — literally `"debugger"`. Independently confirmed by the pre-existing `execute_verificationGateFailure_routesToShiva`, which covers line 426 and continues to line 432: no exception is thrown. |
+
+The 415–418 case is the "operand drawn from the same source as an upstream condition" tell in its purest
+form: `depth` and `maxDelegationDepth` are the very values the caller's gate already compared, and the
+nested check re-asks a strictly weaker question. The 427–429 case is the dead-`catch`-over-a-known-input
+shape already recorded for the two SQL LLM-profile adapters (§Phase 3 findings).
+
+Net for the trio: **98 roadmap lines → 0 reachable**. `DelegateToAgentTool` stands at 174 covered / 6
+documented-dead; the other two are fully covered.
+
 
 ### Phase 2 — Security-critical and execution-boundary code
 
@@ -1002,10 +1050,110 @@ only by the JDK against a real authenticated proxy); `GovernedTelegramMediaResol
 and 246 + 274–281 (the real `GovernedHttpClient` build+send path — needs a non-loopback endpoint, since
 `MediaSecurityValidator` rejects loopback).
 
-**Still open in Phase 2:** `media.GovernedMediaDownloadService` (89 missed — dominated by the HTTP/streaming path
-in `downloadHttpWithRedirects`, which builds its own `HttpClient` with no injection seam, so it needs a
-local-server integration fixture) and `sandbox.PodmanContainerExecutor` (78 missed — container/integration
-fixture).
+**Phase 2 status (2026-09-15) — third pass: the two remaining targets are closed. Phase 2 is complete.**
+
+| Class | Module | Missed before | Missed now | Test file |
+|---|---|---:|---:|---|
+| `media.GovernedMediaDownloadService` | `security` | 89 | **5** | `GovernedMediaDownloadServiceTest` (extended, 21 → 47 tests) |
+| `sandbox.PodmanContainerExecutor` | `sandbox` | 78 | **0** | `PodmanContainerExecutorTest` (extended, 8 → 22 tests) |
+| **Total** | | **167** | **5** | 162 lines closed |
+
+Both targets needed a *real* boundary rather than a mock, which is why they had resisted the earlier passes:
+
+- **`GovernedMediaDownloadService` — a loopback HTTP fixture, plus one deliberate static stub.** The HTTP arms
+  live in `downloadHttpWithRedirects`, which builds its own `HttpClient` with no injection seam, so the only way in
+  is a real `com.sun.net.httpserver.HttpServer` on `127.0.0.1`. That collides with the SSRF gate:
+  `MediaSecurityValidator.validateTarget` rejects loopback/private/link-local addresses **by design** (the media
+  path is deliberately stricter than `GovernedHttpClient`, which permits localhost for dev). The test therefore
+  opens `Mockito.mockStatic(MediaSecurityValidator.class, Answers.CALLS_REAL_METHODS)` and overrides only
+  `validateTarget`. Every other rule — `sameOrigin`, `validateRedirectReference`, `validateMimeType`,
+  `validateMagicBytes` — still runs for real. The gate itself is covered by `MediaSecurityValidatorTest`.
+- **`PodmanContainerExecutor` — a fake `podman` executable.** A POSIX shell script written to a temp dir and marked
+  executable, passed where the code expects the binary (it only ever calls `.toString()` on the configured path).
+  That lets the real `ProcessBuilder` → `Process` plumbing (start, drain, wait, exit code, forced destroy) run end
+  to end, which a mocked `ProcessBuilder` cannot. The OpenTelemetry child span is mocked; `span.makeCurrent()` is
+  deliberately left unstubbed, since a null `Scope` is a valid try-with-resources resource.
+
+**Third pass — the sweep it triggered.** Per the standing "re-measure after every slice" rule, a fresh per-class
+reading was taken once both targets closed. `sandbox` was the reactor's worst module and six of its classes shared
+the fake-executable recipe just built, so the sweep continued there:
+
+| Class | Missed before | Missed now | Test file |
+|---|---:|---:|---|
+| `ProcessIsolationExecutor` | 45 | **2** | `ProcessIsolationExecutorUnitTest` (extended, 7 → 20 tests) |
+| `DirectExecutor` | 32 | 5 | `DirectExecutorTest` (extended, 2 → 11 tests) |
+| `PodmanHealthCheck` | 29 | 9 | `PodmanHealthCheckTest` (extended, 6 → 10 tests) |
+| `PodmanImageHealthCheck` | 28 | 9 | `PodmanImageHealthCheckTest` (extended, 2 → 6 tests) |
+| `NamespaceExecutor` | 24 | **2** | `NamespaceExecutorTest` (extended, 2 → 10 tests) |
+| **Total** | **158** | **27** | 131 lines closed |
+
+> **`sandbox` moved 65.04% → 91.39%**, from the reactor's worst module to one of its best. `security` moved
+> **84.03% → 89.37%**. Combined, this pass closed **293 lines** across the two modules.
+
+Dead / unreachable lines reported (not faked):
+
+- `GovernedMediaDownloadService` 111: `downloadWithMaximumBytes`'s `maximumBytes <= 0` guard is unreachable — both
+  callers guarantee a positive budget (`download` passes `configuredMaxTotalPayloadBytes()`, which falls back to the
+  positive `DEFAULT_MAX_TOTAL_PAYLOAD_BYTES`; `downloadAll` throws on `remainingBytes <= 0` *before* calling).
+- `GovernedMediaDownloadService` 214–215: the `cumulativeBytes > maxTotalBytes` overflow guard in `downloadAll` is
+  unreachable. Each item is capped at `remainingBytes = maxTotalBytes - cumulativeBytes` (via
+  `Math.min(limitBytes, maximumBytes)` inside `downloadWithMaximumBytes`), so `cumulativeBytes` can never exceed
+  `maxTotalBytes`. Line 213 is a green line with a dead body.
+- `GovernedMediaDownloadService` 436 / 506: defensive `catch (IOException)` arms around `fileOut.close()` and
+  `Files.deleteIfExists(tempFile)` on a temp file this class just created. Reaching them needs a local I/O failure.
+- `PodmanHealthCheck` 49, 55–59, 63, 81, 99 and `PodmanImageHealthCheck` 61, 67–71, 75, 93, 111: both probes open
+  with an **unconditional early return when `sandboxEnabled` is false**, so the later `if (!sandboxEnabled)` arms and
+  the false half of every `sandboxEnabled ? … : …` hint are unreachable. `sandboxEnabled` is a plain (non-volatile)
+  config field, so it cannot change between the two reads either.
+- `DirectExecutor` 128–130: the `python3` → `python` Microsoft Store shim swap only fires when `python3` is absent
+  from `PATH`. The surrounding branch is exercised with `os.name` forced to Windows, but the swap itself needs a host
+  without a working `python3`. **Platform-locked.**
+- `NamespaceExecutor` 120–121 and `DirectExecutor` 107–108: the `catch (InterruptedException)` around
+  `reader.join(1_000)` inside `terminateProcess`. The interrupt has to land on the *joining* thread, not on the
+  thread blocked in `Process.waitFor`. Defensive.
+- `ProcessIsolationExecutor` 203, 213: the `circuitBreaker.recordFailure(stateAtCall)` calls in the
+  `PodmanUnavailableException` / `IOException` arms sit behind `if (allowInsecureFallback)`, which already returned
+  `fallbackToHostExecution(...)` when set. Reaching them needs the fallback flag to flip mid-call. Defensive.
+
+Techniques worth reusing (detail in `.agents/skills/amsha-maven-verify/SKILL.md`):
+
+- **Mockito static mocks are thread-local.** A `mockStatic` opened on the test thread is invisible to a worker
+  thread. Any test that drives the code under test from another thread (needed for the interrupt arms) must open its
+  *own* gate on that thread — otherwise the real implementation runs and the assertion fails in a confusing way
+  (`download_httpInterrupted` initially reported `DNS_REBINDING` instead of `IO`).
+- **Reach the deadline pre-check with many short reads.** `readWithDeadline`'s `remainingNanos <= 0` arm looks
+  unreachable by race reasoning, but a stream that returns **one byte forever** (never `-1`) spins the loop until the
+  wall clock passes the deadline. With a large `limitBytes` it trips the pre-check deterministically in ~1 second.
+- **A `Daemon`-threaded `HttpServer` executor** keeps a deliberately hanging handler from stalling the dispatcher for
+  the tests that follow.
+- **`System.setProperty("os.name", …)` with a `finally` restore** reaches the Windows-only command fixup on macOS.
+  Surefire reuses one JVM per module, so the restore is mandatory.
+- **A backgrounded grandchild keeps the stdout pipe open**, which is the deterministic way to leave the drain thread
+  alive after the child exits — that is what covers the `reader.isAlive()` reap arm.
+
+**Verification.** `./mvnw -o -pl security,sandbox clean verify` — green: 123 `sandbox` tests, 0 failures, PMD 7.17.0
+clean, `spotless:check` clean. Changes are **test-only** (7 files, no production code touched).
+
+Confirmed by a full-reactor `./mvnw -o clean verify` (**BUILD SUCCESS**, all 28 modules, 10m00s), because the JaCoCo
+gate is reactor-wide and a `-pl` run cannot exercise it meaningfully:
+
+```
+Reactor JaCoCo line coverage: 79.08% (minimum: 74.00%, covered: 47443, total: 59997)
+```
+
+i.e. **5.08pp of headroom** over the `0.74` floor — up from 78.58% (47,147 covered, the figure committed as
+`f2095b75b`) before this pass, a gain of **+296 lines / +0.50pp**. `scripts/quality/verify_docs.py` reports 0 errors
+and 0 warnings over 117 markdown files.
+
+**Still open in Phase 2:** nothing. The remaining items in the table at the top of this section
+(`tools-builtin.*`, `BootstrapCredentialIssuer`) were closed in the first and second passes; `SecretVaultImpl`,
+`GovernedHttpClient` and `GovernedTelegramMediaResolver` in the first.
+
+**Newly identified (not in the original plan):** `sandbox.TmpfsSecretTransport` (25 missed) is the largest remaining
+gap in either module, and is dominated by environment-locked arms — `AMSHA_SANDBOX_SECRET_TRANSPORT` is unset here so
+the `tmpfs` / `tmpdir` / literal-path override switch is unreachable, and macOS *has* POSIX permissions so the
+`UnsupportedOperationException | IllegalArgumentException` degradation for Windows/dev is unreachable too. It needs
+reflection to clear the cached static `secretDir` plus `os.name` manipulation, for a modest return.
 
 **Phase 2 status (2026-09-15) — `tools-builtin` targets (second pass).** All five `tools-builtin` targets are
 closed out as far as unit tests can reach, verified by a green `./mvnw -o -pl tools-builtin clean verify`
@@ -1382,8 +1530,390 @@ both classes to 100%. That is a source change, so it is left to the human.
   | `persistence-sqlite` | `SqliteArchivalMemoryStore` 49, `GlobalKnowledgeBase` 42, `SqliteVectorIndexCompatibilityInitializer` 27, `SqliteMemoryRetrievalAdapter` 24, `SqliteCheckpointHelper` 22 |
   | `persistence-postgres` | `PostgresAdvisoryLockAdapter` 24, `PostgresMemoryRetrievalAdapter` 23, `PostgresVectorIndexCompatibilityInitializer` 21, `PostgresExecutionTraceStoreAdapter` 15, `PostgresIdentityStoreAdapter` 15 |
 
-  These are the natural candidates for a **Phase 3b**; the roadmap's original Phase 3 list is now fully closed.
+  These became **Phase 3b**; the roadmap's original Phase 3 list is now fully closed.
 
+  **Phase 3b is complete.** All three persistence backends are closed:
+
+  | Module | Final measurement | Tests |
+  |---|---:|---:|
+  | `persistence-fs` | 16 missed, 99.43% | 404 |
+  | `persistence-sqlite` | 7 missed, **99.63%** (56 of 61 classes clean) | 339 |
+  | `persistence-postgres` | 7 missed, **99.49%** (41 of 46 classes clean) | 267 |
+
+  Each module's residual is the same handful of finding shapes — a dead `toJson` catch, a schema-locked
+  `toInstant` fallback, a closed-set guard, an environment-locked path walk, and an empty
+  `@RegisterForReflection` holder. None is a behaviour gap; the per-slice residual tables above name them.
+
+#### Phase 3b status (2026-09-15) — first slice: the fs evolution, directive and lock stores
+
+First slice of the unenumerated persistence work, taking the top three `persistence-fs` entries from the table
+directly above.
+
+| Class | Before | After | New test file |
+|---|---:|---:|---|
+| `FsEvolutionEventStore` | 39 missed, **0 covered** | **0** | `FsEvolutionEventStoreTest` (7 tests) |
+| `FsLockManager` | 44 missed | **5** | `FsLockManagerTest` (16 tests) — **no test file existed** |
+| `FsDirectiveStore` | 44 missed | **0** | `FsDirectiveStoreDeepTest` (14 tests) |
+
+`persistence-fs`: **523 → 400 missed**, covered 2,267 → 2,390, **81.25% → 85.66%**. Module tests **236 → 266**
+(0 failures, 0 errors, 0 skipped; PMD 7.17.0 clean; `spotless:check` clean).
+
+**Reactor: 80.80% → 81.01%** (covered 48,477 → **48,602** / 59,997), BUILD SUCCESS across all 28 modules in
+**10m02s**. Headroom over the 0.74 floor is now **7.01pp**.
+
+**The finding that mattered: an existing test file is not evidence of coverage.** `FsDirectiveStoreTest` already
+existed, but it `@Mock`s `FilesystemFileStore`, so it proves only *delegation*. Because the mock returns canned
+values, the dedup predicate never runs its lambda (`existing.stream().anyMatch(...)` over an empty list), both
+`limit` arms are skipped, and the entire `update` and `purgeExpired` loops are never entered — 44 missed lines
+alongside a green test class. A real-temp-dir companion class (`FsDirectiveStoreDeepTest`, following the
+`*DeepTest` convention already used by `FsAuditEventStoreAdapterDeepTest`) closed the class to **0** without
+touching the mock test. This is the same "a mocked adapter test is not coverage" trap recorded in §Phase 3, now
+confirmed for a class whose test file *looks* complete.
+
+**Reusable technique — put a directory where the code expects a file.** This reaches `IOException` arms
+deterministically, with no mocking and no permission games. In `FsLockManager` the same trick hits three separate
+arms: a directory at `locks/<key>.meta` makes `writeMeta`'s atomic move fail (→ `tryLock` returns false), a
+directory at `locks/<key>.lock` makes `new RandomAccessFile(...)` throw, and a *file* where the `locks/` directory
+belongs makes `Files.createDirectories(...)` throw (→ `tryLock` false, and `ensureLocksDir()` throws
+`UncheckedIOException`).
+
+**Reaching `OverlappingFileLockException` needs a second *instance*, not a second thread.** `FileChannel.tryLock()`
+raises it when this JVM already holds the lock, so a second `FsLockManager` over the same data dir — whose
+`heldLocks` map is empty, so it skips the `containsKey` early return — lands in that catch.
+
+**`FsLockManager`'s residual 5 lines are reported, not faked:**
+
+| Lines | Arm | Why it is out of reach |
+|---|---|---|
+| 82, 83 | `channel.tryLock()` returns `null` | Needs a **second OS process** holding the fcntl lock; an in-JVM competitor raises `OverlappingFileLockException` instead, so this is genuinely cross-process. |
+| 101 | `closeQuietly`'s `catch` | Requires `RandomAccessFile.close()` to throw. |
+| 116, 117 | `unlock`'s `catch` | Requires the filesystem to refuse deletion. Reachable only via a read-only-directory `chmod`, which silently stops working when the suite runs as root — exactly the machine-dependent test the "a test whose coverage depends on the machine can skip the SUBJECT" rule forbids. |
+
+That is the same judgement call as the `sandbox.TmpfsSecretTransport` case in Phase 2: leave the environment-locked
+lines, document them, and do not contort a test to reach them.
+
+
+#### Phase 3b — second slice: the fs memory, checkpoint and vector stores (2026-09-15)
+
+Second slice, driven entirely by **re-measurement rather than the roadmap list**. The first slice's table named six
+classes; a fresh per-class reading taken after it landed showed that list was already stale — `FsApiCredentialStoreAdapter`
+(19 missed) was never on it, and several of the named entries were store classes whose existing `*Test` files
+`@Mock`ed `FilesystemFileStore` and therefore proved only *delegation*.
+
+| Class | Before | After | New / extended test file |
+|---|---:|---:|---|
+| `FsApiCredentialStoreAdapter` | 19 missed | **0** | `FsIdentityStoreAdapterTest` (19 → 21 tests) |
+| `FsBootstrapStateStoreAdapter` | 3 missed | **0** | `FsBootstrapStateStoreAdapterTest` (7 → 14 tests) |
+| `FsRecallMemoryStore` | 39 missed | **0** | `FsRecallMemoryStoreDeepTest` (10 tests) |
+| `FsExtractedMemoryStore` | 32 missed | **0** | `FsExtractedMemoryStoreDeepTest` (8 tests) |
+| `FsCoreMemoryStore` | 8 missed | **0** | `FsCoreMemoryStoreDeepTest` (6 tests) |
+| `FsArchivalMemoryStore` | 28 missed | **1** (dead) | `FsArchivalMemoryStoreDeepTest` (11 tests) |
+| `FilesystemFileStore` | 28 missed | **2** (dead) | `FilesystemFileStoreErrorPathTest` (13 tests) |
+| `FsCheckpointHelper` | 12 missed | **0** | `FsCheckpointHelperDeepTest` (15 tests) |
+| `FsVectorIndexMetadataAdapter` | 29 missed | **6** (unreachable) | `FsVectorIndexMetadataAdapterDeepTest` (8 tests) |
+| `FsMemoryRetrievalAdapter` | 21 missed | **0** | `FsMemoryRetrievalAdapterDeepTest` (10 tests) |
+| `FsExecutionTraceStoreAdapter` | 32 missed | **2** (dead) | `FsExecutionTraceStoreAdapterDeepTest` (18 tests) |
+| `LuceneIndexManager` | 17 missed | **0** | `lucene/LuceneIndexManagerDeepTest` (12 tests) |
+| seven small gaps (≈16 lines) | 16 missed | **0** | four existing test files extended |
+
+`persistence-fs`: **400 → 16 missed**, covered 2,390 → **2,774**, **85.66% → 99.43%**. Module tests **266 → 404**
+(0 failures, 0 errors, 0 skipped). **49 of 54 classes at 0 missed.**
+
+Slice trajectory, re-measured at every step (the standing rule):
+
+| Measurement point | Missed | Module % |
+|---|---:|---:|
+| after slice 1 | 400 | 85.66% |
+| after the identity + bootstrap slice | 267 | 90.43% |
+| after the three memory stores | 161 | 94.23% |
+| after archival + file store + checkpoint | 100 | 96.42% |
+| after vector-meta + retrieval + trace + Lucene | 49 | 98.24% |
+| after the seven small gaps | **16** | **99.43%** |
+
+**The residual 16 lines are the entire remaining gap, and every one is filed as dead or environment-locked:**
+
+| Class | Lines | Arm | Why it is out of reach |
+|---|---|---|---|
+| `FsVectorIndexMetadataAdapter` | 125, 126 | `catch (AtomicMoveNotSupportedException)` | `ATOMIC_MOVE` is supported on every filesystem the suite can run on. |
+| `FsVectorIndexMetadataAdapter` | 134, 135 | temp-manifest delete failure in `finally` | The temp file was created in the same directory microseconds earlier. |
+| `FsVectorIndexMetadataAdapter` | 168, 169 | `NoSuchAlgorithmException` for SHA-256 | Mandated by the JLS; no conformant JRE omits it. |
+| `FsExecutionTraceStoreAdapter` | 113 | `if (batch.isEmpty()) continue` | Values of a `groupingBy` map are never empty — a group exists only if it received an element. |
+| `FsExecutionTraceStoreAdapter` | 151 | `if (events.isEmpty()) return` | Reached only from `processRunBatch`, itself only called for a non-empty group. |
+| `FilesystemFileStore` | 86, 87 | `catch (NoSuchFileException)` in `read` | Jackson's `readValue(File)` raises `FileNotFoundException` — a *sibling* of `NoSuchFileException`, not a subtype — so the `catch (IOException)` below always wins. |
+| `FsArchivalMemoryStore` | 137 | inner loop back-jump | The `\|\| chunks.stream().anyMatch(...)` disjunct is true for every element once `found` is set, so the loop always breaks on iteration 1. |
+| `FsLockManager` | 82, 83, 101, 116, 117 | cross-process / close / delete failures | Same environment-locked set as slice 1. |
+
+That closes `persistence-fs` bar those 16 lines.
+
+**Techniques this slice added.**
+
+*Put the wrong kind of file where the code expects the other kind.* Used in slice 1 for `FsLockManager`; here it
+reaches three more `IOException` arms with no mocking and no `chmod` — a **directory** where
+`FilesystemFileStore.write` wants its temp file (→ `UncheckedIOException` on the atomic move), a **directory** at
+the manifest path in `FsVectorIndexMetadataAdapter` (→ `FileAlreadyExistsException` inside the `ATOMIC_MOVE`), and
+a non-empty **directory** where `FsOnboardingDraftStoreAdapter.delete` expects the draft file.
+
+*`Files.writeString` does not create parent directories.* `FsCheckpointHelperDeepTest`'s corrupt-file case threw
+`NoSuchFileException` until it called `Files.createDirectories(fileStore.resolve(...))` first.
+
+*A failed Lucene `commit()` closes the writer.* The `index`-failure arm and the `delete`-failure arm therefore
+cannot share a `LuceneIndexManager`: the second call throws `AlreadyClosedException`, not `UncheckedIOException`.
+Each write-failure arm needs its own manager instance.
+
+*`MultiFieldQueryParser` is lenient in ways that break the obvious fixtures.* `"(alpha"` parses fine, and
+`"alpha\\"` is stripped by the analyzer before parsing, so neither reaches the retry path. `"alpha^"` is a genuine
+parse error whose *escaped* retry still matches the document — so `size() == 1` proves the retry ran. For the
+"both attempts fail" arm, use `"alpha AND"`.
+
+*An inline field initialiser survives a missing JSON property.* `SessionIndex.latestActivity` is initialised at
+declaration, so Jackson leaves the initialiser in place when the property is absent and the backfill branch never
+runs. The test must write `"latestActivity": null` explicitly.
+
+*`FilesystemFileStore.readOptional` throws on a malformed file rather than returning empty.* One corrupt file takes
+down the whole read. Pinned as observed behaviour rather than softened into an imagined degradation.
+
+**Process note — a failing `mvn test` leaves a phantom report.** `jacoco:report` chained after a failing `test`
+phase never runs, so the CSV and XML still hold the *previous* build's data. After one such failure the per-line
+output showed nearly every line missed; re-running the report once the tests were green restored the real figures.
+Always re-run before trusting per-line output that follows a failure.
+
+#### Phase 3b — third slice: `persistence-sqlite` (2026-09-15)
+
+First slice in the SQLite backend. Targets came from a fresh per-class reading, and again the roadmap list was
+incomplete: `VectorIngestionService` (23), `SqliteAdvisoryLockAdapter` (20) and `FtsConnectionInterceptor` (19) were
+never enumerated, while several listed classes turned out to have mock-based tests that proved only delegation.
+
+`persistence-sqlite`: **375 → 140 missed**, covered 1,500 → **1,735**, **80.00% → 92.53%**. Module tests
+**192 → 280** (0 failures, 0 errors, 0 skipped).
+
+| Class | Before | After | Test file |
+|---|---:|---:|---|
+| `SqliteArchivalMemoryStore` | 49 | **0** | `SqliteArchivalMemoryStoreHybridTest` (11 tests) |
+| `GlobalKnowledgeBase` | 42 | **0** | `GlobalKnowledgeBaseDeepTest` (7 tests) |
+| `SqliteMemoryRetrievalAdapter` | 24 | **0** | `SqliteMemoryRetrievalAdapterTest` 1 → 13 tests |
+| `VectorIngestionService` | 23 | **0** | `VectorIngestionServiceDeepTest` (12 tests) |
+| `SqliteCheckpointHelper` | 22 | **0** | `SqliteCheckpointHelperMergeTest` (11 tests) |
+| `SqliteAdvisoryLockAdapter` | 20 | **0** | `SqliteAdvisoryLockAdapterDeepTest` (9 tests) |
+| `SqliteIdentityStoreAdapter` | 15 | **0** | `SqliteIdentityStoreAdapterTest` 8 → 10 tests |
+| `SqliteChatMemoryStoreAdapter` | 11 | **0** | `SqliteChatMemoryStoreAdapterTest` (4 tests) — **no test file existed** |
+| `SqliteSecretStoreAdapter` | 10 | **0** | `SqliteSecretStoreAdapterDeepTest` (6 tests) |
+| `JdbiProducer` factories/mappers | 22 | **0** | `jdbi/JdbiProducerFactoriesTest` (14 tests) |
+
+**Process finding that changed every number in this section: the JaCoCo agent appends to `target/jacoco.exec` by
+default.** A previous session had left an exec file in `target/`, so the first reading of this module was a *union* of
+that stale data and the new run — it understated the true baseline by 7 lines (the first re-measure showed
+`FtsConnectionInterceptor` going *up* from 16 to 19 and `SqliteSecretStoreAdapter` from 6 to 10, which is impossible
+for an unchanged tree). The clean baseline is **375 missed / exactly 80.00%**. Every measurement after that point
+starts with `rm -f persistence-sqlite/target/jacoco.exec`. Any figure taken without that deletion is an upper bound
+on coverage and must not be compared against a clean one.
+
+**Technique — a bare `Jdbi.create(...)` needs `SqlObjectPlugin`.** The production producer installs it, so this only
+bites in tests that build their own `Jdbi`; without it every `withExtension`/`useExtension` call fails with
+`NoSuchExtensionException: Extension not found: <Dao> [Hint: ... SqlObjectPlugin]`. Two test classes hit this before
+it was added to the recipe.
+
+**Technique — a real SQLite database plus a registered SQL-function shim replaces a missing native extension.**
+`GlobalKnowledgeBase` and `VectorIngestionService` both call `vec_distance_cosine`, which only exists once `vec0` is
+loaded. `vec0` *is* shipped (`app/src/main/resources/native/vec0/`) but is not wired into this module's tests, so the
+mocked-`Jdbi` tests could never reach the query bodies. Registering the function on every connection makes the real
+SQL run:
+
+```java
+ConnectionFactory cf = () -> {
+    Connection c = DriverManager.getConnection("jdbc:sqlite:" + db.toAbsolutePath());
+    Function.create(c, "vec_distance_cosine", new Function() {          // org.sqlite.Function
+        @Override protected void xFunc() throws SQLException { result(0.25); }
+    });
+    return c;
+};
+Jdbi jdbi = Jdbi.create(cf).installPlugin(new SqlObjectPlugin());
+```
+
+Two details matter. The database must be **file-backed, not `:memory:`**, because each JDBI operation opens its own
+connection and an in-memory database would be empty for every call after the first. And a schema-qualified table
+such as `fts.vec_global` requires `ATTACH DATABASE '<path>' AS fts` **on every connection**, which the same
+`ConnectionFactory` does. Deriving the shim's distance from the stored vector (rather than returning a constant)
+makes `ORDER BY distance ASC` and the `1.0 - distance` scoring both verifiable instead of incidental.
+
+**Technique — the `@Nullable`-style trap, SQL flavour: a mocked `JdbiRetryWrapper` hides the whole protocol.**
+`SqliteAdvisoryLockAdapterTest` mocks the retry wrapper, so the lambdas handed to it never execute and none of the
+adapter's SQL runs (20 uncovered lines beside a green class). The wrapper is a plain class with an implicit no-arg
+constructor, so the real one can be used against a real database — and then every branch of the lock protocol is
+observable through its own effects: a second contender is refused, `unlock` only removes its own row, an expired lock
+is reclaimable, and `renew` is scoped to `owner_id`.
+
+**Technique — cover a package-private nested factory through a test-scope bridge.** `JdbiProducer`'s argument
+factories and column mappers are package-private and registered only by the CDI producer, so nothing ever calls
+`build()`/`map()` on them. Testing them directly requires being in the `jdbi` package, but a test that needs the
+production `float[]` factory from another package cannot name it — hence
+`src/test/java/.../jdbi/TestJdbiArguments.java`, a two-line public accessor. Reimplementing the little-endian
+encoding in the test instead would have meant testing the copy rather than the code.
+
+**Technique — reach `awaitTermination`'s `catch (InterruptedException)` by pre-setting the interrupt flag
+*while the executor is still busy*.** `AbstractQueuedSynchronizer.awaitNanos` throws immediately when the
+calling thread is already interrupted, so `Thread.currentThread().interrupt(); service.shutdown();` lands in
+that catch with no waiting. **The executor must still have work queued for this to work**: on an idle
+executor `awaitTermination` returns `true` without ever consulting the interrupt status, so the catch is
+skipped and the test passes for the wrong reason. Clear the flag in a `finally` so the rest of the suite is
+unaffected. The sibling branch — `awaitTermination` returning `false` — has no such shortcut (the 5-second
+window is hardcoded), so it is covered by one deliberately slow test that blocks the single writer thread and
+asserts `shutdown()` waited out the full window.
+
+**A `groupingBy` map never holds an empty list, and `mapTo(Long.class).one()` defeats type inference.** Two smaller
+lessons: the `if (batch.isEmpty()) continue` guards in `SqliteExecutionTraceStoreAdapter` are dead for that reason
+(see below), and `assertEquals(1, jdbi.withHandle(h -> h.createQuery(...).mapTo(Long.class).one()))` fails to compile
+as `assertEquals` is ambiguous — assign the result to an explicitly-typed local first.
+
+**Residual in `persistence-sqlite` — 140 lines, all filed:**
+
+| Class | Lines | Category |
+|---|---:|---|
+| `SqliteVectorIndexCompatibilityInitializer` | 27 | Next target: descriptor resolution, dimension-mismatch and `verifyOrInitialize` arms. |
+| `FtsConnectionInterceptor` | 19 | Next target: vec0 load-failure arms, already partly covered by two existing classes. |
+| `SqliteVectorIndexMetadataAdapter` | 12 | Next target. |
+| `FtsSchemaInitializer`, `RagSchemaInitializer`, `ArchivalVecSchemaInitializer`, `SqliteWalConfigurer` | 30 | Schema/PRAGMA initialisers — need a connection whose setup fails. |
+| `SqliteExecutionTraceStoreAdapter` | 8 | Includes two dead guards (`batch.isEmpty()` / `events.isEmpty()` over non-empty groups). |
+| `SqliteBootstrapStateStoreAdapter` | 8 | Next target. |
+| `FtsCleanCallback.BeforeCleanCallback` | 8 | Next target. |
+| `SqliteErrorStrings`, `SqliteCompactionStoreAdapter`, and 2-line residues in nine other classes | ~30 | Next target. |
+
+#### Phase 3b — fourth slice: the `persistence-sqlite` residual (2026-09-15)
+
+Closing the 140-line residual the third slice left behind. Module: **140 → 7 missed, 92.53% → 99.63%**
+(280 → 339 tests, **133 lines closed, +7.10 pp, 56 of 61 classes clean**). The remaining 7 lines are five
+independently verified findings, not gaps.
+
+| Class | Before | After | What the new coverage pins |
+|---|---:|---:|---|
+| `SqliteVectorIndexCompatibilityInitializer` | 27 | 1 | New plain-unit class. Descriptor resolution, the dimension-mismatch branch that marks **both** namespaces unavailable, both `verify(...)` calls with `count==0`/`count>0`, the whitelist SQL per namespace, and the inspection-failure fallback that must not abort the second namespace. |
+| `FtsConnectionInterceptor` | 19 | 1 | New `RareArms` nested group: the outer catch with its one-shot WARN, both PRAGMA failure arms, the transaction-active ATTACH skip, an unwritable FTS data directory, and three extension-path resolution strategies. |
+| `SqliteVectorIndexMetadataAdapter` | 12 | 0 | New plain-unit sibling: a metadata-read failure degrading to `UNAVAILABLE`, and `markUnavailable`. |
+| `FtsSchemaInitializer` | 11 | 0 | New plain-unit class against a mocked `AgroalDataSource`: the non-SQLite skip, the ATTACH, and all three failure arms. |
+| `SqliteExecutionTraceStoreAdapter` | 8 | 0 | One test for all eight null/blank guard arms. |
+| `SqliteBootstrapStateStoreAdapter` | 8 | 0 | The full credential lifecycle (UNCLAIMED → CLAIMING → CREDENTIAL_ISSUED → CLAIMED), the rollback arm, and the stale-revision / non-owner refusals. |
+| `FtsCleanCallback.BeforeCleanCallback` | 8 | 0 | Captures the callback from the customizer and invokes `handle` directly: the three drop statements and the `SQLException` tolerance arm. |
+| `SqliteWalConfigurer` | 7 | 0 | New plain-unit class: directory creation, the ATTACH, the "already in use" tolerance, and the unexpected-failure rethrow. |
+| `RagSchemaInitializer` | 7 | 0 | New plain-unit class: the warm-up failure, the vec0-unavailable skip, and the DDL failure arm. |
+| `ArchivalVecSchemaInitializer` | 5 | 0 | New plain-unit class; also pins that `vec_archival` is **not** schema-qualified (it lives in the main DB). |
+| `SqliteErrorStrings` | 4 | 0 | The lock/optimistic **type-name** markers and the `SQLITE_BUSY`/`SQLITE_LOCKED` result codes 5/6, including a wrapped cause chain and a non-retriable code 19. |
+| `SqliteCompactionStoreAdapter` | 4 | 0 | New plain-unit class for both best-effort FTS arms, plus the delete-then-insert ordering. |
+| `VectorIngestionService` | 3 | 0 | See the vacuous-test finding below. |
+| Nine classes with 1–2 line residues | 15 | 0 | Uncalled delegates (`deleteAll`, `deleteByRoleAndKey`, `deleteByUserId`, unfiltered `findAll`), a null/empty batch guard, the protected no-arg constructor, and two malformed-JSON row-mapper arms. |
+
+**Finding — a test that pinned the wrong thing, and the paragraph above that taught it.** The third slice
+recorded "pre-set the interrupt flag to reach `awaitTermination`'s `catch (InterruptedException)`", and the
+test written from it built an **idle** service (a mock `Jdbi`, no work submitted), set the flag, and called
+`shutdown()`. It passed — for the wrong reason. On an idle single-thread executor `awaitTermination` returns
+`true` immediately without consulting the interrupt status, so the catch never ran; and
+`assertTrue(Thread.currentThread().isInterrupted())` was satisfied by the test's own `interrupt()` call. The
+technique is only valid when the executor is **still busy**, which is why the fix combines both halves: a
+writer parked in `Thread.sleep`, then a pre-set flag, then an assertion that `shutdown()` returned in
+**under** 5 s — which is what actually proves the interrupt arm ran rather than the timeout arm. The
+paragraph above has been corrected accordingly.
+
+**Finding — `FtsConnectionInterceptorVecFallbackTest` was vacuous.** Isolated against a clean `jacoco.exec`,
+that test showed lines 67–68 (`if (Arc.container() == null) return;`) **covered** while lines 71–72 (the two
+setup calls) and 174–175 (the absolute-path branch of `resolveExtensionPath`) were **missed**. Outside a
+running Quarkus application `Arc.container()` is `null`, so the test returned on its first statement, never
+touched the connection, and its `assertFalse(isVectorSearchEnabled())` was trivially satisfied by the flag's
+initial value. Stubbing `Arc.container()` to a non-null container is what makes the body run — and because
+the test uses a **real** SQLite connection, that single change turned it into genuine end-to-end coverage of
+ATTACH, the `pragma_module_list` probe, `unwrap`, `enable_load_extension` and a failing `load_extension`.
+
+**Technique — a `@Nested` helper must be told the statement order, and `unwrap` must be stubbed.** In
+`FtsConnectionInterceptorTest`, `createStatement()` is called once per setup step, so a fixed-position helper
+silently hands the *wrong* mock to the *wrong* step the moment a branch is skipped: with auto-commit off the
+ATTACH is skipped and the module probe receives the attach mock, whose `executeQuery` returns `null` and
+raises an NPE that the interceptor's own catch swallows. The test then passes while never reaching
+`load_extension`. Two fixes: pass the statements as a vararg **in the order the interceptor will ask for
+them**, and always stub `conn.unwrap(SQLiteConnection.class)` — a null return there is the same trap, and it
+is invisible because the interceptor catches everything.
+
+**Technique — corrupt JSON is the mirror image of dead serialization code.** The two `toJson` catches
+(`SqliteOnboardingDraftStoreAdapter:40`, `SqliteLlmProfileStoreAdapter:63`) are dead for the familiar reason:
+a private, non-injected `new ObjectMapper()` plus an argument that is never null, so `writeValueAsString`
+cannot throw. Their **read-side twins** look identical but are not:
+`OnboardingDraftJdbiDao.DraftRowMapper.parseList` and `LlmProfileJdbiDao.RouteRowMapper.parseList` parse a
+**database column**, so malformed text in that column really does throw. Writing `'{not json'` /
+`'[not json'` into `completed_step_ids` / `ordered_profile_ids` via raw SQL and reading the row back pins the
+degrade-to-empty behaviour — and asserting that an intact sibling column still parses proves the mapper did
+not simply give up on the whole row. **Writing is provably total; reading is not.**
+
+**Residual — 7 lines, five findings, zero reachable gaps:**
+
+| Class | Lines | Finding |
+|---|---:|---|
+| `SqliteOnboardingDraftStoreAdapter` | 2 | Dead: `catch (Exception _) { return "[]"; }` in `toJson(List<String>)` — non-injected `ObjectMapper`, never-null argument. |
+| `SqliteLlmProfileStoreAdapter` | 2 | Same dead-code shape. |
+| `SqliteVectorIndexCompatibilityInitializer` | 1 | `throw new IllegalArgumentException("No whitelisted table name…")` — `NAMESPACE_TABLES` is a `Map.of` over both `VectorIndexNamespace` constants and `verify` is private, so no namespace value can reach it. Defensive guard over a closed set. |
+| `FtsConnectionInterceptor` | 1 | `break` when the upward extension-path walk runs out of parents. Reaching it needs a working directory shallow enough that four `getParent()` hops hit the filesystem root; the test JVM's cwd is the module directory, four levels below `/`. Defensive guard. |
+| `SqlitePersistenceReflectionConfig` | 1 | The empty class body itself: the class exists only to carry `@RegisterForReflection`, so its implicit constructor is never invoked. Unreachable by nature. |
+
+None of the five is a behaviour gap, and none was faked via reflection.
+
+#### Phase 3b — fifth slice: `persistence-postgres`, closing the phase (2026-09-15)
+
+Phase 3b closes. Module: **244 → 7 missed, 82.19% → 99.49%** (159 → 267 tests, **237 lines closed,
++17.30 pp, 41 of 46 classes clean**). The module had never been worked: at baseline 32 of its 45 reported
+classes carried missed lines and three of them were fully dark.
+
+One planning fact differs from `persistence-sqlite` and is easy to get wrong. This module's `@QuarkusTest`
+suite **really runs**: `PostgresTestResource` falls back to a zonky `embedded-postgres` server when
+Testcontainers cannot reach a daemon, so the `Could not find a valid Docker environment` line in the log is
+Testcontainers giving up, not the suite skipping. Everything below was measured with those tests included.
+
+The slice ran in three passes — the roadmap's two named targets plus the initializer, then the guard and
+delegate layer, then the residual. The SQLite recipes transferred almost one-for-one, which is the payoff of
+the "mirror the spec per backend by convention" decision recorded in Phase 3.
+
+| Class | Before | After | What the new coverage pins |
+|---|---:|---:|---|
+| `PostgresAdvisoryLockAdapter` | 24 | 0 | The four-method lock protocol. `tryLock`/`unlock` must translate any failure into a `RuntimeException` **naming the key**; `isLocked`/`renew` do the opposite and report `false`. Both DAO outcomes are driven because the `> 0` split is where the boolean contract actually lives. |
+| `PostgresMemoryRetrievalAdapter` | 23 | 0 | The vector arm of the hybrid search (embed → JSON vector → DAO), `index(...)`'s transaction plus its deliberately **out-of-transaction** embedding upsert, the source-text budget (`400` chars plus an ellipsis), and the failed-embedding degradation that must leave the lexical arm alive. |
+| `PostgresVectorIndexCompatibilityInitializer` | 21 | 0 | New plain-unit class, the SQLite twin's recipe: descriptor resolution, the dimension-mismatch branch, `count == 0` vs `count > 0`, the literal `rag_chunk_embedding` count SQL, and the inspection-failure fallback. |
+| `PostgresExecutionTraceStoreAdapter` | 15 | 0 | The `saveBatch` path — one prepared batch, one `bindMethods` per DTO, one `execute` — plus its null/empty guard and the last two blank guards. |
+| `PostgresIdentityStoreAdapter` | 15 | 0 | New plain-unit sibling for the six `isBlank` short-circuits and the read-only delegates. The integration suite only ever passes real identifiers, so none of the guards ever fired. |
+| `PostgresBootstrapStateStoreAdapter` | 13 | 0 | The DAO's affected-row count → port contract mapping, including `reserveFirstOwner`'s zero-row case, which must short-circuit to empty rather than fall through to a state read. |
+| `PostgresVectorIndexMetadataAdapter` | 12 | 0 | The SQLite twin's degraded-arm recipe: a metadata-read failure degrading to `UNAVAILABLE`, and `markUnavailable` for a namespace never verified. |
+| `PostgresChatMemoryStoreAdapter` · `PostgresSkillStoreAdapter` · `PostgresPersistenceAdapter` | 11 · 11 · 7 | 0 · 0 · 0 | Three classes **no test had ever mentioned**. Among them `PersistenceAdapter.execute`, which runs the caller's action inside a transaction and deliberately lets a failure escape so JDBI can roll back. |
+| `PostgresSecretStoreAdapter` | 11 | 0 | The five-column round trip and the two distinct delete scopes. The `byte[]` components are matched with `aryEq` — Mockito compares arrays by identity, so a plain `eq` would never match a freshly built array. |
+| `PostgresCheckpointHelper.mergeBatchDecisions` | 10 | 0 | The best-effort merge's three fallbacks. Each asserts `assertSame`: the helper must hand the caller back **its own** DTO, not a partially-merged copy, because the caller goes on to persist it. |
+| `JdbiProducer.JsonArgumentFactory` + `JsonColumnMapper` | 8 + 6 + 1 | 0 | New plain-unit class driving both JSON bridges through their real entry points. The anonymous `TypeReference`'s single uncovered line was the tell that `map` had never executed at all. |
+| `PostgresWebSessionStoreAdapter` · `PostgresPromptStoreAdapter` · `PostgresIdentityInvitationStoreAdapter` · `PostgresApiCredentialStoreAdapter` | 8 · 7 · 6 · 2 | 0 | Blank-identifier guards (which must return empty **without opening a connection**) and the uncalled delegate arms — `deleteByUserId`, the unfiltered `findAll`/`deleteAll`/`count` trio, and the two distinct delete scopes. |
+| `PostgresCoreMemoryStore` · `PostgresAuditSchemaEnforcer` · `PostgresArchivalMemoryStore` · `PostgresRecallMemoryStore` · `PostgresCompactionStoreAdapter` | 6 · 6 · 3 · 3 · 2 | 0 | The `VersionConflictException` read-back (including the `-1` case when the row vanished between the update and the read), `AuditSchemaEnforcer`'s two swallowed failure arms, a chunk-type-filtered archival search, a null/empty batch guard, and four protected no-arg constructors. |
+| `OnboardingDraftJdbiDao.DraftRowMapper` + `LlmProfilePostgresDao.RouteRowMapper` | 3 + 2 | 1 + 0 | The **read-side** `parseList` catch, reached by writing corrupt JSON into the real column. |
+| `PostgresCronRunStoreAdapter` | 1 | 0 | The status-filtered branch of `countAll`, which issues a different DAO query from the unfiltered one. |
+
+**Finding — the `toInstant` fallbacks are schema-locked, not gaps.** Both row-mapper helpers end with
+`return Instant.parse(o.toString())` after testing for `null`, `Instant` and `Timestamp`
+(`OnboardingDraftJdbiDao:130`, `LlmProfilePostgresDao:247`). That arm cannot fire here: every temporal column
+in both migrations is `TIMESTAMP WITH TIME ZONE`, and pgjdbc maps that to `java.sql.Timestamp`, so the
+`Timestamp` branch always wins — the per-line counters confirm it, showing line 129 fully covered
+(`mi=0 ci=9`) while line 130 is untouched. It is a defensive fallback for a driver or column type that
+returns some other temporal object; if one ever appears, this arm becomes live. Reported rather than reached
+by feeding the mapper a synthetic `ResultSet`, which would have produced a green line with no production
+path behind it.
+
+**Finding — the dead `toJson` catches have live read-side twins, confirmed on a second backend.** Phase 3b's
+fourth slice found this shape in `persistence-sqlite`; the same two classes here reproduce it exactly.
+`PostgresOnboardingDraftStoreAdapter:40` and `PostgresLlmProfileStoreAdapter:63` are dead for the familiar
+reason — a private, non-injected `new ObjectMapper()` plus an argument that is never null, so
+`writeValueAsString` cannot throw. Their read-side counterparts parse a **database column** and really do
+throw, and both are now covered by writing `'{not json'` / `'[not json'` via raw SQL and reading the row back
+while asserting that an intact sibling column still parses. **Writing is provably total; reading is not** —
+and finding the identical asymmetry on a second backend is what promotes it from an anecdote to a rule.
+
+**Residual — 7 lines, five findings, zero reachable gaps:**
+
+| Class | Lines | Finding |
+|---|---:|---|
+| `PostgresOnboardingDraftStoreAdapter` | 2 | Dead: `catch (Exception _) { return "[]"; }` in `toJson(List<String>)` — non-injected `ObjectMapper`, never-null argument. |
+| `PostgresLlmProfileStoreAdapter` | 2 | Same dead-code shape. |
+| `LlmProfilePostgresDao` | 1 | `Instant.parse(o.toString())` in `toInstant`. All temporal columns are `TIMESTAMP WITH TIME ZONE` and pgjdbc returns `java.sql.Timestamp`, so the earlier branch always wins. |
+| `OnboardingDraftJdbiDao.DraftRowMapper` | 1 | Same schema-locked fallback. |
+| `PostgresPersistenceReflectionConfig` | 1 | The empty class body itself: the class exists only to carry `@RegisterForReflection`, so its implicit constructor is never invoked. Unreachable by nature. |
+
+None of the five is a behaviour gap, and none was faked via reflection.
 
 ### Phase 4 — LLM provider robustness
 
@@ -1484,12 +2014,414 @@ The assertions that depend on those variables are guarded with `Assumptions.assu
 try-with-resources *abnormal-close* branches, reachable only if `VaultKey.close()` throws — `VaultKey` is final with
 a zeroing `close()`, so they are unreachable without a deliberate fault injection.
 
-**Remaining Phase 4 targets:** `FoundryResponsesChatModel` (67), `KimchiResponsesChatModel` (67),
-`AgyResponsesChatModel` (65), `NvidiaMessageSanitizer` (54), `ProviderOAuthExchangeService` (50% branch), plus the
-package-level gaps (`llm-providers.reasoning`: 21 prod classes / 1 test; `llm-providers.routing`: 21 prod / 4 tests).
-The roadmap asks for per-provider **contract** tests — timeout, 429/5xx, malformed SSE, token refresh failure,
-capability fallback — not more happy-path completions. The three `*ResponsesChatModel` classes are SSE-streaming
-wrappers and share an `SseAccumulator` shape, so they are the natural next slice.
+#### Phase 4 status (2026-09-15) — the three `*ResponsesChatModel` wrappers + `NvidiaMessageSanitizer` (third pass)
+
+The natural next slice, as predicted: the three SSE-streaming wrappers share an accumulator shape, and
+`NvidiaMessageSanitizer` is the same package's other protocol adapter. All four were taken in one pass.
+
+| Target | Before | After | Closed |
+|---|---|---|---|
+| `KimchiResponsesChatModel` (+ `SseAccumulator` 31) | 63 (+ 31) = 94 | **0** | 94 |
+| `FoundryResponsesChatModel` (+ `SseAccumulator` 26) | 67 (+ 26) = 93 | **0** | 93 |
+| `AgyResponsesChatModel` | 58 | **1** (dead) | 57 |
+| `NvidiaMessageSanitizer` | 54 | **0** | 54 |
+| **Total** | **299** | **1** | **298** |
+
+Module `llm-providers`: missed **1,121 → 817**, covered **2,938 → 3,242** — **72.38% → 79.87%**, i.e. **304 lines
+closed** (298 in the four targets, 6 gained indirectly). `clean verify` green: **483 tests**, 0 failures,
+3 skipped, PMD 7.17.0 clean, `spotless:check` clean.
+
+Confirmed by a full-reactor `./mvnw -o clean verify` (**BUILD SUCCESS**, all 28 modules, 10m09s), since the JaCoCo
+gate is reactor-wide:
+
+```
+Reactor JaCoCo line coverage: 79.58% (minimum: 74.00%, covered: 47747, total: 59997)
+```
+
+i.e. **5.58pp of headroom** over the `0.74` floor — up from 79.08% (47,443 covered) before this pass, a gain of
+exactly **+304 lines / +0.50pp**.
+
+Before-readings were taken from a fresh full-reactor CSV produced by a `clean verify`, per the staleness rule —
+`target/classes` left over from an earlier revision makes JaCoCo map current line numbers onto old bytecode.
+
+**Why a loopback server again.** All four classes build their own `HttpRequest` and hand it to a
+`GovernedTransportService`, so the transport is mocked and its `send` delegates to a real `HttpClient` pointed at a
+local `com.sun.net.httpserver.HttpServer`. That keeps headers, body serialisation, SSE framing and stream draining
+genuine while bypassing the SSRF gate the real transport applies to loopback addresses. One root context
+(`createContext("/", …)`) plus a captured request path lets the endpoint-resolution assertions read the *actual*
+path instead of needing one context per variant — that is how six `resolveEndpoint` branches are covered in one test.
+
+**Why `AgyResponsesChatModel` needed a second test class.** `AgyChatModelLoopbackTest` already exists but is a
+`@QuarkusTest`, so it runs against a live ArC container and a real `agy` CLI probe. That makes the standalone and
+degraded rungs of `chat()`'s dispatch ladder unreachable there — no transport, no CLI, unresolvable CDI handle.
+The new `AgyResponsesChatModelTest` is a plain unit test alongside it, mirroring the existing
+`CodexResponsesChatModelTest` / `ClaudeCodeResponsesChatModelTest` pairing. (The `@QuarkusTest` also explains why
+`buildMessages` was entirely missed: it only ever sent user messages.)
+
+**Proving a predicate by behaviour, not by outcome.** `FoundryResponsesChatModel.isTransportFailure` decides whether
+to fall back to the CLI. Asserting that a failure is *rethrown* proves nothing — the same exception is rethrown
+whether the predicate matched or not. So each of its eight arms is proven by making the CLI *available* and
+asserting the CLI response comes back: that is the only observable that distinguishes "matched" from "did not".
+The six checked exception types travel as the **cause** of an unchecked wrapper (which is exactly why the method
+walks the cause chain), plus the `HTTP 404` / `HTTP 503` message arms and a nested two-level chain.
+
+**Techniques worth reusing.**
+
+- **`mockStatic(FoundryCliExecutor.class)` / `mockStatic(AgyCliExecutor.class)`** drives the CLI fallback with no
+  real binary and no `Assumptions` skip — `isAvailable()` then reports whatever the test says.
+- **`mockStatic(Arc.class)` + a mocked `ArcContainer`/`InstanceHandle`** covers the CDI-resolution arms in both
+  directions: an available handle (the model then completes a real round trip through the Arc-resolved transport),
+  an unavailable one, and a container that throws.
+- **`doThrow(...).when(mock).send(...)`, never a second `when(...).thenThrow(...)`.** The `@BeforeEach` stub already
+  answers that call, so a second `when(...)` invokes the existing answer with null matcher arguments and NPEs inside
+  the `HttpClient`. Separately, `GovernedTransportService.send` declares **no** checked exception, so the injected
+  failure must be unchecked — Mockito rejects an `IOException` with "Checked exception is invalid for this method".
+  `OutboundHttpException` (a `RuntimeException` with a `Category`) is the faithful choice.
+- **`ChatRequest.parameters()` is never null for a built request**, so an absent tool set reaches the delegate as an
+  empty list, not `null`. Two ternary arms (`FoundryResponsesChatModel` 132, `AgyResponsesChatModel` 148) are
+  therefore dead; a test asserting `isNull()` is simply wrong.
+
+**Dead / divergent behaviour reported (not faked, not "fixed").**
+
+- **`AgyResponsesChatModel` line 426 is dead.** `applyAuthHeaders` opens with
+  `if (tokenChars == null || tokenChars.length == 0) return;`, but its only caller is `chatViaHttp`, which
+  `chat()` reaches only when `hasHttpToken` — a predicate that already requires `token.length > 0`. The guard
+  re-checks what the caller guaranteed. Left uncovered and reported rather than reached reflectively.
+- **A malformed tool-call delta is handled differently by the two accumulators.** A `delta.tool_calls` entry with an
+  `id` but no `function` node yields a `ToolExecutionRequest` with an **empty name** in
+  `FoundryResponsesChatModel` (its `build()` does not filter), and because tool requests exist the response then
+  carries **no text at all**. `KimchiResponsesChatModel.build()` skips blank-named builders, and
+  `AgyResponsesChatModel.buildToolRequests()` does too. Pinned in both tests as an observed divergence; not
+  "corrected", since a coverage task must not change production behaviour.
+- **`AgyResponsesChatModel` names are assigned, not appended.** `extractToolCall` does `builder.name = …` while
+  `arguments` is appended across chunks, so a stream that fragments a tool *name* across deltas keeps only the last
+  fragment. (`KimchiResponsesChatModel` and `FoundryResponsesChatModel` both append.) Worth a look outside a
+  coverage pass.
+- **`NvidiaMessageSanitizer` filters the response by schema but not by bipartite pairing.** `chat()` calls
+  `internalSanitizeAiMessage(ai, new HashMap<>(), ai.toolExecutionRequests(), allowedTools)` — raw requests and a
+  *fresh* id map, unlike the history path which passes the bipartite-filtered subset. That is the only way line 267
+  (the out-of-schema `continue`) is reachable at all; a response naming an out-of-schema tool loses its tool calls
+  and degrades to text, and with null text it becomes an empty `AiMessage`.
+
+**Remaining Phase 4 targets** (per-class, from the fresh sweep that closed the fifth pass):
+`ClaudeCodeResponsesChatModel` (29), `LiveProviderCatalogService` (28), `GovernedLangChainHttpClient` (20) +
+`WatchdogInputStream` (13), `CodexResponsesChatModel` (16) + `SseAccumulator` (17), `CodexTokenResolver` (14),
+`StaticProviderCatalogAdapter` (14) — **151 lines**. The roadmap asks for per-provider **contract** tests — timeout,
+429/5xx, malformed SSE, token refresh failure, capability fallback.
+
+#### Phase 4 status (2026-09-15) — token resolvers, OAuth exchange, and the whole provider-factory package (fourth pass)
+
+The third pass closed with a note that the token resolvers "are the same shape as `AgyTokenResolver`, which the first
+pass took 64 → 0, so that recipe should transfer", and that `llm-providers.reasoning` was an open package-level gap.
+Both were taken in one pass, and the second turned out to be far larger than the roadmap's placeholder suggested.
+
+A fresh per-class sweep of the module — taken after the third pass, per the re-measure-every-slice rule — found **303
+missed lines across 21 `reasoning` provider factories**, not the "21" the roadmap's parenthetical implied. The
+roadmap figure had been an unexpanded placeholder for a package with a single smoke test. This is the third time a
+stale target list has understated a slice (`FsLlmProfileStoreAdapter` and `SpecializedChatModelFactory` were the
+earlier two).
+
+| Target | Before | After | Closed |
+|---|---|---|---|
+| `KimchiTokenResolver` | 48 | **0** | 48 |
+| `ClaudeCodeTokenResolver` | 41 | **0** | 41 |
+| `oauth.ProviderOAuthExchangeService` | 44 | **0** | 44 |
+| `oauth.ProviderOAuthPkceStore` | 9 | **2** (unreachable) | 7 |
+| `reasoning` package — 21 provider factories | 303 | **4** | 299 |
+| `ChatModelFactory` | 33 | **0** | 33 |
+| **Total** | **478** | **6** | **472** |
+
+Module `llm-providers`: missed **817 → 342**, covered **3,242 → 3,717** — **79.87% → 91.57%**, i.e. **475 lines
+closed** (472 in the six targets, 3 gained indirectly). `clean verify` green: **627 tests**, 0 failures, 0 errors,
+3 skipped (the env-locked assumptions), PMD 7.17.0 clean, `spotless:check` clean.
+
+Confirmed by a full-reactor `./mvnw -o clean verify` (**BUILD SUCCESS**, all 28 modules, 10m04s):
+
+```
+Reactor JaCoCo line coverage: 80.37% (minimum: 74.00%, covered: 48222, total: 59997)
+```
+
+**80.37% (48,222 / 59,997)** — up from 79.58% (47,747) before this pass, a gain of exactly **+475 lines / +0.79pp**,
+matching the module delta. The reactor has now crossed 80%, leaving **6.37pp of headroom** over the `0.74` floor.
+
+Before-readings were taken from a fresh per-class sweep of the module CSV produced by the preceding `clean verify`,
+per the staleness rule.
+
+##### The two CDI dependencies are not the same, and only one of them blocks a unit test
+
+The provider factories look like they should be unit-testable: `SpecializedChatModelFactory.resolveGovernedTransport()`
+swallows a missing container and returns `null`, so `ChatModelFactory.openAiBuilder` runs happily without CDI. That is
+what makes the existing reflective smoke test pass.
+
+But the *build* step is a second, independent CDI dependency. `OpenAiChatModel.build()` constructs a
+`QuarkusOpenAiClient`, which resolves `io.quarkiverse.langchain4j.auth.ModelAuthProvider` — and that calls
+`CDI.current()`, which throws `IllegalStateException: Unable to locate CDIProvider` outside a Quarkus runtime. So
+supplying credentials in a plain unit test does **not** reach the construction body; it just moves the failure one
+frame later.
+
+The first attempt at this slice was exactly that mistake: two parameterised tests added to
+`AgentProviderFactoryCoverageTest` that supplied credentials and asserted `create()` returned non-null. They produced
+**30 errors**, all the same `Unable to locate CDIProvider`. Rather than weaken them into
+`assertThrows`/swallow-the-failure tests — which would have "passed" while covering nothing — the tests were split by
+reachability:
+
+- **`AgentProviderFactoryCoverageTest` (plain)** keeps the no-credential surface (metadata, validation, the
+  credential-ladder `orElseThrow` arms) plus the parts of the providers that are pure string logic.
+- **`ReasoningProviderFactoryBuildTest` (`@QuarkusTest`)** drives the construction body for all 21 factories.
+- **`ChatModelFactoryBuildTest` (`@QuarkusTest`)** does the same for `createFromConfig`, `createForAdapter` and the
+  thirteen static delegates.
+
+This is the mirror image of the `AgyResponsesChatModel` case from the third pass: there a `@QuarkusTest` sibling made
+degraded branches *unreachable*; here a plain unit test makes the build path unreachable. The deciding question is
+always which side of the CDI boundary the code under test sits on.
+
+##### Supplying credentials generically, across four provider shapes
+
+The 21 factories declare their credential in four different ways — `Optional<String> apiKey` (14 of them),
+`String apiKey` (`OmlxProviderFactory`), a token resolver (`Agy`/`ClaudeCode`/`Codex`/`Kimchi`), or nothing at all
+(`Foundry`/`LlamaCpp`/`Ollama`). A reflective helper walks the declared fields and sets each by **type**, not by
+name: `Optional` → `Optional.of(valueFor(name))`, `String` → `valueFor(name)`, a resolver type → a mock returning
+`"test-token"`, and `Instance` → a mock whose `isResolvable()` is true and whose `get()` returns the injected
+transport. `valueFor` keys off the lower-cased field name (`model` / `baseurl` / `account` / `extrabody` / else API
+key), so one helper covers every factory without a per-provider table.
+
+Two details made the parameterisation safe:
+
+- The credential-free local providers resolve their transport from a CDI `Instance` rather than a plain field, so the
+  `Instance` arm has to report itself resolvable — otherwise the `: null` rung is taken and the CDI rung stays
+  uncovered (`OllamaProviderFactory` 91, `LlamaCppProviderFactory` 93).
+- A comma-separated model list (`create("model-a,model-b")`) is what makes `buildMultiModelEntries` return more than
+  one entry, selecting the `MultiModelChatModel` arm instead of unwrapping the single entry. The concrete return type
+  differs across providers, so the parameterised assertion is "it builds"; the four `buildMultiModelEntries` arms are
+  covered separately in `ChatModelFactoryMultiModelTest`.
+
+##### Pure logic still belongs in a plain unit test
+
+`CloudflareProviderFactory` is the only factory with real URL logic — `resolveEffectiveBaseUrl`, `sanitizeAccountId`
+and `normalizeBaseUrl`, 44 lines between them. None of it touches CDI, so it is covered in the plain test: account-ID
+substitution, an account ID pasted whole from the dashboard URL (`accounts/acc-123/ai/v1` → `acc-123`), the
+`System.getProperty` fallback, a trailing `}` left by MicroProfile Config's early-`}` corruption, the duplicated
+`/ai/v1/ai/v1` and `/v1/v1` collapses, and the two post-substitution validation throws. `baseUrl()` is the defensive
+wrapper, so one test asserts it degrades to the configured value instead of propagating the failure out of the
+provider metadata surface.
+
+##### Dead / unreachable lines reported (not faked, not "fixed")
+
+- **`ProviderOAuthExchangeService` line 277 `accessToken.isBlank()` and line 301 `refreshToken.isBlank()` are dead.**
+  Both values come from `extractJsonField`, which only returns a value when `!val.isBlank()`. The second disjunct of
+  each guard re-checks what the extractor already guaranteed.
+- **`ProviderOAuthExchangeService` lines 452/453 (`sessionId != null ? sessionId : "system"` and the same for
+  `actorUserId`) are dead.** `recordAuditEvent` is private and every one of its six call sites runs only after the
+  public entry points have rejected null/blank session and actor values. The `"system"` fallbacks are defensive code
+  with no reachable path.
+- **`ProviderOAuthExchangeService` lines 334/338 keep one unreached branch each** — the same `x == null || x.isBlank()`
+  shape as the two above, where the `isBlank()` half is reachable (a blank-but-present argument) but the remaining
+  jump target is not.
+- **`ProviderOAuthPkceStore` lines 220/221 are the `NoSuchAlgorithmException` catch in `computeS256Challenge`.** SHA-256
+  is a required JDK algorithm; the catch is unreachable on any conforming JVM. Reported rather than forced.
+- **`CloudflareProviderFactory` line 101 (`sanitizeAccountId`'s `return ""` for a null/blank argument) is dead.** The
+  method is private with exactly one caller, and the `or(...)` ladder that feeds it already filters `!id.isBlank()`, so
+  the guard re-checks a caller invariant.
+
+##### Techniques worth reusing
+
+- **Ask which side of the CDI boundary the code sits on before choosing plain vs `@QuarkusTest`.** A method can be
+  "unit-testable" for one dependency and not for another; `resolveGovernedTransport()` returning null without a
+  container says nothing about whether the *builder* needs one.
+- **Never convert an unbuildable assertion into a swallow-the-exception assertion.** Thirty identical
+  `Unable to locate CDIProvider` errors were the signal that the tests were in the wrong vehicle, not that the
+  assertion was too strict.
+- **Discover injected fields by type, not by name**, when parameterising over a family of near-identical classes.
+- **`mockStatic`-free `Instance` stubbing**: an `Instance<T>` mock needs both `isResolvable()` and `get()` stubbed;
+  `get()` alone leaves the `isResolvable()` guard on the wrong rung.
+- **`doReturn(...).when(mock).send(...)` for a second stub** on an already-answered mock, as in the third pass — a
+  second `when(...)` invokes the existing answer with null matchers.
+- **A 21-way parameterised `@QuarkusTest` costs one container boot**, not 21: the factories are constructed with
+  `new` and their fields set reflectively, so no per-provider CDI wiring is needed — only a *running* container.
+
+#### Phase 4 status (2026-09-15) — the `audio` package (fifth pass)
+
+The fourth pass closed by flagging the `audio` package as "113 lines, completely untouched, now the largest single
+cluster left in the module". A fresh per-class sweep confirmed the gap and put the real figure at **118 missed lines**
+across four classes — the roadmap's `OggOpusToWavConverter` 46 / `OmlxAudioTranscriptionProvider` 40 /
+`OmlxSpeechSynthesisProvider` 27 omitted `AudioConversionException` (2) and understated the last two.
+
+| Target | Before | After | Closed |
+|---|---|---|---|
+| `OggOpusToWavConverter` | 46 | **3** (unreachable) | 43 |
+| `OmlxAudioTranscriptionProvider` | 40 | **5** (unreachable) | 35 |
+| `OmlxSpeechSynthesisProvider` | 30 | **1** (unreachable) | 29 |
+| `AudioConversionException` | 2 | **0** | 2 |
+| **Total** | **118** | **9** | **109** |
+
+Module `llm-providers`: missed **342 → 233**, covered **3,717 → 3,826** — **91.57% → 94.26%**, i.e. exactly the 109
+lines the package contributed, with no indirect movement elsewhere. `clean verify` green: **664 tests** (was 627),
+0 failures, 0 errors, **1 skipped** (was 3), PMD 7.17.0 clean, `spotless:check` clean. The audio package alone went
+from 25 tests to 62.
+
+The skipped count *fell* because this pass deleted the two machine-gated transcoding tests — see below.
+
+Confirmed by a full-reactor `./mvnw -o clean verify` (**BUILD SUCCESS**, all 28 modules, 10m12s):
+
+```
+Reactor JaCoCo line coverage: 80.55% (minimum: 74.00%, covered: 48330, total: 59997)
+```
+
+**80.55% (48,330 / 59,997)** — up from 80.37% (48,222), i.e. **+108 lines / +0.18pp**, leaving **6.55pp of headroom**
+over the `0.74` floor. The module itself contributed 109 of those lines, so one line elsewhere moved the other way —
+a one-line fluctuation in another module's suite, not a regression from this pass.
+
+##### `assumeTrue(ffmpegPresent(), ...)` was hiding the entire `transcode` body
+
+`ffmpeg` is not installed on this machine, and `OggOpusToWavConverterTest` gated both of its live transcoding tests
+behind `assumeTrue(ffmpegPresent(), "ffmpeg not on PATH; skipping live transcode")`. On any machine in that state the
+whole `transcode` body reported as *skipped*: process start, the stderr drainer, the timeout arm, the interrupted-wait
+arm, the exit-code check, the payload bound, the read-back and the temp-file cleanup. **40 of the class's 46 missed
+lines sat inside the region that guard made unreachable.** It is the same anti-pattern as `AgyTokenResolverTest`'s
+`if (AgyCliExecutor.isAvailable())` wrapper from the first pass, in its most expensive form: the guard did not merely
+skip an assertion, it skipped the subject.
+
+Both tests were replaced with a **fake executable**: a POSIX script written into a `@TempDir`, `setExecutable(true)`,
+and passed as the constructor's `ffmpegPath`. Production only ever calls `toString()` on that value — never `toFile()`
+or an existence check — so an arbitrary path is honoured. One script per behaviour, all deterministic:
+
+| Script | Reaches |
+|---|---|
+| writes a WAV to the last argument, exits 0 | success path, both OGG and WebM suffixes, `drainAsync` |
+| `exit 3` | the non-zero-exit arm |
+| `exec sleep 5` | the timeout arm and the interrupted-wait arm |
+| `sleep 5 &` + `exec sleep 5` | the interrupted *join* arm |
+| `dd` 8 KiB to the output path | the payload bound |
+| replaces the output with a non-empty directory | the read-back `IOException` **and** the cleanup catch |
+
+##### Two interrupts, two different arms — and both are deterministic
+
+`Duration` maps onto `waitFor` in a way that makes the two interrupt arms separately reachable without any sleeping:
+
+- **Interrupted wait.** With the flag set and a 30 s timeout, `ProcessImpl.waitFor` parks in
+  `condition.awaitNanos(...)`, which throws `InterruptedException` and *clears the flag*. That is the `catch` which
+  destroys the child, joins the drainer and re-interrupts.
+- **Interrupted join.** With the flag set and `Duration.ofNanos(1)`, `toMillis()` is **0**, so `waitFor(0, ...)`
+  returns `false` from the `remainingNanos > 0` loop guard *without* touching the interruptible park. The flag
+  survives into the timeout branch, and the `joinQuietly(...)` that reaps the drainer is what absorbs it.
+
+The second only works if the drainer is still alive when the join runs, so that script backgrounds a grandchild that
+inherits stderr (`sleep 5 & exec sleep 5`): `destroyForcibly()` reaps only the direct child, and the grandchild keeps
+the pipe open. Both tests clear the flag in a `finally` — surefire reuses one JVM for the whole module.
+
+##### Dead / unreachable lines reported (not faked, not "fixed")
+
+Nine lines remain, every one a guard whose condition cannot be true on any reachable path:
+
+| Class | Line | Why it cannot fire |
+|---|---|---|
+| `OggOpusToWavConverter` | 154 | `joinQuietly(null)` — `drainAsync` always returns a started thread |
+| | 165 | `deleteQuietly(null)` — only reachable if `Files.createTempFile` throws, and the JDK caches `java.io.tmpdir` in a `static final` (`TempFileHelper`), so a test cannot make it throw |
+| | 208 | `startsWith`'s short-input guard — all three callers pre-check `input.length >= magic.length` |
+| `OmlxAudioTranscriptionProvider` | 124 | size re-check after `declaredBytes` (inline: enforced equal to `length`) or `fileSize` (temp file) has already bounded the payload |
+| | 129 | the same re-check on the converter's *output* — `convertIfNeeded` is handed the same bound and enforces it |
+| | 168 | `tempFilePath == null` — the record enforces exactly one of `inlineData`/`tempFilePath` |
+| | 226 | `multipartFileName(null)` — the MIME arrives non-null and normalised |
+| | 234 | `default -> "audio.bin"` — the switch's domain is *exactly* the MIME set `isAudioMime` admits, and the only other value that can arrive is `audio/wav` |
+| `OmlxSpeechSynthesisProvider` | 286 | the no-arg `isSupportedFormat()` overload — no caller; both call sites use the `String` overload |
+
+Lines 124, 129 and 234 are the interesting ones: they are not merely awkward to reach, they are *implied* by an
+upstream invariant. A re-check that cannot fail is still worth keeping as defence in depth; it is not worth reflecting
+into to move a number.
+
+##### Techniques worth reusing
+
+- **A fake executable beats a mocked `ProcessBuilder`.** The code only ever calls `toString()` on the configured
+  binary path, so a temp-dir script is a drop-in replacement that still exercises the real `Process`, the real pipes
+  and the real drainer thread.
+- **`Duration.ofNanos(1)` as a "return immediately" timeout.** `toMillis() == 0` short-circuits `waitFor` before it
+  can park, which is what makes the interrupted-join arm deterministic rather than racy.
+- **A `sleep 5 &` grandchild holds the pipe open** after `destroyForcibly()` reaps the direct child — the only way to
+  keep the drainer alive across the join.
+- **Replace the output with a non-empty directory** to reach both `Files.readAllBytes`'s `Is a directory` failure and
+  `Files.deleteIfExists`'s `DirectoryNotEmptyException` in one shot. Verified on macOS: `Files.size(dir)` = 96,
+  `readAllBytes(dir)` throws `IOException`, `deleteIfExists(nonEmptyDir)` throws `DirectoryNotEmptyException`.
+- **A checked exception the mocked method does not declare must be raised from an `Answer`**, not `doThrow(...)`:
+  `ResponseTooLargeException extends IOException` while `GovernedTransportService.send` declares nothing, so `doThrow`
+  is rejected at stub time. `doAnswer(invocation -> { throw failure; })` propagates it.
+- **`verify(mock, atLeastOnce())` + `captor.getValue()`** when a helper is reused across several calls — a plain
+  `verify(mock)` counts *every* matching invocation and fails on the second use with `TooManyActualInvocations`.
+- **Watch for two base URLs that normalise to the same endpoint.** `…/v1///` and `…/` both resolve to
+  `…/v1/audio/...`, so a `verify` on the endpoint string cannot tell them apart; use a second host/port instead.
+
+#### Phase 4 status (2026-09-15) — catalog, transport and the remaining wrappers (sixth pass)
+
+The last three clusters of Phase 4 are closed. Ten lines remain, every one either unreachable or reachable only by
+manipulating the classpath.
+
+| Class | Before | After | What closed |
+|---|---|---|---|
+| `LiveProviderCatalogService` | 28 | **2** | the four `resolve*()` ladders, the cache, the blocked-literal guard, all three parse arms, the vault ladder |
+| `StaticProviderCatalogAdapter` | 14 | **7** | `discoverModels` (static + delegated), `hostOf`'s catch arm |
+| `GovernedLangChainHttpClient` + `WatchdogInputStream` | 33 | **1** | both read paths, both timeout conversions, the CDI ladder, GET/DELETE, header filtering |
+| `CodexResponsesChatModel` + `SseAccumulator` | 33 | **0** | every SSE event arm, the payload builders, the CDI ladder |
+| `ClaudeCodeResponsesChatModel` + `ClaudeSseAccumulator` | 31 | **0** | same, plus the endpoint resolver and the auth-header split |
+| `CodexTokenResolver` | 14 | **0** | the issuer ladder, the grant vault hit, `resolveAccountId` |
+
+**Module: 91.57% → 97.88%** (missed 233 → 86; covered 3,826 → 3,973 — 143 lines closed by the new tests plus 4
+indirect). **Reactor: 80.55% → 80.80%** (48,330 → 48,479 / 59,997), confirmed by a full-reactor
+`./mvnw -o clean verify` — BUILD SUCCESS, 28 modules, 10m18s. Headroom over the 74.00% floor is now 6.80pp.
+
+##### Unreachable lines reported (not faked, not "fixed")
+
+| Class | Line | Why it cannot fire |
+|---|---|---|
+| `GovernedLangChainHttpClient` | 290 | `buildHttpRequest`'s `else { throw new IllegalArgumentException("Unsupported HTTP method: …") }`. In langchain4j **1.19.0** `HttpMethod` is a closed three-value enum (GET, POST, DELETE) and `HttpRequest.Builder.build()` rejects a null method (`IllegalArgumentException: method cannot be null`), so no value can reach the `else` |
+| `LiveProviderCatalogService` | 188, 189 | `catch (Exception _)` around `URI.create(probeUrl).getHost()`. `probeUrl` derives from `effBaseUrl`, which already passed `URI.create` at line 125, and appending one of the four real path suffixes cannot turn a valid URI invalid |
+
+The 188/189 finding is **measured, not assumed**. A throwaway `java Probe.java` enumerated 145 curated
+base-URL × provider cases and 52,948 exhaustive tail × provider cases — tails of length ≤ 3 over
+`[]%#?/:@&=+$,;!*'()`, appended to seven seeds, then run through a replica of `buildProbeUrl`'s exact switch — and
+found **zero** cases where `URI.create(X)` succeeds but `URI.create(probeUrl(X))` fails. An earlier run *did* report
+counterexamples, but they came from two suffixes (`"models"`, `"api/tags"`) that no arm of `buildProbeUrl` actually
+produces. Model the real transform before trusting a counterexample.
+
+##### Reachable only by manipulating the classpath (7 lines)
+
+`StaticProviderCatalogAdapter.load()`'s failure arms — 68/69 (resource absent), 76/77 (invalid entry skipped),
+81/82/83 (JSON unparseable) — are live production paths, but every route to them is unsafe or invisible:
+
+- **Shadowing the resource.** `target/test-classes/provider-catalog.json` precedes `target/classes` on the test
+  classpath, so a shadow *would* work — but `process-resources` never deletes it, and its newer mtime means a
+  hard-killed run would leave a malformed catalog shadowing the whole module on every later `mvn test` until a
+  `clean`.
+- **Re-defining the class in a child classloader.** A 46-line child-first loader serving a caller-supplied
+  `provider-catalog.json` did exercise all three arms — the `log.errorf`/`log.warnf` output proved it. But
+  **JaCoCo cannot observe it**: re-definition via `defineClass` bypasses the agent's `ClassFileLoadHook`, so the
+  lines still report as missed. Confirmed by running the class alone against a fresh `jacoco.exec`: lines 66–80
+  (the happy path) were covered, 68/69/76/77/81/82/83 were not.
+
+The scaffolding was therefore **removed** rather than left as 46 lines of exotic test code that cannot move the
+metric. Recorded here as a known gap.
+
+##### Techniques worth reusing
+
+- **`mockStatic(Arc.class)` covers the whole `Arc.container()` fallback ladder** in the provider wrappers — both the
+  `container != null` → `handle.isAvailable()` → `handle.get()` arm and the `catch (Exception _)` arm. Stub
+  `Arc::container` to return a container whose `instance(X.class)` yields a handle with `isAvailable()` true, or stub
+  it to `thenThrow(...)`. They are two separate tests.
+- **A class re-defined via `defineClass` is invisible to JaCoCo.** Verify behaviour if you like, but do not expect
+  the report to move. Check with a single-class run against a fresh `jacoco.exec` before investing in scaffolding.
+- **Check the resolved dependency version before declaring an enum closed.** `~/.m2` held five
+  `langchain4j-http-client` versions; the reactor resolves **1.19.0**, and only that version's `HttpMethod` decides
+  whether line 290 is reachable. `./mvnw -o -pl <module> dependency:tree -Dincludes=<g>:<a>` settles it in seconds.
+- **A literal-IP base URL never reaches the probe.** `LiveProviderCatalogService` rejects blocked literal addresses
+  up front (`Custom base URL host is blocked: 127.0.0.1`), so a test that wants the Ollama no-auth arm must pass a
+  host *name* (`http://localhost:11434`), not `http://127.0.0.1:11434`.
+- **`doAnswer(inv -> { throw checked; })` again.** `GovernedLangChainHttpClient.execute` distinguishes a checked
+  transport failure (wrapped, line 86) from an unchecked one (rethrown as-is), and `send` declares nothing, so the
+  checked failure has to arrive through an `Answer`.
+- **A blank header name is a real filtering path.** langchain4j accepts `headers(Map.of("", List.of("v")))` and
+  preserves the blank key, while `java.net.http.HttpRequest.Builder.header` would reject it — so
+  `isRestrictedHeader`'s `name.isBlank()` arm is reachable. A *null* key is rejected by langchain4j itself
+  (`Header name cannot be null`), so only the blank half of that disjunct is live.
+- **`Instance<T>` ladders want two small helpers.** `resolvable(v)` (stubs both `isResolvable()` and `get()`) and
+  `unresolvable()` cover the `*TokenResolver` / `LiveProviderCatalogService` shape in three lines each.
 
 ### Phase 5 — MCP, ONNX, skills, and app glue
 
@@ -1503,6 +2435,156 @@ wrappers and share an `SseAccumulator` shape, so they are the natural next slice
   `McpImportResource` (44, 0%), `McpSetupResource` (39, 0%), `DbResultMapper` (39, 0%),
   `BackendValidator` (23, 0%), `SandboxValidator` (17, 0%), `ActiveWorkspaceFilter` (18, 0%).
 - `onboarding` (once measurement is fixed): `SettingsResource` (216, 0%), `BootstrapResource` (145, 0%).
+
+#### Phase 5 status (2026-09-15) — the `app` glue: config validators, DB-console helpers, identity governance (first slice)
+
+`app` is by far the largest remaining mass in the plan — **2,306 missed lines across 102 of 188 classes**, roughly
+nine times the size of the whole `persistence-postgres` module — so it is being worked in slices. This first slice
+took the self-contained, CDI-free logic: the CLI bootstrap validator, the DB-console redaction and tenant-isolation
+helpers, the workspace request filter, and the identity-governance helper.
+
+| Class | Before | After |
+|---|---:|---:|
+| `LocalModelValidator` | 77 missed / 4 covered | **0** / 81 |
+| `DbConsoleTenantResolver` | 32 / 28 | **0** / 60 |
+| `DbQueryAstScanner` | 15 / 59 | 4 / 70 |
+| `IdentityResourceHelper` | 17 / 63 | 3 / 77 |
+| `DbResultMapper` | ¹ | 2 / 36 |
+| `ActiveWorkspaceFilter` | ¹ | **0** / 18 |
+
+¹ The roadmap listed these as `DbResultMapper` (39, 0%) and `ActiveWorkspaceFilter` (18, 0%), but both were already
+partly covered indirectly by the existing `@QuarkusTest` suites; their combined true baseline was 19 missed lines, not
+57. **The roadmap's per-class counts are placeholders — only the module total is a measurement.**
+
+Module movement: **2,306 → 2,153 missed, 69.17% → 71.21% (+2.04 pp), 153 lines closed**, classes carrying a gap
+102 → 99. Six new plain-JUnit test files, **106 new tests**; the module suite is **933 tests, 0 failures, 0 errors,
+2 skipped**.
+
+**Finding — a dead privilege-escalation guard, i.e. a real authorisation hole.** In
+`IdentityResourceHelper.validateInvitationRole`, the third guard requires `!"OWNER".equals(callerRole)` **and** a
+normalized role outside `{ADMIN, MEMBER}`. `isValidRole` has already narrowed the role to `{OWNER, ADMIN, MEMBER}`, so
+"outside `{ADMIN, MEMBER}`" means `OWNER` — and any `OWNER` request from a non-owner already returned at the second
+guard. The third guard can therefore **never fire**, and a `MEMBER` really can invite an `ADMIN`:
+
+```java
+IdentityResourceHelper.validateInvitationRole("MEMBER", "ADMIN")   // returns null (allowed)
+```
+
+This is the "guard on a closed set that an earlier guard already exhausted" shape. Reported, not "fixed" — the test
+pins the actual behaviour and names the finding, so a future change is noticed. **This one is worth a human decision
+rather than a coverage-driven edit.**
+
+**Finding — `DbQueryAstScanner.visit(ParenthesedSelect)` is unreachable under JSqlParser 4.9.** The override looks
+live and is even exercised by every nested-subquery test, but the dispatch never lands on it. `Select` implements
+`Expression` and supplies a *concrete* `accept(ExpressionVisitor)` whose bytecode is:
+
+```
+2: invokeinterface ExpressionVisitor.visit:(Lnet/sf/jsqlparser/statement/select/Select;)V
+```
+
+`ParenthesedSelect extends Select` and does **not** override `accept(ExpressionVisitor)`, so it inherits that method
+and static overload resolution — compiled inside `Select`, where `this` is `Select` — always selects `visit(Select)`.
+The behaviour is still correct (`visit(Select)` → `visitSelect` handles `ParenthesedSelect` at lines 100–105), so this
+is redundancy, not a bug. `visit(ParenthesedSelect)` is nonetheless dead and cannot be reached without reflection.
+
+**Finding — `DbQueryAstScanner.scanBody`'s null guard is dead.** The only caller is `visitSelect`, inside an
+`instanceof PlainSelect plainSelect` branch, so the parameter can never be null.
+
+**Finding — `DbResultMapper`'s `NoSuchAlgorithmException` catch is dead.** `MessageDigest.getInstance("SHA-256")` is
+guaranteed by the JCA specification on every conformant JDK, so the `return "sha256-error"` arm cannot run. Same
+"non-injected stock dependency makes its catch unreachable" shape as the `toJson` catches in Phase 3b.
+
+**Finding — a line-covered guard whose arm is untakeable.** `DbConsoleTenantResolver.resolveMembershipWorkspace`
+guards `m.workspaceId() != null && !m.workspaceId().isBlank()`. `WorkspaceMembershipDto`'s compact constructor already
+rejects a null or blank `workspaceId`, so the blank arm can never be taken. The *line* reports green because the first
+operand is evaluated — the usual "green line ≠ working guard" tell. Documented by a test that pins the DTO invariant.
+
+The residual 9 lines in this slice are exactly the four dead regions above plus `IdentityResourceHelper`'s dead guard
+body. Nothing was faked via reflection.
+
+**Verification, and a process finding worth keeping.** `spotless:apply` then the full-reactor
+`./mvnw -o clean verify` → **BUILD SUCCESS across all 28 modules (10 m 05 s)**, with reactor line coverage at
+**82.90%** (floor 74.00%, covered 49,739 / 59,997) — up from 81.01%.
+
+That first reactor run **failed**, and not on anything in this slice. `spotless:check` rejected ~10 `persistence-fs`
+test files (`FsExecutionTraceStoreAdapterDeepTest`, `LuceneIndexManagerDeepTest`, `FsIdentityStoreAdapterTest`, …)
+written during the Phase 3b slices. Their mtimes (22:26–22:38) are *later* than the last full-reactor build's reports
+(22:15–22:17): **the session that wrote them closed on a module-scoped verification, so the reactor-wide
+`spotless:check` never saw them.** A `-pl` run is not a substitute for the gate — the JaCoCo script, PMD and Spotless
+are all only exercised across the whole reactor. Fixed with a reactor-wide `spotless:apply` (which the build itself
+instructs) and a re-run; the app module then reported `257 files clean, 0 need changes`.
+
+#### Phase 5 status (2026-09-15) — the `app` CLI installer, and a hermeticity bug that made 9 tests lie (second slice)
+
+This slice closed the model-installer integrity path, and in doing so uncovered a **test-hermeticity defect that had
+already produced a false red build**.
+
+| Class | Before | After |
+|---|---:|---:|
+| `ModelInstaller` | 109 missed / 67 covered | **14** / 162 (92.05%) |
+| `LocalModelValidator` | 0 / 81 | 0 / 81 (100%) |
+
+Module movement: **2,153 → 2,057 missed, 71.21% → 72.50% (+1.29 pp), 96 lines closed**; classes carrying a gap
+99 → 98. One test file extended (`ModelInstallerTest`, **35 tests**, was 33); the module suite is **968 tests,
+0 failures, 0 errors, 3 skipped**.
+
+The integrity path is driven through a real `com.sun.net.httpserver.HttpServer` on an ephemeral port rather than a
+mocked `HttpClient`, because the parts worth testing are exactly the ones a mock skips: the 64 KB streaming loop,
+the running digest, the `.partial` file, and the atomic publish. The stub serves `/ok.bin`, `/wrong-size.bin`,
+`/wrong-hash.bin`, `/missing.bin` (404) and `/slow.bin` (a 3 s delay). A synthetic one-file `ModelCatalogEntry`
+keeps every assertion off the real multi-hundred-megabyte Hugging Face artifacts.
+
+**Finding — `resolveModelRoot()` reads the environment before the property, and disagrees with itself.**
+The three `modelRoot*` cases and six `LocalModelValidator` cases had been reported as failing in a full-module run
+while passing in isolation. Reproduced exactly by exporting the two variables the production code reads:
+
+```bash
+AMSHA_ONNX_MODEL_ROOT="$PWD/data/models" AMSHA_STT_FFMPEG_PATH=/opt/homebrew/bin/ffmpeg \
+  ./mvnw -o -pl app test -Dtest='ModelInstallerTest,LocalModelValidatorTest'
+# → Tests run: 52, Failures: 9   (identical names, lines and expected/actual to the reported red run)
+```
+
+The mechanism is precedence, not a race:
+
+```java
+String rootEnv = System.getenv("AMSHA_ONNX_MODEL_ROOT");        // environment FIRST …
+if (rootEnv == null || rootEnv.isBlank()) {
+    rootEnv = System.getProperty("amsha.onnx.model-root");      // … property second
+}
+…
+String dataDir = System.getProperty("AMSHA_DATA_DIR", System.getenv("AMSHA_DATA_DIR"));  // property FIRST
+```
+
+An exported `AMSHA_ONNX_MODEL_ROOT` therefore makes the system property unreachable, resolution falls through to the
+repository's real `data/models` — where the whisper and mpnet bundles genuinely exist — and every banner assertion
+inverts. Note that the two lookups **inside the same method** use opposite precedence, and that
+`LocalModelValidator` reads all of its own inputs property-first. **Reported, not "fixed"** — changing production
+precedence during a coverage task is out of scope. The tests were made hermetic instead: the property-driven cases
+carry `@DisabledIfEnvironmentVariable(named = "AMSHA_ONNX_MODEL_ROOT", matches = ".+")` so they skip loudly rather
+than pass or fail for the wrong reason, and a new `@EnabledIfEnvironmentVariable` twin pins the precedence itself on
+machines where the variable *is* set. Both classes also now **snapshot and restore** every property they touch
+instead of `clearProperty`-ing it, which removes the same class of cross-class clobber for good.
+
+**Finding — the `InterruptedException` arm of `installFile` is reachable, but only by interrupting `send`.**
+Lines 457–460 were previously uncovered because a mocked client never throws it and the streaming read loop surfaces
+interrupts as `IOException`. Pre-setting the calling thread's interrupt flag — with `/slow.bin` guaranteeing the
+request is genuinely in flight — makes `HttpClient.send` raise `InterruptedException` deterministically. Those four
+lines are now covered, and the test asserts the message and that no `.partial` survives.
+
+**The residual 14 lines are all unreachable or dead**, and none was faked:
+
+| Lines | Why it cannot run |
+|---|---|
+| 268 | `return parentCandidate` — an absolute configured root either exists (line 263) or `Path.of("..").resolve(abs)` is that same absolute path, so the test at 267 is false whenever 262 was |
+| 278–284 | the `../<data-dir>/models` parent-candidate fallback — same reasoning, and `<abs>/models` was already tested at 275 |
+| 289 | `return local…` for `data/models` — from the module working directory that is `app/data/models`, which does not exist |
+| 295 | the final `return local…` — `<repo-root>/data/models` exists, so 292–294 always returns first |
+| 316–317 | dead `catch (IOException _)` around `Files.size` — `Files.size` on a directory does not throw |
+| 482–483 | dead `NoSuchAlgorithmException` catch — `MessageDigest.getInstance("SHA-256")` is JCA-guaranteed |
+
+Lines 268 and 278–284 are **working code that this test harness cannot reach**: they exist for a distribution layout
+where the process runs from a parent of the data directory with a relative setting, which a unit test cannot
+reproduce without relocating the JVM's working directory. They are "unreachable from the test CWD", not dead.
 
 ### Phase 6 — Cross-cutting invariant tests *(cheap, high value)*
 

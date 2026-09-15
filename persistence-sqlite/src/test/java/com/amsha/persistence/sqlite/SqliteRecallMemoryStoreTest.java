@@ -90,4 +90,14 @@ class SqliteRecallMemoryStoreTest {
         store.purgeExpired(userId, 0);
         store.purgeExpiredAll(0);
     }
+
+    @Test
+    void insertBatchIgnoresNullAndEmptyBatches() {
+        String userId = "user-empty-" + UUID.randomUUID();
+
+        store.insertBatch(null);
+        store.insertBatch(List.of());
+
+        assertEquals(0, store.countByUserId(userId));
+    }
 }

@@ -14,6 +14,7 @@ import com.amsha.persistence.api.OnboardingDraftState;
 import com.amsha.persistence.api.OnboardingDraftStorePort;
 import com.amsha.persistence.postgres.testutil.FlywayEnabledTestProfile;
 
+import org.jdbi.v3.core.Jdbi;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.common.QuarkusTestResource;
@@ -28,6 +29,9 @@ class PostgresOnboardingDraftStoreAdapterTest {
 
     @Inject
     OnboardingDraftStorePort store;
+
+    @Inject
+    Jdbi jdbi;
 
     private static OnboardingDraftDto draft(String id, String owner, OnboardingDraftState state) {
         Instant now = Instant.now();
@@ -124,5 +128,26 @@ class PostgresOnboardingDraftStoreAdapterTest {
         assertEquals(
                 List.of("pg-expired"),
                 store.findExpired(now).stream().map(OnboardingDraftDto::draftId).toList());
+    }
+
+    /**
+     * The two {@code TEXT} columns are JSON arrays parsed by {@code DraftRowMapper.parseList}. Writing is
+     * total, reading is not: a row whose JSON is corrupt (a bad deploy, a manual edit, a truncated write)
+     * must degrade to an empty list rather than make the draft unreadable — a draft nobody can resume is a
+     * worse outcome than a draft that forgets which steps were done.
+     */
+    @Test
+    void aCorruptCompletedStepIdsColumnDegradesToAnEmptyList() {
+        assertTrue(store.save(draft("pg-corrupt-1", "owner-corrupt", OnboardingDraftState.DRAFT)));
+
+        jdbi.useHandle(h -> h.execute(
+                "UPDATE onboarding_draft SET completed_step_ids = ? WHERE draft_id = ?", "{not json", "pg-corrupt-1"));
+
+        OnboardingDraftDto read = store.findById("pg-corrupt-1").orElseThrow();
+
+        assertTrue(read.completedStepIds().isEmpty(), "an unparseable column must degrade, not throw");
+        // The sibling JSON column is untouched, which is what proves the degradation is per-column.
+        assertEquals(List.of("ns1"), read.selectedNonSecretIds());
+        assertEquals("owner-corrupt", read.ownerId());
     }
 }

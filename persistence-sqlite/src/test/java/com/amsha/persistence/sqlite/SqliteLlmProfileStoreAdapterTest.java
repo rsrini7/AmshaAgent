@@ -256,6 +256,25 @@ class SqliteLlmProfileStoreAdapterTest {
         assertTrue(store.findRouteAssignment(prefix + "-r4").isEmpty());
     }
 
+    @Test
+    void aCorruptOrderedProfileIdsColumnDegradesToAnEmptyList() {
+        String prefix = "sqlite-corrupt-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        store.saveRouteAssignment(new ModelRouteAssignmentDto(
+                prefix + "-r", "USER", prefix + "-user", "DEFAULT", null, List.of(prefix + "-p"), true, 1, now, now));
+
+        // Simulate text that is not valid JSON in the ordered-profile-ids column.
+        jdbi.useHandle(h -> h.execute(
+                "UPDATE model_route_assignment SET ordered_profile_ids = ? WHERE id = ?", "[not json", prefix + "-r"));
+
+        ModelRouteAssignmentDto read = store.findRouteAssignment(prefix + "-r").orElseThrow();
+
+        assertTrue(
+                read.orderedProfileIds().isEmpty(),
+                "a malformed JSON column must degrade to an empty list rather than failing the read");
+        assertTrue(read.enabled(), "an intact sibling column must still be read");
+    }
+
     private static LlmConnectionDto connection(String id, String scopeType, String scopeId) {
         Instant now = Instant.now();
         return new LlmConnectionDto(

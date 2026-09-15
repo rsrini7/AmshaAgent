@@ -2,6 +2,8 @@ package com.amsha.llm.providers.helper;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -9,6 +11,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import jakarta.enterprise.inject.Instance;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -99,11 +103,7 @@ class CodexTokenResolverTest {
     void resolveTokenWithGrant_success() {
         when(approvalReceiptIssuer.verifyAndConsume(
                         "grant-xyz", OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, "chatgpt.com"))
-                .thenReturn(new OutboundApprovalReceipt(
-                        "user-1",
-                        "oauth-exchange:codex:sess-1",
-                        OutboundPurpose.PROVIDER_OAUTH_EXCHANGE,
-                        "chatgpt.com"));
+                .thenReturn(receiptFor("user-1", "sess-1"));
         when(secretVault.retrieveSystemKey(VaultConstants.CODEX_OAUTH_TOKEN_KEY))
                 .thenReturn(Optional.empty());
         when(tokenExtractor.extractToken()).thenReturn(Optional.of("grant-extracted-token"));
@@ -138,11 +138,7 @@ class CodexTokenResolverTest {
     void resolveTokenWithGrant_actorMismatch_throws() {
         when(approvalReceiptIssuer.verifyAndConsume(
                         "grant-xyz", OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, "chatgpt.com"))
-                .thenReturn(new OutboundApprovalReceipt(
-                        "other-user",
-                        "oauth-exchange:codex:sess-1",
-                        OutboundPurpose.PROVIDER_OAUTH_EXCHANGE,
-                        "chatgpt.com"));
+                .thenReturn(receiptFor("other-user", "sess-1"));
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class, () -> resolver.resolveTokenWithGrant("user-1", "sess-1", "grant-xyz"));
@@ -153,11 +149,7 @@ class CodexTokenResolverTest {
     void resolveTokenWithGrant_sessionMismatch_throws() {
         when(approvalReceiptIssuer.verifyAndConsume(
                         "grant-xyz", OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, "chatgpt.com"))
-                .thenReturn(new OutboundApprovalReceipt(
-                        "user-1",
-                        "oauth-exchange:codex:other-session",
-                        OutboundPurpose.PROVIDER_OAUTH_EXCHANGE,
-                        "chatgpt.com"));
+                .thenReturn(receiptFor("user-1", "other-session"));
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class, () -> resolver.resolveTokenWithGrant("user-1", "sess-1", "grant-xyz"));
@@ -173,9 +165,110 @@ class CodexTokenResolverTest {
     }
 
     @Test
+    void resolveTokenWithGrant_missingSession_throws() {
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class, () -> resolver.resolveTokenWithGrant("user-1", "   ", "grant-xyz"));
+        assertTrue(ex.getMessage().contains("Session ID is required"));
+    }
+
+    @Test
     void resolveTokenWithGrant_missingToken_throws() {
         IllegalStateException ex =
                 assertThrows(IllegalStateException.class, () -> resolver.resolveTokenWithGrant("user-1", "sess-1", ""));
         assertTrue(ex.getMessage().contains("approvalToken is required"));
+    }
+
+    @Test
+    void resolveTokenWithGrant_withoutAnIssuer_throws() {
+        CodexTokenResolver withoutIssuer = new CodexTokenResolver();
+
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class, () -> withoutIssuer.resolveTokenWithGrant("user-1", "sess-1", "grant-1"));
+        assertTrue(ex.getMessage().contains("ApprovalReceiptIssuer is unavailable"));
+    }
+
+    @Test
+    void resolveTokenWithGrant_returnsTheVaultTokenWhenItIsAlreadyCached() {
+        when(approvalReceiptIssuer.verifyAndConsume(
+                        "grant-xyz", OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, "chatgpt.com"))
+                .thenReturn(receiptFor("user-1", "sess-1"));
+        when(secretVault.retrieveSystemKey(VaultConstants.CODEX_OAUTH_TOKEN_KEY))
+                .thenReturn(Optional.of(new VaultKey("cached-grant-token".getBytes(StandardCharsets.UTF_8))));
+
+        assertEquals("cached-grant-token", resolver.resolveTokenWithGrant("user-1", "sess-1", "grant-xyz"));
+        // A cached vault token short-circuits the extractor and the re-store.
+        verify(tokenExtractor, never()).extractToken();
+        verify(secretVault, never()).storeSystemKey(any(), any());
+    }
+
+    @Test
+    void resolveTokenWithGrant_throwsWhenNothingRemainsAfterGrantVerification() {
+        when(approvalReceiptIssuer.verifyAndConsume(
+                        "grant-xyz", OutboundPurpose.PROVIDER_OAUTH_EXCHANGE, "chatgpt.com"))
+                .thenReturn(receiptFor("user-1", "sess-1"));
+        when(secretVault.retrieveSystemKey(VaultConstants.CODEX_OAUTH_TOKEN_KEY))
+                .thenReturn(Optional.empty());
+        when(tokenExtractor.extractToken()).thenReturn(Optional.empty());
+
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class, () -> resolver.resolveTokenWithGrant("user-1", "sess-1", "grant-xyz"));
+        assertTrue(ex.getMessage().contains("Codex credentials not found after grant verification"));
+    }
+
+    @Test
+    void resolveIssuer_prefersTheDirectlySetField() {
+        assertSame(approvalReceiptIssuer, resolver.resolveIssuer());
+    }
+
+    @Test
+    void resolveIssuer_fallsBackToTheInjectedInstance() {
+        CodexTokenResolver withInstance = new CodexTokenResolver();
+        ApprovalReceiptIssuer fromCdi = Mockito.mock(ApprovalReceiptIssuer.class);
+        withInstance.approvalReceiptIssuerInstance = resolvable(fromCdi);
+
+        assertSame(fromCdi, withInstance.resolveIssuer());
+    }
+
+    @Test
+    void resolveIssuer_isNullWhenTheInjectedInstanceIsNotResolvable() {
+        CodexTokenResolver withInstance = new CodexTokenResolver();
+        withInstance.approvalReceiptIssuerInstance = unresolvable();
+
+        assertNull(withInstance.resolveIssuer());
+    }
+
+    @Test
+    void resolveAccountId_returnsWhatTheExtractorReports() {
+        when(tokenExtractor.extractAccountId()).thenReturn(Optional.of("acct-42"));
+
+        assertEquals(Optional.of("acct-42"), resolver.resolveAccountId());
+    }
+
+    @Test
+    void resolveAccountId_isEmptyWithoutAnExtractor() {
+        assertEquals(Optional.empty(), new CodexTokenResolver().resolveAccountId());
+    }
+
+    private static OutboundApprovalReceipt receiptFor(String actorUserId, String sessionId) {
+        return new OutboundApprovalReceipt(
+                actorUserId,
+                ApprovalReceiptIssuer.oauthExchangeSessionId("codex", sessionId),
+                OutboundPurpose.PROVIDER_OAUTH_EXCHANGE,
+                "chatgpt.com");
+    }
+
+    private static <T> Instance<T> resolvable(T value) {
+        @SuppressWarnings("unchecked")
+        Instance<T> instance = Mockito.mock(Instance.class);
+        when(instance.isResolvable()).thenReturn(true);
+        when(instance.get()).thenReturn(value);
+        return instance;
+    }
+
+    private static <T> Instance<T> unresolvable() {
+        @SuppressWarnings("unchecked")
+        Instance<T> instance = Mockito.mock(Instance.class);
+        when(instance.isResolvable()).thenReturn(false);
+        return instance;
     }
 }

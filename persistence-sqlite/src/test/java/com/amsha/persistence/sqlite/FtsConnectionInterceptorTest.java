@@ -4,16 +4,20 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sqlite.SQLiteConnection;
@@ -397,6 +401,205 @@ class FtsConnectionInterceptorTest {
                 assertDoesNotThrow(() -> interceptor.onConnectionAcquire(conn));
                 verify(attachStmt).execute(contains("ATTACH DATABASE"));
             }
+        }
+    }
+
+    // =========================================================================
+
+    /**
+     * Arms the integration application can never reach: PRAGMA statements that fail, an ATTACH that is
+     * skipped because a transaction is open, an unwritable FTS data directory, and the extension-path
+     * resolution strategies.
+     *
+     * <p>One arm is deliberately left unexercised: {@code resolveExtensionPath}'s
+     * {@code if (parent == null) break;} — the upward walk running out of parents. Reaching it needs a
+     * working directory shallow enough that four {@code getParent()} hops hit the filesystem root; the test
+     * JVM's working directory is the module directory, four levels below {@code /}. It is a defensive guard
+     * rather than a behaviour gap, so it is reported instead of faked.
+     */
+    @Nested
+    @DisplayName("Rare arms")
+    class RareArms {
+
+        /** A PRAGMA statement whose database_list probe reports the fts schema per {@code ftsAttached}. */
+        private Statement databaseListStatement(boolean ftsAttached) throws Exception {
+            Statement stmt = mock(Statement.class);
+            ResultSet rs = mock(ResultSet.class);
+            if (ftsAttached) {
+                lenient().when(rs.next()).thenReturn(true, false);
+                lenient().when(rs.getString("name")).thenReturn("fts");
+            } else {
+                lenient().when(rs.next()).thenReturn(false);
+            }
+            lenient().when(stmt.executeQuery("PRAGMA database_list")).thenReturn(rs);
+            return stmt;
+        }
+
+        /** A statement whose pragma_module_list probe reports vec0 per {@code vec0Present}. */
+        private Statement moduleListStatement(boolean vec0Present) throws Exception {
+            Statement stmt = mock(Statement.class);
+            ResultSet rs = mock(ResultSet.class);
+            lenient().when(rs.next()).thenReturn(vec0Present);
+            lenient().when(stmt.executeQuery(contains("pragma_module_list"))).thenReturn(rs);
+            return stmt;
+        }
+
+        /**
+         * A connection handing out {@code statements} in order, one per {@code createStatement()} call.
+         *
+         * <p>Pass them in the order the interceptor will ask for them, which depends on whether the ATTACH
+         * arm is reachable: PRAGMA, ATTACH, module check, load_extension when the fts schema is absent and
+         * auto-commit is on; PRAGMA, module check, load_extension when it is skipped.
+         *
+         * <p>{@code unwrap} is stubbed because a null return there would raise an NPE that the interceptor's
+         * own catch swallows — the load_extension statement would then never be requested and the test would
+         * pass for the wrong reason.
+         */
+        private Connection connectionWith(boolean autoCommit, Statement... statements) throws Exception {
+            Connection conn = mock(Connection.class);
+            lenient().when(conn.getAutoCommit()).thenReturn(autoCommit);
+            lenient()
+                    .when(conn.createStatement())
+                    .thenReturn(statements[0], Arrays.copyOfRange(statements, 1, statements.length));
+            SQLiteConnection sqliteConnection = mock(SQLiteConnection.class);
+            lenient().when(sqliteConnection.getDatabase()).thenReturn(mock(DB.class));
+            lenient().when(conn.unwrap(SQLiteConnection.class)).thenReturn(sqliteConnection);
+            return conn;
+        }
+
+        @Test
+        @DisplayName("a failure escaping the schema setup is warned once and never propagates")
+        void outerCatchWarnsOnceAndNeverPropagates() throws Exception {
+            Connection conn = mock(Connection.class);
+            lenient().when(conn.getAutoCommit()).thenReturn(true);
+            when(conn.createStatement()).thenThrow(new SQLException("connection is closed"));
+
+            try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+                arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
+
+                assertDoesNotThrow(() -> interceptor.onConnectionAcquire(conn));
+                // Second failure: the warnedFtsAttachment CAS is already spent, so no second WARN.
+                assertDoesNotThrow(() -> interceptor.onConnectionAcquire(conn));
+            }
+
+            assertFalse(interceptor.isVectorSearchEnabled());
+        }
+
+        @Test
+        @DisplayName("a failing PRAGMA busy_timeout is swallowed and the next PRAGMA still runs")
+        void busyTimeoutFailureIsSwallowed() throws Exception {
+            Statement pragma = databaseListStatement(false);
+            lenient().when(pragma.execute("PRAGMA busy_timeout=10000")).thenThrow(new SQLException("busy"));
+            Connection conn = connectionWith(
+                    true, pragma, mock(Statement.class), moduleListStatement(false), mock(Statement.class));
+
+            try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+                arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
+                assertDoesNotThrow(() -> interceptor.onConnectionAcquire(conn));
+            }
+
+            verify(pragma).execute("PRAGMA synchronous=NORMAL");
+        }
+
+        @Test
+        @DisplayName("a failing PRAGMA synchronous is swallowed and the ATTACH still runs")
+        void synchronousFailureIsSwallowed() throws Exception {
+            Statement pragma = databaseListStatement(false);
+            lenient().when(pragma.execute("PRAGMA synchronous=NORMAL")).thenThrow(new SQLException("in transaction"));
+            Statement attach = mock(Statement.class);
+            Connection conn = connectionWith(true, pragma, attach, moduleListStatement(false), mock(Statement.class));
+
+            try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+                arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
+                assertDoesNotThrow(() -> interceptor.onConnectionAcquire(conn));
+            }
+
+            verify(pragma).execute("PRAGMA busy_timeout=10000");
+            verify(attach).execute(contains("ATTACH DATABASE"));
+        }
+
+        @Test
+        @DisplayName("ATTACH is skipped when a transaction is already open on the connection")
+        void attachSkippedWhenTransactionIsActive() throws Exception {
+            // auto-commit off => the ATTACH arm is skipped, so only three statements are requested.
+            Connection conn = connectionWith(
+                    false, databaseListStatement(false), moduleListStatement(false), mock(Statement.class));
+
+            try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+                arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
+                interceptor.onConnectionAcquire(conn);
+            }
+
+            // PRAGMA, module check and load_extension - the ATTACH statement is never requested.
+            verify(conn, times(3)).createStatement();
+        }
+
+        @Test
+        @DisplayName("an unwritable FTS data directory is warned about and ATTACH is still attempted")
+        void dataDirectoryCreationFailureIsWarned(@TempDir Path tempDir) throws Exception {
+            // A regular file where a directory is expected makes Files.createDirectories throw IOException.
+            Path blocker = tempDir.resolve("blocker");
+            Files.writeString(blocker, "regular file, not a directory");
+            interceptor.jdbcUrl = "jdbc:sqlite:" + blocker.resolve("sub") + "/meta.db";
+
+            Statement attach = mock(Statement.class);
+            Connection conn = connectionWith(
+                    true, databaseListStatement(false), attach, moduleListStatement(false), mock(Statement.class));
+
+            try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+                arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
+                assertDoesNotThrow(() -> interceptor.onConnectionAcquire(conn));
+            }
+
+            verify(attach).execute(contains("ATTACH DATABASE"));
+        }
+
+        @Test
+        @DisplayName("an absolute extension path is used verbatim")
+        void absoluteExtensionPathIsUsedAsIs() throws Exception {
+            interceptor.vecExtensionPath = "/tmp/absolute-vec0-probe";
+
+            ConnBundle bundle = buildConnection(false);
+            try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+                arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
+                interceptor.onConnectionAcquire(bundle.conn());
+            }
+
+            verify(bundle.vecStmt()).execute(contains("/tmp/absolute-vec0-probe"));
+        }
+
+        @Test
+        @DisplayName("a relative extension path naming an existing file is used as-is")
+        void relativeExtensionPathNamingAnExistingFileIsUsedAsIs() throws Exception {
+            Path probe = Path.of("target", "vec-path-probe", "vec0-existing-file");
+            Files.createDirectories(probe.getParent());
+            Files.writeString(probe, "");
+            interceptor.vecExtensionPath = "target/vec-path-probe/vec0-existing-file";
+
+            ConnBundle bundle = buildConnection(false);
+            try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+                arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
+                interceptor.onConnectionAcquire(bundle.conn());
+            }
+
+            verify(bundle.vecStmt()).execute(contains("vec0-existing-file"));
+        }
+
+        @Test
+        @DisplayName("a relative extension path falls back to the .so sibling when only that exists")
+        void relativeExtensionPathResolvesToTheSoSibling() throws Exception {
+            Path probe = Path.of("target", "vec-path-probe", "vec0-only-so");
+            Files.createDirectories(probe.getParent());
+            Files.writeString(Path.of(probe + ".so"), "");
+            interceptor.vecExtensionPath = "target/vec-path-probe/vec0-only-so";
+
+            ConnBundle bundle = buildConnection(false);
+            try (MockedStatic<Arc> arc = mockStatic(Arc.class)) {
+                arc.when(Arc::container).thenReturn(mock(ArcContainer.class));
+                interceptor.onConnectionAcquire(bundle.conn());
+            }
+
+            verify(bundle.vecStmt()).execute(contains("vec0-only-so"));
         }
     }
 }

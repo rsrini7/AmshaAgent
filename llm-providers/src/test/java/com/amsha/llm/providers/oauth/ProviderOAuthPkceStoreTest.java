@@ -130,4 +130,48 @@ class ProviderOAuthPkceStoreTest {
 
         assertThrows(IllegalStateException.class, () -> fullStore.beginAuthorization("codex", "user", "session"));
     }
+
+    @Test
+    void beginAuthorization_rejectsBlankProviderAndActor() {
+        assertThrows(IllegalArgumentException.class, () -> store.beginAuthorization(null, "user-1", "sess-1"));
+        assertThrows(IllegalArgumentException.class, () -> store.beginAuthorization("  ", "user-1", "sess-1"));
+        assertThrows(IllegalArgumentException.class, () -> store.beginAuthorization("codex", null, "sess-1"));
+        assertThrows(IllegalArgumentException.class, () -> store.beginAuthorization("codex", "  ", "sess-1"));
+    }
+
+    @Test
+    void validateCallbackState_rejectsBlankArguments() {
+        assertFalse(store.validateCallbackState(null, "state", "user-1", "sess-1"));
+        assertFalse(store.validateCallbackState("codex", null, "user-1", "sess-1"));
+        assertFalse(store.validateCallbackState("codex", "state", null, "sess-1"));
+        assertFalse(store.validateCallbackState("codex", "state", "user-1", null));
+    }
+
+    @Test
+    void validateCallbackState_evictsAnExpiredAuthorization() {
+        Map<String, ProviderOAuthPkceStore.PendingAuthorization> pending = new HashMap<>();
+        pending.put(
+                "expired-state",
+                new ProviderOAuthPkceStore.PendingAuthorization(
+                        "codex", "user-1", "sess-1", "challenge", Instant.now().minus(Duration.ofMinutes(1))));
+        ProviderOAuthPkceStore seeded = new ProviderOAuthPkceStore(pending);
+
+        assertFalse(seeded.validateCallbackState("codex", "expired-state", "user-1", "sess-1"));
+        assertTrue(pending.isEmpty(), "an expired authorization must be evicted at lookup time");
+    }
+
+    @Test
+    void beginAuthorization_purgesExpiredEntries() {
+        Map<String, ProviderOAuthPkceStore.PendingAuthorization> pending = new HashMap<>();
+        pending.put(
+                "expired-state",
+                new ProviderOAuthPkceStore.PendingAuthorization(
+                        "codex", "user-1", "sess-1", "challenge", Instant.now().minus(Duration.ofMinutes(1))));
+        ProviderOAuthPkceStore seeded = new ProviderOAuthPkceStore(pending);
+
+        seeded.beginAuthorization("codex", "user-2", "sess-2");
+
+        assertFalse(pending.containsKey("expired-state"), "beginAuthorization must purge expired entries");
+        assertEquals(1, pending.size(), "only the freshly-issued authorization should remain");
+    }
 }

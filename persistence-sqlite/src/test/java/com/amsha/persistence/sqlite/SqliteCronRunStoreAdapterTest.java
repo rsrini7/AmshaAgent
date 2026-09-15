@@ -64,4 +64,32 @@ class SqliteCronRunStoreAdapterTest {
         // Blank/null check safety
         assertTrue(store.findById(null).isEmpty());
     }
+
+    @Test
+    void findAllWithoutAStatusFilterUsesTheUnfilteredQuery() {
+        String cronId = "cron-all-" + UUID.randomUUID();
+        String runId = "run-all-" + UUID.randomUUID();
+        store.save(new CronRunDto(
+                runId,
+                cronId,
+                "session-all",
+                "FAILED",
+                Instant.now(),
+                Instant.now().plusMillis(10),
+                "boom",
+                1,
+                1,
+                1,
+                BigDecimal.ZERO,
+                Instant.now()));
+
+        List<CronRunDto> unfilteredNull = store.findAll(null, 0, 10);
+        List<CronRunDto> unfilteredBlank = store.findAll("   ", 0, 10);
+
+        assertTrue(unfilteredNull.stream().anyMatch(r -> r.id().equals(runId)));
+        assertTrue(
+                unfilteredBlank.stream().anyMatch(r -> r.id().equals(runId)),
+                "a blank status must be treated as no filter, not as a literal status value");
+        assertEquals(unfilteredNull.size(), unfilteredBlank.size());
+    }
 }

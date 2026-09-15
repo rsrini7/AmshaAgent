@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalSearchQuery;
@@ -84,5 +85,27 @@ class PostgresArchivalMemoryStoreTest {
 
         when(dao.listByUserId("usr-1", 10, 0)).thenReturn(List.of());
         assertTrue(store.listByUserId("usr-1", 10, 0).isEmpty());
+    }
+
+    @Test
+    void theProtectedNoArgConstructorBuildsAnUnconfiguredInstance() {
+        // Same package as the store, so the protected constructor is reachable without reflection.
+        assertDoesNotThrow(() -> new PostgresArchivalMemoryStore());
+    }
+
+    @Test
+    void testSearchWithChunkTypesUsesTheFilteredQuery() {
+        when(jdbi.withExtension(eq(ArchivalMemoryJdbiDao.class), any())).thenAnswer(inv -> {
+            ExtensionCallback callback = inv.getArgument(1);
+            return callback.withExtension(dao);
+        });
+        // The query carries a Set; the DAO takes a List, so the conversion is part of the contract.
+        when(dao.searchByTypes("usr-1", "q", 10, List.of("DOC"))).thenReturn(List.of());
+
+        ArchivalSearchQuery filtered = new ArchivalSearchQuery("usr-1", "q", 10, Set.of("DOC"), false, false, null);
+
+        assertTrue(store.search(filtered).isEmpty());
+        // A non-empty chunk-type filter must NOT fall back to the unfiltered query.
+        verify(dao, never()).searchAllTypes(any(), any(), anyInt());
     }
 }

@@ -11,6 +11,7 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.CronRunDto;
 import com.amsha.persistence.api.PromptDto;
+import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.VersionConflictException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -102,6 +103,53 @@ class FsCoverageGapTest {
         assertTrue(adapter.get("user", "profile").isEmpty());
         adapter.delete("user", "profile");
         verify(store, atLeastOnce()).write(anyList(), any());
+    }
+
+    // ─── Residual single-line gaps ─────────────────────────────
+
+    @Test
+    void cronRunLookupScansEveryCronDirectory() {
+        FsCronRunStoreAdapter adapter = new FsCronRunStoreAdapter();
+        adapter.store = store;
+        when(store.listDirs(List.of("cron-runs"))).thenReturn(List.of("cron-a", "cron-b"));
+        when(store.readOptional(List.of("cron-runs", "cron-a", "run-1.json"), CronRunDto.class))
+                .thenReturn(Optional.empty());
+        when(store.readOptional(List.of("cron-runs", "cron-b", "run-1.json"), CronRunDto.class))
+                .thenReturn(Optional.of(run("run-1", "cron-b", "SUCCESS", Instant.now())));
+
+        assertEquals("run-1", adapter.findById("run-1").orElseThrow().id(), "the second directory is scanned");
+    }
+
+    @Test
+    void cronRunLookupReturnsEmptyWhenNoDirectoryHoldsTheRun() {
+        FsCronRunStoreAdapter adapter = new FsCronRunStoreAdapter();
+        adapter.store = store;
+        when(store.listDirs(List.of("cron-runs"))).thenReturn(List.of("cron-a", "cron-b"));
+        when(store.readOptional(anyList(), eq(CronRunDto.class))).thenReturn(Optional.empty());
+
+        assertTrue(adapter.findById("absent").isEmpty());
+    }
+
+    @Test
+    void skillAndPromptDeletesReportAMissWithoutTouchingTheStore() {
+        FsSkillStoreAdapter skills = new FsSkillStoreAdapter();
+        skills.store = store;
+        when(store.readOptional(anyList(), eq(SkillDto.class))).thenReturn(Optional.empty());
+        assertFalse(skills.deleteById("missing"));
+
+        FsPromptStoreAdapter prompts = new FsPromptStoreAdapter();
+        prompts.store = store;
+        when(store.readOptional(anyList(), eq(PromptDto.class))).thenReturn(Optional.empty());
+        assertFalse(prompts.deleteByRoleAndKey("coder", "system"));
+    }
+
+    @Test
+    void chatMemoryTimestampsAreAlwaysEmptyAndTheReflectionConfigIsInstantiable() {
+        FsChatMemoryStoreAdapter chatMemory = new FsChatMemoryStoreAdapter();
+        chatMemory.store = store;
+
+        assertTrue(chatMemory.getTimestamps("any-memory").isEmpty(), "the FS backend keeps no timestamps");
+        assertNotNull(new FsReflectionConfig(), "the reflection registration holder must be instantiable");
     }
 
     private static CronRunDto run(String id, String cron, String status, Instant started) {
