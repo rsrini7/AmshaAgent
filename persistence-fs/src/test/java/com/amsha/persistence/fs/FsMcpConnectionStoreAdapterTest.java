@@ -200,6 +200,63 @@ class FsMcpConnectionStoreAdapterTest {
         assertFalse(store.listToolPolicies(approved.id(), userId).get(0).enabled());
     }
 
+    @Test
+    void toolPolicyAndHeaderRefValidationRejectsBadInput() {
+        String prefix = "fs-" + UUID.randomUUID();
+        String user = prefix + "-user";
+        McpConnectionDto conn = connection(prefix + "-mcp-val", user, "docs", true);
+        store.save(conn);
+
+        // Blank identifiers short-circuit the read paths and are rejected by the write paths.
+        assertTrue(store.listToolPolicies("", user).isEmpty());
+        assertTrue(store.listToolPolicies(conn.id(), "").isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> store.replaceToolPolicies("", user, List.of()));
+        assertEquals(0, store.setToolEnabled("", user, "search_tool", true));
+
+        // A policy or header ref can only be written for a connection that exists. Unlike the SQL adapters this one
+        // has no separate blank-id guard on replaceHeaderSecretRefs, so the same lookup rejects it.
+        String missing = prefix + "-absent";
+        assertThrows(IllegalArgumentException.class, () -> store.replaceToolPolicies(missing, user, List.of()));
+        assertThrows(IllegalArgumentException.class, () -> store.replaceHeaderSecretRefs(missing, user, List.of()));
+        assertThrows(IllegalArgumentException.class, () -> store.replaceHeaderSecretRefs("", user, List.of()));
+
+        // Ownership mismatch: the DTO must carry the connection/user it is being filed under.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.replaceToolPolicies(
+                        conn.id(), user, List.of(policy(prefix + "-pol-x", prefix + "-other", user, "search_tool"))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.replaceHeaderSecretRefs(
+                        conn.id(),
+                        user,
+                        List.of(headerRef(prefix + "-ref-x", prefix + "-other", user, "X-Api-Key", "vault-x"))));
+
+        // Duplicate names are rejected case-insensitively for headers (normalised to lower case) and exactly for tools.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.replaceToolPolicies(
+                        conn.id(),
+                        user,
+                        List.of(
+                                policy(prefix + "-pol-1", conn.id(), user, "search_tool"),
+                                policy(prefix + "-pol-2", conn.id(), user, "search_tool"))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.replaceHeaderSecretRefs(
+                        conn.id(),
+                        user,
+                        List.of(
+                                headerRef(prefix + "-ref-1", conn.id(), user, "X-Api-Key", "vault-1"),
+                                headerRef(prefix + "-ref-2", conn.id(), user, "x-api-key", "vault-2"))));
+    }
+
+    private static McpConnectionToolPolicyDto policy(String id, String connectionId, String userId, String toolName) {
+        Instant now = Instant.now();
+        return new McpConnectionToolPolicyDto(
+                id, connectionId, userId, toolName, true, true, "desc", "{\"type\":\"object\"}", "hash", now, 0, now);
+    }
+
     private static Set<String> ids(List<McpConnectionDto> connections) {
         return connections.stream().map(McpConnectionDto::id).collect(Collectors.toSet());
     }

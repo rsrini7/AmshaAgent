@@ -1086,6 +1086,305 @@ Techniques worth reusing (see `.agents/skills/amsha-maven-verify/SKILL.md` for d
 | `SqliteMcpConnectionStoreAdapter` / `PostgresMcpConnectionStoreAdapter` (211 LOC each), `SqliteSessionCatalogAdapter` / `PostgresSessionCatalogAdapter` (~205 LOC each) | Untested — add per-backend tests. |
 | **New: Flyway migration parity test** | Assert SQLite and PostgreSQL migration sets match in count, version, and semantics for all 12 pairs. |
 
+#### Phase 3 status (2026-09-15) — cron store parity (first slice)
+
+Three contract suites added, one per backend, each driving the **real** adapter rather than a mock (real SQLite file
+DB, real embedded PostgreSQL, real `FilesystemFileStore` on a temp dir):
+
+| Module | New test class | Tests | `CronStorePort` adapter | Module line coverage |
+|---|---|---:|---|---|
+| `persistence-fs` | `FsCronStoreContractTest` | 31 | `FsCronStoreAdapter` 46 → **0** missed | 76.8% → **78.5%** |
+| `persistence-sqlite` | `SqliteCronStoreContractTest` | 32 | `SqliteCronStoreAdapter` 64 → **0** missed | 70.4% → **73.8%** |
+| `persistence-postgres` | `PostgresCronStoreContractTest` | 32 | `PostgresCronStoreAdapter` 66 → **0** missed | 66.1% → **70.9%** |
+
+**176 lines closed**; all three cron adapters are now at **100% line coverage**. `clean verify` is green on all
+three modules (212 / 164 / 120 tests, PMD 7.17.0 clean, `spotless:check` clean).
+
+**On "shared parameterized contract test".** The plan above asks for one suite run against all three backends. The
+three adapters live in separate Maven modules and the reactor has **no test-jar infrastructure** and no abstract
+contract base (verified: zero `test-jar` declarations, zero `abstract class *Contract|*Base` in test sources).
+Introducing one would mean a new test-jar artifact, which breaks the documented module-scoped loop
+(`./mvnw -o -pl <module> test` would stop resolving without an `install` of the producing module first) — and a new
+*module* would trip the `--strict-instrumentation` empty-report guard in CI. So the spec is **duplicated by
+convention**: the three classes mirror each other in structure and keep the same section ordering, with a header
+comment on each saying so. Consolidating them is recorded as a follow-up, not done here.
+
+**Fixtures worth reusing.** The `persistence-fs` suite builds a real `FilesystemFileStore` from an anonymous
+`FsStoreProperties` returning a temp dir and injects it with `setAccessible(true)` — the same recipe as
+`FsStoreSmokeTest`, but scoped to one adapter. The `persistence-sqlite` / `-postgres` suites generate a fresh
+`user`/`session` per test and assert on **deltas** (`countAll` before vs after) because the table is shared across
+the whole module's test run; user-scoped queries are asserted absolutely. `PostgresTestResource` transparently
+falls back to the zonky embedded server when Docker is absent, so these run on a plain workstation.
+
+#### Phase 3 status (2026-09-15) — checkpoint parity (second slice)
+
+The same treatment applied to `CheckpointStorePort`, again with three mirrored suites driving the real adapters:
+
+| Module | New test class | Tests | `CheckpointStorePort` adapter | Module line coverage |
+|---|---|---|---|---:|
+| `persistence-fs` | `FsCheckpointStoreContractTest` | 13 | `FsCheckpointStoreAdapter` 52 → **0** missed | 78.5% → **80.4%** |
+| `persistence-sqlite` | `SqliteCheckpointStoreContractTest` | 20 | `SqliteCheckpointStoreAdapter` 47 → **0** missed | 73.8% → **76.3%** |
+| `persistence-postgres` | `PostgresCheckpointStoreContractTest` | 29 | `PostgresCheckpointStoreAdapter` 56 → **0** missed | 70.9% → **76.2%** |
+
+**155 lines closed**; all three checkpoint adapters are now at **100% line coverage**. `clean verify` is green on
+all three modules (225 / 184 / 149 tests, PMD 7.17.0 clean, `spotless:check` clean).
+
+**Why the Postgres suite is longer than the other two.** `PostgresCheckpointStoreAdapter` carries the widest port
+surface of the three (upsert-with-steps, upsert-and-finalize, `stampChannelInfo`, `purgeOldChatHistory`,
+`findLatestBySessionAndStatus`, `findLatestNonArchivedBySession`, …). Its existing unit test
+(`PostgresCheckpointStoreAdapterTest`, 267 lines) mocks `Jdbi` and so only proves *delegation* — it cannot tell
+whether the SQL is valid, whether the column aliases still line up, or what a query actually returns. The contract
+suite covers exactly those questions, so the two are complementary rather than redundant. The same is true of
+`SqliteCheckpointStoreAdapterTest`.
+
+**Fixtures worth reusing.**
+
+- Age-sensitive queries cannot be driven through `CheckpointStorePort.save`: `CheckpointDtoHelper.withStatus(...)`
+  stamps `updatedAt = Instant.now()`, so a checkpoint can never be saved in the past. Both SQL suites therefore
+  back-date fixtures with a raw `UPDATE agent_checkpoint SET updated_at = :ts`. Note the bind type differs per
+  backend — `sqlite` binds `TemporalUtils.formatIsoLex(instant)`, `postgres` binds the `Instant` itself.
+- The FS suite writes fixtures **straight through `FilesystemFileStore`** for the same reason. `FilesystemFileStore.write`
+  builds its path with `List.of(segments)` internally, and `List.of` rejects nulls — so a fixture that deliberately
+  exercises a null session segment must build the *outer* list with `Arrays.asList(...)` or it dies in the helper
+  before reaching the adapter.
+- The global sweeps (`findInProgressZombies`, `findStaleApprovals`, `recoverInProgressZombies`) and
+  `purgeOldChatHistory` are unguarded and table-wide. Fixtures are back-dated and asserted by **membership**; the
+  purge fixture is dated 2001 and swept with a 2005 cutoff so it cannot reach another suite's rows.
+
+#### Phase 3 findings — cross-backend divergences the contract suite surfaced
+
+These are **not test gaps**; they are places where `CronStorePort` implementations are not interchangeable. Each is
+pinned by an assertion in all three suites and annotated with a divergence comment. None were "fixed" — that is a
+product decision for the human, and the port has no stated contract for these cases.
+
+| # | Behaviour | `fs` | `sqlite` | `postgres` |
+|---|---|---|---|---|
+| 1 | `save` with a null `nextFireTime` | accepted | **rejected** (`NOT NULL`) | **rejected** (`NOT NULL`) |
+| 2 | `save` with a null `userId` / `chatId` / `goal` / `sessionId` / `cronExpression` | accepted | **rejected** | **rejected** |
+| 3 | `save` — `createdAt` on **insert** | caller's value | caller's value | **`Instant::now()`**, caller's value discarded |
+| 4 | `save` — `createdAt` on **re-save** | caller's value | caller's value | preserved stored value |
+| 5 | `markFired(id, last, null)` | writes `nextFireTime = null` | **rejected** | **rejected** |
+| 6 | `markSkipped(id, null, now)` | writes `nextFireTime = null` | **rejected** | **rejected** |
+| 7 | `markCompleted` | **clears** `nextFireTime` | leaves it | leaves it |
+| 8 | `markFailedIfStatus(id, null, reason)` | treats null as "no expectation", **fails the row** | no-op (`status = NULL` never matches) | no-op |
+| 9 | `reclaimStaleCrons(null)` | **NPE** (`ref.isBefore(null)`) | early-return no-op | no-op via SQL NULL semantics |
+
+Notes on impact:
+
+- **#1–#2 are the sharpest.** `FsCronStoreAdapter.findDueCrons` explicitly guards
+  `dto.nextFireTime() != null`, i.e. the FS backend is *written* to expect a state its SQL siblings cannot store.
+  Any caller that saves a cron before a fire time is resolved works on `fs` and fails on `sqlite`/`postgres`.
+  Both SQL migrations agree with each other (`db/migration/{sqlite,postgresql}/V2__scheduling_and_skills.sql`), so
+  the outlier is `fs`, not either SQL backend.
+- **#8 has no production caller today** — `markFailedIfStatus` appears only in the port, its three adapters and
+  tests. Latent, but it will bite the first caller that passes a null expectation.
+- **#9** is the reverse: a null threshold is not a realistic call, but `fs` is the only backend that throws on it.
+- **#7 is benign in practice**: `markCompleted` sets status `COMPLETED`, and `findDueCrons` filters on `ACTIVE`, so
+  a stale `nextFireTime` is never acted on. It is still a value-visible difference for any reader of the row.
+
+#### Phase 3 findings — `CheckpointStorePort` divergences
+
+The checkpoint slice surfaced two more, plus one latent defect that is *not* a divergence:
+
+| # | Behaviour | `fs` | `sqlite` | `postgres` |
+|---|---|---|---|---|
+| 10 | `markCheckpointsFailed` — `failReason` text | `"Session terminated"` | `"Session cancelled"` | `"Session cancelled"` |
+| 11 | `deleteCheckpoint` — reasoning steps | **deleted with the checkpoint** | left orphaned | left orphaned |
+
+Notes on impact:
+
+- **#10 is a caller-visible string mismatch.** A caller that matches on the reason (or surfaces it to a user) gets
+  different text depending on the configured backend. Both SQL backends agree, so `fs` is the outlier — the same
+  shape as cron divergence #1.
+- **#11 leaks rows on both SQL backends.** `FsCheckpointHelper.deleteStepsForSession` cascades; the SQL
+  `deleteCheckpoint` only removes the `agent_checkpoint` row, leaving `reasoning_step` rows with no parent. Nothing
+  currently reads them (every read path is keyed by `checkpoint_id`), so this is a storage-growth issue rather than
+  a correctness one — but `purgeOldChatHistory` is the only thing that reclaims them, and it only fires on rows
+  older than its cutoff.
+- **Latent defect (not a divergence):** `PostgresCheckpointStoreAdapter.saveSteps` logs `steps.size()` on line 356
+  *before* the `steps != null` guard on line 360, so the null-tolerant guard is unreachable — a null list throws
+  `NullPointerException` in the log statement. Deliberately **not** pinned by a test: the guard shows null was
+  meant to be supported, so the log line is the bug. Reported here for the human to fix; the contract suite
+  therefore does not call `saveSteps(id, null)`.
+
+#### Phase 3 status (2026-09-15) — Flyway migration parity (third slice)
+
+`app/src/test/java/com/amsha/app/db/FlywayMigrationParityTest.java` (new, 7 tests) asserts that the two migration
+sets describe the same schema, which `AGENTS.md` §"Persistence or memory" requires but nothing enforced.
+
+**What is compared** for each of the 12 `V<n>__<description>.sql` pairs: the static table set; every shared table's
+column names and `NOT NULL` flags; the statically created index names; and the columns added by
+`ALTER TABLE ... ADD COLUMN`. Column *types* are deliberately not compared — `TEXT` vs `TIMESTAMP WITH TIME ZONE`
+and `INTEGER` vs `BIGINT` are the expected dialect mappings, not drift.
+
+**Result: the two sets are in exact parity.** 42 static `CREATE TABLE` statements in each dialect, identical table
+names, and identical column-name + nullability maps for all 42 — zero column-level drift. That is a genuinely good
+result and worth recording: the migration sets have been kept in step by hand and the discipline has held.
+
+**Three dialect-specific exceptions, each pinned by name:**
+
+| Construct | SQLite | PostgreSQL |
+|---|---|---|
+| Full-text search | `CREATE VIRTUAL TABLE ... USING fts5` (`recall_messages_fts`, `archival_chunks_fts`) | `content_tsv tsvector` columns + `GIN` indexes (`idx_recall_content_fts`, `idx_archival_content_fts`) |
+| Vector storage | `sqlite-vec` (`vec0`), created at runtime rather than in a migration | `rag_chunk_embedding` + `idx_rag_chunk_embedding_vec`, created inside a `DO $$ ... $$;` block guarded on `pg_available_extensions` |
+
+So the comparison strips `DO $$ ... $$;` blocks and `CREATE VIRTUAL TABLE` statements before diffing, and the
+PostgreSQL-only index/column sets are allow-listed.
+
+**The allow-lists are asserted for exact equality, not as a superset** — this is the design point. A *new*
+dialect-only index fails the build, and so does *removing* a construct that is still listed, so the exemptions
+cannot rot into a blanket "PostgreSQL may differ here" exemption. The excluded constructs are separately pinned by
+name, so a change in *how* a dialect implements full-text or vector search is visible rather than absorbed.
+
+**Verified non-vacuous by mutation.** Both directions were confirmed to fail: appending a SQLite-only index to
+`V1__execution.sql` produced `PostgreSQL is missing indexes SQLite creates ==> expected: <[]> but was:
+<[idx_parity_probe]>`, and appending a PostgreSQL-only index produced `PostgreSQL-only indexes changed ==> expected:
+<[idx_archival_content_fts, idx_recall_content_fts]> but was: <[idx_archival_content_fts, idx_pg_probe,
+idx_recall_content_fts]>`. Both mutations were reverted.
+
+Two anti-vacuity guards are built in, because a parity test that compares two empty sets passes silently: the
+`CREATE TABLE` parser's match count must equal the number of `CREATE TABLE` keywords it saw, and the migrations are
+resolved from the working tree (failing loudly if not found) rather than skipped — unlike
+`ApiKeyAuthFilterTest`, which wraps its file read in `if (Files.exists(...))` and so can pass without checking
+anything.
+
+**Read from the working tree, not the classpath.** The `app` module depends on both backends, so the migration
+resources *are* on its test classpath — but with `-pl app` they come from the installed `~/.m2` jars, which may lag
+the sources under review. Reading the sibling module directories instead means the comparison is always against
+what is actually being changed.
+
+**Verified by a full-reactor `clean verify`** (all 28 modules SUCCESS, 9m38s), because the JaCoCo gate is
+reactor-wide — it aggregates every module's CSV, so a `-pl app` run cannot exercise it meaningfully. The gate
+reported:
+
+```
+Reactor JaCoCo line coverage: 77.83% (minimum: 74.00%, covered: 46696, total: 59997)
+```
+
+i.e. **3.83pp of headroom** over the `0.74` floor. `FlywayMigrationParityTest` ran green inside that build.
+
+#### Phase 3 status (2026-09-15) — LLM-profile, session-catalog and MCP-connection adapters (fourth slice)
+
+The remaining Phase 3 targets, again per backend and again against the real adapters. Unlike the cron and checkpoint
+slices, these three ports already had *some* tests per backend — the work here was to extend the existing classes
+rather than add mirrored suites, so the section records deltas instead of new files.
+
+| Module | Test class (extended) | Tests | Adapter | Missed |
+|---|---|---:|---|---|
+| `persistence-sqlite` | `SqliteLlmProfileStoreAdapterTest` | 4 → 7 | `SqliteLlmProfileStoreAdapter` | 27 → **2** |
+| `persistence-postgres` | `PostgresLlmProfileStoreAdapterTest` | 3 → 7 | `PostgresLlmProfileStoreAdapter` | 53 → **2** |
+| `persistence-sqlite` | `SqliteSessionCatalogAdapterTest` | 6 → 9 | `SqliteSessionCatalogAdapter` | 19 → **0** |
+| `persistence-postgres` | `PostgresSessionCatalogAdapterTest` | 3 → 8 | `PostgresSessionCatalogAdapter` | 24 → **0** |
+| `persistence-sqlite` | `SqliteMcpConnectionStoreAdapterTest` | 1 → 3 | `SqliteMcpConnectionStoreAdapter` | 32 → **0** |
+| `persistence-postgres` | `PostgresMcpConnectionStoreAdapterTest` | 2 → 3 | `PostgresMcpConnectionStoreAdapter` | 7 → **0** |
+| `persistence-fs` | `FsMcpConnectionStoreAdapterTest` | 2 → 3 | `FsMcpConnectionStoreAdapter` | 8 → **0** |
+| `persistence-fs` | `FsLlmProfileStoreAdapterTest` | 6 → 9 | `FsLlmProfileStoreAdapter` | 17 → **0** |
+
+**183 lines closed**; six of the eight adapters are at 100% line coverage and the remaining two are at 2 missed lines
+each, which are dead code (see the finding below). `clean verify` is green on all three modules (192 / 229 / 159
+tests, PMD 7.17.0 clean, `spotless:check` clean), and the **full-reactor `clean verify` is green** (all 28 modules
+SUCCESS, 9m43s) with the gate reporting:
+
+```
+Reactor JaCoCo line coverage: 78.14% (minimum: 74.00%, covered: 46880, total: 59997)
+```
+
+i.e. **4.14pp of headroom** over the `0.74` floor — up from 77.83% (46,696 covered) at the previous full-reactor run,
+a gain of **184 lines** across the fourth slice.
+
+**`FsLlmProfileStoreAdapter` was not on the plan.** It surfaced from a per-module re-measurement after the first
+seven adapters were closed. It had no coverage of `findModelProfile`, `updateModelProfile`, `deleteModelProfile`,
+`updateRouteAssignment`, `deleteRouteAssignment`, or either cache-invalidator branch — i.e. the same optimistic-lock
+and callback surface as its SQL siblings, just never exercised. Worth noting as a general lesson: the roadmap's
+target lists came from an older measurement, so a fresh `jacoco:report` per module should be taken *after* each slice
+rather than trusted at slice start.
+
+**Fixture note — the cache-invalidation port.** `fireConnectionChanged` / `fireProfileChanged` only call the port
+when it is bound (`cacheInvalidator` is `@Nullable`), so every existing test silently took the `null` branch and the
+two call sites stayed uncovered. The FS suite now injects a package-private recording stub
+(`RecordingInvalidator`, a plain `ArrayList` of `"connection:<id>"` / `"profile:<id>"` strings) and asserts the exact
+recorded sequence — which also pins the *negative* behaviour that matters: a rejected optimistic-lock update, or a
+delete of an absent row, must **not** fire, because nothing was persisted and flushing the cache would be wasted
+work. Note the SQLite and Postgres adapters have the identical two helpers; their call sites were already covered
+incidentally by the `activateConnection` path, so only the FS suite needed the stub.
+
+#### Phase 3 findings — `SessionCatalogStore` and MCP-connection divergences
+
+| # | Behaviour | `fs` | `sqlite` | `postgres` |
+|---|---|---|---|---|
+| 12 | `record(active = true)` into a scope that already has an active row | **accepted** — a second active row is written | **rejected** (`UNIQUE constraint failed: idx_session_catalog_active`) | **rejected** (`duplicate key value violates unique constraint`) |
+| 13 | `replaceHeaderSecretRefs` with a blank `connectionId` / `userId` | no blank guard — falls through to `"MCP connection not found"` | explicit guard: `"connectionId/userId required"` | explicit guard: `"connectionId/userId required"` |
+
+Notes on impact:
+
+- **#12 is a genuine API asymmetry, but currently latent.** The "one active row per scope" invariant is enforced by
+  a **partial unique index** in both SQL migrations (`idx_session_catalog_active`, `ON session_catalog(owner_key,
+  channel_type, channel_id) WHERE active = 1` / `WHERE active = TRUE`), and it is *maintained* only by
+  `activateNew()`, which first issues `UPDATE ... SET active=FALSE,status='INACTIVE' WHERE <scope> AND active=TRUE`
+  and then inserts with `activate = true`. `record()` does neither: the SQL adapters call
+  `insert(..., e.active(), e.status(), false)` (the trailing `false` means "leave the stored `active`/`status`
+  alone on conflict"), and the FS adapter simply writes the entry. So on `fs` a second active row is created and
+  `resolveActive` becomes ambiguous, whereas on either SQL backend the same call throws. **No production caller
+  passes `active = true` to `record`** — `SessionCatalogService` uses `activateNew` (lines 93, 162) and `setActive`
+  (line 132), and `SessionReaper` / `SessionRegistry` / `DbConsoleResource` only read (`listInactiveBefore`,
+  `bySessionId`). The port method itself therefore has no production caller today; the suite pins the behaviour so
+  the first caller cannot be surprised. This is also the footgun that made the Postgres suite fail during
+  development with `PSQLException: duplicate key value violates unique constraint "idx_session_catalog_active"`
+  — fixtures that seed two *active* rows in one scope are invalid on both SQL backends.
+- **#13 is a message-text divergence only** — same exception type, different text, same shape as cron divergence #1
+  and checkpoint divergence #10: the two SQL backends agree and `fs` is the outlier. A caller that surfaces the
+  message to a user, or matches on it, gets different text per backend.
+
+#### Phase 3 finding — dead code in both SQL LLM-profile adapters
+
+`SqliteLlmProfileStoreAdapter` and `PostgresLlmProfileStoreAdapter` each still miss exactly **2 lines**, and in both
+cases they are the same construct — the `catch` block of `toJson`:
+
+```java
+private String toJson(List<String> list) {
+    try {
+        return mapper.writeValueAsString(list == null ? List.of() : list);
+    } catch (Exception _) {
+        return "[]";                                   // <- unreachable
+    }
+}
+```
+
+`mapper` is a private, non-injected, stock `new ObjectMapper()`, and the only argument ever passed is a
+`List<String>` taken from `ModelRouteAssignmentDto.orderedProfileIds()`. Serializing a list of strings cannot throw
+`JsonProcessingException` (the only checked type the call can produce), and there is no injection seam to make it
+throw. The catch is therefore **unreachable dead code**, not a coverage gap — so it is reported here rather than
+pinned with a test. The defensive `list == null` arm on the line above is likewise never taken, because both call
+sites pass a record component that the DTO constructor requires to be non-null; that arm is at least *reachable* in
+principle if the DTO ever allowed null, so it is left alone.
+
+Removing the dead `catch` (or narrowing it to `JsonProcessingException` and letting the compiler prove it) would take
+both classes to 100%. That is a source change, so it is left to the human.
+
+#### Phase 3 — remaining work
+
+- ~~`PostgresCheckpointStoreAdapter` (56 missed) / `FsCheckpointStoreAdapter` (52) / `SqliteCheckpointStoreAdapter`
+  (47) — the same treatment: claim/release resume, state transitions, stale-row recovery.~~ **Done** (second slice
+  above); all three at 0 missed.
+- ~~`PostgresLlmProfileStoreAdapter` (53), `PostgresSessionCatalogAdapter` (24), `SqliteLlmProfileStoreAdapter` (27),
+  `SqliteSessionCatalogAdapter` (19) — CRUD + default resolution per backend.~~ **Done** (fourth slice above);
+  session-catalog at 0 missed, LLM-profile at 2 missed each (dead code).
+- ~~`SqliteMcpConnectionStoreAdapter` (32) / `PostgresMcpConnectionStoreAdapter` (7) /
+  `FsMcpConnectionStoreAdapter` (8) — per-backend tests.~~ **Done** (fourth slice above); all three at 0 missed.
+- ~~**Flyway migration parity test**~~ **Done** (third slice above).
+- **Not on the original list, found by re-measurement:** `FsLlmProfileStoreAdapter` (17) — closed in the fourth
+  slice. The three persistence modules still hold a large amount of uncovered surface that the roadmap never
+  enumerated (top gaps per module as of this measurement):
+
+  | Module | Largest remaining gaps |
+  |---|---|
+  | `persistence-fs` | `FsIdentityStoreAdapter` 47, `FsLockManager` 44, `FsDirectiveStore` 44, `FsRecallMemoryStore` 39, `FsEvolutionEventStore` 39 (0 covered), `FsWebSessionStoreAdapter` 36 |
+  | `persistence-sqlite` | `SqliteArchivalMemoryStore` 49, `GlobalKnowledgeBase` 42, `SqliteVectorIndexCompatibilityInitializer` 27, `SqliteMemoryRetrievalAdapter` 24, `SqliteCheckpointHelper` 22 |
+  | `persistence-postgres` | `PostgresAdvisoryLockAdapter` 24, `PostgresMemoryRetrievalAdapter` 23, `PostgresVectorIndexCompatibilityInitializer` 21, `PostgresExecutionTraceStoreAdapter` 15, `PostgresIdentityStoreAdapter` 15 |
+
+  These are the natural candidates for a **Phase 3b**; the roadmap's original Phase 3 list is now fully closed.
+
+
 ### Phase 4 — LLM provider robustness
 
 | Target | Missed | Coverage |
@@ -1101,6 +1400,96 @@ Techniques worth reusing (see `.agents/skills/amsha-maven-verify/SKILL.md` for d
 
 Test type: contract tests per provider (timeout, 429/5xx, malformed SSE, token refresh failure, capability
 fallback), not more happy-path completions.
+
+#### Phase 4 status (2026-09-15) — Antigravity/Foundry CLI helpers + the specialized factory (first pass)
+
+All seven Phase 4 targets live in the single module `llm-providers`, so this phase runs on the fast
+`-pl llm-providers` loop. This pass took the two CLI helpers and the specialized-model factory:
+
+| Target | Before | After | Closed |
+|---|---|---|---|
+| `AgyTokenResolver` | 64 missed / 8 covered (11% line, **7.1%** branch) | **0 missed** / 72 covered (**100%** line, 88.6% branch) | 64 |
+| `AgyCliExecutor` | 81 missed / 59 covered (42% line, 34% branch) | **4 missed** / 136 covered (97.1% line, 86.9% branch) | 77 |
+| `FoundryCliExecutor` | 65 missed / 61 covered (48% line) | **7 missed** / 119 covered (94.4% line) | 58 |
+| `SpecializedChatModelFactory` | 59 missed / 48 covered (45% line, 26.5% branch) | **2 missed** / 105 covered (98.1% line, 97.6% branch) | 57 |
+
+**256 lines closed.** Module `clean verify` is green (360 tests, PMD 7.17.0 clean, `spotless:check` clean across 110
+files). The 3 skipped tests are 2 pre-existing (`OggOpusToWavConverterTest`) plus 1 deliberate skip documented below.
+
+**`AgyTokenResolver`: the root cause was an environment-conditional test.** The previous revision of
+`AgyTokenResolverTest` wrapped its assertions in `if (AgyCliExecutor.isAvailable()) { ... } else { ... }`. Because
+`~/.local/bin/agy` **is** installed on this machine, `isAvailable()` is true, `resolveToken` short-circuits at
+`return "agy-cli-session"` and the vault / extractor / environment fallbacks are never reached — the class sat at
+7.1% branch coverage while the test file looked comprehensive. The fix is to pin the probe with
+`Mockito.mockStatic(AgyCliExecutor.class)`, which makes every branch deterministic and reachable on any machine.
+This is the same class of defect as the cron/checkpoint suites' back-dated fixtures: **a test whose coverage depends
+on the machine is not a test.**
+
+**`AgyCliExecutor`: the subprocess path is driven with a fake executable.** `execute` spawns the real `agy` binary
+via `ProcessBuilder`, so it cannot be mocked without replacing the JDK. Each test instead writes a small POSIX shell
+script into a temp dir and passes it as the `agyExe` argument — the executor only ever calls `agyExe.toString()`, so
+a script is indistinguishable from the real binary. That makes canned stdout, a chosen exit code, chosen stderr and
+a deliberate hang all deterministic. A quoted heredoc (`cat <<'DELIM' … DELIM`) keeps the JSON payload verbatim.
+The timeout arm needs no sleep: `Duration.ZERO.toSeconds()` is `0`, so `waitFor(0, SECONDS)` returns false
+immediately and the executor force-destroys the process.
+
+**`FoundryCliExecutor`: the same fake-executable recipe, one extra wrinkle.** `FoundryCliExecutorTest` mirrors the agy
+suite (31 tests) but the response shape differs — `execute` reads `root.path("text")` and, if that is blank *and* the
+whole document is textual, falls back to `root.asText()`. So the fake CLI emits both `{"text":"…"}` and a bare
+`"plain string response"` payload. `buildCliPrompt` also has a nested `AiMessage` branch that renders text **and**
+tool calls independently, unlike the agy version's single `&&`-chained condition — a blank-text assistant turn with
+tool requests must still emit `Assistant Tool Call: …`.
+
+The machine wrinkle: `/opt/homebrew/bin/foundry` **is** installed (a symlink into `Cellar/foundrylocal/0.10.3`), and
+`resolveCliPath` probes that absolute path before `~/.local/bin/foundry`. So the `~/.local` probe is shadowed and its
+test is skipped by assumption. The `PATH` scan *is* reachable, but only by setting `user.home` to `""` — a blank
+`user.home` skips the whole `if (!userHome.isBlank())` block, which is the only way in from a test.
+
+**`SpecializedChatModelFactory`: the CDI boundary is the real constraint.** This package-private factory had no direct
+test at all — it was only reached through `ChatModelFactory`. `SpecializedChatModelFactoryTest` (22 tests) covers
+adapter dispatch, every per-adapter builder's default-resolution, and `resolveGovernedTransport()`'s three paths
+(no container, container with an available handle, container with an unavailable handle) plus both catch arms — the
+latter by pinning `Arc.container()` with `Mockito.mockStatic(Arc.class)` and throwing a `NoClassDefFoundError` and an
+`IllegalStateException` respectively.
+
+Two things surfaced that are worth recording:
+
+- **Mockito rejects nested stubbing.** `when(container.instance(X.class)).thenReturn(handle(true, service))` fails
+  with `UnfinishedStubbingException`, because the `handle(...)` helper calls `Mockito.mock`/`when` *inside* the outer
+  `when(...)` expression. Build the mock into a local first, then stub. (Mockito's own hint #3 names this case.)
+- **`AnthropicChatModel.builder().build()` and `ChatModelFactory.createOpenAi(...)` require a live ArC context.**
+  Both construct a Quarkus *Reactive REST Client*, which throws "The Reactive REST Client needs to be built within the
+  context of a Quarkus application with a valid ArC (CDI) context running" outside one. `GoogleAiGeminiChatModel` and
+  `OllamaChatModel` take a different HTTP path and *do* build in a plain unit test — which is exactly why the
+  factory's Gemini/Ollama lines were already covered while its Anthropic lines were not. The tests therefore assert
+  the **routing** (that the call reaches the Anthropic/OpenAI builder and cannot complete without CDI) without
+  matching on the third-party message, and the two remaining lines — the `case "anthropic", "claude"` switch arm and
+  `return builder.build()` — are left to a future `@QuarkusTest`.
+
+**Environment-locked lines (reported, not faked).** `System.getenv` cannot be set from a test, so these stay
+uncovered and are *not* pinned with reflection:
+
+| Class | Lines | Why |
+|---|---|---|
+| `AgyCliExecutor` | 43–45 | the `ANTIGRAVITY_AGENTAPI_EXE` custom-executable override |
+| `AgyCliExecutor` | 62 | the `PATH`-scan match — no `agy` is on `PATH` here, and `PATH` cannot be set |
+| `AgyTokenResolver` | 105–107 (branches only) | the `AMSHA_AGY_API_KEY` / `GEMINI_API_KEY` / `GOOGLE_API_KEY` `.filter(...)` predicates — never invoked because all three are unset |
+| `FoundryCliExecutor` | 42–44 | the `AMSHA_FOUNDRY_EXE` custom-executable override |
+| `FoundryCliExecutor` | 54–56 | the `~/.local/bin/foundry` probe — shadowed by the installed `/opt/homebrew/bin/foundry` |
+| `FoundryCliExecutor` | 65 | the `PATH`-scan match — no `foundry` is on `PATH` here |
+| `SpecializedChatModelFactory` | 52, 199 | the Anthropic switch arm and `builder.build()` — need a live ArC context |
+
+The assertions that depend on those variables are guarded with `Assumptions.assumeTrue(...)` so they report as
+**skipped**, not silently passed. Two further branches in `AgyTokenResolver` (lines 82, 154) are the
+try-with-resources *abnormal-close* branches, reachable only if `VaultKey.close()` throws — `VaultKey` is final with
+a zeroing `close()`, so they are unreachable without a deliberate fault injection.
+
+**Remaining Phase 4 targets:** `FoundryResponsesChatModel` (67), `KimchiResponsesChatModel` (67),
+`AgyResponsesChatModel` (65), `NvidiaMessageSanitizer` (54), `ProviderOAuthExchangeService` (50% branch), plus the
+package-level gaps (`llm-providers.reasoning`: 21 prod classes / 1 test; `llm-providers.routing`: 21 prod / 4 tests).
+The roadmap asks for per-provider **contract** tests — timeout, 429/5xx, malformed SSE, token refresh failure,
+capability fallback — not more happy-path completions. The three `*ResponsesChatModel` classes are SSE-streaming
+wrappers and share an `SseAccumulator` shape, so they are the natural next slice.
 
 ### Phase 5 — MCP, ONNX, skills, and app glue
 

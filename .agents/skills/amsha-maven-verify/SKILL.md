@@ -104,10 +104,14 @@ for speed unless the user wants the full suite.
 After any Markdown edits (ADRs, docs):
 
 ```bash
-python3 ./scripts/verify_docs.py
+python3 ./scripts/verify_docs.py            # AUTO-FORWARDING SHIM — SIGTERMs (exit 137) on this machine
+python3 ./scripts/quality/verify_docs.py    # <- run the canonical script instead
 ```
 
-Expect `0 errors`.
+Expect `Scan complete: found 0 errors and 0 warnings.` The shim uses `runpy.run_path`
+and gets killed before it prints anything; the canonical file behind it works fine.
+Same failure signature as `find` over the repo (exit 137) — when a repo-traversing
+script dies silently, try the canonical path before assuming a real error.
 
 ## Measuring Test Coverage
 
@@ -179,6 +183,18 @@ the floor out of the POM rather than hardcoding it.
   The two plugin blocks in the root `pom.xml` are now identical on purpose.
 - `BootstrapOrchestratorTest` used to hang the `app` module (unbounded
   `npm install` via `PlaywrightCliInstaller`). **Fixed** — no exclusion needed.
+- **The JaCoCo gate is REACTOR-WIDE, so `-pl app` cannot verify it.** `app/pom.xml` binds
+  `scripts/verify_jacoco_coverage.py --minimum ${jacoco.minimum.line.coverage}` to `verify`, and that script parses the
+  root `pom.xml`'s `<modules>` list and aggregates *every* module's `target/site/jacoco/jacoco.csv`. Running
+  `clean verify -pl app` therefore aggregates whatever reports happen to be on disk — a mix of fresh and stale — and
+  the resulting percentage is meaningless. Only a full-reactor `./mvnw -o clean verify` exercises the gate honestly.
+  (It also means the gate never runs during a `-pl persistence-* clean verify` slice.)
+- **`scripts/verify_jacoco_coverage.py` is the same 19-line `runpy` auto-forwarding shim as `verify_docs.py`.** Unlike
+  `verify_docs.py`, **it runs fine under Maven** — a full-reactor `clean verify` on 2026-09-15 printed
+  `Reactor JaCoCo line coverage: 77.83% (minimum: 74.00%, covered: 46696, total: 59997)`. So do not pre-emptively
+  work around it; only fall back to the canonical `scripts/quality/verify_jacoco_coverage.py` if it does SIGTERM.
+- **Reactor-wide coverage on 2026-09-15 was 77.83%** against the `0.74` floor (headroom 3.83pp), total 59,997 lines —
+  which matches the CSV total the docs quote, so the gate and the manual CSV reading agree.
 
 ### Analysing gaps correctly
 
@@ -602,6 +618,196 @@ never `git stash` / `checkout` / `add`), run the clean measurement, then copy th
   `assertThrows(Exception.class, () -> privateMethod.invoke(...))` also passes on an argument-type mismatch, so the
   test can go green without ever reaching the code under test. Assert `InvocationTargetException` **and** that the
   cause's message identifies the expected collaborator.
+
+#### `persistence-*` notes (2026-09-15, Phase 3)
+
+- **Docker is not available here, but `persistence-postgres` still runs.** `PostgresTestResource` tries Testcontainers
+  and falls back to the **zonky `embedded-postgres`** server (`EmbeddedPostgres.builder().start()`), so all 120
+  module tests execute on a plain workstation. Do not assume Postgres tests are skipped — check the surefire count.
+- **`PersistencePortContractTest` (persistence-api, 2.3k lines) is NOT a contract test for the real backends.** It
+  validates the port *interfaces* against hand-written `InMemory*Store` mocks. Coverage of the actual adapters comes
+  only from their own module's tests, so it is no evidence that a backend behaves correctly.
+- **There is no test-jar infrastructure in this reactor** — zero `test-jar` declarations in any `pom.xml` and zero
+  `abstract class *Contract|*Base` in test sources. A genuinely shared suite therefore needs a new artifact, which
+  would break the module-scoped loop (`-pl <module> test` would stop resolving without an `install` first), and a new
+  *module* would trip the `--strict-instrumentation` empty-report guard. Mirror the spec across per-backend classes
+  by convention instead, and say so in each class's javadoc.
+- **The SQL backends' tables are shared across a whole module test run** (SQLite writes a file DB under
+  `./target`; Postgres starts one embedded server for the *whole module run*, not per class — `@QuarkusTestResource`
+  declared on a test class is global unless `restrictToAnnotatedClass = true`). Assert global queries (`findAll`,
+  `countAll`) as **deltas** (`countAll(null)` before vs after seeding) and keep absolute assertions to
+  user/session-scoped queries. Generate a fresh `user`/`session` per test from a `UUID` and clean up in `@AfterEach`
+  with `deleteAllByUserId` + `deleteAllBySessionId`.
+- **`agent_cron` is `NOT NULL` on `nextFireTime`, `userId`, `chatId`, `goal`, `sessionId`, `cronExpression`,
+  `timezone`, `status`, `createdAt`** in *both* migrations (`db/migration/{sqlite,postgresql}/V2__…sql`). The FS
+  adapter imposes none of that. Always build test DTOs fully populated, or the save dies with
+  `SQLITE_CONSTRAINT_NOTNULL` / a Postgres not-null violation.
+- **The FS store is a real, cheap fixture.** Build `new FilesystemFileStore(props)` where `props` is an anonymous
+  `FsStoreProperties` returning a `Files.createTempDirectory(...)` path, then `fileStore.ensureDataDir()` and inject
+  it with `setAccessible(true)` on the adapter's `store` field. Same recipe as `FsStoreSmokeTest`, and it exercises
+  the JSON round-trip rather than a mock.
+- **A mirrored contract suite finds real bugs, so budget for it.** Writing the SQLite suite turned up three
+  behaviours that differ between backends (null-column handling, `createdAt` on insert, `INSERT OR REPLACE` vs
+  `ON CONFLICT DO UPDATE`). When an assertion fails, first ask whether the *expectation* was wrong — one
+  `expected: <…T11:23:09.322Z> but was: <…T11:33:09.322918Z>` failure was the Postgres adapter stamping
+  `Instant::now()` on insert rather than a test-pollution artifact (confirmed by re-running the single method with
+  `-Dtest='Class#method'`). Pin the observed behaviour with a comment naming the divergence; do not "fix" a backend
+  as a side effect of a coverage task.
+- **A 267-line mocked adapter test is not evidence the adapter is covered.** `PostgresCheckpointStoreAdapterTest`
+  mocks `Jdbi`, so it only proves *delegation* — it cannot tell whether the SQL is valid, whether the column aliases
+  line up, or what a query returns. JaCoCo showed 56 lines still missed on that adapter (the entire
+  `saveCheckpointWithSteps`, the batch-decision reject arms, every sweep, `purgeOldChatHistory`). Always read the
+  per-class numbers before assuming an existing test class closes a target, and write the new suite as
+  **complementary** (real DB) rather than a duplicate, saying so in its javadoc.
+- **Age-sensitive queries cannot be driven through the port.** `CheckpointDtoHelper.withStatus(...)` stamps
+  `updatedAt = Instant.now()`, so a checkpoint can never be *saved* in the past; `findInProgressZombies`,
+  `findStaleApprovals`, `isCheckpointExpired` and the purge all need back-dated fixtures written with raw SQL
+  (`UPDATE agent_checkpoint SET updated_at = :ts`). **The bind type differs per backend** — `sqlite` binds
+  `TemporalUtils.formatIsoLex(instant)` (a `String`), `postgres` binds the `Instant` itself. Same divergence exists
+  across the two `CheckpointJdbiDao`s generally.
+- **The FS backend's equivalent of that fixture is `FilesystemFileStore.write` — and `List.of` will reject your
+  fixture.** `write` builds the path with `List.of(segments)` internally, so a fixture that deliberately exercises a
+  **null session segment** must construct the *outer* list with `Arrays.asList(...)`, or it dies with an NPE inside
+  the helper before it ever reaches the adapter. Cost: one confusing `NullPointerException` at the fixture line.
+- **`purgeOldChatHistory` is global, unguarded, and deletes rows *and* their steps.** Date the fixture far in the
+  past (2001) and sweep with an ancient cutoff (2005) so the DELETE cannot reach another suite's rows, then assert
+  the old row and its `reasoning_step` children are gone while a fresh row survives.
+- **When a helper sorts the actual result, write the expected literal in that same order.** One contract test
+  failed on `[root/r1, root:delegate:other/r1, root:delegate:sub/r1]` vs an expected `…sub…, …other…` — the SQL's
+  `ORDER BY checkpoint_id ASC` was irrelevant because the helper called `.sorted()` on `session + "/" + role` and
+  `"other" < "sub"`. Same three elements, pure ordering, entirely a test bug.
+- **Log-before-guard NPEs are a real defect class — report, don't pin.** `PostgresCheckpointStoreAdapter.saveSteps`
+  logs `steps.size()` on line 356 *before* its own `steps != null` guard on line 360, so the null-tolerant guard is
+  unreachable and a null list throws inside the log call. The guard proves null was meant to be supported, so the
+  log line is the bug: record it as a finding and simply don't call `saveSteps(id, null)` from the suite.
+- **Migration parity is now enforced** by `app/src/test/java/com/amsha/app/db/FlywayMigrationParityTest.java` (7
+  tests). It compares the 12 `V<n>__<desc>.sql` pairs for: identical file/version sets; identical static table sets;
+  identical column-name + `NOT NULL` maps per table; identical static index names; identical `ALTER TABLE ... ADD
+  COLUMN` targets. **Column types are deliberately not compared** (`TEXT` vs `TIMESTAMP WITH TIME ZONE`, `INTEGER`
+  vs `BIGINT` are the expected dialect mappings). As of 2026-09-15 the sets are in **exact parity** — 42 static
+  `CREATE TABLE` statements in each dialect with zero column-level drift.
+  **If you add a migration:** add it to *both* directories with the same version and description. If it needs a
+  genuinely dialect-specific construct, add the name to the relevant allow-list constant in that test — the lists
+  are asserted for **exact equality**, so a new dialect-only index/column fails the build until it is named, and
+  naming something that is no longer used also fails.
+- **Three dialect-specific constructs are excluded from that comparison**, each pinned by name: `DO $$ ... $$;`
+  blocks (PostgreSQL's pgvector DDL, guarded on `pg_available_extensions`); `CREATE VIRTUAL TABLE ... USING fts5`
+  (SQLite's full-text search, where PostgreSQL uses `content_tsv tsvector` + `GIN` indexes); and the
+  PostgreSQL-only `content_tsv` columns those indexes back.
+- **Read migrations from the working tree, not the classpath.** `app` depends on both backends so the migration
+  resources *are* on its test classpath — but under `-pl app` they resolve from the installed `~/.m2` jars, which can
+  lag the sources being reviewed. Resolve the sibling module directories instead (walk up from the working directory;
+  surefire's cwd is the module basedir, the same assumption `ApiKeyAuthFilterTest` makes).
+- **Do NOT copy `ApiKeyAuthFilterTest`'s `if (Files.exists(sourceFile)) { ... }` idiom.** It silently skips when the
+  file is missing, so the test passes without asserting anything — a vacuous green. Fail loudly instead.
+- **Prove a new guard/parity test is non-vacuous by mutation.** A parity test that compares two empty sets passes
+  silently. Perturb the input (append a stray index to one dialect's migration), confirm the test fails with a
+  readable message, then restore and confirm `git status --short <file>` is empty. Both directions are worth
+  checking: drift *towards* the other dialect, and a *new* dialect-only construct. Build anti-vacuity guards in:
+  assert the parser's match count equals the raw keyword count, and assert the parsed set is non-empty.
+- **An `@Nullable`-injected collaborator hides its own call sites.** `FsLlmProfileStoreAdapter` (and both SQL
+  siblings) hold `@Inject @Nullable ModelCacheInvalidationPort cacheInvalidator` and guard every call with
+  `if (cacheInvalidator != null && id != null)`. Every existing test left the field `null`, so the guard always took
+  the false branch and the two call sites sat uncovered while looking "obviously fine". The fix is a package-private
+  recording stub assigned straight to the field (no CDI needed) — and the *negative* assertions are the valuable
+  half: a rejected optimistic-lock update, or a delete of an absent row, must **not** fire, because nothing was
+  persisted. Generalise: when a class has a nullable optional collaborator, check whether any test ever binds it.
+- **`idx_session_catalog_active` is a PARTIAL UNIQUE INDEX, and only `activateNew()` maintains it.** It is
+  `ON session_catalog(owner_key, channel_type, channel_id) WHERE active = 1` (SQLite) / `WHERE active = TRUE`
+  (Postgres), i.e. **at most one active row per scope**. `activateNew()` first issues `UPDATE ... SET
+  active=FALSE,status='INACTIVE' WHERE <scope> AND active=TRUE`, then inserts. `record()` does neither — the SQL
+  adapters call `insert(..., e.active(), e.status(), false)` (trailing `false` = "leave stored `active`/`status`
+  alone on conflict"). So seeding **two active rows in one scope** fails the Postgres suite with
+  `PSQLException: duplicate key value violates unique constraint "idx_session_catalog_active"`. Give your `entry(...)`
+  fixture helper an explicit `boolean active` parameter and make the second row in each scope inactive.
+- **The FS backend enforces no uniqueness at all, so it is the permissive outlier on invariants.** The same
+  `record(active = true)` that throws on both SQL backends is silently accepted by `FsSessionCatalogAdapter` (which
+  just writes the entry), leaving two active rows and an ambiguous `resolveActive`. Expect this shape generally:
+  where a migration adds a constraint, `fs` accepts what `sqlite`/`postgres` reject. Pin the difference; don't
+  "fix" it. (Here it is latent: `record()` has **no production caller** — `SessionCatalogService` uses
+  `activateNew`/`setActive`, and `SessionReaper` / `SessionRegistry` / `DbConsoleResource` only read. Check callers
+  before rating a divergence's severity.)
+- **Exception-*message* divergences are real divergences.** `replaceHeaderSecretRefs` has an explicit
+  `if (isBlank(connectionId) || isBlank(userId)) throw new IllegalArgumentException("connectionId/userId required")`
+  guard in both SQL adapters; `FsMcpConnectionStoreAdapter` has no blank guard and falls through to
+  `"MCP connection not found"`. Same type, different text — same shape as the cron `failReason` and checkpoint
+  reason mismatches. Assert the message, not just the type, when the port's contract is caller-visible text.
+- **A non-injected stock `ObjectMapper` makes its `catch` block dead code.** Both SQL LLM-profile adapters end with
+  2 permanently-missed lines: the `catch (Exception _) { return "[]"; }` in `toJson(List<String>)`. `mapper` is a
+  private `new ObjectMapper()` with no injection seam, and the only argument is a record component that cannot be
+  null, so `writeValueAsString` cannot throw. Report as **dead code**, not a coverage gap, and do not fake-reach it
+  (no reflection into `mapper`, no `assertThrows`). Removing the catch would take both classes to 100% — that is a
+  source change, so it belongs to the human.
+- **Re-measure per module *after* every slice; roadmap target lists go stale.** `FsLlmProfileStoreAdapter` (17
+  missed) was never on the Phase 3 list and only appeared from a fresh `jacoco:report` taken after the other seven
+  adapters were closed — it had no coverage of `findModelProfile` / `updateModelProfile` / `deleteModelProfile` /
+  `updateRouteAssignment` / `deleteRouteAssignment` / either invalidator branch. Take a per-class reading at the end
+  of each slice and sweep for same-shaped gaps in sibling classes the plan forgot.
+
+#### `llm-providers` notes (2026-09-15, Phase 4)
+
+All seven Phase 4 targets live in this one module, so use the fast `-pl llm-providers` loop (its `clean verify` is
+~20s of tests plus PMD/spotless).
+
+- **A test whose coverage depends on the machine is not a test.** `AgyTokenResolverTest` used to wrap every assertion
+  in `if (AgyCliExecutor.isAvailable()) { ... } else { ... }`. `~/.local/bin/agy` **is** installed here, so
+  `resolveToken` short-circuited at `return "agy-cli-session"` and the vault / extractor / env fallbacks were never
+  reached — 11% line and **7.1% branch** coverage from a file that looked thorough. Pin such probes with
+  `Mockito.mockStatic(AgyCliExecutor.class)` (inline mock maker is the default, and it works on a `final` class with a
+  private ctor) and open/close it in `@BeforeEach`/`@AfterEach`. Then both branches are reachable everywhere.
+- **`System.getenv` is not settable from a test — use `Assumptions`, never a silent `if`.** The env-var tail of a
+  fallback chain (`AMSHA_AGY_API_KEY` / `GEMINI_API_KEY` / `GOOGLE_API_KEY`) and the `ANTIGRAVITY_AGENTAPI_EXE` /
+  `PATH` probes in `AgyCliExecutor.resolveCliPath` cannot be driven. Guard those assertions with
+  `Assumptions.assumeTrue(precondition, "reason")` so they report as **skipped** (visible in the report) rather than
+  branching invisibly. Write a small helper for the precondition (e.g. `noAgyOnPath()` walking `PATH`) so the skip is
+  honest about what it needs.
+- **`System.setProperty("user.home", ...)` IS settable — use it to reach later branches.** `resolveCliPath` returns
+  early from `~/.local/bin/agy` on a machine that has the CLI installed, hiding the whole `PATH`-scan loop. Pointing
+  `user.home` at an empty temp dir during the test reaches lines that are otherwise dead — and it is the *only* way
+  to get there without `System.getenv`. **Restore it in a `finally`**, because surefire reuses one JVM for the module.
+- **Drive a subprocess with a fake executable, not a mocked `ProcessBuilder`.** `AgyCliExecutor.execute` cannot be
+  mocked without replacing the JDK. Write a small POSIX shell script into a temp dir, `setExecutable(true)`, and pass
+  its `Path` as the `agyExe` argument — the code only calls `agyExe.toString()`, so a script is indistinguishable from
+  the real binary while giving you canned stdout, a chosen exit code, chosen stderr, or a deliberate hang. Use a
+  **quoted heredoc** (`cat <<'DELIM' … DELIM`) to emit a JSON payload verbatim.
+- **A timeout arm needs no sleep.** `Duration.ZERO.toSeconds()` is `0`, so `process.waitFor(0, TimeUnit.SECONDS)`
+  returns `false` immediately and the executor force-destroys the process — assert `"timed out after 0 seconds"` with
+  no wall-clock cost. Pair it with a `sleep 30` script so the process genuinely outlives the wait.
+- **An unstartable process is a distinct path from a non-zero exit.** `ProcessBuilder.start()` on a non-existent path
+  throws `IOException`, which the executor wraps in `RuntimeException("Failed to execute Antigravity CLI request: …")`.
+  Feed it a `Path` inside the temp dir that was never created, and assert on the cause being non-null.
+- **Report env-locked lines; do not fake-reach them.** After both helpers were done the residue was
+  `AgyCliExecutor` 43–45 (`ANTIGRAVITY_AGENTAPI_EXE`) and 62 (`PATH` match), plus three `.filter(...)` *branches* in
+  `AgyTokenResolver`. Two more branches (try-with-resources abnormal close) need `VaultKey.close()` to throw, and
+  `VaultKey` is final with a zeroing `close()`. All are recorded as findings in the coverage doc, not pinned.
+- **`FoundryCliExecutor` is the same recipe with a different response shape.** `execute` reads `root.path("text")` and
+  falls back to `root.asText()` when that is blank *and* the whole document is textual — so the fake CLI must emit
+  both `{"text":"…"}` and a bare `"plain string"` payload. Its `buildCliPrompt` `AiMessage` branch is *nested*
+  (text append and tool-call loop are independent), unlike the agy version's single `&&`-chained condition, so a
+  blank-text assistant turn carrying tool requests must still render `Assistant Tool Call: …`.
+- **A homebrew install shadows the `~/.local` probe — blank `user.home` is the way past it.**
+  `/opt/homebrew/bin/foundry` is installed here (a symlink into `Cellar/foundrylocal/…`) and `resolveCliPath` checks
+  that absolute path *before* `~/.local/bin/foundry`, so the latter is unreachable and its test is skipped by
+  assumption. The `PATH` scan is reachable only by setting `user.home` to `""`, which skips the entire
+  `if (!userHome.isBlank())` block. Note this differs from `AgyCliExecutor`, whose homebrew probe does not exist —
+  check the machine before assuming which probe wins.
+- **Mockito rejects nested stubbing.** `when(container.instance(X.class)).thenReturn(handle(true, service))` fails with
+  `UnfinishedStubbingException` when `handle(...)` itself calls `Mockito.mock`/`when` — build the mock into a **local
+  variable first**, then stub. Mockito's hint #3 names this case explicitly; the stack trace points at the helper,
+  not the real problem.
+- **`AnthropicChatModel.builder().build()` and `ChatModelFactory.createOpenAi(...)` need a live ArC context.**
+  Both construct a Quarkus *Reactive REST Client*, which throws `"The Reactive REST Client needs to be built within
+  the context of a Quarkus application with a valid ArC (CDI) context running"` in a plain unit test.
+  `GoogleAiGeminiChatModel` and `OllamaChatModel` take a different HTTP path and *do* build. That asymmetry is why
+  `SpecializedChatModelFactory`'s Gemini/Ollama lines were already covered while its Anthropic lines were not. Assert
+  the **routing** (that the call reaches the Anthropic/OpenAI builder and cannot complete without CDI) without
+  matching the third-party message, and leave the genuinely happy path to a future `@QuarkusTest`. Pin
+  `Arc.container()` with `mockStatic(Arc.class)` to cover `resolveGovernedTransport`'s catch arms — throw a
+  `NoClassDefFoundError` for the standalone fallback and an `Exception` for the rethrow.
+- **`SpecializedChatModelFactory` is package-private**, so its test must live in `com.amsha.llm.providers`. It had no
+  direct test at all before this pass — it was reached only indirectly through `ChatModelFactory`, which is why 59
+  lines were missed despite the module looking well covered. Sweep for package-private helpers that only the public
+  entry point exercises.
 
 ### 1. Get the per-class numbers, not the package numbers
 
