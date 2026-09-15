@@ -974,6 +974,106 @@ still needs a CDI container for its async body — followed by `AgentStateMachin
 | `security.BootstrapCredentialIssuer` | untested | — | Unit: issue, rotate, replay rejection |
 | `tools-builtin.ScheduleTaskTool` / `LocalSocksProxy` | 58 / 53 | 69% / 62% | Unit: fork-bomb guard, `CRON:` prefix rejection, naked-pronoun guard |
 
+**Phase 2 status (2026-09-15) — security-module targets (first pass).** Three of the Phase 2 targets are closed
+out in the `security` module, verified by a green `./mvnw -o -pl security clean verify` (222 tests, 0 failures;
+PMD 7.17.0 and `spotless:check` clean):
+
+| Class | Missed before | Missed now | Test file |
+|---|---:|---:|---|
+| `SecretVaultImpl` | 54 | **0** | `SecretVaultImplUnitTest` (extended, 5 → 21 tests) |
+| `http.GovernedHttpClient` | 58 | 11 | `GovernedHttpClientTest` (extended, 14 → 27 tests) |
+| `media.GovernedTelegramMediaResolver` | 53 | 10 | `GovernedTelegramMediaResolverTest` (extended, 17 → 37 tests) |
+
+Dead / unreachable lines reported (not faked):
+
+- `GovernedHttpClient` 287–288: the `CUSTOM_CA` trust mode without a `customCaVaultRef` is unreachable —
+  `NetworkProfilePolicy.fromJson` (lines 137–141) **fails closed to `SYSTEM`** whenever `CUSTOM_CA` lacks a CA
+  ref, so `tlsTrustMode() == CUSTOM_CA` always implies a non-blank ref.
+- `GovernedHttpClient` 154 (cleanup-loop `catch (Exception)`): the only cleanup registered is `Arrays.fill(...)`,
+  which cannot throw → dead defensive guard.
+- `GovernedHttpClient` 245–246 (`revalidateDns` generic `catch`): a literal IP resolved via `InetAddress.getByName`
+  cannot throw a non-`OutboundHttpException` → dead defensive guard.
+- `GovernedHttpClient` 377–378 (`buildCustomCaContext` `catch (OutboundHttpException)`): the try body performs only
+  cert/keystore/SSLContext operations, none of which throw `OutboundHttpException` → dead defensive guard.
+
+Remaining (integration-only) for the three closed classes: `GovernedHttpClient` 146–149 (`InterruptedException`
+from `HttpClient.send` — needs an interrupt-during-send) and 347 (the `Authenticator` proxy-auth callback, invoked
+only by the JDK against a real authenticated proxy); `GovernedTelegramMediaResolver` 103 (Vert.x event-loop guard)
+and 246 + 274–281 (the real `GovernedHttpClient` build+send path — needs a non-loopback endpoint, since
+`MediaSecurityValidator` rejects loopback).
+
+**Still open in Phase 2:** `media.GovernedMediaDownloadService` (89 missed — dominated by the HTTP/streaming path
+in `downloadHttpWithRedirects`, which builds its own `HttpClient` with no injection seam, so it needs a
+local-server integration fixture) and `sandbox.PodmanContainerExecutor` (78 missed — container/integration
+fixture).
+
+**Phase 2 status (2026-09-15) — `tools-builtin` targets (second pass).** All five `tools-builtin` targets are
+closed out as far as unit tests can reach, verified by a green `./mvnw -o -pl tools-builtin clean verify`
+(296 tests, 0 failures; PMD 7.17.0 and `spotless:check` clean):
+
+| Class | Missed before | Missed now | Test file |
+|---|---:|---:|---|
+| `ScheduleTaskTool` | 58 | **7** | `ScheduleTaskToolTest` (extended, 11 → 26 tests) |
+| `GithubTool` | 73 | 47 | `GithubToolCoverageTest` (extended, 3 → 12 tests) |
+| `HostExecTool` | 60 | 27 | `HostExecToolUnitTest` (extended, 4 → 16 tests) |
+| `LocalSocksProxy` | 53 | **9** | `LocalSocksProxyCoverageTest` (extended, 6 → 13 tests) |
+| `PlaywrightCliTool` | 83 | 49 | `PlaywrightCliToolCoverageTest` (extended, 8 → 17 tests) |
+| **Total** | **327** | **139** | 188 lines closed |
+
+> **Measurement caveat — always re-measure after `clean`.** The "before" column was re-taken with `clean` after
+> the first pass produced implausible deltas. `tools-builtin/target/classes` had been left stale by an earlier
+> revision, so JaCoCo was mapping current line numbers onto old bytecode: `GithubTool` first reported 46 missed
+> instead of its true 73. A coverage reading taken without a `clean` build is not trustworthy at line level.
+
+Dead / unreachable lines reported (not faked):
+
+- `ScheduleTaskTool` 412–419: `createAndPersistCron`'s "synthesise a cron from `nextFireTime`" fallback is
+  unreachable — line 284 already rewrites a blank cron from `nextFireTime`, and `nextFireTime` is guaranteed
+  non-null by the guard at 264, so the false arm of the ternary at 410 can never be taken.
+- `ScheduleTaskTool` 395: the `: null` arm of `resolveNextFireTime`'s final ternary is unreachable — a
+  non-`runOnce` call always arrives with a non-blank cron (guarded at 224), and both `runOnce` arms return earlier.
+- `HostExecTool` 385: `HTML_INSPECTION_PATTERN`'s capture group is `[^\s;|&]+\.(html?|htm)`, so it can never be
+  null or blank → the guard's body is dead.
+- `HostExecTool` 348, 355–362: `UnsupportedOperationException` from `setPosixFilePermissions` and the non-POSIX
+  `chmod` fallback are both unreachable on a POSIX filesystem.
+- `PlaywrightCliTool` 418–419: `sessionName`'s fallback needs `MessageDigest.getInstance("SHA-256")` to fail,
+  which cannot happen on any supported JRE.
+
+Remaining (integration-only / environment-dependent):
+
+- `GithubTool` 290–310, 323–347, 353–375: the whole child-process lifecycle (env injection, exit-code mapping,
+  the virtual-thread output reader, `terminateProcess`). `gh` is not installed in this environment, so
+  `ProcessBuilder.start()` throws and it is the `IOException` branch (313–316, already covered) that runs.
+- `HostExecTool` 233–234, 263–277: `autoOpenGeneratedHtml` returning a real artifact — it then spawns the
+  platform browser opener (`open` on macOS), a side effect a unit test must not have.
+- `HostExecTool` 302–303: `Files.walk` failing inside `snapshotHtmlArtifacts` (e.g. permission denied) — defensive.
+- `LocalSocksProxy` 179–180, 201–202, 205–207, 218: failure paths only (dest→client pipe error, interrupt during
+  the pipe joins, destination-connect failure → `{5,5,…}` reply, `closeQuietly`'s `catch`). The happy-path tunnel
+  is fully covered — see the `0.0.0.0` destination technique below.
+- `LocalSocksProxy` 189 is a **JaCoCo false negative**, not a real gap: `connectTunnelsBidirectionally` asserts the
+  destination receives the client payload, which is only possible if that line ran, yet JaCoCo reports `ci=0`.
+  Do not chase it.
+- `PlaywrightCliTool` 120–121, 246–257, 267–270, 278–283: the CLI **success** path (needs a live playwright-cli
+  daemon with an open page). 228–229 / 231 / 237–238 additionally require `open`, which launches Chromium.
+- `PlaywrightCliTool` 377, 385–389, 468–469: stale-session detection, the `IOException`/`InterruptedException`
+  arms and `cleanup`'s `catch` — they need `pb.start()` to fail (CLI absent) or a running process to interrupt.
+
+> **JaCoCo attribution quirk (`PlaywrightCliTool`).** Lines whose statement is a call to the private varargs
+> helper `execWithSession(...)` — 278, 292, 304, 317, 325, 336 — are reported as fully missed (`mi>0, ci=0`)
+> even though they demonstrably execute: the surrounding lines in the same method are covered and the tests pin
+> the exact `playwright-cli` failure thrown *from* those calls. Treat these as covered-but-mis-attributed rather
+> than as genuine gaps.
+
+Techniques worth reusing (see `.agents/skills/amsha-maven-verify/SKILL.md` for detail):
+
+- **`0.0.0.0` as a loopback-reachable, SSRF-guard-passing destination.** `InetAddress` classifies the wildcard
+  address as none of loopback / link-local / site-local / multicast, so it clears `LocalSocksProxy`'s guard, while
+  `connect()` still routes it to the local host. This is what makes the full CONNECT tunnel unit-testable.
+- **A lenient shared stub for checked-exception collaborators.** `DirectExecutor.executeDirectly` declares
+  `throws Exception`, so `when(...)` needs a `throws` clause; hoisting it into `setUp()` as
+  `lenient().when(...)` keeps each test method clean and avoids `UnnecessaryStubbingException`.
+
+
 ### Phase 3 — Persistence parity and cron correctness
 
 **Highest branch-coverage ROI in the reactor.**

@@ -529,6 +529,80 @@ here so a future coverage run does not re-investigate them. All are reported as 
 229 / 251, `BrowserPreflightHandler` 240 / 274, plus the `ParallelBatchResumeHandler` line-97 NPE risk — a *real*
 defect, not dead code, worth hardening.)
 
+### Phase 2 notes (security / tools-builtin / sandbox modules)
+
+Phase 2 targets live **outside `core`** (`security`, `tools-builtin`, `sandbox`). The `amsha-*` upstream artifacts
+are installed in `~/.m2`, so `./mvnw -o -pl security test jacoco:report` works **without `-am`** and is the fast
+loop. `-pl security clean verify` runs that module's tests + PMD + `spotless:check` (the `0.74` JaCoCo gate is
+bound in `app`, so it does not run per-module).
+
+- **A self-signed cert is the fixture for custom-CA/TLS trust success paths.** `CertificateFactory.generateCertificate`
+  needs a parseable X.509 DER blob; generate a compact one once (`openssl ecparam -name prime256v1 -genkey` +
+  `openssl req -x509 … | openssl x509 -outform DER | base64`) — an EC P-256 cert is only ~294 bytes / ~390 base64
+  chars — embed it as a `String` constant and `Base64.getDecoder().decode(...)` it in the test. A plain-HTTP target
+  exercises the SSLContext build without a real TLS handshake.
+- **`NetworkProfilePolicy.fromJson` fails closed to `tlsTrustMode=SYSTEM`** whenever `CUSTOM_CA` lacks a
+  `customCaVaultRef` (lines 137–141). Consequence: in `GovernedHttpClient.buildClient`, the
+  `caRef == null || caRef.isBlank()` guard (287–288) is **dead** — `tlsTrustMode() == CUSTOM_CA` always implies a
+  non-blank ref. Report, don't fake.
+- **`URI.getPath()` decodes percent-escapes.** `URI.create("telegram://file/%01")` yields a decoded path containing
+  `\u0001`, which is how to drive an `Character::isISOControl` guard when the raw URI parser would reject a literal
+  control char.
+- **`Future.get()` only throws `InterruptedException` immediately when the task is not already complete.** To make
+  an interrupted-read test deterministic, pair a pre-set `Thread.currentThread().interrupt()` with a stream that
+  blocks on a `CountDownLatch` (so the future is still pending when `get()` checks the flag); release the latch in
+  `finally` and clear the flag with `Thread.interrupted()`.
+- **A class that builds its own `HttpClient` (e.g. `GovernedMediaDownloadService.downloadHttpWithRedirects`) has no
+  injection seam** — its HTTP paths need a real local-server fixture, not a mock. Check for an injectable transport
+  hook (like `GovernedTelegramMediaResolver.customMetadataTransport`) before budgeting the effort.
+
+#### CRITICAL: take the "before" reading after a `clean` build
+
+`target/classes` can be left stale by an earlier revision. JaCoCo then maps the *current* source line numbers onto
+*old* bytecode and the per-line figures are fiction. Real example: `tools-builtin.GithubTool` reported **46** missed
+pre-`clean` and **73** missed once `clean` was used — the 46 was wrong, and it made a genuine 26-line improvement
+look like a 1-line regression.
+
+Always `clean` (or at least confirm the class files are newer than the sources) before recording a before/after
+pair. If a delta looks implausible, re-measure before writing it down.
+
+To recover a trustworthy baseline **without touching git**: back the modified test files up to `/tmp`, restore the
+committed versions with `git show HEAD:<path> > <path>` (a read-only git command plus an ordinary file write —
+never `git stash` / `checkout` / `add`), run the clean measurement, then copy the backups back and re-verify.
+
+#### `tools-builtin` notes (2026-09-15)
+
+- **`0.0.0.0` is the destination trick for `LocalSocksProxy`.** Its SSRF guard rejects loopback / link-local /
+  site-local / multicast, so a unit test cannot reach a server it bound itself. But `InetAddress` classifies the
+  wildcard address as *none* of those four, while `connect()` still routes `0.0.0.0:<port>` to the local host
+  (verified on macOS; specified behaviour on Linux). That makes the whole CONNECT tunnel — both pipe threads and
+  `closeQuietly` included — testable with no external network.
+- **`DirectExecutor.executeDirectly` declares `throws Exception`**, so `when(...)` on it forces a `throws` clause
+  onto every test method. Hoist it into `setUp()` as
+  `lenient().when(directExecutor.executeDirectly(any(), any(), any())).thenReturn("ran")` — keeps methods clean and
+  sidesteps `UnnecessaryStubbingException` for tests whose path throws before reaching the executor.
+- **`HostExecTool.autoOpenGeneratedHtml` spawns the platform browser opener** (`open` / `xdg-open`) once it finds a
+  *new or modified* `.html` artifact — a real side effect. To cover the snapshot/compare logic safely, pre-create
+  the `.html` under `<skillHome>/output` so `isNewOrModified` returns false and the method returns `null` early.
+- **`gh` is not installed here** (`command -v gh` fails), so `GithubTool.execute` always dies at
+  `ProcessBuilder.start()`; its child-process lifecycle is integration-only. Check `command -v gh` before assuming
+  those lines are reachable.
+- **`playwright-cli` IS installed** (Chromium with it), so `execute()` past validation spawns real node processes.
+  Avoid `action=navigate|screenshot|extract_text` **with** a `url`: those call `execWithSession(session, "open",
+  url)` and launch Chromium. `action=click|fill|wait|eval` need no URL and fail fast with "browser … is not open"
+  (~1s, no browser). Each `execWithSession` failure costs **3** spawns (attempt → `close-session` → retry), and
+  `doWait` costs 6 (unsupported `wait` plus its JS fallback) — budget test time and use one invocation per helper.
+- **`PlaywrightCliTool.mcpHelper` is not null-checked** (line 214, outside the `try`). Any `execute()` that gets past
+  parameter validation must have `tool.mcpHelper` set to a mock first, or it NPEs out of the method.
+- **JaCoCo mis-attributes `execWithSession(...)` call sites** in `PlaywrightCliTool` (278, 292, 304, 317, 325, 336):
+  reported `mi>0, ci=0` even though the surrounding lines in the same method are covered and the tests pin the exact
+  `playwright-cli` failure thrown from those calls. Same artifact class as `LocalSocksProxy` 189. Confirm with a
+  behavioural assertion before treating such a line as a real gap.
+- **Pin the failure *cause* when asserting on a reflective call.** A bare
+  `assertThrows(Exception.class, () -> privateMethod.invoke(...))` also passes on an argument-type mismatch, so the
+  test can go green without ever reaching the code under test. Assert `InvocationTargetException` **and** that the
+  cause's message identifies the expected collaborator.
+
 ### 1. Get the per-class numbers, not the package numbers
 
 Parse `**/target/site/jacoco/jacoco.csv` (one CSV per module, written by

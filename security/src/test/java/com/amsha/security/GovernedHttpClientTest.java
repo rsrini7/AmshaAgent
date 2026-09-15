@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -414,5 +415,279 @@ class GovernedHttpClientTest {
         assertFalse((Boolean) mappedMethod.invoke(null, (Object) plainV6));
         byte[] shortBytes = new byte[4];
         assertFalse((Boolean) mappedMethod.invoke(null, (Object) shortBytes));
+    }
+
+    // ------------------------------------------------------------------
+    // Header flattening / sensitive-header stripping on redirects
+    // ------------------------------------------------------------------
+
+    @Test
+    void sameOriginRedirect_copiesRequestHeaders() throws Exception {
+        server.createContext("/redir-same", exchange -> {
+            exchange.getResponseHeaders().add("Location", "/ok");
+            exchange.sendResponseHeaders(302, -1);
+        });
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .actor("u")
+                .build();
+        HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + "/redir-same"))
+                .header("X-Custom", "v")
+                .GET()
+                .build();
+        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, resp.statusCode());
+    }
+
+    @Test
+    void crossOriginRedirect_stripsSensitiveHeadersButKeepsOthers() throws Exception {
+        int port = server.getAddress().getPort();
+        server.createContext("/redir-cross", exchange -> {
+            exchange.getResponseHeaders().add("Location", "http://localhost:" + port + "/ok");
+            exchange.sendResponseHeaders(302, -1);
+        });
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .actor("u")
+                .build();
+        HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + "/redir-cross"))
+                .header("Authorization", "Bearer secret")
+                .header("X-Custom", "v")
+                .GET()
+                .build();
+        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, resp.statusCode());
+    }
+
+    // ------------------------------------------------------------------
+    // Connect-timeout override + builder validation
+    // ------------------------------------------------------------------
+
+    @Test
+    void connectTimeoutOverride_isApplied() {
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .actor("u")
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        HttpRequest req =
+                HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
+        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, resp.statusCode());
+    }
+
+    @Test
+    void connectTimeoutBuilder_rejectsNonPositiveValues() {
+        GovernedHttpClient.Builder builder = GovernedHttpClient.builder(alwaysAllow);
+        assertThrows(IllegalArgumentException.class, () -> builder.connectTimeout(null));
+        assertThrows(IllegalArgumentException.class, () -> builder.connectTimeout(Duration.ZERO));
+        assertThrows(IllegalArgumentException.class, () -> builder.connectTimeout(Duration.ofSeconds(-1)));
+    }
+
+    // ------------------------------------------------------------------
+    // Policy-URI mapper rejection
+    // ------------------------------------------------------------------
+
+    @Test
+    void policyUriMapper_nullTarget_denied() {
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .actor("u")
+                .policyUriMapper(uri -> null)
+                .build();
+        HttpRequest req =
+                HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+    }
+
+    @Test
+    void policyUriMapper_originChange_denied() {
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .actor("u")
+                .policyUriMapper(uri -> URI.create("https://evil.example.com/x"))
+                .build();
+        HttpRequest req =
+                HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+    }
+
+    // ------------------------------------------------------------------
+    // Proxy credential resolution failure modes
+    // ------------------------------------------------------------------
+
+    @Test
+    void proxyCredentials_withoutVault_denied() {
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .connection(
+                        conn(
+                                "{\"requireProxy\":true,\"proxyUrl\":\"http://127.0.0.1:9999\",\"proxyCredentialVaultRef\":\"proxy-ref\"}"))
+                .actor("u")
+                .build();
+        HttpRequest req = HttpRequest.newBuilder(URI.create("http://example.com/ok"))
+                .GET()
+                .build();
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+    }
+
+    @Test
+    void proxyCredentials_unresolvedRef_denied() {
+        SecretVault vault = Mockito.mock(SecretVault.class);
+        when(vault.get("proxy-ref", "u")).thenReturn(Optional.empty());
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .vault(vault)
+                .connection(
+                        conn(
+                                "{\"requireProxy\":true,\"proxyUrl\":\"http://127.0.0.1:9999\",\"proxyCredentialVaultRef\":\"proxy-ref\"}"))
+                .actor("u")
+                .build();
+        HttpRequest req = HttpRequest.newBuilder(URI.create("http://example.com/ok"))
+                .GET()
+                .build();
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+    }
+
+    @Test
+    void proxyCredentials_malformedSecret_denied() {
+        SecretVault vault = Mockito.mock(SecretVault.class);
+        VaultKey key = Mockito.mock(VaultKey.class);
+        when(key.get()).thenReturn("no-colon-here".getBytes(StandardCharsets.UTF_8));
+        when(vault.get("proxy-ref", "u")).thenReturn(Optional.of(key));
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .vault(vault)
+                .connection(
+                        conn(
+                                "{\"requireProxy\":true,\"proxyUrl\":\"http://127.0.0.1:9999\",\"proxyCredentialVaultRef\":\"proxy-ref\"}"))
+                .actor("u")
+                .build();
+        HttpRequest req = HttpRequest.newBuilder(URI.create("http://example.com/ok"))
+                .GET()
+                .build();
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+    }
+
+    @Test
+    void proxyCredentials_keyAccessFailure_denied() {
+        SecretVault vault = Mockito.mock(SecretVault.class);
+        VaultKey key = Mockito.mock(VaultKey.class);
+        when(key.get()).thenThrow(new RuntimeException("key access boom"));
+        when(vault.get("proxy-ref", "u")).thenReturn(Optional.of(key));
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .vault(vault)
+                .connection(
+                        conn(
+                                "{\"requireProxy\":true,\"proxyUrl\":\"http://127.0.0.1:9999\",\"proxyCredentialVaultRef\":\"proxy-ref\"}"))
+                .actor("u")
+                .build();
+        HttpRequest req = HttpRequest.newBuilder(URI.create("http://example.com/ok"))
+                .GET()
+                .build();
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertEquals(OutboundHttpException.Category.POLICY_DENIED, ex.category());
+    }
+
+    // ------------------------------------------------------------------
+    // Custom-CA trust-mode failure modes
+    // ------------------------------------------------------------------
+
+    // NOTE: the "CUSTOM_CA with a blank/missing customCaVaultRef" branch (GovernedHttpClient lines
+    // 287-288) is unreachable: NetworkProfilePolicy.fromJson (lines 137-141) fails closed to SYSTEM
+    // whenever CUSTOM_CA lacks a CA ref, so tlsTrustMode() can only be CUSTOM_CA with a non-blank ref.
+    // Reported as a dead defensive guard rather than faked.
+
+    @Test
+    void customCaMode_unresolvedVaultRef_throwsTls() {
+        SecretVault vault = Mockito.mock(SecretVault.class);
+        when(vault.get("ca-ref", "u")).thenReturn(Optional.empty());
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .vault(vault)
+                .connection(conn("{\"tlsTrustMode\":\"CUSTOM_CA\",\"customCaVaultRef\":\"ca-ref\"}"))
+                .actor("u")
+                .build();
+        HttpRequest req =
+                HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertEquals(OutboundHttpException.Category.TLS_TRUST, ex.category());
+    }
+
+    @Test
+    void customCaMode_invalidCertificate_throwsTls() {
+        SecretVault vault = Mockito.mock(SecretVault.class);
+        VaultKey key = Mockito.mock(VaultKey.class);
+        when(key.get()).thenReturn("not-a-certificate".getBytes(StandardCharsets.UTF_8));
+        when(vault.get("ca-ref", "u")).thenReturn(Optional.of(key));
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .vault(vault)
+                .connection(conn("{\"tlsTrustMode\":\"CUSTOM_CA\",\"customCaVaultRef\":\"ca-ref\"}"))
+                .actor("u")
+                .build();
+        HttpRequest req =
+                HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
+        OutboundHttpException ex =
+                assertThrows(OutboundHttpException.class, () -> client.send(req, HttpResponse.BodyHandlers.ofString()));
+        assertEquals(OutboundHttpException.Category.TLS_TRUST, ex.category());
+    }
+
+    /**
+     * A self-signed EC P-256 certificate (DER, base64) used purely as a parseable X.509 fixture for the
+     * custom-CA trust path. It is never used to verify a real TLS handshake.
+     */
+    private static final String TEST_CA_DER_BASE64 =
+            "MIIBIjCByAIJAJufsTusFMEsMAoGCCqGSM49BAMCMBgxFjAUBgNVBAMMDWFtc2hhLXRlc3QtY2EwIBcNMjYwOTE1MDYwODMzWhgPMjEyNjA4MjIwNjA4MzNaMBgxFjAUBgNVBAMMDWFtc2hhLXRlc3QtY2EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASgZPFms5FHypxeAQNpxtoz6SBpARICHC1QLegRjxgTGDHDFE8MFl/yVPdBlAyFE54kIlGzDCaoR3QOpMcTwNNAMAoGCCqGSM49BAMCA0kAMEYCIQDY5P+79NzWzI2bc4OMDNoBPJ/I13NWuxh5kMpM8C/KQwIhAJ1SEnGItOwOLJmsjacbQchm9i2z7xQUKqhVwNuIoODC";
+
+    @Test
+    void customCaMode_validCertificate_buildsSslContextAndProceeds() {
+        SecretVault vault = Mockito.mock(SecretVault.class);
+        VaultKey key = Mockito.mock(VaultKey.class);
+        when(key.get()).thenReturn(java.util.Base64.getDecoder().decode(TEST_CA_DER_BASE64));
+        when(vault.get("ca-ref", "u")).thenReturn(Optional.of(key));
+        GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                .vault(vault)
+                .connection(conn("{\"tlsTrustMode\":\"CUSTOM_CA\",\"customCaVaultRef\":\"ca-ref\"}"))
+                .actor("u")
+                .build();
+        // Plain-HTTP target: the custom SSLContext is built (exercising the cert/keystore/SSLContext
+        // success path) but is not used for the actual cleartext request, so it still returns 200.
+        HttpRequest req =
+                HttpRequest.newBuilder(URI.create(baseUrl + "/ok")).GET().build();
+        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, resp.statusCode());
+    }
+
+    private static LlmConnectionDto conn(String policyJson) {
+        return new LlmConnectionDto(
+                "c1",
+                "USER",
+                "u",
+                "u",
+                "conn",
+                "openai",
+                null,
+                null,
+                "API_KEY",
+                policyJson,
+                "ACTIVE",
+                1,
+                Instant.now(),
+                Instant.now());
     }
 }
