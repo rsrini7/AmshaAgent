@@ -391,6 +391,9 @@ print_plan() {
   printf 'validation_mode=%s\n' "$VALIDATION_MODE"
   printf 'validation_args=%s\n' "$validation_args"
   printf 'validation_base=%s\n' "${TEST_BASE:-http://127.0.0.1:${AMSHA_VALIDATION_PORT:-8080}}"
+  if [[ "$VALIDATE_MODE" == true ]]; then
+    printf 'validation_log=%s\n' "${AMSHA_VALIDATION_LOG_FILE:-$PROJECT_ROOT/amsha-${BACKEND}-validation.$$.log}"
+  fi
   printf 'build=%s\n' "$AUTO_BUILD"
   printf 'clean=%s\n' "$CLEAN_REQUESTED"
   printf 'onnx=%s\n' "$ONNX_REQUESTED"
@@ -452,10 +455,11 @@ if [[ "$VALIDATE_MODE" == true ]]; then
 
   validation_base="http://127.0.0.1:$validation_port"
   export QUARKUS_HTTP_PORT="$validation_port"
-  log_file="${AMSHA_VALIDATION_LOG_FILE:-${TMPDIR:-/tmp}/amsha-${BACKEND}-validation.$$.log}"
+  log_file="${AMSHA_VALIDATION_LOG_FILE:-$PROJECT_ROOT/amsha-${BACKEND}-validation.$$.log}"
+  mkdir -p "$(dirname "$log_file")"
   printf '🚀 Starting %s validation server on %s.\n' "$BACKEND" "$validation_base"
   printf '📄 Server logs: %s\n' "$log_file"
-  "$BINARY" serve < /dev/null > "$log_file" 2>&1 &
+  (cd "$PROJECT_ROOT" && exec "$BINARY" serve) < /dev/null > "$log_file" 2>&1 &
   server_pid=$!
 
   cleanup() {
@@ -516,4 +520,5 @@ fi
 printf '\n'
 printf '📂 Persistence: %s (profile: %s)\n' "$AMSHA_PERSISTENCE_BACKEND" "$QUARKUS_PROFILE"
 printf '📁 Data directory: %s\n' "$AMSHA_DATA_DIR"
+cd "$PROJECT_ROOT"
 exec "$BINARY" "$COMMAND" "${PASSTHROUGH_ARGS[@]}"

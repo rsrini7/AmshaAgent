@@ -77,6 +77,9 @@ class DistributionWrapperContractTest(unittest.TestCase):
         )
         self.assertEqual(plan["validation_mode"], "full")
         self.assertEqual(plan["validation_args"], "")
+        validation_log = Path(plan["validation_log"])
+        self.assertEqual(validation_log.parent, ROOT)
+        self.assertRegex(validation_log.name, r"^amsha-sqlite-validation\.\d+\.log$")
 
     def test_backend_storage_contracts_are_isolated(self) -> None:
         for backend in WRAPPERS:
@@ -286,6 +289,7 @@ class DistributionWrapperContractTest(unittest.TestCase):
                     "AMSHA_VALIDATION_PORT": "18765",
                     "AMSHA_VALIDATION_SCRIPT": str(validator),
                     "AMSHA_TEST_ARGS_FILE": str(args_file),
+                    "AMSHA_VALIDATION_LOG_FILE": str(directory_path / "server.log"),
                     "PATH": f"{fake_bin_dir}:{os.environ['PATH']}",
                 },
             )
