@@ -1,25 +1,25 @@
 # Dependency Upgrade Policy
 
-Reviewed 2026-08-25. This policy records the dependency boundary used for
-routine maintenance after the Quarkus 3.38.3 migration.
+Reviewed 2026-09-12. This policy records the dependency boundary used for
+routine maintenance after the Quarkus 3.39.3 staging migration.
 
 ## Platform policy
 
-- Quarkus upgrades are LTS-only. The official [Quarkus security page](https://quarkus.io/security/) currently lists the 3.33 and 3.27 lines as LTS; Maven Central currently publishes `3.33.3.1` as the latest 3.33 patch.
-- Quarkus `3.38.3` is a regular maintenance release, not an LTS release. Moving the project back to the 3.33 LTS line is a separate compatibility task and must not be combined with routine library refreshes.
-- `3.39.0.CR1` and other release candidates are excluded from production dependency updates.
-- Quarkus, Camel, LangChain4j, and MCP member BOMs move only with the selected Quarkus LTS platform.
+- Quarkus upgrades prioritize LTS releases. The official [Quarkus security page](https://quarkus.io/security/) currently lists the 3.33 and 3.27 lines as LTS; Maven Central currently publishes `3.33.3.1` as the latest 3.33 patch.
+- On 2026-09-12, **Path A (Quarkus 3.39.3 staging checkpoint)** was ratified as an authorized regular-stream staging step toward Quarkus 3.40 LTS. Quarkus 3.39 serves as the upstream foundation for 3.40 LTS; this staging step validates integration changes (Quarkiverse MCP Server 2.0.0, LangChain4j 1.19.0, Camel 4.22.0, Bouncy Castle 1.85.2) before 3.40 LTS freezes.
+- `3.39.0.CR1` and other release candidates remain excluded from production dependency updates.
+- Quarkus, Camel, LangChain4j, and MCP member BOMs move only with the selected Quarkus platform.
 
 ### Next LTS backlog target
 
 Quarkus `3.40 LTS` is tracked as the next target for **September 2026
 (targeted)**. It is not an available upgrade until the final platform and
 member BOMs are published and the official support/security pages identify the
-line as LTS. See [Quarkus 3.40 LTS backlog issue](../.scratch/quarkus-upgrade/issues/10-quarkus-340-lts.md).
+line as LTS. See the local Quarkus 3.40 LTS backlog issue at `.scratch/quarkus-upgrade/issues/10-quarkus-340-lts.md` when the working tracker is available.
 
-The 3.40 work must begin with a fresh updater dry-run and migration-guide
-review, then prove JVM, persistence, native, REST, delegation, ML, and release
-evidence gates before changing the platform pin.
+Advancing from 3.39.3 to 3.40 LTS must begin with a fresh updater dry-run and
+migration-guide review, then prove JVM, persistence, native, REST, delegation, ML,
+and release evidence gates before changing the platform pin.
 
 ## Routine independent updates
 
@@ -53,7 +53,7 @@ before changing:
 | Apache Lucene | `10.5.1` | Native image initialization, reflection, FS search, and full FS validation |
 | DJL Hugging Face tokenizers | `0.36.0` | MPNet tokenization, truncation/max-sequence, and embedding regression tests |
 | ONNX Runtime | `1.29.0` | Native library loading, model inference, provenance, and ONNX release gates |
-| Bouncy Castle | `1.85.2` | Platform alignment, security-provider tests, and JVM/native startup |
+| Bouncy Castle | `1.85.2` | Platform-managed by `quarkus-bom:3.39.3`. Root `pom.xml` `<bouncycastle.version>` bumped from `1.84` to `1.85.2` on 2026-09-12 (plan §3, invariant 6 / §7, criterion 3). Silent-downgrade risk is **resolved and closed**; version alignment plus local macOS arm64 native builds/smoke verification passed. Explicit provider-initialization coverage and the multi-platform native matrix remain deferred to CI before production promotion. |
 | Bucket4j | `8.19.0` | Rate-limit, authentication, and REST behavior tests |
 | OpenAPI Generator | `7.25.0` | Generated TypeScript DTO diff, UI type-check, UI build, and UI tests |
 

@@ -11,7 +11,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_{PROVIDER}_API_KEY` | — | Provider-specific LLM API key, for example `AMSHA_GROQ_API_KEY` (`gsk_...`) |
-| `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `omlx`, `generic-openai` |
+| `AMSHA_LLM_PROVIDER` | `groq` in `application.yaml`; the repository `.env.example` explicitly selects `infinite-loop` | Provider ID: `groq`, `openai`, `ollama`, `claude-code`, `openrouter`, `nvidia`, `cerebras`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `agy`, `kimchi`, `foundry`, `gemini`, `omlx`, `llamacpp`, `generic-openai`, or the internal `infinite-loop` provider |
 | `AMSHA_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `AMSHA_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
 | `AMSHA_LLM_TEMPERATURE` | `0.1` | LLM temperature |
@@ -26,8 +26,9 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | `AMSHA_LLM_CIRCUIT_BREAKER_ENABLED` | `true` | Enable per-model circuit breaker isolation |
 
 Claude Code uses `CLI_OAUTH` with optional direct API key fallback. The
-runtime resolves its credentials from the system vault, macOS Keychain, local Claude Code
-credentials file (`~/.claude/.credentials.json`), or `AMSHA_CLAUDE_CODE_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`;
+runtime resolves its credentials from the system vault, macOS Keychain, supported local
+Claude Code credential files (`~/.claude/.credentials.json` or
+`~/.claude/credentials.json`), or `AMSHA_CLAUDE_CODE_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`;
 onboarding status reports only whether the credential is configured.
 
 ### Onboarding and native first-run testing
@@ -44,7 +45,7 @@ The web onboarding wizard never edits `.env`. It stores drafts and staged secret
 the configured persistence/vault layers; `AMSHA_LLM_VAULT_PRIORITY` controls whether
 committed system-vault LLM settings override environment configuration. The CLI
 first-run wizard is environment bootstrap and may patch the distribution `.env`.
-See [ADR: Onboarding Configuration Sources and Precedence](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md)
+See [ADR: Onboarding Configuration Sources and Precedence](./adr/domain/ADR-Onboarding-Configuration-Source-and-Precedence.md)
 for the complete lifecycle and credential-scope rules.
 
 Authenticated onboarding status and settings also report non-secret effective LLM provenance
@@ -138,7 +139,7 @@ Cloudflare Workers AI provider for serverless model inference. Requires an API t
 | `AMSHA_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Base URL for Cohere OpenAI-compatibility endpoint |
 | `AMSHA_CODEX_API_KEY` | — | Optional direct API key / token (defaults to `~/.codex/auth.json` OAuth session) |
 | `AMSHA_CODEX_MODEL` | `gpt-5.6-luna` | Default chat model |
-| `AMSHA_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Base URL for Codex endpoint (defaults to direct ChatGPT Plus Responses endpoint; or `http://127.0.0.1:8787/v1` for hroom proxy, or `https://api.openai.com/v1`) |
+| `AMSHA_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Base URL for Codex endpoint (defaults to a direct ChatGPT Plus Responses endpoint; or `http://127.0.0.1:8787/v1` for Headroom proxy, or `https://api.openai.com/v1`) |
 
 Do not put `{account_id}` inside a MicroProfile `${ENV:default}` default string.
 MP Config closes on the first `}`, which corrupts the URL (e.g. trailing `/ai/v1}`).
@@ -586,19 +587,29 @@ Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDown
 
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_TTS_PROVIDER` | `omlx` | Speech synthesis provider (`omlx` or `openai`). |
-| `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` | Model identifier for TTS synthesis. |
-| `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` | Default voice delivery mode (`TEXT_ONLY`, `AUDIO_ONLY`, `TEXT_AND_AUDIO`). |
-| `AMSHA_TTS_RESPONSE_FORMAT` | `wav` | Audio encoding format emitted by the synthesis port (`wav`, `mp3`, `ogg`). |
-| `AMSHA_STT_PROVIDER` | `omlx` | Speech-to-text recognition provider (`omlx` or `openai`). |
-| `AMSHA_STT_MODEL` | `whisper-large-v3` | Model identifier for STT transcription. |
-| `AMSHA_STT_LOCAL_ENABLED` | `false` | Enables local in-process ONNX Whisper audio transcription under `AudioTranscriptionPort` (requires `AMSHA_ONNX_ENABLED=true`). |
-| `AMSHA_STT_LOCAL_BUNDLE_ID` | `whisper-tiny-en-v1` | Verified local Whisper model bundle identifier under `data/models/`. |
+| `AMSHA_TTS_ENABLED` | `false` | Enables the optional OMLX Qwen3-TTS output path. |
+| `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` | OMLX model identifier for TTS synthesis. |
+| `AMSHA_TTS_VOICE` | *(empty)* | Optional voice identifier; omitted from the provider request when blank. |
+| `AMSHA_TTS_RESPONSE_FORMAT` | `wav` | TTS response format. V1 supports WAV only; other values fail closed as `UNSUPPORTED`. |
+| `AMSHA_TTS_TIMEOUT` | `PT120S` | Maximum TTS provider request duration. |
+| `AMSHA_TTS_MAX_INPUT_CHARS` | `1200` | Maximum projected prose sent to synthesis. |
+| `AMSHA_TTS_MAX_BYTES` | `8388608` | Maximum streamed TTS response size (8 MiB). |
+| `AMSHA_TTS_MAX_CONCURRENT` | `1` | Maximum concurrent TTS requests. |
+| `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` | Default mode for inbound-audio turns without an explicit directive (`TEXT_ONLY`, `AUDIO_ONLY`, `TEXT_AND_AUDIO`). |
+| `AMSHA_STT_ENABLED` | `false` | Enables the governed OMLX Whisper transcription path. |
+| `AMSHA_STT_MODEL` | `whisper-large-v3-turbo` | OMLX Whisper model identifier for remote STT. |
+| `AMSHA_STT_TIMEOUT` | `PT60S` | Maximum remote STT provider request duration. |
+| `AMSHA_STT_MAX_BYTES` | `26214400` | Maximum remote STT audio payload size (25 MiB). |
+| `AMSHA_STT_MAX_TRANSCRIPT_CHARS` | `12000` | Maximum remote STT transcript length. |
+| `AMSHA_STT_LOCAL_ENABLED` | `false` | Enables in-process ONNX Whisper under `AudioTranscriptionPort`; requires `AMSHA_ONNX_ENABLED=true`. |
+| `AMSHA_STT_LOCAL_BUNDLE_ID` | `whisper-tiny-en-v1` | Verified local Whisper bundle identifier under `data/models/`. |
 | `AMSHA_STT_LOCAL_TIMEOUT` | `PT30S` | Total deadline for one local audio transcription request. |
-| `AMSHA_STT_LOCAL_MAX_AUDIO_BYTES` | `26214400` | Maximum raw audio payload bytes accepted for admission (<= 25 MiB). |
-| `AMSHA_STT_LOCAL_MAX_TRANSCRIPT_CHARS` | `12000` | Maximum character length of output transcript text. |
-| `AMSHA_STT_FFMPEG_PATH` | `ffmpeg` | Path to ffmpeg executable used to transcode compressed audio to mono 16 kHz WAV. |
-| `AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE` | `false` | If true, cascades to secondary STT providers on failure/timeout. False guarantees zero egress. |
+| `AMSHA_STT_LOCAL_MAX_AUDIO_BYTES` | `26214400` | Maximum local STT audio payload size (25 MiB). |
+| `AMSHA_STT_LOCAL_MAX_TRANSCRIPT_CHARS` | `12000` | Maximum local STT transcript length. |
+| `AMSHA_STT_FFMPEG_PATH` | `ffmpeg` | Executable used to transcode compressed audio to mono 16 kHz WAV. |
+| `AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE` | `false` | Allows the composite STT port to try a lower-priority provider after a failure or timeout. Keep false to prevent unintended audio egress. |
+
+Both STT and TTS reuse `AMSHA_OMLX_API_KEY` and `AMSHA_OMLX_BASE_URL` for the OMLX provider. STT is an execution port, not a chat-model capability: local ONNX Whisper has priority over OMLX, while `UNSUPPORTED` results may cascade and failures/timeouts cascade only when explicitly enabled. TTS is output-only, governed, and currently emits WAV only; it does not create an `AUDIO` model route.
 
 ## Retry
 

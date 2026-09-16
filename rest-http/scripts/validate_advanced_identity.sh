@@ -15,41 +15,60 @@ SECOND_KEY="${TEST_SECOND_OWNER_KEY:-}"
 SECOND_ID="${TEST_SECOND_OWNER_ID:-}"
 FAIL=0; PASS=0
 
-ok() { printf 'PASS %s\n' "$1"; PASS=$((PASS + 1)); }
-bad() { printf 'FAIL %s\n' "$1"; FAIL=$((FAIL + 1)); }
-req() { curl -sS -m 20 -o /tmp/amsha-advanced-response -w '%{http_code}' "$@"; }
+HAS_ADVANCED_FLAG=false
+for arg in "$@"; do
+  if [ "$arg" = "--advanced-identity" ]; then
+    HAS_ADVANCED_FLAG=true
+  fi
+done
 
-if [ -z "$OWNER_KEY" ] || [ -z "$WORKSPACE_ID" ] || [ -z "$OWNER_IDS" ]; then
-  echo "Set TEST_OWNER_KEY, TEST_WORKSPACE_ID, and TEST_OWNER_IDS before running this validator."
+if [ "$HAS_ADVANCED_FLAG" != true ]; then
+  echo "Error: validate_advanced_identity.sh must be explicitly invoked with --advanced-identity." >&2
   exit 2
 fi
+
+if [ "${AMSHA_ALLOW_DESTRUCTIVE_TESTS:-false}" != "true" ]; then
+  echo "Error: Destructive identity tests require AMSHA_ALLOW_DESTRUCTIVE_TESTS=true." >&2
+  exit 2
+fi
+
+if [ -z "$OWNER_KEY" ] || [ -z "$WORKSPACE_ID" ] || [ -z "$OWNER_IDS" ]; then
+  echo "Error: Set TEST_OWNER_KEY, TEST_WORKSPACE_ID, and TEST_OWNER_IDS before running this validator." >&2
+  exit 2
+fi
+
+RUN_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/amsha_adv_ident.XXXXXX")"
+trap 'rm -rf "$RUN_TMP_DIR" 2>/dev/null || true' EXIT INT TERM
+
+ok() { printf 'PASS %s\n' "$1"; PASS=$((PASS + 1)); }
+bad() { printf 'FAIL %s\n' "$1"; FAIL=$((FAIL + 1)); }
+req() { curl -sS -m 20 -o "$RUN_TMP_DIR/response" -w '%{http_code}' "$@"; }
 
 echo 'ADVANCED IDENTITY VALIDATION'
 
 # Two concurrent owner removals must not remove the final active owner.
 IFS=',' read -r FIRST_OWNER SECOND_OWNER _ <<< "$OWNER_IDS"
 if [ -z "$SECOND_OWNER" ]; then
-  echo 'TEST_OWNER_IDS must contain at least two owner IDs.'
+  echo 'Error: TEST_OWNER_IDS must contain at least two owner IDs.' >&2
   exit 2
 fi
 
-rm -f /tmp/amsha-advanced-race-a /tmp/amsha-advanced-race-b
 (
   curl -sS -m 20 -X DELETE -H "X-Amsha-API-Key: $OWNER_KEY" \
-    -o /tmp/amsha-advanced-race-a -w '%{http_code}' \
+    -o "$RUN_TMP_DIR/race-a" -w '%{http_code}' \
     "$R/identity/workspaces/$WORKSPACE_ID/members/$FIRST_OWNER"
-) > /tmp/amsha-advanced-race-a.code &
+) > "$RUN_TMP_DIR/race-a.code" &
 PID_A=$!
 (
   curl -sS -m 20 -X DELETE -H "X-Amsha-API-Key: $OWNER_KEY" \
-    -o /tmp/amsha-advanced-race-b -w '%{http_code}' \
+    -o "$RUN_TMP_DIR/race-b" -w '%{http_code}' \
     "$R/identity/workspaces/$WORKSPACE_ID/members/$SECOND_OWNER"
-) > /tmp/amsha-advanced-race-b.code &
+) > "$RUN_TMP_DIR/race-b.code" &
 PID_B=$!
 wait "$PID_A"; wait "$PID_B"
 
-CODE_A=$(cat /tmp/amsha-advanced-race-a.code)
-CODE_B=$(cat /tmp/amsha-advanced-race-b.code)
+CODE_A=$(cat "$RUN_TMP_DIR/race-a.code")
+CODE_B=$(cat "$RUN_TMP_DIR/race-b.code")
 if { [ "$CODE_A" = 200 ] && [ "$CODE_B" = 400 ]; } || \
    { [ "$CODE_A" = 400 ] && [ "$CODE_B" = 200 ]; }; then
   ok "concurrent last-owner removal: one success, one blocked"

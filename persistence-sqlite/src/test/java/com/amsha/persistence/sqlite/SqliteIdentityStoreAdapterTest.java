@@ -216,4 +216,67 @@ class SqliteIdentityStoreAdapterTest {
         assertTrue(found.isPresent());
         assertEquals("UNCLAIMED", found.get().status());
     }
+
+    @Test
+    void testListAndSecondaryLookupOperations() {
+        String ownerId = "user-" + UUID.randomUUID();
+        String memberId = "user-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        identityStore.saveUser(new IdentityUserDto(ownerId, "Owner", "ACTIVE", now, now));
+        identityStore.saveUser(new IdentityUserDto(memberId, "Member", "ACTIVE", now, now));
+
+        assertTrue(
+                identityStore.listUsers().stream().anyMatch(u -> u.userId().equals(ownerId)),
+                "listUsers must include a just-saved user");
+
+        String workspaceId = "ws-" + UUID.randomUUID();
+        identityStore.saveWorkspace(new IdentityWorkspaceDto(workspaceId, "WS", ownerId, now, now));
+        assertTrue(identityStore.findWorkspaceById(workspaceId).isPresent());
+        assertTrue(
+                identityStore.listWorkspaces().stream()
+                        .anyMatch(w -> w.workspaceId().equals(workspaceId)),
+                "listWorkspaces must include a just-saved workspace");
+
+        String subject = "sub-" + UUID.randomUUID();
+        identityStore.saveExternalIdentity(
+                new ExternalIdentityDto("github", "https://github.com", subject, memberId, "{}", now, now));
+        assertTrue(
+                identityStore.findExternalIdentityByUserId("github", memberId).isPresent());
+        assertTrue(identityStore.listExternalIdentitiesByUserId(memberId).stream()
+                .anyMatch(e -> subject.equals(e.subject())));
+
+        assertTrue(identityStore.saveMembership(
+                new WorkspaceMembershipDto(workspaceId, ownerId, "OWNER", "ACTIVE", 0, now, now)));
+        assertTrue(identityStore.saveMembership(
+                new WorkspaceMembershipDto(workspaceId, memberId, "MEMBER", "ACTIVE", 0, now, now)));
+
+        assertTrue(identityStore.listMembershipsByWorkspaceId(workspaceId).stream()
+                .anyMatch(m -> m.userId().equals(memberId)));
+        assertTrue(identityStore.listMembershipsByUserId(memberId).stream()
+                .anyMatch(m -> m.workspaceId().equals(workspaceId)));
+
+        // The last-owner guard: the sole ACTIVE OWNER cannot be removed, a MEMBER can.
+        assertEquals(0, identityStore.deleteMembershipIfNotLastOwner(workspaceId, ownerId));
+        assertEquals(1, identityStore.deleteMembershipIfNotLastOwner(workspaceId, memberId));
+        assertTrue(identityStore.findMembership(workspaceId, memberId).isEmpty());
+        assertTrue(identityStore.findMembership(workspaceId, ownerId).isPresent());
+    }
+
+    @Test
+    void blankIdentifiersShortCircuitWithoutTouchingTheDatabase() {
+        // Every blank guard must return the empty/zero value rather than issuing a query.
+        assertTrue(identityStore.findUserById("  ").isEmpty());
+        assertTrue(identityStore.findExternalIdentity("", "issuer", "subject").isEmpty());
+        assertTrue(
+                identityStore.findExternalIdentity("provider", null, "subject").isEmpty());
+        assertTrue(identityStore.findExternalIdentityByUserId("github", "").isEmpty());
+        assertTrue(identityStore.listExternalIdentitiesByUserId(null).isEmpty());
+        assertTrue(identityStore.findWorkspaceById("").isEmpty());
+        assertTrue(identityStore.findMembership("", "user").isEmpty());
+        assertTrue(identityStore.findMembership("ws", null).isEmpty());
+        assertTrue(identityStore.listMembershipsByWorkspaceId(" ").isEmpty());
+        assertTrue(identityStore.listMembershipsByUserId(null).isEmpty());
+        assertEquals(0, identityStore.deleteMembership("", "user"));
+        assertEquals(0, identityStore.deleteMembershipIfNotLastOwner("ws", " "));
+    }
 }

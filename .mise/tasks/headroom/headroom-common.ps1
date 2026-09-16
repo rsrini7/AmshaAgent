@@ -36,6 +36,38 @@ function Get-HeadroomEmbedderRuntimeEnv {
     return $null
 }
 
+function Get-HeadroomProcessCommandLine {
+    param([Parameter(Mandatory)][int]$ProcessId)
+
+    try {
+        $cim = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction Stop
+        if ($cim.CommandLine) { return [string]$cim.CommandLine }
+    } catch {
+        # macOS/Linux PowerShell does not provide Win32_Process; use ps below.
+    }
+
+    $raw = bash -c "ps -p $ProcessId -o args= 2>/dev/null"
+    if ($raw) { return ($raw | Out-String).Trim() }
+    return $null
+}
+
+function Test-HeadroomProxyProcess {
+    param(
+        [Parameter(Mandatory)][int]$ProcessId,
+        [Parameter(Mandatory)][int]$Port
+    )
+
+    if ($ProcessId -le 0) { return $false }
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if (-not $process) { return $false }
+
+    $commandLine = Get-HeadroomProcessCommandLine -ProcessId $ProcessId
+    if (-not $commandLine -or $commandLine -notmatch '(?i)(^|\s)headroom(?:\.exe)?\s+proxy(\s|$)') {
+        return $false
+    }
+    return $commandLine -match "(?i)--port\s+$Port(?:\s|$)"
+}
+
 function Start-HeadroomProxy {
     param(
         [Parameter(Mandatory)][string]$Provider,
@@ -46,16 +78,22 @@ function Start-HeadroomProxy {
     )
 
     $ErrorActionPreference = 'Stop'
-    $PidFile = "$PSScriptRoot/pids/$Provider.pid"
-    $LogDir = "$PSScriptRoot/logs"
+    $repoRoot = (Resolve-Path "$PSScriptRoot/../../..").Path
+    $dataHeadroom = Join-Path $repoRoot "data/headroom"
+    $PidDir = Join-Path $dataHeadroom "pids"
+    $LogDir = Join-Path $dataHeadroom "logs"
+    New-Item -ItemType Directory -Force -Path $PidDir | Out-Null
     New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+    $PidFile = Join-Path $PidDir "$Provider.pid"
 
     if (Test-Path $PidFile) {
-        $oldPid = Get-Content $PidFile
-        $proc = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
-        if ($proc) {
+        $oldPid = (Get-Content $PidFile -Raw).Trim()
+        if ($oldPid -match '^\d+$' -and (Test-HeadroomProxyProcess -ProcessId ([int]$oldPid) -Port $Port)) {
             Write-Host "✅ Headroom proxy for $Provider already running (PID $oldPid) on port $Port"
             exit 0
+        } else {
+            Write-Host "⚠️ Ignoring stale or unrelated PID file for $Provider (PID $oldPid)."
+            Remove-Item $PidFile -ErrorAction SilentlyContinue
         }
     }
 
@@ -78,8 +116,8 @@ function Start-HeadroomProxy {
 
     $envParts = @(
         'PYTHONUNBUFFERED=1'
-        "HEADROOM_CONFIG_DIR=$PSScriptRoot/../../../.headroom/config"
-        "HEADROOM_MODEL_LIMITS=$PSScriptRoot/../../../.headroom/config/models.json"
+        "HEADROOM_CONFIG_DIR=$repoRoot/.headroom/config"
+        "HEADROOM_MODEL_LIMITS=$repoRoot/.headroom/config/models.json"
     )
     if ($TargetApiUrl) {
         $envParts += "OPENAI_TARGET_API_URL=$TargetApiUrl"
@@ -108,7 +146,9 @@ function Start-HeadroomProxy {
     }
 
     if ($listener) {
-        $listener | Set-Content $PidFile
+        $tempPidFile = "$PidFile.tmp.$PID"
+        $listener | Set-Content $tempPidFile
+        Move-Item -Force $tempPidFile $PidFile
         Write-Host "✅  Headroom proxy for $Provider started (PID $listener) on port $Port"
         if ($TargetApiUrl) { Write-Host "    Target: $TargetApiUrl" }
         Write-Host "    Logs: $LogDir/$Provider.log  (stdout)"

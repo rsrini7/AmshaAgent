@@ -90,4 +90,20 @@ class PostgresRecallMemoryStoreTest {
 
         assertFalse(store.getById("msg-1").isPresent());
     }
+
+    @Test
+    void theProtectedNoArgConstructorBuildsAnUnconfiguredInstance() {
+        // Same package as the store, so the protected constructor is reachable without reflection.
+        assertDoesNotThrow(() -> new PostgresRecallMemoryStore());
+    }
+
+    @Test
+    void testInsertBatchIgnoresNullAndEmptyBatches() {
+        store.insertBatch(null);
+        store.insertBatch(List.of());
+
+        // No stub is installed in this test, so this proves the guard ran before any connection was
+        // requested rather than merely that the DAO happened to return quietly.
+        verifyNoInteractions(jdbi);
+    }
 }

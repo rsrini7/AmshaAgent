@@ -1,6 +1,6 @@
 # Amsha Agent - Manual Setup Guide
 
-> **Stack**: JDK 25 · Quarkus 3.38.3 · LangChain4J 1.17.2 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.39.3 · LangChain4J 1.19.0 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This guide covers **manual setup without mise** on **macOS**, **WSL2 (Ubuntu)**, and **Windows**. All commands are direct - no wrapper scripts.
 > If you prefer automated setup, see [`MISE_SETUP.md`](./MISE_SETUP.md).
@@ -245,13 +245,13 @@ These three keys **must be stable after first boot** - never change them once th
 
 ```bash
 # macOS / Linux / WSL2
-openssl rand -base64 32   # run 3 times: VAULT_PEPPER, AUDIT_HMAC_KEY, API_KEY_INTERNAL
+openssl rand -base64 32   # run 4 times: VAULT_PEPPER, AUDIT_HMAC_KEY, API_KEY_INTERNAL, AUTH_HMAC_KEY
 ```
 
 ```powershell
 # Windows PowerShell
 [Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Max 256) }))
-# Run 3 times
+# Run 4 times
 ```
 
 Set in `.env`:
@@ -260,6 +260,7 @@ Set in `.env`:
 AMSHA_VAULT_PEPPER=<generated>        # immutable - do not change after first boot
 AMSHA_AUDIT_HMAC_KEY=<generated>      # immutable - do not change after first boot
 AMSHA_API_KEYS_INTERNAL=<generated>
+AMSHA_AUTH_HMAC_KEY=<generated>       # immutable - do not change after first boot
 AMSHA_API_KEYS_CI=<generated>          # optional, for CI smoke tests
 ```
 
@@ -268,8 +269,9 @@ AMSHA_API_KEYS_CI=<generated>          # optional, for CI smoke tests
 Edit `.env`:
 
 ```env
-# LLM - required
-AMSHA_LLM_API_KEY=gsk_your_key_here          # get from console.groq.com
+# LLM - required for the selected provider
+AMSHA_LLM_PROVIDER=groq
+AMSHA_GROQ_API_KEY=gsk_your_key_here         # get from console.groq.com
 
 # Embedding - multi-slot infinite-loop (Ollama local by default)
 AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS=ollama,jina
@@ -425,10 +427,10 @@ $env:MAVEN_OPTS = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.b
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw clean install -pl amsha-app -am -DskipTests
+./mvnw clean install -pl app -am -DskipTests
 
 # Windows PowerShell
-.\mvnw.cmd clean install -pl amsha-app -am -DskipTests
+.\mvnw.cmd clean install -pl app -am -DskipTests
 ```
 
 Output: `app/target/quarkus-app/quarkus-run.jar`
@@ -484,7 +486,7 @@ Dev mode uses the `%dev` profile: no container isolation, live code reload, Quar
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Djvm.args=--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8" \
   "-Dquarkus.args=serve" \
   "-Dquarkus.profile=dev" \
@@ -495,7 +497,7 @@ Dev mode uses the `%dev` profile: no container isolation, live code reload, Quar
 ```powershell
 # Windows PowerShell
 $jvmArgs = "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8"
-.\mvnw.cmd quarkus:dev -pl amsha-app -am `
+.\mvnw.cmd quarkus:dev -pl app -am `
   "-Djvm.args=$jvmArgs" `
   "-Dquarkus.args=serve" `
   "-Dquarkus.profile=dev" `
@@ -517,7 +519,7 @@ Requires `TELEGRAM_BOT_TOKEN` set in `.env`.
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Djvm.args=..." \
   "-Dquarkus.args=ask your goal here --role coordinator" \
   "-Dquarkus.profile=dev" \
@@ -527,7 +529,7 @@ Requires `TELEGRAM_BOT_TOKEN` set in `.env`.
 
 ```powershell
 # Windows PowerShell
-.\mvnw.cmd quarkus:dev -pl amsha-app -am `
+.\mvnw.cmd quarkus:dev -pl app -am `
   "-Djvm.args=$jvmArgs" `
   "-Dquarkus.args=ask your goal here --role coordinator" `
   "-Dquarkus.profile=dev" `
@@ -677,8 +679,25 @@ Useful for running the packaged jar with `%dev` settings (no Podman sandbox requ
 Uses the Mandrel builder image inside Podman. Produces a portable Linux binary.
 
 ```bash
-# Shield .env - secrets must not be baked into the binary
-mv .env .env.build-backup
+# Shield .env - secrets must not be baked into the binary. Keep the backup and
+# build in one subshell so the EXIT trap runs immediately after Maven returns.
+(
+# Use a unique, timestamped backup and an EXIT trap so failures and interrupts
+# restore it.
+env_backup=".env.build-backup.$(date +%Y%m%d-%H%M%S)"
+restore_env() {
+  if [ -e "$env_backup" ]; then
+    [ -e .env ] && rm -f .env
+    mv "$env_backup" .env
+  fi
+}
+trap restore_env EXIT
+if [ -e .env ]; then
+  while [ -e "$env_backup" ]; do
+    env_backup="${env_backup}.$RANDOM"
+  done
+  mv .env "$env_backup"
+fi
 
 # macOS / WSL2 / Linux
 export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED \
@@ -687,26 +706,28 @@ export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED \
   --enable-native-access=ALL-UNNAMED \
   -Dsun.misc.unsafe.memory.access=allow"
 
-./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
+./mvnw clean package -Pnative -pl app -am -DskipTests \
   -Dquarkus.native.container-build=true
 
-# Restore .env
-mv .env.build-backup .env
+# The EXIT trap restores the original .env, including when Maven fails.
+)
 ```
 
-Output: `app/target/app-0.1.0-SNAPSHOT-runner`
+Output: a native runner under `app/target/`; the distribution step renames it
+to the stable backend-specific launcher name.
 
 ### 10.2 Build - Local GraalVM (No Container)
 
-Switch to GraalVM first (see [Section 13](#13-jdk-management)), then:
+Switch to GraalVM first (see [Section 13](#13-jdk-management)), then repeat
+the timestamped `.env` shielding subshell from 10.1 around this build command:
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
+./mvnw clean package -Pnative -pl app -am -DskipTests \
   -Dquarkus.native.container-build=false
 
 # Windows PowerShell
-.\mvnw.cmd clean package -Pnative -pl amsha-app -am -DskipTests `
+.\mvnw.cmd clean package -Pnative -pl app -am -DskipTests `
   "-Dquarkus.native.container-build=false"
 ```
 
@@ -714,8 +735,11 @@ Switch back to Temurin after (see [Section 13](#13-jdk-management)).
 
 ### 10.3 Build - Low Memory (6 GB Heap Cap)
 
+Use the same timestamped `.env` shielding subshell from 10.1 around this
+command:
+
 ```bash
-./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
+./mvnw clean package -Pnative -pl app -am -DskipTests \
   -Dquarkus.native.container-build=false \
   "-Dquarkus.native.additional-build-args=-J-Xmx6g"
 ```
@@ -731,7 +755,8 @@ export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
 export AMSHA_RAG_VEC_PATH=./lib/vec0
 export AMSHA_DATA_DIR=./data
 
-./app/target/app-0.1.0-SNAPSHOT-runner serve
+runner_name=amsha-app-0.1.0-SNAPSHOT-runner
+"$PWD/app/target/$runner_name" serve
 # or: chat | attach | ask "your goal"
 ```
 
@@ -741,7 +766,8 @@ export AMSHA_DATA_DIR=./data
 export AMSHA_RAG_VEC_PATH=./lib/vec0
 export AMSHA_DATA_DIR=./data
 
-./app/target/app-0.1.0-SNAPSHOT-runner serve
+runner_name=amsha-app-0.1.0-SNAPSHOT-runner
+"$PWD/app/target/$runner_name" serve
 ```
 
 #### Windows PowerShell
@@ -750,13 +776,15 @@ export AMSHA_DATA_DIR=./data
 $env:AMSHA_RAG_VEC_PATH = './lib/vec0'
 $env:AMSHA_DATA_DIR = './data'
 
-.\app\target\app-0.1.0-SNAPSHOT-runner.exe serve
+$runner_name = 'amsha-app-0.1.0-SNAPSHOT-runner.exe'
+& (Join-Path (Get-Location) "app/target/$runner_name") serve
 ```
 
 #### Role Flag (All Platforms)
 
 ```bash
-./app/target/app-0.1.0-SNAPSHOT-runner ask "your goal" --role researcher
+runner_name=amsha-app-0.1.0-SNAPSHOT-runner
+"$PWD/app/target/$runner_name" ask "your goal" --role researcher
 ```
 
 ---
@@ -769,8 +797,9 @@ Manually assemble a `dist/` folder containing the binary, launchers, and vec0 ex
 # macOS / WSL2 / Linux
 mkdir -p dist/lib
 
-# Copy binary
-cp app/target/app-0.1.0-SNAPSHOT-runner dist/
+# Copy and give the distribution binary its stable backend name
+runner_name=amsha-app-0.1.0-SNAPSHOT-runner
+cp "app/target/$runner_name" dist/amsha-sqlite
 
 # Copy .env.example
 cp .env.example dist/.env.example
@@ -784,7 +813,8 @@ cp .env.example dist/.env.example
 ```powershell
 # Windows PowerShell
 New-Item -ItemType Directory -Force dist/lib | Out-Null
-Copy-Item app/target/app-0.1.0-SNAPSHOT-runner.exe dist/
+$runner_name = 'amsha-app-0.1.0-SNAPSHOT-runner.exe'
+Copy-Item "app/target/$runner_name" dist/amsha-sqlite.exe
 Copy-Item .env.example dist/.env.example
 if (Test-Path lib/vec0.dll)   { Copy-Item lib/vec0.dll   dist/lib/ }
 if (Test-Path lib/vec0.so)    { Copy-Item lib/vec0.so    dist/lib/ }
@@ -798,13 +828,14 @@ if (Test-Path lib/vec0.dylib) { Copy-Item lib/vec0.dylib dist/lib/ }
 mkdir -p dist/release
 cd dist
 tar -czf release/amsha-0.1.0-linux-x64.tar.gz \
-  amsha-app-0.1.0-SNAPSHOT-runner .env.example lib/
+  amsha-sqlite .env.example lib/
 cd ..
 ```
 
 ```powershell
 # Windows archive
-Compress-Archive -Path dist/* -DestinationPath dist/release/amsha-0.1.0-windows-x64.zip -Force
+Compress-Archive -Path dist/amsha-sqlite.exe,dist/.env.example,dist/lib \
+  -DestinationPath dist/release/amsha-0.1.0-windows-x64.zip -Force
 ```
 
 ---
@@ -950,10 +981,11 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `AMSHA_LLM_API_KEY` | ✅ | - | Starts with `gsk_`. Get from [console.groq.com](https://console.groq.com). |
+| `AMSHA_{PROVIDER}_API_KEY` | Selected cloud provider | - | Provider-specific credential, for example `AMSHA_GROQ_API_KEY` (`gsk_...`). |
 | `AMSHA_VAULT_PEPPER` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
 | `AMSHA_AUDIT_HMAC_KEY` | ✅ | - | Min 32 bytes. **Immutable after first boot.** |
 | `AMSHA_API_KEYS_INTERNAL` | ✅ | - | Bearer token for REST API (`Authorization: Bearer`). |
+| `AMSHA_AUTH_HMAC_KEY` | ✅ | - | Min 32 bytes for session, invitation, and API-credential digests. **Immutable after first boot.** |
 | `AMSHA_API_KEYS_CI` | Optional | - | CI/CD read-only API key. |
 | `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | Optional | `ollama` | Comma-separated embedding providers (ollama, openai, jina, ...). |
 | `AMSHA_EMBEDDING_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider embedding key (e.g. `AMSHA_EMBEDDING_JINA_API_KEY`). |
@@ -1042,7 +1074,7 @@ done < .env
 Disable the Dev UI and console:
 
 ```bash
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Dquarkus.args=serve" \
   "-Dquarkus.console.enabled=false" \
   "-Dquarkus.devui.enabled=false" \
@@ -1086,7 +1118,7 @@ Expected with Netty on JDK 22+. Ensure all `--add-opens` and `-Dsun.misc.unsafe.
 
 ```bash
 # Reduce heap cap (default is 8 GB)
-./mvnw clean package -Pnative -pl amsha-app -am -DskipTests \
+./mvnw clean package -Pnative -pl app -am -DskipTests \
   "-Dquarkus.native.additional-build-args=-J-Xmx6g"
 
 # Or increase Podman machine memory before building
@@ -1101,7 +1133,8 @@ podman machine start
 
 ```bash
 export LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6
-./app/target/app-0.1.0-SNAPSHOT-runner serve
+runner_name=amsha-app-0.1.0-SNAPSHOT-runner
+"$PWD/app/target/$runner_name" serve
 ```
 
 ### vector search disabled at runtime
@@ -1155,4 +1188,4 @@ The `init-perms` service in `docker-compose.yaml` handles this automatically by 
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.38.3 · JDK 25*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25*

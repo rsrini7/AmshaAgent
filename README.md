@@ -3,13 +3,13 @@
   <p><strong>A secure, stateful, and financially governed multi-agent AI kernel designed for enterprise deployment.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
-  ![Quarkus](https://img.shields.io/badge/Quarkus-3.38.3-blue.svg?style=flat&logo=quarkus)
-  ![LangChain4J](https://img.shields.io/badge/LangChain4j-1.17.2-FC4C02?style=flat&logo=langchain)
+  ![Quarkus](https://img.shields.io/badge/Quarkus-3.39.3-blue.svg?style=flat&logo=quarkus)
+  ![LangChain4J](https://img.shields.io/badge/LangChain4j-1.19.0-FC4C02?style=flat&logo=langchain)
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Java Tests](https://img.shields.io/badge/Tests-6193_passing-brightgreen.svg?style=flat)
-  ![Java Coverage](https://img.shields.io/badge/Coverage-70.50%25-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-8301_passing-brightgreen.svg?style=flat)
+  ![Java Coverage](https://img.shields.io/badge/Coverage-84.28%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-172_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-58.67%25-yellow.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
@@ -20,7 +20,7 @@
 
 > **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~400 MB binary.
 
-**Stack**: JDK 25 · Quarkus 3.38.3 · LangChain4J 1.17.2 · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
+**Stack**: JDK 25 · Quarkus 3.39.3 · LangChain4J 1.19.0 · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
 
 ### Native binary size
 
@@ -56,10 +56,13 @@ cd amsha
 
 # Copy and edit .env (see docs/CONFIGURATION.md for all variables)
 cp .env.example .env
-# At minimum: AMSHA_GROQ_API_KEY=gsk_... (Groq), AMSHA_VAULT_PEPPER=<random>
+# At minimum for a Groq development setup: AMSHA_GROQ_API_KEY=gsk_...,
+# AMSHA_VAULT_PEPPER, AMSHA_AUDIT_HMAC_KEY, AMSHA_API_KEYS_INTERNAL, and
+# AMSHA_AUTH_HMAC_KEY must be set to strong stable values. See the configuration
+# reference for keyless providers and the complete startup requirements.
 
 # Dev mode (hot reload, no sandbox isolation)
-./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=chat"
+./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
 
 # Or build and run a packaged JAR
 ./mvnw clean package -DskipTests
@@ -107,7 +110,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Read-Only Database Console (`#/db-console`)** — operator SQL console with AST parser validation (JSqlParser), read-only transaction guarantees (`PRAGMA query_only = ON;`), schema allowlisting, column truncation tooltips, and Micrometer telemetry
 - **Model Arena (`#/arena`)** — multi-model comparative benchmarking with dynamic CDI provider discovery, categorical slot grouping (`Subscription / CLI OAuth`, `Cloud API`, `Local Runtime`), fail-closed credential detection (400 Bad Request), token bounding, and script-aware truncation
 - **Guided setup and observability** — onboarding wizard, encrypted provider settings, OpenTelemetry tracing (LangChain4j `ChatModelListener` pilot: `off`/`shadow`/`active` with zero payload, `amsha.observability.chat-listener.mode`), SSE status updates, and web management panels
-- **Backend-aware deployment** — JVM backend selection at startup, native backend selection at build time, with PostgreSQL and filesystem runtime profiles
+- **Backend-aware deployment** — backend selection is a build-time/Quarkus-augmentation choice for packaged JVM and native artifacts; PostgreSQL and filesystem variants are built separately from SQLite
 
 ---
 
@@ -159,7 +162,7 @@ All roles have `garuda` for delegation. Tool schemas assembled dynamically at ru
 ## Module Reference
 
 ```
-amsha-parent/               ← Root POM: Java 25, Quarkus 3.38.3
+amsha-parent/               ← Root POM: Java 25, Quarkus 3.39.3
 │
 app/                  ← Main deployable: CLI, REST, scheduler, security wiring
 core/                 ← Agent loop, state machine, reflexes, routing, governance
@@ -188,7 +191,7 @@ tools-builtin/        ← Built-in AgentTool implementations + Lucene tool searc
 rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory + deterministic reranking
 local-ml-onnx/        ← Verified local ONNX embeddings, shadow classifiers, and cross-encoder reranking
 mcp/                  ← MCP server bridge + dynamic client tool loading
-onboarding/           ← 6-step setup wizard REST API
+onboarding/           ← Durable draft/saga onboarding REST API
 self-evolve/          ← Trace capture and self-evolution learning loop
 deployment/           ← Build-time: custom CDI scope, MCP reflection
 │
@@ -269,7 +272,9 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 After `mise run build:test` or `mise run test:ui`, run `mise run test:summary` to view total test counts
 and coverage across both Java and UI suites. For detailed breakdowns:
-- **Java**: `python3 ./scripts/analyze_jacoco_coverage.py --target 0.72` (`--module <mod>`, `--top 10`, `--badge`, `--json`).
+- **Java**: `python3 ./scripts/analyze_jacoco_coverage.py --target 0.80` (`--module <mod>`, `--top 10`, `--badge`, `--json`).
+  The default target tracks the goal in [`docs/TEST_COVERAGE_ANALYSIS.md`](./docs/TEST_COVERAGE_ANALYSIS.md) §8; the build gate itself is
+  `jacoco.minimum.line.coverage` in the root `pom.xml`.
 - **UI**: `mise run test:ui` (runs Vitest with V8 coverage) and `python3 ./scripts/analyze_ui_coverage.py --target 0.50` (`--top 10`, `--badge`, `--badge-tests`, `--json`).
 
 ### ❓ Reference
@@ -281,4 +286,4 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.38.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 18 LLM providers
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-16; UI 2026-09-12): 8,301 Java tests at 84.28% line coverage and 172 UI tests at 58.67% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.

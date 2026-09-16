@@ -14,7 +14,7 @@ This directory contains `.http` files covering every REST API surface of Amsha A
 
 ```bash
 # Serve mode (REST + no Telegram)
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Dquarkus.args=serve" \
   "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
@@ -22,11 +22,13 @@ This directory contains `.http` files covering every REST API surface of Amsha A
 ### Required `.env` values
 
 ```env
-AMSHA_LLM_API_KEY=gsk_...
+AMSHA_LLM_PROVIDER=groq
+AMSHA_GROQ_API_KEY=gsk_...
 AMSHA_API_KEYS_INTERNAL=key-internal-changeme
 AMSHA_API_KEYS_CI=key-ci-changeme
 AMSHA_VAULT_PEPPER=<32+ char string>
 AMSHA_AUDIT_HMAC_KEY=<32+ char string>
+AMSHA_AUTH_HMAC_KEY=<32+ char string>
 AMSHA_RAG_VEC_PATH=../lib/vec0         # dev mode
 ```
 
@@ -139,21 +141,21 @@ process environment variables take precedence.
 |---|---|---|---|---|
 | 1 | `01_system_health.http` | Health endpoints, startup log assertions, metrics, E2E SQLite smoke test | Server up | B1: HMAC chain under concurrency |
 | 2 | `02_auth_security.http` | API key auth, public bypasses, rate limiting per key | Server up | B2: DevSecretSeeder absent in prod |
-| 3 | `03_session_lifecycle.http` | Full session CRUD, sync/async run, multi-turn memory, isolation | AMSHA_LLM_API_KEY | B3: random UUID via SessionRegistry |
-| 4a | `04_agent_delegation.http` | Agent delegation flows, sub-agent spawning, depth limits | AMSHA_LLM_API_KEY | Post-Phase 64 |
-| 4b | `04_agent_roles.http` | All 6 roles + deity aliases, tool schema structural guarantees | AMSHA_LLM_API_KEY | A2: FULL autonomy not downgraded |
-| 5 | `05_hitl_governance.http` | HITL approve/deny flows (REST + goal-string), timeout | AMSHA_LLM_API_KEY, GITHUB_TOKEN | A2: FULL session skips approval |
+| 3 | `03_session_lifecycle.http` | Full session CRUD, sync/async run, multi-turn memory, isolation | Selected provider API key | B3: random UUID via SessionRegistry |
+| 4a | `04_agent_delegation.http` | Agent delegation flows, sub-agent spawning, depth limits | Selected provider API key | Post-Phase 64 |
+| 4b | `04_agent_roles.http` | All 12 roles + deity aliases, tool schema structural guarantees | Selected provider API key | A2: FULL autonomy not downgraded |
+| 5 | `05_hitl_governance.http` | HITL approve/deny flows (REST + goal-string), timeout | Selected provider API key, GITHUB_TOKEN | A2: FULL session skips approval |
 | 6 | `06_reflex_commands.http` | All reflexes: /status /reset /halt /history /crons /skills /mcp store | Server up | None (existing behaviour) |
-| 7 | `07_pii_prompt_injection.http` | PII redaction (8 types), store bypass, injection blocking (4 categories) | AMSHA_LLM_API_KEY | A3: non-ASCII FTS5 fix (store path) |
-| 8 | `08_audit_log.http` | WORM audit log, HMAC chain verify, tamper detection, all event types | AMSHA_LLM_API_KEY | B1: concurrent chain integrity |
-| 9 | `09_cron_scheduler.http` | Schedule/list/delete crons, safeguards, wait for CRONFIRED | AMSHA_LLM_API_KEY | C2: ChannelCronNotificationDispatcher |
-| 10 | `10_memory_compaction.http` | Multi-turn memory, rolling window pruning, compaction, memory search | AMSHA_LLM_API_KEY | A3, A6, C3, D1 |
-| 11 | `11_skill.http` | Skill CRUD, skill routing (bypasses LLM), upsert, error cases | AMSHA_LLM_API_KEY | D7: SANDBOX_EXEC removed |
+| 7 | `07_pii_prompt_injection.http` | PII redaction (8 types), store bypass, injection blocking (4 categories) | Selected provider API key | A3: non-ASCII FTS5 fix (store path) |
+| 8 | `08_audit_log.http` | WORM audit log, HMAC chain verify, tamper detection, all event types | Selected provider API key | B1: concurrent chain integrity |
+| 9 | `09_cron_scheduler.http` | Schedule/list/delete crons, safeguards, wait for CRONFIRED | Selected provider API key | C2: ChannelCronNotificationDispatcher |
+| 10 | `10_memory_compaction.http` | Multi-turn memory, rolling window pruning, compaction, memory search | Selected provider API key | A3, A6, C3, D1 |
+| 11 | `11_skill.http` | Skill CRUD, skill routing (bypasses LLM), upsert, error cases | Selected provider API key | D7: SANDBOX_EXEC removed |
 | 12 | `12_mcp.http` | MCP server protocol, MCP client (self-connect), admin API | Server up | D7: sandbox_exec → allowlist error |
-| 13 | `13_rag.http` | RAG ingest → approve → recall, RRF dual-tier, isolation | AMSHA_LLM_API_KEY | C3: rag_chunk table |
-| 14 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy | AMSHA_LLM_API_KEY | A1, A2 |
-| 15 | `15_phase64_regression.http` | Full regression suite for all Phase 64 fixes A1–A7, B1–B3, C1–C3, D smoke | AMSHA_LLM_API_KEY | All tiers |
-| 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, draft/saga onboarding, HITL task-id approval, WS token | AMSHA_LLM_API_KEY | Post-Phase 64 / P110 |
+| 13 | `13_rag.http` | RAG ingest → approve → recall, RRF dual-tier, isolation | Selected provider API key | C3: rag_chunk table |
+| 14 | `14_budget_governance.http` | Budget soft/hard limits, SUPERVISED/FULL/READONLY autonomy | Selected provider API key | A1, A2 |
+| 15 | `15_phase64_regression.http` | Full regression suite for all Phase 64 fixes A1–A7, B1–B3, C1–C3, D smoke | Selected provider API key | All tiers |
+| 16 | `16_ui_settings_onboarding.http` | UI status/SSE streams, settings CRUD, draft/saga onboarding, HITL task-id approval, WS token | Selected provider API key | Post-Phase 64 / P110 |
 | 19 | `19_identity_access.http` | **P109** first-owner bootstrap claim, `/identity/me`, workspace members, invitations, personal API credentials, last-owner guard, ownership transfer, workspace credential rotation | Fresh DB (UNCLAIMED) | New in P109 |
 | 20 | `20_auth_oauth_session.http` | **P109** `/auth/providers` discovery, OAuth login/callback negative paths, web-session rotate, CSRF enforcement, logout, revoke-all | Server up | New in P109 |
 | 21 | `21_self_evolve.http` | **Self-evolve** behavioral directive REST surface: list/get, synthesize, reconcile, disable, delete + internal-key-only auth model | Server up | New (dedicated coverage) |

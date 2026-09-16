@@ -1,11 +1,8 @@
 package com.amsha.llm.providers;
 
-import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.listener.ChatModelListener;
 import dev.langchain4j.model.chat.request.ResponseFormat;
-import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
-import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 
@@ -30,26 +27,17 @@ import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.llm.api.LlmModelConfig;
-import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputCapabilities;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.transport.GovernedLangChainHttpClientBuilder;
-import com.amsha.llm.providers.wrapper.AgyResponsesChatModel;
-import com.amsha.llm.providers.wrapper.ClaudeCodeResponsesChatModel;
-import com.amsha.llm.providers.wrapper.CodexResponsesChatModel;
-import com.amsha.llm.providers.wrapper.FoundryResponsesChatModel;
-import com.amsha.llm.providers.wrapper.KimchiResponsesChatModel;
 import com.amsha.security.http.GovernedTransportService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ArcContainer;
-import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.Unremovable;
 
 /**
@@ -300,28 +288,20 @@ public class ChatModelFactory implements ChatModelCreationPort {
             String adapterId, String baseUrl, String apiKey, String model, AgentLlmConfig config) {
         String adapter = adapterId == null ? "" : adapterId.toLowerCase(Locale.ROOT);
         ChatModel created =
-                switch (adapter) {
-                    case "gemini" -> createGemini(baseUrl, apiKey, model, config);
-                    case "anthropic", "claude" -> createAnthropic(baseUrl, apiKey, model, config);
-                    case "claude-code" -> createClaudeCode(baseUrl, apiKey, model, config);
-                    case "agy", "antigravity" -> createAgy(baseUrl, apiKey, model, config);
-                    case "kimchi" -> createKimchi(baseUrl, apiKey, model, config);
-                    case "foundry", "foundrylocal" -> createFoundry(baseUrl, model, config);
-                    case "ollama" -> createOllama(baseUrl, model, config);
-                    case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
-                    default ->
-                        openAiBuilder(
-                                        baseUrl,
-                                        apiKey,
-                                        model,
-                                        config.maxTokens() > 0 ? config.maxTokens() : null,
-                                        config.timeout() != null ? config.timeout() : Duration.ofSeconds(60),
-                                        config.maxRetries(),
-                                        config.temperature(),
-                                        config.logHttp(),
-                                        config.logHttp())
-                                .build();
-                };
+                SpecializedChatModelFactory.createSpecializedAdapter(adapter, baseUrl, apiKey, model, config);
+        if (created == null) {
+            created = openAiBuilder(
+                            baseUrl,
+                            apiKey,
+                            model,
+                            config.maxTokens() > 0 ? config.maxTokens() : null,
+                            config.timeout() != null ? config.timeout() : Duration.ofSeconds(60),
+                            config.maxRetries(),
+                            config.temperature(),
+                            config.logHttp(),
+                            config.logHttp())
+                    .build();
+        }
         boolean eligible = "openai".equals(adapter)
                 && StructuredOutputCapabilities.resolvesToStrictSchema(
                         config.structuredOutputMode(), true, baseUrl, true);
@@ -329,25 +309,13 @@ public class ChatModelFactory implements ChatModelCreationPort {
         return CapabilityAwareChatModel.withCapabilities(created, eligible, multimodalCap);
     }
 
-    private static GovernedTransportService resolveGovernedTransport() {
-        try {
-            ArcContainer container = Arc.container();
-            if (container != null) {
-                InstanceHandle<GovernedTransportService> handle = container.instance(GovernedTransportService.class);
-                if (handle.isAvailable()) return handle.get();
-            }
-        } catch (NoClassDefFoundError _) {
-            // Standalone unit tests without CDI
-        } catch (Exception e) {
-            throw new IllegalStateException(
-                    "Failed to resolve GovernedTransportService from CDI container: " + LogUtil.rootMessage(e), e);
-        }
-        return null;
+    public static GovernedTransportService resolveGovernedTransport() {
+        return SpecializedChatModelFactory.resolveGovernedTransport();
     }
 
     /** Builds an Antigravity/AGY ChatModel. */
     public static ChatModel createAgy(String baseUrl, String token, String model, AgentLlmConfig config) {
-        return createAgy(baseUrl, token, model, config, resolveGovernedTransport());
+        return SpecializedChatModelFactory.createAgy(baseUrl, token, model, config);
     }
 
     /** Builds an Antigravity/AGY ChatModel with explicit governed transport. */
@@ -357,22 +325,12 @@ public class ChatModelFactory implements ChatModelCreationPort {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
-                ? ModelDefaults.DEFAULT_AGY_MODEL
-                : model;
-        return new AgyResponsesChatModel(
-                baseUrl,
-                token,
-                modelName,
-                config.maxTokens(),
-                config.timeout(),
-                config.temperature(),
-                governedTransport != null ? governedTransport : resolveGovernedTransport());
+        return SpecializedChatModelFactory.createAgy(baseUrl, token, model, config, governedTransport);
     }
 
     /** Builds a Claude Code ChatModel. */
     public static ChatModel createClaudeCode(String baseUrl, String token, String model, AgentLlmConfig config) {
-        return createClaudeCode(baseUrl, token, model, config, resolveGovernedTransport());
+        return SpecializedChatModelFactory.createClaudeCode(baseUrl, token, model, config);
     }
 
     /** Builds a Claude Code ChatModel with explicit governed transport. */
@@ -382,33 +340,13 @@ public class ChatModelFactory implements ChatModelCreationPort {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
-                ? ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL
-                : model;
-        return new ClaudeCodeResponsesChatModel(
-                baseUrl,
-                token,
-                modelName,
-                config.maxTokens(),
-                config.timeout(),
-                config.temperature(),
-                governedTransport != null ? governedTransport : resolveGovernedTransport());
+        return SpecializedChatModelFactory.createClaudeCode(baseUrl, token, model, config, governedTransport);
     }
 
     /** Builds a Codex ChatModel. */
     public static ChatModel createCodex(
             String baseUrl, String token, String accountId, String model, AgentLlmConfig config) {
-        return createCodex(
-                baseUrl,
-                token,
-                accountId,
-                model,
-                config.maxTokens(),
-                config.timeout(),
-                config.maxRetries(),
-                config.temperature(),
-                config.logHttp(),
-                resolveGovernedTransport());
+        return SpecializedChatModelFactory.createCodex(baseUrl, token, accountId, model, config);
     }
 
     /** Builds a Codex ChatModel with explicit parameter overrides. */
@@ -422,17 +360,8 @@ public class ChatModelFactory implements ChatModelCreationPort {
             Integer maxRetries,
             Double temperature,
             boolean logHttp) {
-        return createCodex(
-                baseUrl,
-                token,
-                accountId,
-                model,
-                maxTokens,
-                timeout,
-                maxRetries,
-                temperature,
-                logHttp,
-                resolveGovernedTransport());
+        return SpecializedChatModelFactory.createCodex(
+                baseUrl, token, accountId, model, maxTokens, timeout, maxRetries, temperature, logHttp);
     }
 
     /** Builds a Codex ChatModel with explicit parameter overrides and governed transport. */
@@ -447,68 +376,37 @@ public class ChatModelFactory implements ChatModelCreationPort {
             Double temperature,
             boolean logHttp,
             GovernedTransportService governedTransport) {
-        if (baseUrl == null || baseUrl.isBlank() || baseUrl.contains("chatgpt.com/backend-api/codex")) {
-            String endpoint = (baseUrl != null && baseUrl.endsWith("/responses"))
-                    ? baseUrl
-                    : (baseUrl != null && !baseUrl.isBlank()
-                            ? baseUrl + "/responses"
-                            : "https://chatgpt.com/backend-api/codex/responses");
-            return new CodexResponsesChatModel(
-                    endpoint, token, accountId, model, maxTokens, timeout, temperature, governedTransport);
-        }
-        return createOpenAi(baseUrl, token, model, maxTokens, timeout, maxRetries, temperature, logHttp);
+        return SpecializedChatModelFactory.createCodex(
+                baseUrl,
+                token,
+                accountId,
+                model,
+                maxTokens,
+                timeout,
+                maxRetries,
+                temperature,
+                logHttp,
+                governedTransport);
     }
 
     /** Builds a Gemini ChatModel from a resolved credential. */
     public static ChatModel createGemini(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
-        String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_GEMINI_MODEL : model;
-        GoogleAiGeminiChatModel.GoogleAiGeminiChatModelBuilder builder = GoogleAiGeminiChatModel.builder()
-                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(resolveGovernedTransport()))
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .temperature(config.temperature())
-                .maxOutputTokens(config.maxTokens())
-                .timeout(config.timeout())
-                .logRequests(config.logHttp())
-                .logResponses(config.logHttp());
-        if (baseUrl != null && !baseUrl.isBlank()) {
-            builder.baseUrl(baseUrl);
-        }
-        return builder.build();
+        return SpecializedChatModelFactory.createGemini(baseUrl, apiKey, model, config);
     }
 
     /** Builds an Anthropic/Claude ChatModel from a resolved credential. */
     public static ChatModel createAnthropic(String baseUrl, String apiKey, String model, AgentLlmConfig config) {
-        String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL : model;
-        AnthropicChatModel.AnthropicChatModelBuilder builder = AnthropicChatModel.builder()
-                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(resolveGovernedTransport()))
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .timeout(config.timeout())
-                .logRequests(config.logHttp())
-                .logResponses(config.logHttp());
-        if (baseUrl != null && !baseUrl.isBlank()) {
-            builder.baseUrl(baseUrl);
-        }
-        return builder.build();
+        return SpecializedChatModelFactory.createAnthropic(baseUrl, apiKey, model, config);
     }
 
     /** Builds an Ollama ChatModel from a resolved credential. */
     public static ChatModel createOllama(String baseUrl, String model, AgentLlmConfig config) {
-        String url = (baseUrl == null || baseUrl.isBlank()) ? ModelDefaults.DEFAULT_OLLAMA_BASE_URL : baseUrl;
-        String modelName = (model == null || model.isBlank()) ? ModelDefaults.DEFAULT_OLLAMA_MODEL : model;
-        return OllamaChatModel.builder()
-                .httpClientBuilder(new GovernedLangChainHttpClientBuilder(resolveGovernedTransport()))
-                .baseUrl(url)
-                .modelName(modelName)
-                .logRequests(config.logHttp())
-                .logResponses(config.logHttp())
-                .build();
+        return SpecializedChatModelFactory.createOllama(baseUrl, model, config);
     }
 
     /** Builds a Kimchi ChatModel. */
     public static ChatModel createKimchi(String baseUrl, String token, String model, AgentLlmConfig config) {
-        return createKimchi(baseUrl, token, model, config, resolveGovernedTransport());
+        return SpecializedChatModelFactory.createKimchi(baseUrl, token, model, config);
     }
 
     /** Builds a Kimchi ChatModel with explicit governed transport. */
@@ -518,36 +416,17 @@ public class ChatModelFactory implements ChatModelCreationPort {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
-                ? ModelDefaults.DEFAULT_KIMCHI_MODEL
-                : model;
-        return new KimchiResponsesChatModel(
-                baseUrl,
-                token,
-                modelName,
-                config.maxTokens(),
-                config.timeout(),
-                config.temperature(),
-                governedTransport != null ? governedTransport : resolveGovernedTransport());
+        return SpecializedChatModelFactory.createKimchi(baseUrl, token, model, config, governedTransport);
     }
 
     /** Builds a Microsoft Foundry Local ChatModel. */
     public static ChatModel createFoundry(String baseUrl, String model, AgentLlmConfig config) {
-        return createFoundry(baseUrl, model, config, resolveGovernedTransport());
+        return SpecializedChatModelFactory.createFoundry(baseUrl, model, config);
     }
 
     /** Builds a Microsoft Foundry Local ChatModel with explicit governed transport. */
     public static ChatModel createFoundry(
             String baseUrl, String model, AgentLlmConfig config, GovernedTransportService governedTransport) {
-        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
-                ? ModelDefaults.DEFAULT_FOUNDRY_MODEL
-                : model;
-        return new FoundryResponsesChatModel(
-                baseUrl,
-                modelName,
-                config.maxTokens(),
-                config.timeout(),
-                config.temperature(),
-                governedTransport != null ? governedTransport : resolveGovernedTransport());
+        return SpecializedChatModelFactory.createFoundry(baseUrl, model, config, governedTransport);
     }
 }

@@ -62,8 +62,8 @@ $script:root = (Get-Location).Path
 $script:excludeDirs = @(
     'target', 'dist', '.vscode', '.idea', 'out', '.quarkus', 'quarkus-app',
     'workspaces', 'data', 'lib', 'node_modules', 'node', 'npm',
-    '.playwright-browsers', 'MyPrompts', 'docs', 'docs-main', 'docs-test',
-    'Ideas-Pending', 'ProjectWorkflowDocs', 'bruno-collections',
+    '.playwright-browsers', 'MyPrompts', 'docs', 'docs-main',
+    'ProjectWorkflowDocs', 'bruno-collections',
     'rest-http', 'backups', '.git'
 )
 
@@ -90,7 +90,7 @@ $script:includeFiles = @(
 )
 
 $script:includeRelPaths = @(
-    'docs-test/amsha_rg_cheatsheet.md'
+    'docs/SEARCH_AND_DIAGNOSTICS_CHEATSHEET.md'
 )
 
 function ShouldExclude($item, $relPath) {

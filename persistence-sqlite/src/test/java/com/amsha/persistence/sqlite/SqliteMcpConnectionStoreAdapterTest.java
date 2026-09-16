@@ -14,6 +14,7 @@ import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
+import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 import com.amsha.persistence.sqlite.testutil.FlywayEnabledTestProfile;
 
 import org.junit.jupiter.api.Test;
@@ -89,6 +90,114 @@ class SqliteMcpConnectionStoreAdapterTest {
         assertConnection(
                 userTwoConnection,
                 store.findByIdAndUserId(userTwoConnection.id(), userTwo).orElseThrow());
+    }
+
+    @Test
+    void pendingApprovalsRevisionAndToolPolicies() {
+        String prefix = "sqlite-" + UUID.randomUUID();
+        String user = prefix + "-user";
+        Instant now = Instant.now();
+        McpConnectionDto pending = new McpConnectionDto(
+                prefix + "-mcp-pending",
+                user,
+                "pending-srv",
+                "HTTP_SSE",
+                "https://example.test/mcp",
+                "NETWORK",
+                false,
+                "PENDING_APPROVAL",
+                "task-1",
+                0,
+                null,
+                now,
+                now);
+        store.save(pending);
+
+        assertTrue(
+                store.listPendingApprovals().stream().anyMatch(c -> pending.id().equals(c.id())));
+
+        McpConnectionDto approved = new McpConnectionDto(
+                pending.id(),
+                user,
+                pending.name(),
+                pending.transport(),
+                pending.endpoint(),
+                pending.category(),
+                true,
+                "READY",
+                null,
+                1,
+                null,
+                pending.createdAt(),
+                Instant.now());
+        assertFalse(store.updateStateIfRevision(approved, 5), "stale revision must not apply");
+        assertTrue(store.updateStateIfRevision(approved, 0));
+
+        store.replaceToolPolicies(
+                pending.id(), user, List.of(policy(prefix + "-pol-1", pending.id(), user, "search_tool")));
+        List<McpConnectionToolPolicyDto> policies = store.listToolPolicies(pending.id(), user);
+        assertEquals(1, policies.size());
+        assertEquals("search_tool", policies.get(0).toolName());
+
+        assertEquals(1, store.setToolEnabled(pending.id(), user, "search_tool", false));
+        assertFalse(store.listToolPolicies(pending.id(), user).get(0).enabled());
+        assertEquals(0, store.setToolEnabled(pending.id(), user, "absent_tool", false), "unknown tool");
+    }
+
+    @Test
+    void toolPolicyAndHeaderRefValidationRejectsBadInput() {
+        String prefix = "sqlite-" + UUID.randomUUID();
+        String user = prefix + "-user";
+        McpConnectionDto conn = connection(prefix + "-mcp-val", user, "docs", true);
+        store.save(conn);
+
+        // Blank identifiers are rejected before any normalisation happens.
+        assertTrue(store.listToolPolicies("", user).isEmpty());
+        assertTrue(store.listToolPolicies(conn.id(), "").isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> store.replaceToolPolicies("", user, List.of()));
+        assertThrows(IllegalArgumentException.class, () -> store.replaceHeaderSecretRefs("", user, List.of()));
+        assertEquals(0, store.setToolEnabled("", user, "search_tool", true));
+
+        // A policy or header ref can only be written for a connection that exists.
+        String missing = prefix + "-absent";
+        assertThrows(IllegalArgumentException.class, () -> store.replaceToolPolicies(missing, user, List.of()));
+        assertThrows(IllegalArgumentException.class, () -> store.replaceHeaderSecretRefs(missing, user, List.of()));
+
+        // Ownership mismatch: the DTO must carry the connection/user it is being filed under.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.replaceToolPolicies(
+                        conn.id(), user, List.of(policy(prefix + "-pol-x", prefix + "-other", user, "search_tool"))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.replaceHeaderSecretRefs(
+                        conn.id(),
+                        user,
+                        List.of(headerRef(prefix + "-ref-x", prefix + "-other", user, "X-Api-Key", "vault-x"))));
+
+        // Duplicate names are rejected case-insensitively for headers (normalised to lower case) and exactly for tools.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.replaceToolPolicies(
+                        conn.id(),
+                        user,
+                        List.of(
+                                policy(prefix + "-pol-1", conn.id(), user, "search_tool"),
+                                policy(prefix + "-pol-2", conn.id(), user, "search_tool"))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> store.replaceHeaderSecretRefs(
+                        conn.id(),
+                        user,
+                        List.of(
+                                headerRef(prefix + "-ref-1", conn.id(), user, "X-Api-Key", "vault-1"),
+                                headerRef(prefix + "-ref-2", conn.id(), user, "x-api-key", "vault-2"))));
+    }
+
+    private static McpConnectionToolPolicyDto policy(String id, String connectionId, String userId, String toolName) {
+        Instant now = Instant.now();
+        return new McpConnectionToolPolicyDto(
+                id, connectionId, userId, toolName, true, true, "desc", "{\"type\":\"object\"}", "hash", now, 0, now);
     }
 
     private static Set<String> ids(List<McpConnectionDto> connections) {

@@ -118,4 +118,100 @@ class FsBootstrapStateStoreAdapterTest {
         assertTrue(adapter.replaceCredential(2, "new-digest", now, now));
         verify(store).write(any(), any(BootstrapStateDto.class));
     }
+
+    // ─── Rejected transitions ──────────────────────────────────
+
+    @Test
+    void testSaveIsANoOpWhenStateAlreadyExists() {
+        BootstrapStateDto existing = new BootstrapStateDto(
+                "bootstrap", BootstrapStateDto.STATUS_UNCLAIMED, null, null, null, null, null, 0, now);
+        when(store.readOptional(any(), eq(BootstrapStateDto.class))).thenReturn(Optional.of(existing));
+
+        adapter.save(new BootstrapStateDto(
+                "bootstrap", BootstrapStateDto.STATUS_CLAIMED, "owner-1", "ws-1", "d", now, now, 3, now));
+
+        verify(store, never()).write(any(), any(BootstrapStateDto.class));
+    }
+
+    @Test
+    void testReserveFirstOwnerSucceedsFromAnUnclaimedState() {
+        BootstrapStateDto unclaimed = new BootstrapStateDto(
+                "bootstrap", BootstrapStateDto.STATUS_UNCLAIMED, null, null, null, null, null, 4, now);
+        when(store.readOptional(any(), eq(BootstrapStateDto.class))).thenReturn(Optional.of(unclaimed));
+
+        Optional<Integer> rev = adapter.reserveFirstOwner("owner-2", "ws-2", now);
+
+        assertEquals(5, rev.orElseThrow(), "a re-reservation bumps the stored revision");
+        verify(store).write(any(), any(BootstrapStateDto.class));
+    }
+
+    /**
+     * {@code rollbackClaiming} is only legal from {@code CLAIMING}. Every other state — here
+     * {@code CREDENTIAL_ISSUED} — must be refused without touching the store.
+     */
+    @Test
+    void testRollbackClaimingRejectsAStateThatIsNotClaiming() {
+        BootstrapStateDto issued = new BootstrapStateDto(
+                "bootstrap",
+                BootstrapStateDto.STATUS_CREDENTIAL_ISSUED,
+                "owner-1",
+                "ws-1",
+                "digest-1",
+                now,
+                null,
+                2,
+                now);
+        when(store.readOptional(any(), eq(BootstrapStateDto.class))).thenReturn(Optional.of(issued));
+
+        assertFalse(adapter.rollbackClaiming(2, now));
+        verify(store, never()).write(any(), any(BootstrapStateDto.class));
+    }
+
+    @Test
+    void testReplaceCredentialAcceptsAClaimingState() {
+        BootstrapStateDto claiming = new BootstrapStateDto(
+                "bootstrap", BootstrapStateDto.STATUS_CLAIMING, "owner-1", "ws-1", null, null, null, 1, now);
+        when(store.readOptional(any(), eq(BootstrapStateDto.class))).thenReturn(Optional.of(claiming));
+
+        assertTrue(adapter.replaceCredential(1, "new-digest", now, now));
+        verify(store).write(any(), any(BootstrapStateDto.class));
+    }
+
+    @Test
+    void testReplaceCredentialAcceptsAClaimedState() {
+        BootstrapStateDto claimed = new BootstrapStateDto(
+                "bootstrap", BootstrapStateDto.STATUS_CLAIMED, "owner-1", "ws-1", "digest-1", now, now, 3, now);
+        when(store.readOptional(any(), eq(BootstrapStateDto.class))).thenReturn(Optional.of(claimed));
+
+        assertTrue(adapter.replaceCredential(3, "new-digest", now, now));
+        verify(store).write(any(), any(BootstrapStateDto.class));
+    }
+
+    @Test
+    void testReplaceCredentialRejectsAnUnclaimedState() {
+        BootstrapStateDto unclaimed = new BootstrapStateDto(
+                "bootstrap", BootstrapStateDto.STATUS_UNCLAIMED, null, null, null, null, null, 1, now);
+        when(store.readOptional(any(), eq(BootstrapStateDto.class))).thenReturn(Optional.of(unclaimed));
+
+        assertFalse(adapter.replaceCredential(1, "new-digest", now, now));
+        verify(store, never()).write(any(), any(BootstrapStateDto.class));
+    }
+
+    @Test
+    void testReplaceCredentialRejectsAStaleRevision() {
+        BootstrapStateDto issued = new BootstrapStateDto(
+                "bootstrap",
+                BootstrapStateDto.STATUS_CREDENTIAL_ISSUED,
+                "owner-1",
+                "ws-1",
+                "digest-1",
+                now,
+                null,
+                2,
+                now);
+        when(store.readOptional(any(), eq(BootstrapStateDto.class))).thenReturn(Optional.of(issued));
+
+        assertFalse(adapter.replaceCredential(99, "new-digest", now, now));
+        verify(store, never()).write(any(), any(BootstrapStateDto.class));
+    }
 }

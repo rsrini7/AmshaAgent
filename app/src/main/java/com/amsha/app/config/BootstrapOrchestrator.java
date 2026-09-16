@@ -34,7 +34,15 @@ public class BootstrapOrchestrator {
         }
 
         normalizePlaywrightPath(binaryDir);
-        PlaywrightCliInstaller.ensureCliInstalled();
+
+        // Informational invocations (--help/--version) must be side-effect free. Without
+        // this guard `amsha --help` installs @playwright/cli globally and then blocks on
+        // the first-run wizard before picocli ever prints usage. Validation and directory
+        // provisioning below still run because Quarkus boots afterwards either way.
+        boolean informational = isInformational(args);
+        if (!informational) {
+            PlaywrightCliInstaller.ensureCliInstalled();
+        }
 
         ensureFallbackLlmDefaults();
         EnvConfigInitializer.validateSecurityKeys(binaryDir);
@@ -46,11 +54,25 @@ public class BootstrapOrchestrator {
         MandatoryConfigValidator.validateMandatoryConfig();
         LocalModelValidator.validateLocalModels(binaryDir, args);
 
-        InteractiveSetupWizard.run(binaryDir, args);
-        PlaywrightSetupPrompter.promptPlaywrightSetupIfNeeded(binaryDir);
+        if (!informational) {
+            InteractiveSetupWizard.run(binaryDir, args);
+            PlaywrightSetupPrompter.promptPlaywrightSetupIfNeeded(binaryDir);
+        }
 
         provisionDataDirectory(binaryDir);
         provisionNativeLibraries(binaryDir);
+    }
+
+    /**
+     * Detects informational-only invocations, which must not mutate the environment,
+     * install external tooling, or block on input. Mirrors the short-circuit used by
+     * {@link com.amsha.app.util.CliUtils#validateRequiredEnvVars(String[])} and
+     * {@link LocalModelValidator#validateLocalModels(Path, String[])}.
+     */
+    private static boolean isInformational(String[] args) {
+        if (args == null || args.length == 0) return false;
+        String mode = args[0].toLowerCase(Locale.ROOT);
+        return mode.equals("--help") || mode.equals("-h") || mode.equals("--version") || mode.equals("-v");
     }
 
     private static Path resolveBinaryDir() {

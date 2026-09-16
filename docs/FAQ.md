@@ -37,12 +37,12 @@ The reactor enforces strict architectural separation that prevents accidental de
 - **`amsha-core`** - Agent runtime kernel. Domain logic, tools, reflexes, governance, sandbox, pipeline, and CDI interfaces. Has zero awareness of REST, Telegram, or CLI.
 - **`amsha-persistence-sqlite`** - SQLite adapter implementing all persistence ports. Contains `GlobalKnowledgeBase`, `SessionKnowledgeBase`, WAL configuration, FTS5 setup, and `RagSchemaInitializer`.
 - **`amsha-persistence-fs`** - Filesystem-based persistence adapter for environments without SQLite.
-- **`amsha-persistence-postgres`** - PostgreSQL adapter (partial: checkpoint, cron, and audit operations only).
+- **`amsha-persistence-postgres`** - PostgreSQL adapter implementing the persistence store ports, including identity, memory, audit, MCP, onboarding, and execution-trace stores.
 - **`amsha-mcp`** - MCP server/client logic. Exposes `DynamicToolLookupImpl` behind the `DynamicToolLookup` interface defined in `amsha-core`. Keeping it separate means the kernel has no compile-time dependency on MCP transport code.
 - **`amsha-rag`** - Two-tier RAG memory (sqlite-vec). The `vec0.so` native extension has platform-specific native image metadata. Isolating it prevents this from polluting the core module.
-- **`amsha-onboarding`** - First-run setup wizard. Isolated so it can be excluded from headless/CI deployments.
-- **`amsha-channel-web`** - WebSocket-based web channel. Can be excluded for Telegram-only or API-only deployments.
-- **`amsha-channel-telegram`** - Full Telegram channel implementation with its own test suite. Can be excluded for non-Telegram deployments.
+- **`amsha-onboarding`** - Durable first-run setup wizard in its own module; the current `amsha-app` build includes it, so excluding it requires a custom application dependency graph.
+- **`amsha-channel-web`** - WebSocket-based web channel in its own module; the current `amsha-app` build includes it.
+- **`amsha-channel-telegram`** - Full Telegram channel implementation with its own test suite; the current `amsha-app` build includes it.
 - **`amsha-self-evolve`** - Optional trace capture, pattern extraction, and behavioral-directive synthesis.
 - **`amsha-deployment`** - Quarkus build-time processors. Contains the `@BuildStep` logic that wires up `@WorkspaceScoped`, `AgentFunctionProcessor`, `RestResourceBuildStep`, MCP build steps, and RAG resource steps.
 - **`ui`** - Frontend (Lit 3.x Web Components + TypeScript + Vite). No Java source; excluded from Maven build.
@@ -52,13 +52,13 @@ The rule is: **kernel logic never imports application-layer code**. This makes `
 
 ---
 
-### Q: Why does Amsha Agent use SQLite instead of a scalable database like PostgreSQL?
+### Q: Why is SQLite the default when PostgreSQL is also supported?
 
 Amsha Agent relies on `StatefulAgentStore` to checkpoint the LLM's `ReasoningStep` history at every iteration. There are three reasons SQLite is the right tool:
 
 1. **Zero-latency:** Writing to a local SQLite file avoids network round-trips during the high-speed Agent Loop. Each checkpoint is a single write; adding a network hop would double iteration latency.
 2. **Concurrency:** SQLite's WAL (Write-Ahead Logging) mode allows concurrent readers while a single writer commits. Amsha Agent's `AsyncPersistenceEngine` serializes all writes through a `LinkedBlockingQueue` backed by a single virtual thread, eliminating WAL contention entirely.
-3. **Portability:** Amsha Agent deploys as a single, self-contained native binary with no external service dependencies. A PostgreSQL sidecar would eliminate that advantage.
+3. **Portability:** SQLite supports a single, self-contained native binary with no external service dependency. PostgreSQL remains the appropriate choice for shared or server deployments; switching backends requires an explicit data migration.
 
 The dual-database design (`amsha-meta.db` for structured state, `amsha-fts.db` for FTS5 full-text search) keeps the schema clean and prevents FTS index operations from locking the primary checkpoint tables.
 
@@ -70,7 +70,7 @@ Amsha Agent uses a port/adapter (hexagonal) architecture for persistence. The `a
 
 - **`amsha-persistence-sqlite`** — Full implementation of all ports. Default backend.
 - **`amsha-persistence-fs`** — Filesystem-based implementation. Alternative for environments without SQLite.
-- **`amsha-persistence-postgres`** — Partial implementation (checkpoint, cron, audit only). For production deployments requiring a server database.
+- **`amsha-persistence-postgres`** — Full PostgreSQL adapter implementing the persistence store ports. Use it for production deployments requiring a server database.
 
 Swapping backends requires zero core changes — the CDI container discovers the active adapter at runtime. `PersistenceAdapterPort` is the composite interface that aggregates all individual ports.
 
@@ -826,17 +826,17 @@ Mockito's inline mock agent (used for mocking final classes and static methods) 
 ### Q: How do I run only a specific test module without rebuilding everything?
 
 ```bash
-# Run only amsha-core tests
-mvn test -pl amsha-core
+# Run only core tests
+mvn test -pl core
 
-# Run only amsha-app integration tests
-mvn verify -pl amsha-app -am
+# Run only app integration tests
+mvn verify -pl app -am
 
 # Run a single test class
-mvn test -pl amsha-core -Dtest=SandboxCircuitBreakerTest
+mvn test -pl core -Dtest=SandboxCircuitBreakerTest
 
 # Run with LLM debug logging enabled
-mvn verify -pl amsha-app -am -Damsha.debug.llm=true
+mvn verify -pl app -am -Damsha.debug.llm=true
 ```
 
 ---

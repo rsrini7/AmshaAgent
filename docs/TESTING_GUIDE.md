@@ -1,6 +1,6 @@
 # Amsha Agent - Testing Guide
 
-> **Stack**: JDK 25 · Quarkus 3.38.3 · LangChain4J 1.17.2 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
+> **Stack**: JDK 25 · Quarkus 3.39.3 · LangChain4J 1.19.0 · SQLite (WAL + FTS5 + sqlite-vec) · Podman (rootless) · Groq Cloud
 >
 > This guide covers the automated test suite and the complete REST API surface. Use alongside [TELEGRAM_TESTING.md](./TELEGRAM_TESTING.md) for full end-to-end coverage, and [rest-http/README.md](../rest-http/README.md) for the `.http` file reference.
 
@@ -39,56 +39,84 @@
 
 ## 1. Running the Test Suite
 
-Amsha Agent has **1664 tests** across the multi-module reactor.
+### Recorded test snapshot
+
+The concrete figures below are retained because they make test health and regression
+trends visible. They are dated measurements, not a promise that every checkout has
+the same generated reports; rerun the commands in the table before quoting them as
+current.
+
+| Suite | Recorded result | Line coverage | Evidence date |
+|---|---:|---:|---|
+| Java/JUnit, full Maven reactor | **8,301 passing**; 0 failures, 0 errors | **84.28%** | 2026-09-16 |
+| UI/Vitest | **172 passing**; 0 failures, 0 errors | **58.67%** (4,665/7,951 lines) | 2026-09-12 |
+
+Run `./mvnw --batch-mode clean verify` followed by `mise run test:summary` for
+Java/JUnit and `mise run test:ui` followed by `mise run test:ui:summary` for the UI.
+The Java total is aggregated from Surefire XML and the UI total from Vitest JUnit
+XML; a clean run matters because stale or partial report files can produce a
+misleading count.
+
+My interpretation of this snapshot: Java is 2.28 percentage points above the
+current 82.00% JaCoCo build floor, which is useful headroom but not a reason to
+stop adding tests. The UI line figure is 8.67 points above the analyzer's 50.00%
+target, but UI coverage has no equivalent Maven build gate. The two percentages
+use different codebases and denominators, so they should be tracked separately;
+neither percentage replaces behavioral, integration, native, or REST validation.
+
+The earlier 2026-09-14 measurement is retained below as historical analysis:
+6,528 tests in 905 suites, 0 failures, 0 errors, 7 skipped, reactor line coverage 76.10%.
+Derive a fresh exact count with `mise run test:summary`
+(see [§1.6](#16-target-0-failures-0-errors-no-drop-in-test-count)).
 
 ### 1.1 Run all tests
 
 ```bash
 # macOS / WSL2 / Linux
-./mvnw clean test -pl amsha-app -am
+./mvnw clean test -pl app -am
 
 # Windows PowerShell
-.\mvnw.cmd clean test -pl amsha-app -am
+.\mvnw.cmd clean test -pl app -am
 ```
 
 ### 1.2 Run a specific module
 
 ```bash
 # Only amsha-core (zero Quarkus startup - fast)
-./mvnw clean test -pl amsha-core
+./mvnw clean test -pl core
 
 # Only amsha-app (starts full CDI context via @QuarkusTest)
-./mvnw clean test -pl amsha-app -am
+./mvnw clean test -pl app -am
 ```
 
 ### 1.3 Run a single test class
 
 ```bash
 # Use -am to include upstream module dependencies
-./mvnw clean test -pl amsha-core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=AuditHmacChainTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=AgentResourceTest  "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=AuditHmacChainTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=AgentResourceTest  "-Dsurefire.failIfNoSpecifiedTests=false"
 ```
 
 ### 1.4 Phase 64 - run specific new/modified test classes
 
 ```bash
 # Tier A
-./mvnw clean test -pl amsha-core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=CompactionSummaryRepositoryTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=CompactionHandlerTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=ReasoningStepParserTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=TelegramMarkdownV2RendererTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=AgentDispatchHandlerTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-channel-api -am -Dtest=ChannelTypeTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=CompactionSummaryRepositoryTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=CompactionHandlerTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=ReasoningStepParserTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=TelegramMarkdownV2RendererTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=AgentDispatchHandlerTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl channel-api -am -Dtest=ChannelTypeTest "-Dsurefire.failIfNoSpecifiedTests=false"
 # Tier B
-./mvnw clean test -pl amsha-core -am -Dtest=AuditEventRepositoryTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=DevSecretSeederTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=SessionRegistryTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=AuditEventRepositoryTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=DevSecretSeederTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=SessionRegistryTest "-Dsurefire.failIfNoSpecifiedTests=false"
 # Tier C & D
-./mvnw clean test -pl amsha-rag  -am -Dtest=GlobalKnowledgeBaseTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-app  -am -Dtest=ChannelCronNotificationDispatcherTest "-Dsurefire.failIfNoSpecifiedTests=false"
-./mvnw clean test -pl amsha-core -am -Dtest=SqliteRetryTemplateTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl rag  -am -Dtest=GlobalKnowledgeBaseTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app  -am -Dtest=ChannelCronNotificationDispatcherTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest=SqliteRetryTemplateTest "-Dsurefire.failIfNoSpecifiedTests=false"
 ```
 
 ### 1.5 Test profile specifics (`%test`)
@@ -106,9 +134,34 @@ When the `%test` profile is active:
 - Fault tolerance is disabled (`quarkus.smallrye-fault-tolerance.enabled: false`)
 - `DevSecretSeederStartup` bean is absent - it is `@IfBuildProfile("dev")` only (Phase 64-B2)
 
-### 1.6 Target: 1664+ green, 0 failures
+### 1.6 Target: 0 failures, 0 errors, no drop in test count
 
-After any code change, the full suite must remain at or above 1664 passing tests. Do not accept a lower count — missing tests indicate a compilation failure or a deleted test case.
+After any code change, the full suite must report **0 failures and 0 errors**, and the total test count must not
+decrease. Do not accept a lower count — a drop indicates a compilation failure or a deleted test case.
+
+The absolute count is deliberately *not* pinned to a literal here. It changes with every added test, and a stale
+number is worse than none (this section previously read "1664", which had drifted by ~4,500 tests). Derive it:
+
+```bash
+mise run test:summary   # surefire totals + reactor JaCoCo coverage
+```
+
+### 1.7 Skipped tests roster & rationale (24 expected on developer environments)
+
+When running `mise run test:summary`, the test suite reports **24 skipped tests**. Every skip is intentional and guarded by deliberate JUnit conditional mechanisms:
+
+| Category | Count | Primary Test Classes | Mechanism & Rationale |
+|---|---:|---|---|
+| **Environment hermeticity** | 13 | `LocalModelValidatorTest` (9)<br>`ModelInstallerTest` (4) | `@DisabledIfEnvironmentVariable(named = "AMSHA_ONNX_MODEL_ROOT", matches = ".+")`<br>On local developer environments where `AMSHA_ONNX_MODEL_ROOT` is exported, these property-driven tests skip to avoid asserting against actual on-disk model directories. In clean CI environments where this variable is unset, they run. |
+| **OS platform guard** | 1 | `WorkspacePathSafetyTest` (1) | `@EnabledOnOs(OS.WINDOWS)`<br>Exercises Windows drive-letter (`C:\...`) and backslash path safety rules; skipped when running on macOS / Linux. |
+| **Headless TTY guard** | 2 | `ChatCommandApprovalTest` (2) | `@Disabled("JLine3 readLine() blocks indefinitely in Surefire forked JVM — no real TTY available")`<br>JLine3 interactive terminal reads block indefinitely without a real TTY. The interactive logic is tested hermetically in `ChatCommandUnitTest`. |
+| **Machine tooling & assumptions** | 8 | `AgyCliExecutorTest` (1)<br>`FoundryCliExecutorTest` (2)<br>`KimchiTokenResolverTest` (2)<br>`AgentProviderFactoryCoverageTest` (1)<br>`OnnxGoldenCorpusEquivalenceTest` (1)<br>`OnnxResourceLeakTest` (1) | `Assumptions.assumeTrue(...)`<br>Dynamic assertions that adapt to host setup: skips when local CLI tools (`agy`, `foundry`) or credentials (`KIMCHI_API_KEY`, Cloudflare account ID) are present or absent on the machine, or for release-evidence gates (golden corpus / resident memory). |
+
+To inspect all skipped tests and their exact skip messages on the current host:
+
+```bash
+python3 -c "import xml.etree.ElementTree as ET, glob; [print(f'{tc.get(\"classname\")}#{tc.get(\"name\")}: {tc.find(\"skipped\").get(\"message\", \"\")}') for r in glob.glob('*/target/surefire-reports/TEST-*.xml') for tc in ET.parse(r).findall('.//testcase') if tc.find('skipped') is not None]"
+```
 
 ---
 
@@ -119,7 +172,8 @@ For REST client testing (manual), start the app in dev or serve mode with a `.en
 **Minimum required:**
 
 ```env
-AMSHA_LLM_API_KEY=gsk_your_groq_key
+AMSHA_LLM_PROVIDER=groq
+AMSHA_GROQ_API_KEY=gsk_your_groq_key
 AMSHA_API_KEYS_INTERNAL=key-internal-changeme
 AMSHA_API_KEYS_CI=key-ci-changeme
 AMSHA_VAULT_PEPPER=test-pepper-32-chars-min-xxxxxxxxxx
@@ -138,7 +192,7 @@ AMSHA_TELEGRAM_BOT_TOKEN=...  # required for attach telegram mode only
 
 ```bash
 # Serve mode (REST only, no Telegram)
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Dquarkus.args=serve" \
   "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
@@ -1791,7 +1845,7 @@ grep -i "vector search" logs/amsha.log | tail -3
 
 ### 17.2 Ingest a document
 
-> The `3.27.2` version in this payload is intentional fixed historical test data for memory/RAG verification. The current application stack is Quarkus `3.38.3`.
+> The `3.27.2` version in this payload is intentional fixed historical test data for memory/RAG verification. The current application stack is Quarkus `3.39.3`.
 
 ```bash
 SESSION=$(curl -s -X POST http://localhost:8080/api/v1/sessions \
@@ -2103,10 +2157,10 @@ read-only.
 
 ```bash
 # Start CLI with the most recent catalogued session
-./amsha chat --last-session
+./dist/amsha-sqlite chat --last-session
 
 # Start CLI with a fresh catalogued session (skips --last-session)
-./amsha chat --new-session
+./dist/amsha-sqlite chat --new-session
 
 # Inside chat, rotate and verify the prompt shows the new ID
 /newsession
@@ -2260,10 +2314,10 @@ Run after deploying all Budget Governance fixes.
 
 Run after any significant code change. Combine automated + manual.
 
-### Automated (1664 tests — must remain green)
+### Automated (full suite — must remain green)
 
 ```bash
-./mvnw clean test -pl amsha-app -am
+./mvnw clean test -pl app -am
 ```
 
 **Key test classes to verify:**
@@ -2514,4 +2568,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.38.3 · JDK 25 · 1664 tests · 28 Maven modules · 21 tools · 18 LLM providers · Tiered Memory · Answer Quality Guard*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · recorded snapshot: 8,301 passing Java/JUnit tests at 84.28% line coverage and 172 passing UI/Vitest tests at 58.67% line coverage · 28 Maven modules · 21 tools · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider) · Tiered Memory · Answer Quality Guard.*

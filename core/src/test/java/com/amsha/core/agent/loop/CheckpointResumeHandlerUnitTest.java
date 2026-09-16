@@ -4,12 +4,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.RejectedExecutionException;
 
+import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
@@ -27,6 +29,7 @@ import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -38,6 +41,9 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -82,6 +88,12 @@ class CheckpointResumeHandlerUnitTest {
     @Mock
     SpeechDeliveryService speechDeliveryService;
 
+    @Mock
+    MeterRegistry meterRegistry;
+
+    @Mock
+    Counter resumeFailureCounter;
+
     CheckpointResumeHandler handler;
 
     @BeforeEach
@@ -99,6 +111,23 @@ class CheckpointResumeHandlerUnitTest {
                 escalationService);
         handler.executor = executor;
         handler.speechDeliveryService = speechDeliveryService;
+        handler.meterRegistry = meterRegistry;
+        when(meterRegistry.counter(anyString())).thenReturn(resumeFailureCounter);
+    }
+
+    /** A well-formed cron session id: "cron-" + 36-char job id + "-" + execution id. */
+    private static final String CRON_SESSION = "cron-12345678-1234-1234-1234-123456789012-session";
+
+    private static ChannelUser user(ChannelType type) {
+        return new ChannelUser("u1", "c1", "Operator", type);
+    }
+
+    private <T> T invokePrivate(String name, Class<?>[] types, Object... args) throws Exception {
+        Method method = CheckpointResumeHandler.class.getDeclaredMethod(name, types);
+        method.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        T result = (T) method.invoke(handler, args);
+        return result;
     }
 
     @Test
@@ -335,5 +364,384 @@ class CheckpointResumeHandlerUnitTest {
 
         verify(mockCronDispatcher).dispatch(cronSessionId, result);
         verifyNoInteractions(speechDeliveryService);
+    }
+
+    // ================= cron-lease guards on both resume paths =================
+
+    @Test
+    void asyncResumeReleasesTheClaimWhenTheCronLeaseIsLost() {
+        when(agentStore.claimForResume(CRON_SESSION, "r1")).thenReturn(true);
+        doReturn(Optional.of(mock(AgentCheckpoint.class))).when(agentStore).load(CRON_SESSION, "r1");
+        // claimForResume and renewLease both default to false -> syncRunning refuses the resume.
+        when(cronStore.claimForResume("12345678-1234-1234-1234-123456789012", "session"))
+                .thenReturn(false);
+
+        assertFalse(handler.resumeAfterBatchDecision(CRON_SESSION, "r1", "u1", "c1", "cli"));
+
+        verify(agentStore).releaseResumeClaim(CRON_SESSION, "r1");
+        verify(agentStore).clearBatchResuming(CRON_SESSION);
+        verifyNoInteractions(executor);
+    }
+
+    @Test
+    void syncResumeReleasesTheClaimWhenTheCronLeaseIsLost() throws Exception {
+        when(agentStore.claimForResume(CRON_SESSION, "r1")).thenReturn(true);
+        when(cronStore.claimForResume("12345678-1234-1234-1234-123456789012", "session"))
+                .thenReturn(false);
+
+        assertNull(handler.resumeAfterBatchDecisionSync(CRON_SESSION, "r1", "u1", "c1", "cli"));
+
+        verify(agentStore).releaseResumeClaim(CRON_SESSION, "r1");
+    }
+
+    @Test
+    void asyncResumeReleasesTheClaimWhenDispatchThrows() {
+        when(agentStore.claimForResume("s-throw", "r1")).thenReturn(true);
+        doReturn(Optional.of(mock(AgentCheckpoint.class))).when(agentStore).load("s-throw", "r1");
+        // A non-RejectedExecutionException must still release the claim.
+        doThrow(new IllegalStateException("dispatch blew up")).when(executor).execute(any(Runnable.class));
+
+        assertFalse(handler.resumeAfterBatchDecision("s-throw", "r1", "u1", "c1", "cli"));
+
+        verify(agentStore).releaseResumeClaim("s-throw", "r1");
+    }
+
+    @Test
+    void aFailingClaimReleaseIsSwallowed() {
+        when(agentStore.claimForResume("s-rel", "r1")).thenReturn(true);
+        doReturn(Optional.of(mock(AgentCheckpoint.class))).when(agentStore).load("s-rel", "r1");
+        doThrow(new IllegalStateException("dispatch blew up")).when(executor).execute(any(Runnable.class));
+        doThrow(new IllegalStateException("release failed")).when(agentStore).releaseResumeClaim("s-rel", "r1");
+
+        // The cleanup itself must not mask the original dispatch failure.
+        assertFalse(handler.resumeAfterBatchDecision("s-rel", "r1", "u1", "c1", "cli"));
+    }
+
+    // ================= resume budget =================
+
+    @Test
+    void resumeBudgetIsClampedBetweenThreeAndTheOriginalCap() throws Exception {
+        AgentCheckpoint unset = mock(AgentCheckpoint.class);
+        when(unset.getMaxIterations()).thenReturn(null);
+        assertEquals(5, resumeBudget(unset));
+
+        AgentCheckpoint partial = mock(AgentCheckpoint.class);
+        when(partial.getMaxIterations()).thenReturn(10);
+        when(partial.getIterationsUsed()).thenReturn(2);
+        assertEquals(8, resumeBudget(partial));
+
+        // Exhausted: remaining clamps to 0, so the floor of 3 applies (not 5).
+        AgentCheckpoint exhausted = mock(AgentCheckpoint.class);
+        when(exhausted.getMaxIterations()).thenReturn(3);
+        when(exhausted.getIterationsUsed()).thenReturn(3);
+        assertEquals(3, resumeBudget(exhausted));
+
+        AgentCheckpoint nearly = mock(AgentCheckpoint.class);
+        when(nearly.getMaxIterations()).thenReturn(20);
+        when(nearly.getIterationsUsed()).thenReturn(19);
+        assertEquals(3, resumeBudget(nearly));
+    }
+
+    /** Typed wrapper so {@code assertEquals(int, …)} is not ambiguous against the generic helper. */
+    private int resumeBudget(AgentCheckpoint cp) throws Exception {
+        Method method = CheckpointResumeHandler.class.getDeclaredMethod("calculateResumeBudget", AgentCheckpoint.class);
+        method.setAccessible(true);
+        return (int) method.invoke(handler, cp);
+    }
+
+    // ================= handleResumeFailure =================
+
+    @Test
+    void resumeFailureWithoutAContextOnlyCountsTheMetric() throws Exception {
+        invokePrivate(
+                "handleResumeFailure",
+                new Class<?>[] {String.class, MessageContext.class, Exception.class},
+                "s-1",
+                null,
+                new IllegalStateException("boom"));
+
+        verify(resumeFailureCounter).increment();
+        verifyNoInteractions(channelPluginRegistry);
+    }
+
+    @Test
+    void resumeFailureNotifiesTheChannelWhenASenderExists() throws Exception {
+        ChannelSender sender = mock(ChannelSender.class);
+        ChannelPlugin plugin = mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find("telegram")).thenReturn(Optional.of(plugin));
+
+        ChannelUser u = user(ChannelType.TELEGRAM);
+        MessageContext ctx = mock(MessageContext.class);
+        when(ctx.getUser()).thenReturn(u);
+
+        invokePrivate(
+                "handleResumeFailure",
+                new Class<?>[] {String.class, MessageContext.class, Exception.class},
+                "s-1",
+                ctx,
+                new IllegalStateException("boom"));
+
+        verify(resumeFailureCounter).increment();
+        verify(sender).sendRaw(eq(u), contains("Resume failed"));
+    }
+
+    @Test
+    void resumeFailureWithoutASenderIsSilent() throws Exception {
+        when(channelPluginRegistry.find("telegram")).thenReturn(Optional.empty());
+
+        ChannelUser u = user(ChannelType.TELEGRAM);
+        MessageContext ctx = mock(MessageContext.class);
+        when(ctx.getUser()).thenReturn(u);
+
+        invokePrivate(
+                "handleResumeFailure",
+                new Class<?>[] {String.class, MessageContext.class, Exception.class},
+                "s-1",
+                ctx,
+                new IllegalStateException("boom"));
+
+        verify(resumeFailureCounter).increment();
+    }
+
+    // ================= prepareResumeMessageContext =================
+
+    @Test
+    void resumeContextIsBuiltForEveryChannelType() throws Exception {
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        List<ChannelType> types = List.of(
+                ChannelType.TELEGRAM,
+                ChannelType.DISCORD,
+                ChannelType.REST_API,
+                ChannelType.CLI,
+                ChannelType.WEBSOCKET,
+                ChannelType.of("matrix"));
+
+        for (ChannelType type : types) {
+            MessageContext ctx = invokePrivate(
+                    "prepareResumeMessageContext",
+                    new Class<?>[] {
+                        String.class, ChannelUser.class, ChannelType.class, String.class, AgentCheckpoint.class
+                    },
+                    "c1",
+                    user(type),
+                    type,
+                    "resume goal",
+                    cp);
+
+            assertTrue(ctx.isResumeSignal(), "resume flag must be set for " + type.id());
+            assertEquals("resume goal", ctx.getGoal());
+            assertEquals("c1", ctx.getChatId());
+        }
+    }
+
+    @Test
+    void resumeContextRestoresStoredContextData() throws Exception {
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getContextDataJson()).thenReturn("{\"k\":\"v\",\"n\":7}");
+
+        MessageContext ctx = invokePrivate(
+                "prepareResumeMessageContext",
+                new Class<?>[] {String.class, ChannelUser.class, ChannelType.class, String.class, AgentCheckpoint.class
+                },
+                "c1",
+                user(ChannelType.CLI),
+                ChannelType.CLI,
+                "goal",
+                cp);
+
+        assertEquals("v", ctx.getData("k"));
+        assertEquals(7, ctx.getData("n"));
+    }
+
+    @Test
+    void resumeContextToleratesUnparseableContextData() throws Exception {
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getContextDataJson()).thenReturn("{not valid json");
+
+        MessageContext ctx = invokePrivate(
+                "prepareResumeMessageContext",
+                new Class<?>[] {String.class, ChannelUser.class, ChannelType.class, String.class, AgentCheckpoint.class
+                },
+                "c1",
+                user(ChannelType.CLI),
+                ChannelType.CLI,
+                "goal",
+                cp);
+
+        // Corrupt stored context is non-fatal: the resume still proceeds with an empty map.
+        assertTrue(ctx.isResumeSignal());
+        assertTrue(ctx.getData().isEmpty());
+    }
+
+    // ================= runResumeLoop =================
+
+    private MessageContext resumeContextFor(ChannelType type) {
+        ChannelUser u = user(type);
+        return new MessageContext("c1", u, new ChannelMessage.TelegramMessage(u, "goal", "c1", Instant.now()));
+    }
+
+    @Test
+    void resumeLoopRunsTheAgentWithTheComputedBudget() throws Exception {
+        MessageContext ctx = resumeContextFor(ChannelType.TELEGRAM);
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getSessionId()).thenReturn("s-1");
+        when(cp.getAgentRole()).thenReturn("r1");
+        when(cp.getSystemNote()).thenReturn("note");
+        when(cp.getMaxIterations()).thenReturn(10);
+        when(cp.getIterationsUsed()).thenReturn(2);
+        when(cp.getAutonomyLevel()).thenReturn(AutonomyLevel.SUPERVISED);
+
+        AgentResult expected = AgentResult.finished("ok", List.of());
+        when(agentLoop.run(eq("s-1"), eq("r1"), eq("goal"), eq("note"), eq(reasoningEngine), eq(8), eq(ctx)))
+                .thenReturn(expected);
+
+        AgentResult actual = invokePrivate(
+                "runResumeLoop",
+                new Class<?>[] {MessageContext.class, AgentCheckpoint.class, String.class},
+                ctx,
+                cp,
+                "goal");
+
+        assertSame(expected, actual);
+    }
+
+    @Test
+    void resumeLoopFailureIsReportedAndRethrown() throws Exception {
+        MessageContext ctx = resumeContextFor(ChannelType.TELEGRAM);
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getSessionId()).thenReturn("s-1");
+        when(cp.getAgentRole()).thenReturn("r1");
+        when(cp.getSystemNote()).thenReturn("note");
+        when(cp.getMaxIterations()).thenReturn(10);
+        when(cp.getIterationsUsed()).thenReturn(2);
+        when(cp.getAutonomyLevel()).thenReturn(AutonomyLevel.SUPERVISED);
+        when(agentLoop.run(any(), any(), any(), any(), any(), anyInt(), any()))
+                .thenThrow(new IllegalStateException("loop blew up"));
+
+        try {
+            invokePrivate(
+                    "runResumeLoop",
+                    new Class<?>[] {MessageContext.class, AgentCheckpoint.class, String.class},
+                    ctx,
+                    cp,
+                    "goal");
+            fail("a failed resume loop must propagate");
+        } catch (InvocationTargetException e) {
+            assertInstanceOf(RuntimeException.class, e.getCause());
+        }
+
+        verify(resumeFailureCounter).increment();
+    }
+
+    // ================= dispatchResumeResult: remaining branches =================
+
+    @Test
+    void dispatchIsSkippedWhenCronOwnershipIsLost() {
+        ChannelUser u = user(ChannelType.CLI);
+        AgentResult res = AgentResult.finished("done", List.of());
+
+        // A malformed cron session id makes syncTerminal refuse the transition.
+        handler.dispatchResumeResult(null, res, ChannelType.CLI, u, "cron-short", null);
+
+        verifyNoInteractions(channelPluginRegistry);
+        verifyNoInteractions(cliResultBridge);
+    }
+
+    @Test
+    void cliDispatchDeliversAnApprovalFrameThroughTheBridge() {
+        ChannelUser u = user(ChannelType.CLI);
+        AgentResult approval = AgentResult.awaitingApproval("sandbox_exec", "{}", "cli-abc", List.of());
+
+        handler.dispatchResumeResult(null, approval, ChannelType.CLI, u, "cli-abc", "sandbox_exec");
+
+        verify(cliResultBridge).complete(anyString(), eq(approval));
+    }
+
+    @Test
+    void cliDispatchDeliversAResultThroughTheBridge() {
+        ChannelUser u = user(ChannelType.CLI);
+        AgentResult res = AgentResult.finished("done", List.of());
+
+        handler.dispatchResumeResult(null, res, ChannelType.CLI, u, "cli-abc", null);
+
+        verify(cliResultBridge).complete(anyString(), eq(res));
+    }
+
+    @Test
+    void dispatchPrependsApprovedToolInfoToTheOutput() {
+        ChannelSender sender = mock(ChannelSender.class);
+        ChannelPlugin plugin = mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find("telegram")).thenReturn(Optional.of(plugin));
+
+        ChannelUser u = user(ChannelType.TELEGRAM);
+        AgentResult res = AgentResult.finished("all good", List.of());
+
+        handler.dispatchResumeResult(null, res, ChannelType.TELEGRAM, u, "s-1", "web_search");
+
+        verify(speechDeliveryService).deliver(isNull(), eq(sender), eq(u), eq(res), contains("✅ Approved"));
+    }
+
+    @Test
+    void dispatchMarksDeniedToolInfoAsDenied() {
+        ChannelSender sender = mock(ChannelSender.class);
+        ChannelPlugin plugin = mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find("telegram")).thenReturn(Optional.of(plugin));
+
+        ChannelUser u = user(ChannelType.TELEGRAM);
+        AgentResult res = AgentResult.finished("Request denied by policy", List.of());
+
+        handler.dispatchResumeResult(null, res, ChannelType.TELEGRAM, u, "s-1", "web_search");
+
+        verify(speechDeliveryService).deliver(isNull(), eq(sender), eq(u), eq(res), contains("❌ Denied"));
+    }
+
+    @Test
+    void dispatchFallsBackWhenNoSenderIsRegisteredForTheChannel() {
+        when(channelPluginRegistry.find("telegram")).thenReturn(Optional.empty());
+
+        ChannelUser u = user(ChannelType.TELEGRAM);
+        AgentResult res = AgentResult.finished("done", List.of());
+
+        assertDoesNotThrow(() -> handler.dispatchResumeResult(null, res, ChannelType.TELEGRAM, u, "s-1", null));
+
+        verifyNoInteractions(speechDeliveryService);
+        verifyNoInteractions(cliResultBridge);
+    }
+
+    @Test
+    void approvalResultIsDeliveredAsAnApprovalPrompt() {
+        ChannelSender sender = mock(ChannelSender.class);
+        ChannelPlugin plugin = mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find("telegram")).thenReturn(Optional.of(plugin));
+
+        ChannelUser u = user(ChannelType.TELEGRAM);
+        AgentResult approval = AgentResult.awaitingApproval("sandbox_exec", "{}", "s-1", List.of());
+
+        handler.dispatchResumeResult(null, approval, ChannelType.TELEGRAM, u, "s-1", null);
+
+        // An approval frame goes out as a prompt, not through the speech pipeline.
+        verify(sender).send(eq(u), anyList());
+        verifyNoInteractions(speechDeliveryService);
+    }
+
+    @Test
+    void rawOutputIsSentWhenSpeechDeliveryIsUnavailable() {
+        handler.speechDeliveryService = null;
+
+        ChannelSender sender = mock(ChannelSender.class);
+        ChannelPlugin plugin = mock(ChannelPlugin.class);
+        when(plugin.sender()).thenReturn(sender);
+        when(channelPluginRegistry.find("telegram")).thenReturn(Optional.of(plugin));
+
+        ChannelUser u = user(ChannelType.TELEGRAM);
+        AgentResult res = AgentResult.finished("plain output", List.of());
+
+        handler.dispatchResumeResult(null, res, ChannelType.TELEGRAM, u, "s-1", null);
+
+        verify(sender).sendRaw(eq(u), contains("plain output"));
     }
 }

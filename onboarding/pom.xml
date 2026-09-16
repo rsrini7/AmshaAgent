@@ -139,7 +139,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <argLine>${argLine} ${maven.surefire.argLine}</argLine>
+          <argLine>@{argLine} ${maven.surefire.argLine}</argLine>
           <forkCount>1</forkCount>
           <reuseForks>true</reuseForks>
           <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>

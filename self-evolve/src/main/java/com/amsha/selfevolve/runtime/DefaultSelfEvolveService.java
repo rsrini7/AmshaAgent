@@ -1,8 +1,9 @@
 package com.amsha.selfevolve.runtime;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -13,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.config.SelfEvolveConfig;
@@ -32,6 +34,7 @@ import com.amsha.selfevolve.store.noop.NoOpExtractedMemoryStore;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.Startup;
 
 /**
@@ -71,9 +74,11 @@ public class DefaultSelfEvolveService {
     private final Map<String, ConversationBuffer> buffers = new ConcurrentHashMap<>();
     private final Map<String, Long> lastEventTimestamps = new ConcurrentHashMap<>();
     private ScheduledExecutorService idleTimer;
+    private final AtomicBoolean shuttingDown = new AtomicBoolean();
 
     @PostConstruct
     void init() {
+        shuttingDown.set(false);
         if (!config.enabled()) {
             store = new NoOpEvolutionEventStore();
             log.info("[SelfEvolve] Disabled — all operations are no-ops");
@@ -132,8 +137,10 @@ public class DefaultSelfEvolveService {
         return new NoOpDirectiveStore();
     }
 
-    @PreDestroy
-    void shutdown() {
+    void onShutdown(@Observes @Priority(Integer.MIN_VALUE) ShutdownEvent event) {
+        if (!shuttingDown.compareAndSet(false, true)) {
+            return;
+        }
         if (idleTimer != null) {
             idleTimer.shutdown();
             try {
@@ -160,7 +167,7 @@ public class DefaultSelfEvolveService {
      * @return true if flush was triggered
      */
     public boolean append(EvolutionEvent event) {
-        if (!config.enabled()) {
+        if (!config.enabled() || shuttingDown.get()) {
             return false;
         }
         ConversationBuffer buffer = buffers.computeIfAbsent(
@@ -202,15 +209,18 @@ public class DefaultSelfEvolveService {
         if (!config.enabled()) {
             return;
         }
-        ConversationBuffer buffer = buffers.remove(sessionId);
-        lastEventTimestamps.remove(sessionId);
+        ConversationBuffer buffer = buffers.get(sessionId);
         if (buffer != null) {
             List<EvolutionEvent> events = buffer.drain(FlushReason.SESSION_END);
             if (!events.isEmpty()) {
                 // Persist events to store
-                persistEvents(events, FlushReason.SESSION_END);
-                // Run rule-based extraction (Phase 9)
-                runExtraction(events);
+                if (persistEvents(events, FlushReason.SESSION_END)) {
+                    buffers.remove(sessionId, buffer);
+                    lastEventTimestamps.remove(sessionId);
+                    runExtraction(events);
+                } else {
+                    buffer.restore(events);
+                }
             }
         }
     }
@@ -237,24 +247,30 @@ public class DefaultSelfEvolveService {
         return directiveStore != null ? directiveStore : new NoOpDirectiveStore();
     }
 
-    private void flushBuffer(ConversationBuffer buffer, FlushReason reason) {
+    private boolean flushBuffer(ConversationBuffer buffer, FlushReason reason) {
         List<EvolutionEvent> events = buffer.drain(reason);
         if (events.isEmpty()) {
-            return;
+            return true;
         }
-        persistEvents(events, reason);
+        if (persistEvents(events, reason)) {
+            return true;
+        }
+        buffer.restore(events);
+        return false;
     }
 
-    private void persistEvents(List<EvolutionEvent> events, FlushReason reason) {
+    private boolean persistEvents(List<EvolutionEvent> events, FlushReason reason) {
         try {
             int persisted = store.insertBatch(events);
             log.debugf(
                     "[SelfEvolve] Flushed %s events (reason=%s, persisted=%s)",
                     Integer.valueOf(events.size()), reason, Integer.valueOf(persisted));
+            return true;
         } catch (Exception e) {
             log.errorf(
                     "[SelfEvolve] Flush failed (reason=%s, events=%s): %s",
                     reason, events.size(), LogUtil.rootMessage(e));
+            return false;
         }
     }
 
@@ -283,7 +299,7 @@ public class DefaultSelfEvolveService {
     }
 
     private void checkIdleFlush() {
-        if (!config.enabled() || flushPolicy == null) {
+        if (!config.enabled() || flushPolicy == null || shuttingDown.get()) {
             return;
         }
         long now = System.currentTimeMillis();

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -31,6 +33,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.quarkus.runtime.ShutdownEvent;
 
 @ExtendWith(MockitoExtension.class)
 class DefaultSelfEvolveServiceTest {
@@ -140,6 +144,41 @@ class DefaultSelfEvolveServiceTest {
         verify(store, times(1)).insertBatch(captor.capture());
         assertEquals(1, captor.getValue().size());
         assertEquals("sandbox_exec", captor.getValue().get(0).toolName());
+    }
+
+    @Test
+    void failedThresholdFlush_restoresEventsForLaterPersistence() {
+        when(config.enabled()).thenReturn(true);
+        when(config.bufferSize()).thenReturn(2);
+        when(flushConfig.maxEvents()).thenReturn(2);
+        when(flushConfig.idleMs()).thenReturn(300000L);
+        doThrow(new IllegalStateException("pool closed")).when(store).insertBatch(any());
+
+        service.init();
+        service.emit("s1", "u1", EvolutionEventType.USER_MESSAGE, "coordinator", "one", null, 1);
+        service.emit("s1", "u1", EvolutionEventType.AGENT_MESSAGE, "coordinator", "two", null, 1);
+
+        assertEquals(2, service.bufferSize("s1"));
+        doReturn(2).when(store).insertBatch(any());
+        service.flushSession("s1");
+
+        assertEquals(0, service.bufferSize("s1"));
+        verify(store, times(2)).insertBatch(any());
+    }
+
+    @Test
+    void shutdown_flushesRemainingEventsBeforePersistenceIsClosed() {
+        when(config.enabled()).thenReturn(true);
+        when(config.bufferSize()).thenReturn(10);
+        when(flushConfig.maxEvents()).thenReturn(10);
+        when(flushConfig.idleMs()).thenReturn(300000L);
+        when(store.insertBatch(any())).thenReturn(1);
+
+        service.init();
+        service.emit("s1", "u1", EvolutionEventType.USER_MESSAGE, "coordinator", "one", null, 1);
+        service.onShutdown(new ShutdownEvent());
+
+        verify(store).insertBatch(any());
     }
 
     @Test

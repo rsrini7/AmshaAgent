@@ -36,9 +36,9 @@ mise run headroom:start-groq      # Start a single provider
 ├── start-gemini.ps1       #   ...
 ├── status.ps1             # Queries /health endpoint + process env per running proxy
 ├── stop-all.ps1           # Kills all proxies by PID file + port fallback
-├── pids/                  # PID files (auto-created)
-└── logs/                  # stdout/stderr logs (auto-created)
 ```
+
+Runtime state (`pids/` and `logs/`) is auto-created under `$repoRoot/data/headroom/`.
 
 Every `start-*.ps1` is a thin wrapper that dot-sources `headroom-common.ps1` and calls `Start-HeadroomProxy`. The shared helper handles:
 
@@ -163,8 +163,8 @@ Controlled by `HEADROOM_PROXY_AUTH_MODE_POLICY_ENFORCEMENT` env var (default: en
 
 Check logs:
 ```bash
-cat .mise/tasks/headroom/logs/<provider>.log   # stdout
-cat .mise/tasks/headroom/logs/<provider>.err   # stderr
+cat data/headroom/logs/<provider>.log   # stdout
+cat data/headroom/logs/<provider>.err   # stderr
 ```
 
 Common causes:
@@ -176,7 +176,7 @@ Common causes:
 
 If a proxy crashed without cleanup:
 ```bash
-rm .mise/tasks/headroom/pids/<provider>.pid
+rm data/headroom/pids/<provider>.pid
 mise run headroom:start-<provider>
 ```
 

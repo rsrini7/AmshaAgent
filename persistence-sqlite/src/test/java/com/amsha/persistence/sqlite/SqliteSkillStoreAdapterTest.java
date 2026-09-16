@@ -45,4 +45,14 @@ class SqliteSkillStoreAdapterTest {
         assertTrue(store.deleteById(skillId));
         assertTrue(store.findByName(name).isEmpty());
     }
+
+    @Test
+    void deleteAllRemovesEverySkill() {
+        String suffix = UUID.randomUUID().toString();
+        store.save(new SkillDto("skill-a-" + suffix, "name-a-" + suffix, "yaml-a", Instant.now(), Instant.now()));
+        store.save(new SkillDto("skill-b-" + suffix, "name-b-" + suffix, "yaml-b", Instant.now(), Instant.now()));
+
+        assertTrue(store.deleteAll() >= 2);
+        assertTrue(store.findAll().isEmpty());
+    }
 }

@@ -150,4 +150,158 @@ class PostgresLlmProfileStoreAdapterTest {
         assertEquals(1, grantStore.delete("ws-1", "c-shared"));
         assertTrue(grantStore.findByWorkspaceAndConnection("ws-1", "c-shared").isEmpty());
     }
+
+    /**
+     * Activation is the one write path here that spans several tables in a single transaction: it flips the
+     * connection, enables the profiles it owns, and enables only the routes that reference one of those profiles.
+     * A route in the same scope pointing at an unrelated profile must be left alone — a scope can hold independent
+     * drafts, and enabling every route in the scope would activate them.
+     */
+    @Test
+    void activateConnectionFlipsConnectionProfilesAndRoutesToActive() {
+        String prefix = "pg-" + UUID.randomUUID();
+        LlmConnectionDto staged = new LlmConnectionDto(
+                prefix + "-c3",
+                "USER",
+                prefix + "-user-3",
+                "owner-1",
+                "Conn",
+                "openai",
+                "default",
+                null,
+                "API_KEY",
+                null,
+                "STAGED",
+                1,
+                Instant.now(),
+                Instant.now());
+        store.saveConnection(staged);
+
+        Instant now = Instant.now();
+        store.saveModelProfile(new ModelProfileDto(
+                prefix + "-p2", prefix + "-c3", "gpt-4o", "NATIVE", null, null, false, 1, now, now));
+        store.saveRouteAssignment(new ModelRouteAssignmentDto(
+                prefix + "-r2",
+                "USER",
+                prefix + "-user-3",
+                "ACTIVE_WORKSPACE",
+                null,
+                List.of(prefix + "-p2"),
+                false,
+                1,
+                now,
+                now));
+        store.saveRouteAssignment(new ModelRouteAssignmentDto(
+                prefix + "-r-unrelated",
+                "USER",
+                prefix + "-user-3",
+                "DEFAULT",
+                null,
+                List.of(prefix + "-other-profile"),
+                false,
+                1,
+                now,
+                now));
+
+        assertTrue(store.activateConnection(prefix + "-c3", 1));
+
+        assertEquals("ACTIVE", store.findConnection(prefix + "-c3").get().state());
+        assertTrue(store.listModelProfilesByConnection(prefix + "-c3").get(0).enabled());
+        assertTrue(store.findRouteAssignment(prefix + "-r2").orElseThrow().enabled());
+        assertFalse(
+                store.findRouteAssignment(prefix + "-r-unrelated").orElseThrow().enabled());
+
+        assertFalse(store.activateConnection(prefix + "-c3", 1), "stale revision must fail");
+    }
+
+    @Test
+    void activateConnectionRejectsAMissingConnection() {
+        assertFalse(store.activateConnection("missing-" + UUID.randomUUID(), 1));
+    }
+
+    @Test
+    void modelProfileUpdateAndDelete() {
+        String prefix = "pg-" + UUID.randomUUID();
+        store.saveConnection(connection(prefix + "-c4", "USER", prefix + "-user-4"));
+        Instant now = Instant.now();
+        store.saveModelProfile(
+                new ModelProfileDto(prefix + "-p4", prefix + "-c4", "gpt-4o", "NATIVE", null, null, true, 1, now, now));
+        assertTrue(store.findModelProfile(prefix + "-p4").isPresent());
+
+        ModelProfileDto renamed = new ModelProfileDto(
+                prefix + "-p4", prefix + "-c4", "gpt-4o-mini", "NATIVE", null, null, false, 2, now, Instant.now());
+        assertTrue(store.updateModelProfile(renamed, 1));
+
+        ModelProfileDto after = store.findModelProfile(prefix + "-p4").orElseThrow();
+        assertEquals("gpt-4o-mini", after.modelId());
+        assertFalse(after.enabled());
+
+        assertFalse(store.updateModelProfile(renamed, 1), "stale revision must fail");
+
+        assertEquals(1, store.deleteModelProfile(prefix + "-p4"));
+        assertTrue(store.findModelProfile(prefix + "-p4").isEmpty());
+        assertEquals(0, store.deleteModelProfile(prefix + "-p4"), "already deleted");
+    }
+
+    @Test
+    void routeAssignmentUpdateAndDelete() {
+        String prefix = "pg-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        store.saveRouteAssignment(new ModelRouteAssignmentDto(
+                prefix + "-r4",
+                "USER",
+                prefix + "-user-4",
+                "DEFAULT",
+                null,
+                List.of(prefix + "-p4"),
+                true,
+                1,
+                now,
+                now));
+        assertTrue(store.findRouteAssignment(prefix + "-r4").isPresent());
+
+        ModelRouteAssignmentDto disabled = new ModelRouteAssignmentDto(
+                prefix + "-r4",
+                "USER",
+                prefix + "-user-4",
+                "DEFAULT",
+                null,
+                List.of(prefix + "-p4"),
+                false,
+                2,
+                now,
+                Instant.now());
+        assertTrue(store.updateRouteAssignment(disabled, 1));
+        assertFalse(store.findRouteAssignment(prefix + "-r4").orElseThrow().enabled());
+
+        assertFalse(store.updateRouteAssignment(disabled, 1), "stale revision must fail");
+
+        assertEquals(1, store.deleteRouteAssignment(prefix + "-r4"));
+        assertTrue(store.findRouteAssignment(prefix + "-r4").isEmpty());
+    }
+
+    /**
+     * {@code ordered_profile_ids} is a {@code TEXT} JSON array parsed by {@code RouteRowMapper.parseList}.
+     * Writing is total, reading is not: a route whose JSON is corrupt must still be readable, degrading that
+     * one column to an empty list. Returning empty rather than throwing keeps the rest of the routing table
+     * inspectable so an operator can repair the row.
+     */
+    @Test
+    void aCorruptOrderedProfileIdsColumnDegradesToAnEmptyList() {
+        String prefix = "pg-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        String routeId = prefix + "-r5";
+        store.saveRouteAssignment(new ModelRouteAssignmentDto(
+                routeId, "USER", prefix + "-user-5", "DEFAULT", null, List.of(prefix + "-p5"), true, 1, now, now));
+
+        jdbi.useHandle(h -> h.execute(
+                "UPDATE model_route_assignment SET ordered_profile_ids = ? WHERE id = ?", "[not json", routeId));
+
+        ModelRouteAssignmentDto read = store.findRouteAssignment(routeId).orElseThrow();
+
+        assertTrue(read.orderedProfileIds().isEmpty(), "an unparseable column must degrade, not throw");
+        // The sibling columns are untouched, which is what proves the degradation is per-column.
+        assertEquals("USER", read.scopeType());
+        assertTrue(read.enabled());
+    }
 }

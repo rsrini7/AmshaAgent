@@ -22,9 +22,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 
 import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.MediaAttachment;
@@ -608,5 +610,307 @@ class GovernedTelegramMediaResolverTest {
                 GovernedTelegramMediaResolver.scrubTokenException(rawWithSuppressed, BOT_TOKEN);
         assertEquals(1, scrubbedWithSuppressed.getSuppressed().length);
         assertFalse(scrubbedWithSuppressed.getSuppressed()[0].getMessage().contains(BOT_TOKEN));
+    }
+
+    // ------------------------------------------------------------------
+    // Additional branch coverage: guards, transport failures, bounded read
+    // ------------------------------------------------------------------
+
+    private MediaAttachment attachment(String uri) {
+        return MediaAttachment.ofUri(
+                "att-tg", AttachmentType.IMAGE, "image/png", "photo.png", 100L, URI.create(uri), Map.of());
+    }
+
+    @Test
+    @DisplayName("No-arg (CDI) constructor is usable")
+    void noArgConstructor_constructs() {
+        assertNotNull(new GovernedTelegramMediaResolver());
+    }
+
+    @Test
+    @DisplayName("Attachment with a null sourceUri is rejected")
+    void resolveAndDownload_nullSourceUri_rejected() {
+        MediaAttachment att = mock(MediaAttachment.class);
+        when(att.sourceUri()).thenReturn(null);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> resolver.resolveAndDownload(att, "user-1", true, 1024, downloadService));
+    }
+
+    @Test
+    @DisplayName("Failure thrown by the download service is token-scrubbed and rethrown")
+    void resolveAndDownload_downloadServiceThrows_scrubsAndRethrows() throws Exception {
+        @SuppressWarnings("unchecked")
+        HttpResponse<InputStream> resp = mock(HttpResponse.class);
+        when(resp.statusCode()).thenReturn(200);
+        when(resp.body())
+                .thenReturn(new ByteArrayInputStream(
+                        "{\"ok\":true,\"result\":{\"file_path\":\"photos/p.png\"}}".getBytes(StandardCharsets.UTF_8)));
+        resolver.customMetadataTransport = _ -> resp;
+        when(policyService.evaluate(anyString(), eq(OutboundPurpose.MEDIA_DOWNLOAD), any(), eq("user-1"), anyBoolean()))
+                .thenReturn(OutboundPolicyDecision.allow(OutboundPurpose.MEDIA_DOWNLOAD, "user-1"));
+        Mockito.doThrow(new RuntimeException("stream boom " + BOT_TOKEN))
+                .when(downloadService)
+                .downloadHttpWithRedirects(any(), any(), any(), anyBoolean(), any(), anyLong(), eq(0));
+
+        RuntimeException ex = assertThrows(
+                RuntimeException.class,
+                () -> resolver.resolveAndDownload(
+                        attachment("telegram://file/photo123"), "user-1", true, 1024, downloadService));
+        assertFalse(ex.getMessage().contains(BOT_TOKEN));
+        assertTrue(ex.getMessage().contains("[REDACTED]"));
+    }
+
+    @Test
+    @DisplayName("Opaque telegram URI is rejected")
+    void validateTelegramUri_opaqueUri_rejected() {
+        assertThrows(
+                OutboundHttpException.class,
+                () -> GovernedTelegramMediaResolver.validateTelegramUri(URI.create("telegram:file/123")));
+    }
+
+    @Test
+    @DisplayName("Telegram URI with no path is rejected")
+    void validateTelegramUri_missingPath_rejected() {
+        assertThrows(
+                OutboundHttpException.class,
+                () -> GovernedTelegramMediaResolver.validateTelegramUri(URI.create("telegram://file")));
+    }
+
+    @Test
+    @DisplayName("Telegram URI with a control character in the file id is rejected")
+    void validateTelegramUri_controlCharInFileId_rejected() {
+        assertThrows(
+                OutboundHttpException.class,
+                () -> GovernedTelegramMediaResolver.validateTelegramUri(URI.create("telegram://file/%01")));
+    }
+
+    @Test
+    @DisplayName("Malformed base URI configuration is rejected")
+    void validateBaseUri_malformed_rejected() {
+        assertThrows(
+                OutboundHttpException.class,
+                () -> GovernedTelegramMediaResolver.validateBaseUri("http://exa mple.com"));
+    }
+
+    @Test
+    @DisplayName("getFile transport timeout maps to TIMEOUT")
+    void fetchTelegramFilePath_transportTimeout_mapsToTimeout() {
+        resolver.customMetadataTransport = _ -> {
+            throw new HttpTimeoutException("slow");
+        };
+        when(policyService.evaluate(anyString(), eq(OutboundPurpose.MEDIA_DOWNLOAD), any(), eq("user-1"), anyBoolean()))
+                .thenReturn(OutboundPolicyDecision.allow(OutboundPurpose.MEDIA_DOWNLOAD, "user-1"));
+
+        OutboundHttpException ex = assertThrows(
+                OutboundHttpException.class,
+                () -> resolver.resolveAndDownload(
+                        attachment("telegram://file/photo123"), "user-1", true, 1024, downloadService));
+        assertEquals(OutboundHttpException.Category.TIMEOUT, ex.category());
+    }
+
+    @Test
+    @DisplayName("getFile transport I/O failure maps to IO and scrubs the token")
+    void fetchTelegramFilePath_ioFailure_mapsToIoAndScrubs() {
+        resolver.customMetadataTransport = _ -> {
+            throw new IOException("io fail " + BOT_TOKEN);
+        };
+        when(policyService.evaluate(anyString(), eq(OutboundPurpose.MEDIA_DOWNLOAD), any(), eq("user-1"), anyBoolean()))
+                .thenReturn(OutboundPolicyDecision.allow(OutboundPurpose.MEDIA_DOWNLOAD, "user-1"));
+
+        OutboundHttpException ex = assertThrows(
+                OutboundHttpException.class,
+                () -> resolver.resolveAndDownload(
+                        attachment("telegram://file/photo123"), "user-1", true, 1024, downloadService));
+        assertEquals(OutboundHttpException.Category.IO, ex.category());
+        assertFalse(ex.getMessage().contains(BOT_TOKEN));
+    }
+
+    @Test
+    @DisplayName("getFile transport interruption maps to IO and restores the interrupt flag")
+    void fetchTelegramFilePath_interrupted_mapsToIo() {
+        resolver.customMetadataTransport = _ -> {
+            throw new InterruptedException("interrupted");
+        };
+        when(policyService.evaluate(anyString(), eq(OutboundPurpose.MEDIA_DOWNLOAD), any(), eq("user-1"), anyBoolean()))
+                .thenReturn(OutboundPolicyDecision.allow(OutboundPurpose.MEDIA_DOWNLOAD, "user-1"));
+
+        try {
+            OutboundHttpException ex = assertThrows(
+                    OutboundHttpException.class,
+                    () -> resolver.resolveAndDownload(
+                            attachment("telegram://file/photo123"), "user-1", true, 1024, downloadService));
+            assertEquals(OutboundHttpException.Category.IO, ex.category());
+            assertTrue(Thread.interrupted(), "interrupt flag should be restored");
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    @DisplayName("getFile non-200 status fails closed and closes the body quietly")
+    void fetchTelegramFilePath_non200_closesBodyAndFails() {
+        @SuppressWarnings("unchecked")
+        HttpResponse<InputStream> resp = mock(HttpResponse.class);
+        when(resp.statusCode()).thenReturn(500);
+        when(resp.body()).thenReturn(new InputStream() {
+            @Override
+            public int read() {
+                return -1;
+            }
+
+            @Override
+            public void close() throws IOException {
+                throw new IOException("close failure");
+            }
+        });
+        resolver.customMetadataTransport = _ -> resp;
+        when(policyService.evaluate(anyString(), eq(OutboundPurpose.MEDIA_DOWNLOAD), any(), eq("user-1"), anyBoolean()))
+                .thenReturn(OutboundPolicyDecision.allow(OutboundPurpose.MEDIA_DOWNLOAD, "user-1"));
+
+        OutboundHttpException ex = assertThrows(
+                OutboundHttpException.class,
+                () -> resolver.resolveAndDownload(
+                        attachment("telegram://file/photo123"), "user-1", true, 1024, downloadService));
+        assertEquals(OutboundHttpException.Category.IO, ex.category());
+        assertTrue(ex.getMessage().contains("HTTP status 500"));
+    }
+
+    @Test
+    @DisplayName("getFile non-200 status closes a well-behaved body quietly")
+    void fetchTelegramFilePath_non200_closesQuietlyOnSuccess() {
+        @SuppressWarnings("unchecked")
+        HttpResponse<InputStream> resp = mock(HttpResponse.class);
+        when(resp.statusCode()).thenReturn(404);
+        when(resp.body()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        resolver.customMetadataTransport = _ -> resp;
+        when(policyService.evaluate(anyString(), eq(OutboundPurpose.MEDIA_DOWNLOAD), any(), eq("user-1"), anyBoolean()))
+                .thenReturn(OutboundPolicyDecision.allow(OutboundPurpose.MEDIA_DOWNLOAD, "user-1"));
+
+        OutboundHttpException ex = assertThrows(
+                OutboundHttpException.class,
+                () -> resolver.resolveAndDownload(
+                        attachment("telegram://file/photo123"), "user-1", true, 1024, downloadService));
+        assertEquals(OutboundHttpException.Category.IO, ex.category());
+        assertTrue(ex.getMessage().contains("HTTP status 404"));
+    }
+
+    @Test
+    @DisplayName("readBoundedString returns empty for a null stream")
+    void readBoundedString_nullStream_returnsEmpty() {
+        assertEquals("", GovernedTelegramMediaResolver.readBoundedString(null, 100, 5, BOT_TOKEN));
+    }
+
+    @Test
+    @DisplayName("readBoundedString fails closed when the deadline is already exceeded")
+    void readBoundedString_deadlineExceeded_failsClosed() {
+        InputStream in = new ByteArrayInputStream(new byte[] {1, 2, 3});
+        OutboundHttpException ex = assertThrows(
+                OutboundHttpException.class,
+                () -> GovernedTelegramMediaResolver.readBoundedString(in, 100, 0, BOT_TOKEN));
+        assertEquals(OutboundHttpException.Category.TIMEOUT, ex.category());
+    }
+
+    @Test
+    @DisplayName("readBoundedString fails closed when a blocking read exceeds the deadline")
+    void readBoundedString_blockingReadTimesOut() {
+        CountDownLatch latch = new CountDownLatch(1);
+        InputStream blocking = new InputStream() {
+            @Override
+            public int read() throws IOException {
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return -1;
+            }
+        };
+        try {
+            OutboundHttpException ex = assertThrows(
+                    OutboundHttpException.class,
+                    () -> GovernedTelegramMediaResolver.readBoundedString(blocking, 100, 1, BOT_TOKEN));
+            assertEquals(OutboundHttpException.Category.TIMEOUT, ex.category());
+        } finally {
+            latch.countDown();
+        }
+    }
+
+    @Test
+    @DisplayName("readBoundedString fails closed when the calling thread is interrupted")
+    void readBoundedString_interrupted_failsClosed() {
+        CountDownLatch latch = new CountDownLatch(1);
+        InputStream blocking = new InputStream() {
+            @Override
+            public int read() throws IOException {
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return -1;
+            }
+        };
+        Thread.currentThread().interrupt();
+        try {
+            OutboundHttpException ex = assertThrows(
+                    OutboundHttpException.class,
+                    () -> GovernedTelegramMediaResolver.readBoundedString(blocking, 100, 5, BOT_TOKEN));
+            assertEquals(OutboundHttpException.Category.IO, ex.category());
+        } finally {
+            Thread.interrupted();
+            latch.countDown();
+        }
+    }
+
+    @Test
+    @DisplayName("readBoundedString propagates an IOException raised by the stream")
+    void readBoundedString_readIOException_wrapped() {
+        InputStream failing = new InputStream() {
+            @Override
+            public int read() throws IOException {
+                throw new IOException("read boom");
+            }
+        };
+        assertThrows(
+                RuntimeException.class,
+                () -> GovernedTelegramMediaResolver.readBoundedString(failing, 100, 5, BOT_TOKEN));
+    }
+
+    @Test
+    @DisplayName("readBoundedString propagates a RuntimeException raised by the stream")
+    void readBoundedString_readRuntimeException_wrapped() {
+        InputStream failing = new InputStream() {
+            @Override
+            public int read() {
+                throw new IllegalStateException("read boom");
+            }
+        };
+        assertThrows(
+                RuntimeException.class,
+                () -> GovernedTelegramMediaResolver.readBoundedString(failing, 100, 5, BOT_TOKEN));
+    }
+
+    @Test
+    @DisplayName("readBoundedString wraps a non-IO/non-runtime throwable from the stream")
+    void readBoundedString_readError_wrapped() {
+        InputStream failing = new InputStream() {
+            @Override
+            public int read() {
+                throw new AssertionError("read boom");
+            }
+        };
+        assertThrows(
+                RuntimeException.class,
+                () -> GovernedTelegramMediaResolver.readBoundedString(failing, 100, 5, BOT_TOKEN));
+    }
+
+    @Test
+    @DisplayName("Telegram file_path with a control character is rejected")
+    void validateTelegramFilePath_controlChar_rejected() {
+        assertThrows(
+                OutboundHttpException.class,
+                () -> GovernedTelegramMediaResolver.validateTelegramFilePath("photos/evil\u0001.png"));
     }
 }

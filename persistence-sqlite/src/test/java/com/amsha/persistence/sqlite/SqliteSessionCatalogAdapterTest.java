@@ -141,4 +141,56 @@ class SqliteSessionCatalogAdapterTest {
                         .orElseThrow()
                         .sessionId());
     }
+
+    @Test
+    void recordUpsertsAndAssignsSeqWhenNoneIsGiven() {
+        String sid = uid();
+        String owner = uid();
+        String cid = uid();
+
+        adapter.record(makeEntry(sid, owner, "telegram", cid));
+        assertEquals(1, adapter.bySessionId(sid).orElseThrow().seq(), "seq comes from the scope maximum");
+
+        // Re-recording the same session upserts in place rather than adding a row.
+        adapter.record(new SessionCatalogEntry(
+                uid(), owner, "telegram", cid, sid, "coordinator", "summarize", now, Instant.now(), 0, true, "ACTIVE"));
+        assertEquals(1, adapter.listByScope(owner, "telegram", cid).size());
+
+        SessionCatalogEntry updated = adapter.bySessionId(sid).orElseThrow();
+        assertEquals("coordinator", updated.role());
+        assertEquals("summarize", updated.goalPreview());
+    }
+
+    @Test
+    void recordHonoursAnExplicitSeq() {
+        String sid = uid();
+        String owner = uid();
+        String cid = uid();
+
+        adapter.record(
+                new SessionCatalogEntry(uid(), owner, "telegram", cid, sid, null, null, now, now, 7, true, "ACTIVE"));
+
+        assertEquals(7, adapter.bySessionId(sid).orElseThrow().seq());
+    }
+
+    @Test
+    void latestByScopeReturnsTheMostRecentlyUsedEntry() {
+        String sid1 = uid();
+        String sid2 = uid();
+        String owner = uid();
+        String cid = uid();
+        // Distinct last_used_at: the query orders on that column, so equal values would make the result arbitrary.
+        Instant older = Instant.now().minusSeconds(60);
+        Instant newer = Instant.now();
+
+        adapter.activateNew(new SessionCatalogEntry(
+                uid(), owner, "telegram", cid, sid1, null, null, older, older, 0, true, "ACTIVE"));
+        adapter.activateNew(new SessionCatalogEntry(
+                uid(), owner, "telegram", cid, sid2, null, null, newer, newer, 0, true, "ACTIVE"));
+
+        assertEquals(
+                sid2,
+                adapter.latestByScope(owner, "telegram", cid).orElseThrow().sessionId());
+        assertTrue(adapter.latestByScope(owner, "telegram", uid()).isEmpty());
+    }
 }

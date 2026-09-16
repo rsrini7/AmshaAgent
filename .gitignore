@@ -45,6 +45,7 @@ workspaces/
 data*/
 !**/scripts/data/
 lib/
+!scripts/lib/
 
 # Environment Variables
 .env
@@ -52,6 +53,7 @@ lib/
 .env.local
 .env.build*
 .env.backup*
+.env.recovery*
 
 # Node.js
 node_modules/
@@ -78,6 +80,7 @@ amsha-source.7z
 tool-contracts.json
 results*.json
 autotest/logs/
+scripts/autotest/logs/
 
 # Babysitter — keep project-profile, quality-gates, package.json; ignore transient
 .a5c/runs/
@@ -92,6 +95,7 @@ autotest/logs/
 
 .mise/tasks/headroom/logs/
 .mise/tasks/headroom/pids/
+data/headroom/
 
 !.headroom/config/*.json
 .headroom/*.db

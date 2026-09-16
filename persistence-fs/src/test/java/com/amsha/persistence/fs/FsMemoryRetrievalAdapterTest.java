@@ -175,6 +175,21 @@ class FsMemoryRetrievalAdapterTest {
     }
 
     @Test
+    void blankSearchQueryDoesNotInvokeEmbeddingModel() throws Exception {
+        EmbeddingModel model = mock(EmbeddingModel.class);
+        @SuppressWarnings("unchecked")
+        Instance<EmbeddingModel> mockInstance = mock(Instance.class);
+        when(mockInstance.isUnsatisfied()).thenReturn(false);
+        when(mockInstance.get()).thenReturn(model);
+        setField(adapter, "embeddingModel", mockInstance);
+        adapter.init();
+        setField(adapter, "vectorSearchEnabled", true);
+
+        assertTrue(adapter.search("   ", 10, null).isEmpty());
+        verify(model, never()).embed(anyString());
+    }
+
+    @Test
     void indexAndSearchWithMetadata() {
         adapter.init();
         Map<String, String> metadata = Map.of("source", "unit-test", "type", "verification");

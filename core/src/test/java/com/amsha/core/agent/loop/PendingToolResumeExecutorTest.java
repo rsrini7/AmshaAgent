@@ -3,12 +3,15 @@ package com.amsha.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,14 +20,18 @@ import java.util.List;
 import java.util.Map;
 
 import com.amsha.core.agent.reasoning.ReasoningEngine;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +39,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -332,5 +340,357 @@ class PendingToolResumeExecutorTest {
 
         assertInstanceOf(AgentResult.Finished.class, result);
         verify(stateMachineRunner).run(any(AgentExecutionContext.class), eq(reasoningEngine), anyList());
+    }
+
+    // ---------------------------------------------------------------- checkpoint restore
+
+    @Test
+    void execute_prependsRestoredCheckpointStepsToTheHistory() {
+        when(agentStore.deserializeSteps(checkpoint))
+                .thenReturn(List.of(ReasoningStep.systemMessage("restored prior turn")));
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.success("fetched"));
+        when(stateMachineRunner.runFinishPass(any(), any(), any())).thenReturn(AgentResult.finished("done", List.of()));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        AgentResult result = executor.execute(
+                contextFor("s-restore", "coordinator", "fetch the page"),
+                history,
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertEquals("restored prior turn", history.get(0).observation());
+        assertEquals(2, history.size(), "the resumed tool step must follow the prepended HITL context steps");
+    }
+
+    // ---------------------------------------------------------------- retry / halt control flow
+
+    @Test
+    void execute_retryableToolFailureBacksOffThenRetriesOnce() {
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(toolRegistry.invokeTool(any(), any(), any()))
+                .thenThrow(new RuntimeException("Rate limited. Please try again in 0.001s"))
+                .thenReturn(ToolResponse.success("fetched on retry"));
+        when(stateMachineRunner.runFinishPass(any(), any(), any()))
+                .thenReturn(AgentResult.finished("recovered", List.of()));
+
+        AgentResult result = executor.execute(
+                contextFor("s-retry", "coordinator", "fetch"),
+                new ArrayList<>(),
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        assertEquals("recovered", ((AgentResult.Finished) result).answer());
+        verify(toolRegistry, times(2)).invokeTool(any(), any(), any());
+    }
+
+    @Test
+    void execute_interruptDuringBackoffAbortsWithAnUncheckedException() {
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Rate limited. Please try again in 0.001s");
+        });
+        try {
+            RuntimeException thrown = assertThrows(
+                    RuntimeException.class,
+                    () -> executor.execute(
+                            contextFor("s-backoff", "coordinator", "fetch"),
+                            new ArrayList<>(),
+                            checkpoint,
+                            "CLI",
+                            stateMachineRunner));
+
+            assertEquals("Resume interrupted during backoff", thrown.getMessage());
+            verify(toolRegistry, times(1)).invokeTool(any(), any(), any());
+        } finally {
+            Thread.interrupted(); // never leak a set interrupt flag into another test
+        }
+    }
+
+    @Test
+    void execute_haltedSessionAbortsBeforeTheToolIsInvoked() {
+        WorkspaceManager.haltSession("s-halted");
+        try {
+            when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+            when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+
+            RuntimeException thrown = assertThrows(
+                    RuntimeException.class,
+                    () -> executor.execute(
+                            contextFor("s-halted", "coordinator", "fetch"),
+                            new ArrayList<>(),
+                            checkpoint,
+                            "CLI",
+                            stateMachineRunner));
+
+            assertEquals("Session s-halted halted during resume", thrown.getMessage());
+            verify(toolRegistry, never()).invokeTool(any(), any(), any());
+        } finally {
+            WorkspaceManager.clearHalted("s-halted");
+        }
+    }
+
+    // ---------------------------------------------------------------- guard decisions
+
+    @Test
+    void execute_guardBlockReturnsFailedWithoutInvokingTheTool() {
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(guard.evaluate(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Blocked("url is not on the allowlist"));
+
+        AgentResult result = executor.execute(
+                contextFor("s-blocked", "coordinator", "fetch"),
+                new ArrayList<>(),
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        assertTrue(((AgentResult.Failed) result).reason().contains("url is not on the allowlist"));
+        verify(toolRegistry, never()).invokeTool(any(), any(), any());
+    }
+
+    @Test
+    void execute_guardPauseSurfacesAnAwaitingApprovalResult() {
+        ApprovalFrame frame = new ApprovalFrame("web_fetch", Map.of("url", "https://example.com"), RiskLevel.HIGH);
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(guard.evaluate(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(frame));
+
+        AgentResult result = executor.execute(
+                contextFor("s-paused", "coordinator", "fetch"),
+                new ArrayList<>(),
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertInstanceOf(AgentResult.AwaitingApproval.class, result);
+        assertEquals("s-paused", ((AgentResult.AwaitingApproval) result).sessionId());
+        verify(toolRegistry, never()).invokeTool(any(), any(), any());
+    }
+
+    @Test
+    void execute_guardDeduplicateReplaysTheCachedObservationAndRunsTheFinishPass() {
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(guard.evaluate(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Deduplicate("cached: page already fetched"));
+        when(stateMachineRunner.runFinishPass(any(), any(), any()))
+                .thenReturn(AgentResult.finished("reused the cached fetch", List.of()));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        AgentResult result = executor.execute(
+                contextFor("s-dedup", "coordinator", "fetch"), history, checkpoint, "CLI", stateMachineRunner);
+
+        assertEquals("reused the cached fetch", ((AgentResult.Finished) result).answer());
+        assertEquals("cached: page already fetched", history.get(0).observation());
+        verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
+        verify(agentStore).save(checkpoint);
+        verify(toolRegistry, never()).invokeTool(any(), any(), any());
+    }
+
+    // ---------------------------------------------------------------- delegation redirect
+
+    @Test
+    void execute_unauthorizedPendingToolIsRedirectedToItsOwningPersona() {
+        when(checkpoint.getPendingToolName()).thenReturn("sandbox_exec");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{\"code\":\"print(1)\",\"language\":\"python\"}");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.success("ran"));
+
+        AgentResult result = executor.execute(
+                contextFor("s-redirect", "nurturer", "run the snippet"),
+                new ArrayList<>(),
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertEquals("ran", ((AgentResult.Finished) result).answer());
+        ArgumentCaptor<String> toolName = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> paramsJson = ArgumentCaptor.forClass(String.class);
+        verify(toolRegistry).invokeTool(toolName.capture(), paramsJson.capture(), any());
+        assertEquals("garuda", toolName.getValue());
+        assertTrue(paramsJson.getValue().contains("\"agent\":\"coder\""));
+    }
+
+    @Test
+    void execute_unauthorizedPendingToolWithUnparseableParamsStillRedirects() {
+        when(checkpoint.getPendingToolName()).thenReturn("sandbox_exec");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{not valid json");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.success("ran"));
+
+        AgentResult result = executor.execute(
+                contextFor("s-redirect-bad", "nurturer", "run the snippet"),
+                new ArrayList<>(),
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertEquals("ran", ((AgentResult.Finished) result).answer());
+        ArgumentCaptor<String> paramsJson = ArgumentCaptor.forClass(String.class);
+        verify(toolRegistry).invokeTool(any(), paramsJson.capture(), any());
+        assertTrue(paramsJson.getValue().contains("\"agent\":\"coder\""));
+    }
+
+    @Test
+    void execute_delegationRedirectFailsWhenTheRequestCannotBeSerialized() throws Exception {
+        ObjectMapper failingMapper = Mockito.mock(ObjectMapper.class);
+        when(failingMapper.writeValueAsString(any())).thenThrow(new RuntimeException("serializer offline"));
+        PendingToolResumeExecutor failingExecutor = new PendingToolResumeExecutor(
+                agentStore,
+                toolRegistry,
+                failingMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                new ToolDelegationResolver(),
+                guard);
+        when(checkpoint.getPendingToolName()).thenReturn("sandbox_exec");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn(null);
+
+        IllegalStateException thrown = assertThrows(
+                IllegalStateException.class,
+                () -> failingExecutor.execute(
+                        contextFor("s-redirect-fail", "nurturer", "run the snippet"),
+                        new ArrayList<>(),
+                        checkpoint,
+                        "CLI",
+                        stateMachineRunner));
+
+        assertTrue(thrown.getMessage().contains("Could not build delegation request for sandbox_exec"));
+    }
+
+    // ---------------------------------------------------------------- delegated pause persistence
+
+    @Test
+    void execute_delegationPausedWithUnparseableParamsFailsInsteadOfResuming() {
+        when(checkpoint.getPendingToolName()).thenReturn("garuda");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(toolRegistry.invokeTool(any(), any(), any()))
+                .thenReturn(
+                        ToolResponse.success(UserMessages.delegationPaused("brahma", "sandbox_exec", "{not valid")));
+
+        AgentResult result = executor.execute(
+                contextFor("s-bad-paused", "coordinator", "run delegated task"),
+                new ArrayList<>(),
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        assertEquals(
+                "Delegated approval payload was invalid and was not resumed.", ((AgentResult.Failed) result).reason());
+        verify(agentStore, never()).saveWithSteps(any(), anyList());
+    }
+
+    @Test
+    void execute_delegationPausedThatCannotBePersistedFails() {
+        when(checkpoint.getPendingToolName()).thenReturn("garuda");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{}");
+        when(toolRegistry.invokeTool(any(), any(), any()))
+                .thenReturn(ToolResponse.success(UserMessages.delegationPaused("brahma", "sandbox_exec")));
+        doThrow(new RuntimeException("checkpoint store offline"))
+                .when(agentStore)
+                .saveWithSteps(any(), anyList());
+
+        AgentResult result = executor.execute(
+                contextFor("s-persist-fail", "coordinator", "run delegated task"),
+                new ArrayList<>(),
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        assertEquals("Could not persist delegated wait state.", ((AgentResult.Failed) result).reason());
+    }
+
+    // ---------------------------------------------------------------- failure handling
+
+    @Test
+    void execute_webFetchFailureAfterABrowserFailureFallsBackToSearch() {
+        String url = "https://example.com/release-notes";
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn("{\"url\":\"" + url + "\"}");
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.failure(502, "fetch timeout"));
+        when(stateMachineRunner.run(any(), any(), any())).thenReturn(AgentResult.finished("searched", List.of()));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        history.add(ReasoningStep.observeStep(
+                ToolCapability.BROWSER_NAVIGATE.toolName(),
+                WebRetrievalFallbackPolicy.browserFailureMarker(url) + ". navigation timed out",
+                "browser failed"));
+
+        AgentResult result = executor.execute(
+                contextFor("s-search-fallback", "researcher", "get the release notes"),
+                history,
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Finished.class, result);
+        ArgumentCaptor<AgentExecutionContext> contextCaptor = ArgumentCaptor.forClass(AgentExecutionContext.class);
+        verify(stateMachineRunner).run(contextCaptor.capture(), eq(reasoningEngine), anyList());
+        assertTrue(contextCaptor.getValue().goal().contains("Both browser_navigate and web_fetch failed"));
+        assertTrue(
+                history.stream()
+                        .anyMatch(step ->
+                                "Browser and web_fetch failed, falling back to one search.".equals(step.thought())),
+                "the bounded-retrieval escalation must be recorded in the history");
+    }
+
+    @Test
+    void execute_blankParamsWithAFailingToolReportsTheGenericFailure() {
+        when(checkpoint.getPendingToolName()).thenReturn("web_fetch");
+        when(checkpoint.getPendingToolParametersJson()).thenReturn(null);
+        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.failure(500, null));
+
+        AgentResult result = executor.execute(
+                contextFor("s-blank-params", "coordinator", "fetch"),
+                new ArrayList<>(),
+                checkpoint,
+                "CLI",
+                stateMachineRunner);
+
+        assertInstanceOf(AgentResult.Failed.class, result);
+        assertEquals("Tool execution failed", ((AgentResult.Failed) result).reason());
+    }
+
+    @Test
+    void recordReasoningStep_toleratesUnparseableParamsJson() {
+        List<ReasoningStep> history = new ArrayList<>();
+
+        executor.recordReasoningStep("web_fetch", "{not valid json", "fetched anyway", true, history, "s-parse");
+
+        assertEquals(1, history.size());
+        assertEquals("fetched anyway", history.get(0).observation());
+        assertEquals("web_fetch", history.get(0).action());
+    }
+
+    // ---------------------------------------------------------------- fixtures
+
+    private static AgentExecutionContext contextFor(String sessionId, String role, String goal) {
+        return new AgentExecutionContext(
+                sessionId,
+                "u1",
+                "c1",
+                role,
+                goal,
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "CLI",
+                "u1",
+                null,
+                Map.of());
     }
 }

@@ -5,33 +5,8 @@
 
 set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common_env.sh"
+source "$SCRIPT_DIR/common_http.sh"
 FAIL=0; PASS=0
-
-info()  { printf "%-4s %-60s " "" "$1"; }
-ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
-fail()  { printf "❌ HTTP %s\n" "$(format_http_code "$1")"; FAIL=$((FAIL+1)); }
-mute()  { : > /tmp/resp; curl -s -m 60 -o /tmp/resp -w "%{http_code}" "$@"; }
-
-# Retry helper for standard requests
-run_req() {
-  local method="$1" key="$2" url="$3" data="$4"
-  local c
-  if [ -n "$data" ]; then
-    c=$(mute -X "$method" -H "X-Amsha-API-Key: $key" -H "Content-Type: application/json" -d "$data" "$url")
-  else
-    c=$(mute -X "$method" -H "X-Amsha-API-Key: $key" "$url")
-  fi
-  if [ "$c" = "429" ]; then
-    sleep 62
-    if [ -n "$data" ]; then
-      c=$(mute -X "$method" -H "X-Amsha-API-Key: $key" -H "Content-Type: application/json" -d "$data" "$url")
-    else
-      c=$(mute -X "$method" -H "X-Amsha-API-Key: $key" "$url")
-    fi
-  fi
-  echo "$c"
-}
 
 echo "═══════════════════════════════════════════"
 echo " ADMIN REST RESOURCE VALIDATOR"
@@ -75,20 +50,13 @@ CODE=$(run_req POST "$CI_KEY" "$B/api/v1/admin/prompts" '{"roleId":"coordinator"
 [ "$CODE" = "403" ] && ok "$CODE" || fail "$CODE"
 
 info "ADMIN-PRM-3: Create prompt (authorized)"
-curl -s -i -m 15 -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
+PROMPT_RESPONSE_FILE="$(mktemp "${_AMSHA_RUN_DIR}/prompt-response.XXXXXX")"
+http_call -o "$PROMPT_RESPONSE_FILE" -X POST \
+  -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
   -d '{"roleId":"coordinator","sectionKey":"test_section_$$","content":"test prompt","version":1}' \
-  "$B/api/v1/admin/prompts" > /tmp/resp_headers
-HTTP_LINE=$(grep -i '^HTTP/' /tmp/resp_headers | tail -n 1)
-CODE=$(echo "$HTTP_LINE" | awk '{print $2}')
-if [ "$CODE" = "429" ]; then
-  sleep 62
-  curl -s -i -m 15 -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
-    -d '{"roleId":"coordinator","sectionKey":"test_section_$$","content":"test prompt","version":1}' \
-    "$B/api/v1/admin/prompts" > /tmp/resp_headers
-  HTTP_LINE=$(grep -i '^HTTP/' /tmp/resp_headers | tail -n 1)
-  CODE=$(echo "$HTTP_LINE" | awk '{print $2}')
-fi
-PROMPT_ID=$(grep -i '^location:' /tmp/resp_headers | awk -F'/' '{print $NF}' | tr -d '\r\n')
+  "$B/api/v1/admin/prompts"
+CODE="$HTTP_CODE"
+PROMPT_ID=$(grep -i '^location:' "$HTTP_HDRS" | tail -n 1 | awk -F'/' '{print $NF}' | tr -d '\r\n')
 [ "$CODE" = "201" ] && ok "$CODE" || fail "$CODE"
 
 info "ADMIN-PRM-4: Get specific prompt"

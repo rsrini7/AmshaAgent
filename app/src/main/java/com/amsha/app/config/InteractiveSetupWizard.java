@@ -7,7 +7,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
@@ -87,7 +86,7 @@ public class InteractiveSetupWizard {
         if (!Files.exists(envFile)) {
             try (InputStream in = InteractiveSetupWizard.class.getResourceAsStream("/env-example")) {
                 if (in != null) {
-                    Files.copy(in, envFile, StandardCopyOption.REPLACE_EXISTING);
+                    Files.copy(in, envFile);
                     EnvConfigInitializer.reportEnvFileCreated(envFile, "bundled .env.example template");
                 }
             } catch (IOException e) {
@@ -488,6 +487,15 @@ public class InteractiveSetupWizard {
 
     private static String readLineWithFallback(Console console, String prompt) {
         if (console != null) return console.readLine(prompt);
+        // No console attached (pipe, service manager, container without a TTY, test
+        // harness). Only consume input that is already buffered — calling read() on an
+        // idle stdin blocks forever, which would hang bootstrap with no timeout guard.
+        // Treat "nothing buffered" as "skip this prompt".
+        try {
+            if (System.in.available() == 0) return null;
+        } catch (IOException _) {
+            return null;
+        }
         System.err.print(prompt);
         System.err.flush();
         try (ByteArrayOutputStream line = new ByteArrayOutputStream()) {

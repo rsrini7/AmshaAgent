@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import com.amsha.channel.api.ChannelAllowlist;
 import com.amsha.channel.api.ChannelPlugin;
+import com.amsha.channel.api.ChannelType;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.channel.ChannelPluginRegistry;
@@ -43,7 +44,14 @@ public class AllowlistHandler implements MessageHandler {
                 channelPluginRegistry.find(context.getChannelType()).map(ChannelPlugin::allowlist);
 
         if (allowlistOpt.isEmpty()) {
-            log.warnf("No allowlist found for channel %s - allowing access by default.", context.getChannelType());
+            if (ChannelType.REST_API.equals(context.getChannelType())
+                    || ChannelType.CLI.equals(context.getChannelType())) {
+                log.debugf(
+                        "No allowlist found for channel %s - access governed by channel security.",
+                        context.getChannelType());
+            } else {
+                log.warnf("No allowlist found for channel %s - allowing access by default.", context.getChannelType());
+            }
             return HandleResult.CONTINUE;
         }
 

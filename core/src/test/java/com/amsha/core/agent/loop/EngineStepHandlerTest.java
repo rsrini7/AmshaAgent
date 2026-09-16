@@ -25,6 +25,7 @@ import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
@@ -37,11 +38,14 @@ import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
 import com.amsha.llm.api.error.LlmRateLimitException;
+import com.amsha.llm.api.error.LlmToolCallException;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * Unit tests for {@link EngineStepHandler}: degraded-response detection, raw-JSON FINISH
@@ -310,5 +314,123 @@ public class EngineStepHandlerTest {
         assertEquals(Optional.of(CheckpointStatus.COMPLETED), status);
         assertEquals(CheckpointStatus.COMPLETED, context.lastCheckpointStatus());
         assertFalse(context.isStatusDirty() && status.isEmpty());
+    }
+
+    // --- Task #5: cover previously-missed REACHABLE branches (dead guards reported as findings) ---
+
+    @Test
+    void systemNoteIsAppendedToGoal() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coder",
+                "do things",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.NATIVE,
+                10,
+                0,
+                "TELEGRAM",
+                "42",
+                "sys-note",
+                Map.of());
+        when(engine.nextStep(any(), anyString(), anyString(), anyList())).thenReturn(toolCallStep(50));
+
+        StepDecision decision = handler.processEngineStep(ctx, engine, new ArrayList<>(), null, 0, 1);
+
+        assertEquals(DecisionType.PROCEED, decision.type());
+        ArgumentCaptor<String> goalCaptor = ArgumentCaptor.forClass(String.class);
+        verify(engine).nextStep(any(), anyString(), goalCaptor.capture(), anyList());
+        assertTrue(goalCaptor.getValue().contains("sys-note"));
+    }
+
+    @Test
+    void lenientModeUsesLenientSchemaBudget() {
+        AgentExecutionContext ctx = new AgentExecutionContext(
+                "sess-1",
+                "user-1",
+                "chat-1",
+                "coder",
+                "do things",
+                AutonomyLevel.FULL,
+                StructuredOutputMode.LENIENT,
+                10,
+                0,
+                "TELEGRAM",
+                "42",
+                null,
+                Map.of());
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenThrow(new LlmMalformedResponseException("bad shape"));
+        when(hintBuilder.buildSchemaCorrectionHint(anyString())).thenReturn("fix-schema");
+
+        StepDecision decision = handler.processEngineStep(ctx, engine, new ArrayList<>(), null, 0, 1);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
+        assertEquals(1, decision.llmSchemaErrorCount());
+    }
+
+    @Test
+    void hallucinatedAgentToolProducesRetryHint() {
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenThrow(new LlmToolCallException("attempted to call tool 'coder'"));
+        when(exceptionRouter.extractUnavailableToolName(anyString())).thenReturn("coder");
+
+        StepDecision decision = handler.processEngineStep(context, engine, new ArrayList<>(), null, 0, 1);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
+        verify(hintBuilder).buildHallucinatedAgentToolHint("coder");
+    }
+
+    @Test
+    void finishUnavailableToolWithAnswerTerminatesAsFinished() {
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenThrow(new LlmToolCallException("attempted to call tool 'FINISH'"));
+        when(exceptionRouter.extractUnavailableToolName(anyString())).thenReturn("FINISH");
+        when(exceptionRouter.extractFailedGeneration(anyString())).thenReturn("gen");
+        when(exceptionRouter.extractFinishAnswer(anyString())).thenReturn("Final answer here");
+
+        StepDecision decision = handler.processEngineStep(context, engine, new ArrayList<>(), null, 0, 1);
+
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertTrue(decision.result() instanceof AgentResult.Finished);
+    }
+
+    @Test
+    void unavailableSandboxToolDelegatesToCoder() {
+        assertDelegationHint(ToolCapability.SANDBOX_EXEC.toolName(), AgentRoleEnum.CODER.id());
+    }
+
+    @Test
+    void unavailableBrowserToolDelegatesToResearcher() {
+        assertDelegationHint(ToolCapability.BROWSER_NAVIGATE.toolName(), AgentRoleEnum.RESEARCHER.id());
+    }
+
+    @Test
+    void unavailableGenericToolDelegatesToCoordinator() {
+        assertDelegationHint("calculator", AgentRoleEnum.COORDINATOR.id());
+    }
+
+    @Test
+    void unavailableNullToolDelegatesToCoordinator() {
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenThrow(new LlmToolCallException("no tool name"));
+        when(exceptionRouter.extractUnavailableToolName(anyString())).thenReturn(null);
+
+        StepDecision decision = handler.processEngineStep(context, engine, new ArrayList<>(), null, 0, 1);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
+        assertTrue(decision.transientError().contains("garuda(agent=" + AgentRoleEnum.COORDINATOR.id() + ")"));
+    }
+
+    private void assertDelegationHint(String toolName, String expectedRoleId) {
+        when(engine.nextStep(any(), anyString(), anyString(), anyList()))
+                .thenThrow(new LlmToolCallException("attempted to call tool '" + toolName + "'"));
+        when(exceptionRouter.extractUnavailableToolName(anyString())).thenReturn(toolName);
+
+        StepDecision decision = handler.processEngineStep(context, engine, new ArrayList<>(), null, 0, 1);
+
+        assertEquals(DecisionType.CONTINUE, decision.type());
+        assertTrue(decision.transientError().contains("garuda(agent=" + expectedRoleId + ")"));
     }
 }

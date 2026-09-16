@@ -6,7 +6,7 @@ reflexes, safety guards, and tool interfaces.
 ## Module Extraction Status
 
 Under the `extract-core-subsystems` program (see
-[`Ideas-Pending/Architecture/ADR-extract-core-subsystems.md`](../Ideas-Pending/Architecture/ADR-extract-core-subsystems.md)),
+[`docs/adr/architecture/ADR-extract-core-subsystems.md`](../docs/adr/architecture/ADR-extract-core-subsystems.md)),
 large shared surfaces moved out of this module. Contracts consumed from here now live in dedicated API jars,
 and heavy implementations moved into tier-2 modules:
 
@@ -153,7 +153,7 @@ and CDI `Instance<T>` multi-bean discovery.
 | Property | Env Var | Default | Description |
 |---|---|---|---|
 | `amsha.llm.codex.api-key` | `AMSHA_CODEX_API_KEY` | — | Optional direct API key / token (defaults to `~/.codex/auth.json` OAuth session) |
-| `amsha.llm.codex.base-url` | `AMSHA_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Codex endpoint (defaults to direct ChatGPT Plus Responses endpoint; or `http://127.0.0.1:8787/v1` for hroom proxy, or `https://api.openai.com/v1`) |
+| `amsha.llm.codex.base-url` | `AMSHA_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Codex endpoint (defaults to a direct ChatGPT Plus Responses endpoint; or `http://127.0.0.1:8787/v1` for Headroom proxy, or `https://api.openai.com/v1`) |
 | `amsha.llm.codex.model` | `AMSHA_CODEX_MODEL` | `gpt-5.6-luna` | Default chat model |
 | `amsha.compaction.codex.api-key` | `AMSHA_COMPACTION_CODEX_API_KEY` | — | Codex API key for compaction slot |
 | `amsha.compaction.codex.model` | `AMSHA_COMPACTION_CODEX_MODEL` | `gpt-5.6-luna` | Compaction slot model |
@@ -294,7 +294,7 @@ A profile that is selectable but permanently broken is worse than no profile, so
 * an audio attachment therefore matches no profile and degrades to the structured text
   placeholder. When enabled, the governed STT path transcribes unsupported audio to bounded
   text and routes it to the text profile — see
-  `.scratch/lc4j-capability-adoption/issues/11-p7-audio-transcription-port.md`.
+  `.scratch/lc4j-capability-adoption/issues/11-p7-audio-transcription-port.md` (local tracker artifact).
 
 Audio input is an execution/port concern, not a model-profile concern: Whisper is an STT
 execution port and is **never** registered as an `AUDIO` chat profile. Text-to-speech

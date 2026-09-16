@@ -147,7 +147,7 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 1. Add routing and agent-reasoning factories in `amsha-core`.
 2. Register URL detection and onboarding defaults.
 3. Update `.env`, `.env.example`, `application.yaml`, and UI provider lists.
-4. Compile and build the UI. See [JVM LLM options](Ideas-Pending/JVM-LLMs.md).
+4. Compile and build the UI. See [JVM LLM options](docs/research/providers/JVM-LLMs.md).
 
 ## 7. Adding a New Persona (Agent Role)
 
@@ -271,7 +271,7 @@ It compares the project's build files against reference generated projects from
 [code-with-quarkus-compare](https://github.com/quarkusio/code-with-quarkus-compare)
 and drives the Quarkus updater dry-run. Use it when checking whether build files
 are up to date or when executing a Quarkus platform checkpoint; pair its output
-with the verification matrix in the [Quarkus upgrade ADR](Ideas-Pending/Architecture/ADR-Quarkus-Upgrade-Strategy.md).
+with the verification matrix in the [Quarkus upgrade ADR](docs/adr/architecture/ADR-Quarkus-Upgrade-Strategy.md).
 Evidence from its runs lives under `.scratch/quarkus-upgrade/evidence/`.
 
 ### Triage labels
@@ -282,5 +282,5 @@ The default five-role triage vocabulary is used. See
 ### Domain docs
 
 This is a single-context repository using root `CONTEXT.md` when present and
-root or topic-local `Ideas-Pending/**/ADR-*.md` files for ADRs. See
+topic-scoped `docs/adr/**/ADR-*.md` files for ADRs. See
 `docs/agents/domain.md`.

@@ -855,8 +855,9 @@ Every persistence adapter bean uses Quarkus `@IfBuildProperty` to conditionally 
 
 | Mode | When `@IfBuildProperty` is evaluated | Switching backend |
 |------|--------------------------------------|-------------------|
-| **JVM** (`amsha serve`) | At **app startup** (runtime) | Set `AMSHA_PERSISTENCE_BACKEND` in `.env` — **no rebuild needed** |
-| **Native image** (`amsha-native`) | At **build time** (GraalVM compile) | Must **rebuild** the native binary with the new property set during build |
+| **JVM dev** (`./mvnw quarkus:dev -pl app -am`) | During Quarkus augmentation at startup/reload | Set the build property before launch and restart; a packaged JVM artifact still needs to be rebuilt for a different backend |
+| **Packaged JVM** (`app/target/quarkus-app`) | During Maven/Quarkus augmentation | Build the artifact with the target `amsha.persistence.backend`; changing `.env` alone does not replace its CDI adapter set |
+| **Native image** (`./dist/amsha-sqlite`, `./dist/amsha-pg`, or `./dist/amsha-fs`) | At **build time** (GraalVM compile) | Must **rebuild** the backend-specific native binary with the new property set during build |
 
 ### How to Switch Backend (JVM mode)
 
@@ -869,8 +870,8 @@ echo "QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/amsha" >> .en
 echo "QUARKUS_DATASOURCE_USERNAME=amsha" >> .env
 echo "QUARKUS_DATASOURCE_PASSWORD=<password>" >> .env
 
-# 3. Start the app — no rebuild needed
-amsha serve
+# 3. Start Quarkus dev; its augmentation applies the build property on startup
+./mvnw quarkus:dev -pl app -am "-Damsha.persistence.backend=postgres -Dquarkus.args=serve"
 ```
 
 ### How to Switch Backend (Native image)
@@ -885,7 +886,7 @@ export AMSHA_PERSISTENCE_BACKEND=postgres
 
 | Backend | `.env` variables needed | Notes |
 |---------|------------------------|-------|
-| **SQLite** (default) | None — zero config | Data stored in `./amsha-data/` by default |
+| **SQLite** (default) | None — zero config | Data stored in `./data/` by default (`AMSHA_DATA_DIR` overrides it) |
 | **PostgreSQL** | `QUARKUS_DATASOURCE_JDBC_URL`, `QUARKUS_DATASOURCE_USERNAME`, `QUARKUS_DATASOURCE_PASSWORD` | Flyway auto-creates schema on startup |
 | **Filesystem** | `AMSHA_FS_DATA_DIR` (optional, default `./data/fs`) | Uses Lucene index for BM25 search |
 
@@ -917,7 +918,7 @@ specific connection or data-directory configuration.
 
 - `enableIfMissing = true` on the SQLite adapter means: if the property is not set at all, SQLite activates.
 - This ensures the binary works out of the box with zero configuration — no database server needed.
-- All three backend jars are included in the build; `@IfBuildProperty` selects which CDI beans register at startup.
+- All three backend jars are included in the build; `@IfBuildProperty` selects which CDI beans are registered during Quarkus augmentation.
 
 ### Flyway Migration Parity
 
@@ -949,14 +950,16 @@ Since `@IfBuildProperty` is baked at build time, each persistence backend requir
 | `amsha-pg` | PostgreSQL | `postgres` | Requires running PG instance |
 | `amsha-fs` | Filesystem | `fs` | Lucene-based, no SQL database |
 
-**Build approach:** Use `mise run` tasks (recommended) or raw Maven commands:
+**Build approach:** Use `mise run` tasks (recommended) or raw Maven commands.
+The SQLite task produces `dist/amsha-sqlite`; PostgreSQL and filesystem tasks
+produce `dist/amsha-pg` and `dist/amsha-fs`.
 
 ```bash
 # Recommended: mise tasks (auto-switch JDK, copy to dist/)
-mise run build:native-local          # SQLite (default) → dist/amsha
+mise run build:native-local          # SQLite (default) → dist/amsha-sqlite
 mise run build:native-local-pg       # PostgreSQL → dist/amsha-pg
 mise run build:native-local-fs       # Filesystem → dist/amsha-fs
-mise run build:native-local-all      # All 3 variants → dist/amsha, dist/amsha-pg, dist/amsha-fs
+mise run build:native-local-all      # All 3 variants → dist/amsha-sqlite, dist/amsha-pg, dist/amsha-fs
 ```
 
 **What mise tasks do:**
@@ -995,7 +998,9 @@ This is **3 archives × 3 binaries each = 9 binaries total** across all platform
 
 **Default binary (`amsha-sqlite` / `amsha-sqlite.exe`)** is always the SQLite variant — works out of the box with zero configuration. Users who want PostgreSQL or Filesystem use `amsha-pg` or `amsha-fs` respectively.
 
-**JVM mode is backend-agnostic:** The JAR distribution (`quarkus-run.jar`) includes all 3 backend jars. The user switches via `.env` at runtime — no separate JARs needed.
+**JVM packaged artifacts:** `quarkus-run.jar` uses the backend selected during
+Quarkus augmentation; build a separate artifact when changing the backend.
+Quarkus dev can re-augment after a restart.
 
 ---
 
@@ -1020,8 +1025,8 @@ created/updated simultaneously:
 
 - `amsha-persistence-sqlite` (SQLite — default, `@IfBuildProperty(enableIfMissing = true)`)
 - `amsha-persistence-postgres` (PostgreSQL — `@IfBuildProperty("postgres")`)
-- Either `amsha-persistence-fs` (Filesystem — `@IfBuildProperty("fs")`) OR the store lives
-  in the `self-evolve` module with `persistence-fs` wrappers
+- `amsha-persistence-fs` (Filesystem — `@IfBuildProperty("fs")`); self-evolve has
+  its own filesystem stores in addition to the shared persistence adapters
 
 Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-postgres`
 (FS has no migrations).
@@ -1030,7 +1035,7 @@ Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-
 
 | Port | SQLite | PostgreSQL | Filesystem |
 |---|---|---|---|
-| `CoreMemoryStorePort` | `SqliteCoreMemoryStore` | — | `FsCoreMemoryStore` |
+| `CoreMemoryStorePort` | `SqliteCoreMemoryStore` | `PostgresCoreMemoryStore` | `FsCoreMemoryStore` |
 | `RecallMemoryStorePort` | `SqliteRecallMemoryStore` | `PostgresRecallMemoryStore` | `FsRecallMemoryStore` |
 | `ArchivalMemoryStorePort` | `SqliteArchivalMemoryStore` | `PostgresArchivalMemoryStore` | `FsArchivalMemoryStore` |
 | `EvolutionEventStorePort` | `SqliteEvolutionEventStore` | `PostgresEvolutionEventStore` | `FsEvolutionEventStore` |
@@ -1039,12 +1044,7 @@ Flyway V<n> migrations must exist in both `persistence-sqlite` and `persistence-
 **Verification**: grep for `@IfBuildProperty` and `@TieredBackend` across all `*Store*.java` files —
 each port should have matches for all 3 backends.
 
-**Known failures**:
-- P104: self-evolve stores were built for SQLite + PostgreSQL but the FS backend was missed entirely.
-- P104b: Tiered memory stores (`CoreMemoryStorePort`, `RecallMemoryStorePort`, `ArchivalMemoryStorePort`) had no `@TieredBackend("fs")` implementations — runtime error `No @TieredBackend("fs") RecallMemoryStorePort implementation found`.
-- P104c: `%filesystem` profile in `application.yaml` was missing `amsha.memory.tiered.backend: fs` — caused tiered memory to default to SQLite while FS backend was active.
-
-This rule prevents recurrence of all three patterns.
+**Current implementation note**: The store implementations listed in this table are present in the current source, including `PostgresCoreMemoryStore`. The self-evolve stores also have SQLite, PostgreSQL, filesystem, and explicit no-op variants where the selected backend is unavailable. Keep this table synchronized whenever a port or adapter changes.
 
 ---
 
@@ -1181,7 +1181,7 @@ These are the 4 classes referenced by `TestSecrets.<clinit>` via `Consumer.accep
 
 **MUST NOT** register inner classes (e.g., `ConcurrentMergeScheduler.MergeThread`) as class literals in `@RegisterForReflection` — they have `protected`/`private` access and will not compile. Use the JSON config approach instead.
 
-**Detection:** GraalVM native-image build will NOT catch this — the error only manifests at **runtime** when the static initializer fires. Always verify with `mise build:native-local` and a test that boots the full application context.
+**Detection:** GraalVM native-image build will NOT catch this — the error only manifests at **runtime** when the static initializer fires. Always verify with `mise run build:native-local` and a test that boots the full application context.
 
 ### 6.10 SQLite/vec0 Virtual Table Shadow Table Cleanup (§6.10 INVARIANT)
 
@@ -1736,7 +1736,7 @@ Always verify with a runtime startup log check when adding CDI beans from a new 
 
 ### 16.4 Session Management (§16.4 INVARIANT)
 Onboarding configuration source and precedence are defined in [ADR: Onboarding
-Configuration Sources and Precedence](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md).
+Configuration Sources and Precedence](adr/domain/ADR-Onboarding-Configuration-Source-and-Precedence.md).
 Web drafts stage owner-scoped secrets before commit; LLM activation with vault
 priority promotes selected values into system-vault keys, while the CLI bootstrap
 wizard patches deployment `.env` values.
@@ -1778,8 +1778,8 @@ wizard patches deployment `.env` values.
   - `<forkedProcessExitTimeoutInSeconds>10</forkedProcessExitTimeoutInSeconds>` (Forces a hard kill after 10s if graceful shutdown fails)
 - Additionally, `src/test/resources/application.yaml` MUST include:
   - `quarkus.transaction-manager.enable-recovery: false`
-  - `quarkiverse.mcp.server.http.enabled: false`
-  - `quarkiverse.mcp.server.stdio.enabled: false`
+  - `quarkus.mcp.server.http.enabled: false`
+  - `quarkus.mcp.server.stdio.enabled: false`
   - `quarkus.shutdown.timeout: 5S`
 
 ### 16.7 App Indexing contract
@@ -1904,7 +1904,8 @@ The following gates apply to every REST, UI, import, onboarding, provider, and t
 
 ### 21.6 Packaging & Deployment
 - The UI build process MUST output to `ui/dist/`.
-- The `mise build:ui-copy` task is the authoritative mechanism for moving the bundled UI into the `amsha-app` `META-INF/resources` directory for production packaging.
+- The `mise run build:ui:copy` task is the authoritative mechanism for moving the
+  bundled UI into the `amsha-app` `META-INF/resources` directory for production packaging.
 - Do NOT commit the `dist/` folder to version control.
 
 ### 21.7 Accessibility (a11y)
@@ -2206,7 +2207,14 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 1. **Explicit vs. Default Resolution**: `SpeechOutputPolicy.resolve` inspects user text directives first (`"reply audio"`, `"audio only"`, `"no audio"`). When text lacks explicit directives:
    - If the user sent voice-only input (blank text with `inboundAudioPresent = true`), the policy falls back to `amsha.tts.default-output-mode` (`TEXT_ONLY`, `AUDIO_ONLY`, or `TEXT_AND_AUDIO`).
    - Blank voice-only turns MUST NOT be classified as trivial greetings or simple conversational turns in `IntentClassificationService.isSimpleConversational()`.
-2. **Deterministic Text Projection**: `SpeechReplyService.projectSpeakableText()` strips markdown code blocks, tables, and internal artifacts before passing prose to speech synthesis ports (`OmlxSpeechSynthesisProvider` / `OpenAiSpeechSynthesisProvider`).
+2. **Deterministic Text Projection**: `SpeechReplyService.projectSpeakableText()` strips markdown code blocks, tables, and internal artifacts before passing prose to the OMLX `OmlxSpeechSynthesisProvider` through `SpeechSynthesisPort`.
+
+### 25.1a Speech provider boundaries
+
+- `AudioTranscriptionPort` is an execution/provider seam, not a chat-model capability and not a persistence port. OMLX must not create an `AUDIO` model profile, and the retired Nemotron audio-chat profile must not be reintroduced while the configured OMLX runtime rejects its `nemotron_voicechat` model type.
+- `CompositeAudioTranscriptionPort` orders available adapters by priority: local ONNX Whisper (`100`) before OMLX Whisper (`50`). `UNSUPPORTED` results may proceed to the next adapter; `FAILED` and `TIMEOUT` results stop the cascade unless `amsha.stt.allow-fallback-on-failure=true` explicitly permits it. The default is fail-closed to avoid unexpected audio egress.
+- Every transcription adapter enforces bounded audio and transcript sizes, uses governed media/transport boundaries, and releases temporary or request-owned audio data after the operation. Local ONNX inference remains disabled unless both `amsha.stt.local.enabled` and `amsha.onnx.enabled` are enabled.
+- `OmlxSpeechSynthesisProvider` is output-only, is not an `AUDIO` route, and currently accepts WAV only. TTS is attempted only for eligible finished turns; approval, intermediate, and failed responses remain text. Provider egress remains governed and a synthesis or delivery failure must preserve the text response.
 
 ### 25.2 Channel Audio Fallback Guarantee
 
@@ -2254,4 +2262,3 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 ### 26.5 Dynamic Provider Discovery Invariant (§26.5 INVARIANT)
 - **No Hardcoded Static Provider Sets**: `ModelArenaHelper` and health resources MUST NOT hardcode static sets of allowed providers or base URL maps in application source code.
 - **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`, `requiresCustomBaseUrl()`, `probeUrlForProvider()`, `authHeadersForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
-

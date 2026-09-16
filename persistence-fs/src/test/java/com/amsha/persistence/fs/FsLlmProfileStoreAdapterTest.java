@@ -6,12 +6,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmConnectionSecretRefDto;
+import com.amsha.persistence.api.ModelCacheInvalidationPort;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
 import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
@@ -98,6 +100,27 @@ class FsLlmProfileStoreAdapterTest {
     private ModelRouteAssignmentDto sampleRoute(String id, String scopeType, String scopeId) {
         Instant now = Instant.now();
         return new ModelRouteAssignmentDto(id, scopeType, scopeId, "DEFAULT", null, List.of("p-1"), true, 1, now, now);
+    }
+
+    /**
+     * Records the cache-invalidation callbacks in order. The adapter only calls the port when it is
+     * bound (the field is {@code @Nullable}) and only for mutations that actually changed durable
+     * state, so the recorded sequence is the observable contract of the two private
+     * {@code fireConnectionChanged}/{@code fireProfileChanged} helpers.
+     */
+    private static final class RecordingInvalidator implements ModelCacheInvalidationPort {
+
+        private final List<String> events = new ArrayList<>();
+
+        @Override
+        public void onConnectionChanged(String connectionId) {
+            events.add("connection:" + connectionId);
+        }
+
+        @Override
+        public void onProfileChanged(String profileId) {
+            events.add("profile:" + profileId);
+        }
     }
 
     @Test
@@ -233,5 +256,121 @@ class FsLlmProfileStoreAdapterTest {
         assertTrue(adapter.findConnection("c-9").isEmpty());
         assertTrue(adapter.listSecretRefs("c-9").isEmpty());
         assertTrue(adapter.listModelProfilesByConnection("c-9").isEmpty());
+    }
+
+    @Test
+    void modelProfileFindUpdateAndDelete() {
+        adapter.saveConnection(sampleConnection("c-up", "USER", "user-up"));
+        assertTrue(adapter.findModelProfile("p-absent").isEmpty());
+
+        adapter.saveModelProfile(sampleProfile("p-up", "c-up"));
+        assertEquals("gpt-4o", adapter.findModelProfile("p-up").orElseThrow().modelId());
+
+        // Optimistic locking: a stale expected revision is rejected and leaves the row untouched.
+        ModelProfileDto stale = new ModelProfileDto(
+                "p-up", "c-up", "gpt-4.1", "NATIVE", null, null, true, 99, Instant.now(), Instant.now());
+        assertFalse(adapter.updateModelProfile(stale, 42), "stale revision must be rejected");
+        assertEquals("gpt-4o", adapter.findModelProfile("p-up").orElseThrow().modelId());
+
+        // An id that was never persisted is rejected through the same guard.
+        ModelProfileDto ghost = new ModelProfileDto(
+                "p-ghost", "c-up", "gpt-4o", "NATIVE", null, null, true, 1, Instant.now(), Instant.now());
+        assertFalse(adapter.updateModelProfile(ghost, 1), "updating a never-saved profile must be rejected");
+
+        ModelProfileDto renamed = new ModelProfileDto(
+                "p-up", "c-up", "gpt-4.1", "NATIVE", null, null, true, 2, Instant.now(), Instant.now());
+        assertTrue(adapter.updateModelProfile(renamed, 1));
+        assertEquals("gpt-4.1", adapter.findModelProfile("p-up").orElseThrow().modelId());
+
+        assertEquals(0, adapter.deleteModelProfile("p-never-saved"));
+        assertEquals(1, adapter.deleteModelProfile("p-up"));
+        assertTrue(adapter.findModelProfile("p-up").isEmpty());
+    }
+
+    @Test
+    void routeAssignmentUpdateAndDelete() {
+        adapter.saveConnection(sampleConnection("c-rt", "USER", "user-rt"));
+        adapter.saveModelProfile(sampleProfile("p-rt", "c-rt"));
+        adapter.saveRouteAssignment(sampleRoute("r-rt", "USER", "user-rt"));
+
+        ModelRouteAssignmentDto stale = new ModelRouteAssignmentDto(
+                "r-rt",
+                "USER",
+                "user-rt",
+                "DEFAULT",
+                null,
+                List.of("p-rt", "p-2"),
+                true,
+                7,
+                Instant.now(),
+                Instant.now());
+        assertFalse(adapter.updateRouteAssignment(stale, 99), "stale revision must be rejected");
+        assertEquals(
+                1,
+                adapter.findRouteAssignment("r-rt")
+                        .orElseThrow()
+                        .orderedProfileIds()
+                        .size());
+
+        ModelRouteAssignmentDto reordered = new ModelRouteAssignmentDto(
+                "r-rt",
+                "USER",
+                "user-rt",
+                "DEFAULT",
+                null,
+                List.of("p-rt", "p-2"),
+                true,
+                2,
+                Instant.now(),
+                Instant.now());
+        assertTrue(adapter.updateRouteAssignment(reordered, 1));
+        assertEquals(
+                2,
+                adapter.findRouteAssignment("r-rt")
+                        .orElseThrow()
+                        .orderedProfileIds()
+                        .size());
+
+        assertFalse(adapter.updateRouteAssignment(reordered, 1), "an unknown id must be rejected");
+
+        assertEquals(0, adapter.deleteRouteAssignment("r-never-saved"));
+        assertEquals(1, adapter.deleteRouteAssignment("r-rt"));
+        assertTrue(adapter.findRouteAssignment("r-rt").isEmpty());
+    }
+
+    @Test
+    void cacheInvalidationPortReceivesEveryDurableMutation() {
+        RecordingInvalidator invalidator = new RecordingInvalidator();
+        adapter.cacheInvalidator = invalidator;
+
+        adapter.saveConnection(sampleConnection("c-inv", "USER", "user-inv"));
+        adapter.saveModelProfile(sampleProfile("p-inv", "c-inv"));
+        assertEquals(List.of("connection:c-inv", "profile:p-inv"), invalidator.events);
+
+        // The accepted update path fires the profile callback too.
+        assertTrue(adapter.updateModelProfile(
+                new ModelProfileDto(
+                        "p-inv", "c-inv", "gpt-4o", "NATIVE", null, null, true, 2, Instant.now(), Instant.now()),
+                1));
+        assertEquals("profile:p-inv", invalidator.events.get(2));
+
+        // Rejected writes never reached the store, so they must not flush the cache either.
+        ModelProfileDto staleProfile = new ModelProfileDto(
+                "p-inv", "c-inv", "gpt-4o", "NATIVE", null, null, true, 42, Instant.now(), Instant.now());
+        assertFalse(adapter.updateModelProfile(staleProfile, 7));
+        ModelRouteAssignmentDto staleRoute = new ModelRouteAssignmentDto(
+                "r-inv", "USER", "user-inv", "DEFAULT", null, List.of("p-inv"), true, 42, Instant.now(), Instant.now());
+        assertFalse(adapter.updateRouteAssignment(staleRoute, 7));
+        assertEquals(3, invalidator.events.size(), "rejected writes must not invalidate the cache");
+
+        // A delete of a missing row is a no-op, so it must not fire either.
+        assertEquals(0, adapter.deleteModelProfile("p-absent"));
+        assertEquals(3, invalidator.events.size(), "deleting a missing profile must not invalidate the cache");
+
+        assertEquals(1, adapter.deleteModelProfile("p-inv"));
+        assertEquals("profile:p-inv", invalidator.events.get(3));
+
+        assertEquals(1, adapter.deleteConnection("c-inv"));
+        assertEquals("connection:c-inv", invalidator.events.get(4));
     }
 }

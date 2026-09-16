@@ -63,6 +63,10 @@ Examples:
 ```env
 AMSHA_LLM_PROVIDER=groq
 AMSHA_GROQ_API_KEY=<provider-key>
+AMSHA_VAULT_PEPPER=<32+ byte random value>
+AMSHA_AUDIT_HMAC_KEY=<32+ byte random value>
+AMSHA_API_KEYS_INTERNAL=<strong random value>
+AMSHA_AUTH_HMAC_KEY=<32+ byte random value>
 AMSHA_UI_SKIP_ONBOARDING=false
 AMSHA_LLM_VAULT_PRIORITY=true
 AMSHA_DATA_DIR=./data
@@ -70,9 +74,11 @@ AMSHA_DATA_DIR=./data
 
 Provider-specific keys are canonical. Examples include
 `AMSHA_GROQ_API_KEY`, `AMSHA_OPENAI_API_KEY`, and
-`AMSHA_GENERIC_OPENAI_API_KEY`; do not use the legacy generic
-`AMSHA_LLM_API_KEY` for new deployments. Keyless providers such as Ollama and
-OMLX do not need an API-key field, but their server/model configuration must be
+`AMSHA_GENERIC_OPENAI_API_KEY`; new deployments should use the selected
+provider's canonical key rather than the legacy generic `AMSHA_LLM_API_KEY`.
+That legacy name remains only in a placeholder check, old routing error
+messages, and test/Docker fixtures. Keyless providers such as Ollama and OMLX
+do not need an API-key field, but their server/model configuration must be
 available.
 
 See [CONFIGURATION.md](./CONFIGURATION.md) for the complete variable reference
@@ -96,7 +102,7 @@ draft or promote web selections into the system vault.
 ### JVM development
 
 ```bash
-./mvnw quarkus:dev -pl amsha-app -am "-Dquarkus.args=serve"
+./mvnw quarkus:dev -pl app -am "-Dquarkus.args=serve"
 ```
 
 Use `chat` for the interactive CLI, `ask "..."` for one request, or
@@ -236,5 +242,5 @@ automation details.
 - [Quick Start](./QUICK_START.md)
 - [Configuration Reference](./CONFIGURATION.md)
 - [Manual Setup](./MANUAL_SETUP.md)
-- [Configuration Sources and Precedence ADR](../Ideas-Pending/ADR-Onboarding-Configuration-Source-and-Precedence.md)
+- [Configuration Sources and Precedence ADR](./adr/domain/ADR-Onboarding-Configuration-Source-and-Precedence.md)
 - [Architecture Invariants](./Architecture_Invariants.md)

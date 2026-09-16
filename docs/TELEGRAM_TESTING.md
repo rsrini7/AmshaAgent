@@ -40,7 +40,7 @@
 
 ## Quick Smoke Test (10 minutes)
 
-For rapid regression, use `telegram-test-amsha.txt` — a numbered list of 126 messages covering major Telegram features. Paste messages into Telegram sequentially and verify responses match expectations.
+For rapid regression, use `telegram-test-amsha.txt` (`scripts/autotest/files/telegram-test-amsha.txt`) — a numbered list of 126 messages covering major Telegram features. Paste messages into Telegram sequentially and verify responses match expectations.
 
 **What it covers:**
 - Identity extraction and memory (messages 1-9, 57-66)
@@ -69,7 +69,8 @@ TELEGRAM_BOT_TOKEN=<token from @BotFather>
 AMSHA_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>
 AMSHA_TELEGRAM_ALLOWED_USERS=<your @username without @>
 AMSHA_API_KEYS_INTERNAL=key-internal-changeme   # or your custom key
-AMSHA_LLM_API_KEY=<your groq key>                     # must start with gsk_
+AMSHA_LLM_PROVIDER=groq
+AMSHA_GROQ_API_KEY=<your groq key>                    # must start with gsk_
 AMSHA_VAULT_PEPPER=<32+ char random string>
 AMSHA_AUDIT_HMAC_KEY=<32+ char random string>
 ```
@@ -79,7 +80,7 @@ AMSHA_AUDIT_HMAC_KEY=<32+ char random string>
 **Dev mode (hot reload, no Podman isolation):**
 
 ```bash
-./mvnw quarkus:dev -pl amsha-app -am \
+./mvnw quarkus:dev -pl app -am \
   "-Dquarkus.args=attach" \
   "-Damsha.rag.vec-extension-path=../lib/vec0"
 ```
@@ -125,7 +126,7 @@ Before running any section of this guide, confirm:
 - [ ] Bot responds to a simple `Hello` message within a few seconds
 - [ ] Logs show `Resolved session <uuid> for chat <chatId>` for your chat
 - [ ] `AMSHA_TELEGRAM_ALLOWED_USER_IDS` contains your numeric user ID
-- [ ] `AMSHA_LLM_API_KEY` is set and valid (key starts with `gsk_`)
+- [ ] The selected provider API key (for Groq, `AMSHA_GROQ_API_KEY`) is set and valid (key starts with `gsk_`)
 - [ ] Boot logs show `WORM triggers installed on audit_event`
 - [ ] Boot logs show `FTS5 memory index and triggers verified`
 - [ ] Boot logs show `sqlite-vec extension loaded` OR `vector search disabled, FTS5 only`
@@ -259,7 +260,7 @@ What was the project name I told you about?
 
 **Expect:** Bot recalls "Amsha Agent" and "Quarkus 3.27.2" without needing to be told again.
 
-> The `3.27.2` value above is intentionally fixed historical memory-test data; it is not the current application version. The current stack is Quarkus `3.38.3`.
+> The `3.27.2` value above is intentionally fixed historical memory-test data; it is not the current application version. The current stack is Quarkus `3.39.3`.
 
 > The chat memory store (rolling window = 20 messages) is backed by `PersistentChatMemoryStore`
 > in SQLite WAL mode. `SystemMessage` objects are never stored - only `UserMessage` and
@@ -1214,7 +1215,7 @@ operation is not permitted.
 
 ### 22.1 Ingest a document
 
-> The Quarkus `3.27.2` text in this ingestion fixture is intentionally fixed historical test data; the current application stack is Quarkus `3.38.3`.
+> The Quarkus `3.27.2` text in this ingestion fixture is intentionally fixed historical test data; the current application stack is Quarkus `3.39.3`.
 
 **Send:**
 ```

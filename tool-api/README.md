@@ -1,6 +1,6 @@
 # Amsha Tool API Module (`amsha-tool-api`)
 
-Pure API contracts for agent tools in Amsha Agent. Extracted from `amsha-core` (stream S5 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../Ideas-Pending/Architecture/ADR-extract-core-subsystems.md)).
+Pure API contracts for agent tools in Amsha Agent. Extracted from `amsha-core` (stream S5 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../docs/adr/architecture/ADR-extract-core-subsystems.md)).
 
 `amsha-tool-api` contains **zero dependencies on `amsha-core`**, so tool provider modules (`amsha-tools-builtin`, `amsha-mcp`, `amsha-rag`, `amsha-self-evolve`) implement and consume tool contracts without importing core internals. Dispatchers and the invocation guard remain in `amsha-core`.
 

@@ -66,4 +66,23 @@ class SqlitePromptStoreAdapterTest {
         assertTrue(store.deleteById(promptId));
         assertTrue(store.findById(promptId).isEmpty());
     }
+
+    @Test
+    void deleteByRoleAndKeyAndDeleteAll() {
+        String roleId = "role-del-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        store.save(new PromptDto(
+                "prompt-a-" + roleId, roleId, "section-a", "content-a", 1, "ACTIVE", 100, "{}", now, now));
+        store.save(new PromptDto(
+                "prompt-b-" + roleId, roleId, "section-b", "content-b", 1, "ACTIVE", 100, "{}", now, now));
+
+        assertEquals(2, store.findByRole(roleId).size());
+
+        assertTrue(store.deleteByRoleAndKey(roleId, "section-a"));
+        assertEquals(1, store.findByRole(roleId).size());
+        assertFalse(store.deleteByRoleAndKey(roleId, "section-absent"));
+
+        assertTrue(store.deleteAll() >= 1);
+        assertEquals(0, store.count());
+    }
 }

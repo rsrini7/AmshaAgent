@@ -119,7 +119,7 @@ Persistence has SQLite, PostgreSQL, and filesystem adapters. See [Architecture I
 
 ## P4 — Safety-Gated MCP Protocol-Adapter Evaluation (2026-08-28) — Retain Native Bridge
 
-**Decision: RETAIN CURRENT AMSHA NATIVE MCP BRIDGE — DEFER ADOPTION** (`P4-MCP-01`, LangChain4j `1.17.2` / Quarkus `3.38.3` / Quarkiverse `1.12.2`, `dev.langchain4j:langchain4j-mcp:1.17.2-beta27` managed but not on classpath, `amsha-mcp` 193 tests passing). Authority: [ADR-LangChain4j-Capability-Adoption](../Ideas-Pending/Architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp) §MCP + [Issue 07](../.scratch/lc4j-capability-adoption/issues/07-p4-mcp-protocol-adapter-gate.md) — *“No proof means retain.”* Evidence: [`.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md).
+**Decision: RETAIN CURRENT AMSHA NATIVE MCP BRIDGE — DEFER ADOPTION** (`P4-MCP-01`, LangChain4j `1.17.2` / Quarkus `3.38.3` / Quarkiverse `1.12.2`, `dev.langchain4j:langchain4j-mcp:1.17.2-beta27` managed but not on classpath, `amsha-mcp` 193 tests passing). Authority: [ADR-LangChain4j-Capability-Adoption](../docs/adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp) §MCP. The detailed Issue 07 tracker and evaluation evidence are local ignored artifacts under `.scratch/lc4j-capability-adoption/`; they are not required for a clean checkout.
 
 **Why retain — verification against Amsha invariants:**
 

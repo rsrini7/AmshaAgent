@@ -21,14 +21,14 @@ fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
 mute()  { : > "$RESP_FILE"; curl -s -m 15 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 sid()   { python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('sessionId',''))" "$RESP_FILE" 2>/dev/null; }
 
-# run a reflex/command against the shared session, auto-retry once on 429
+# run a reflex/command against the selected session, auto-retry once on 429
 run_agent() {
-  local goal="$1" code
+  local goal="$1" session="${2:-$S}" code
   sleep "$SP"
   : > "$RESP_FILE"
   code=$(curl -s -m "$AGENT_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" \
     -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
-    -X POST "$B/api/v1/sessions/$S/run" \
+    -X POST "$B/api/v1/sessions/$session/run" \
     -d "{\"goal\":\"$goal\",\"agentRole\":\"coordinator\",\"maxIterations\":1}")
   if [ "$code" = "429" ]; then
     printf "(429, waiting %ss) " "$RL_WAIT" >&2
@@ -36,7 +36,7 @@ run_agent() {
     : > "$RESP_FILE"
     code=$(curl -s -m "$AGENT_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" \
       -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
-      -X POST "$B/api/v1/sessions/$S/run" \
+      -X POST "$B/api/v1/sessions/$session/run" \
       -d "{\"goal\":\"$goal\",\"agentRole\":\"coordinator\",\"maxIterations\":1}")
   fi
   echo "$code"
@@ -44,7 +44,7 @@ run_agent() {
 
 echo "═══════════════════════════════════════════"
 echo " REFLEX COMMANDS VALIDATOR"
-echo " Zero-token reflexes (shared session, paced)"
+echo " Zero-token reflexes (shared session, paced; GitHub HITL isolated)"
 echo "═══════════════════════════════════════════"
 echo ""
 
@@ -98,18 +98,36 @@ CODE=$(run_agent "/github list rsrini7 repos")
 case $CODE in 200|202) ok "$CODE";; 429) warn "$CODE (rate limited)";; *) fail "$CODE";; esac
 
 # ── GITHUB-2: /github view ──
-# Note: shared session may be awaiting HITL approval from GITHUB-1 (NETWORK_OUTBOUND
-# always requires approval) → 409 is the correct/expected state here.
-info "/github view"
-CODE=$(run_agent "/github view rsrini7/AmshaAgentInternal readme")
-case $CODE in
-  200|202) ok "$CODE";;
-  409) warn "$CODE (session awaiting HITL approval from /github list — expected)";;
-  429) warn "$CODE (rate limited)";;
-  *)   fail "$CODE";;
-esac
+# /github list may leave the shared supervised session awaiting approval because
+# GitHub is NETWORK_OUTBOUND. Use a fresh session so this test exercises /github
+# view itself instead of intentionally submitting work to a parked session.
+VIEW_MK=$(mute -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
+  -X POST "$B/api/v1/sessions" -d '{"autonomyLevel":"SUPERVISED"}')
+if [ "$VIEW_MK" = "429" ]; then
+  printf "(429, waiting %ss) " "$RL_WAIT" >&2
+  sleep "$RL_WAIT"
+  VIEW_MK=$(mute -H "X-Amsha-API-Key: $KEY" -H "Content-Type: application/json" \
+    -X POST "$B/api/v1/sessions" -d '{"autonomyLevel":"SUPERVISED"}')
+fi
+VIEW_S=$(sid)
+if [ -z "$VIEW_S" ]; then
+  info "/github view session"
+  fail "$VIEW_MK"
+else
+  info "/github view"
+  CODE=$(run_agent "/github view rsrini7/AmshaAgentInternal readme" "$VIEW_S")
+  case $CODE in
+    200|202) ok "$CODE";;
+    429) warn "$CODE (rate limited)";;
+    *) fail "$CODE";;
+  esac
+fi
 
 # ── Cleanup ──
+sleep "$SP"
+if [ -n "$VIEW_S" ]; then
+  mute -X DELETE "$B/api/v1/sessions/$VIEW_S" -H "X-Amsha-API-Key: $KEY" > /dev/null 2>&1
+fi
 sleep "$SP"
 mute -X DELETE "$B/api/v1/sessions/$S" -H "X-Amsha-API-Key: $KEY" > /dev/null 2>&1
 

@@ -294,4 +294,32 @@ class SqliteExecutionTraceStoreAdapterTest {
         adapter.deleteBySessionId(sessionId2);
         assertEquals(0, adapter.countByRunId(run2));
     }
+
+    @Test
+    void testBlankAndNullArgumentsShortCircuitWithoutQuerying() {
+        // Every guard arm: a null or blank key must return the documented empty/zero value instead of
+        // issuing a query that would have to be constrained at the SQL layer.
+        assertTrue(adapter.findByRunId(null).isEmpty());
+        assertTrue(adapter.findByRunId("").isEmpty());
+        assertTrue(adapter.findByRunId("   ").isEmpty());
+
+        assertTrue(adapter.findByRunIdBounded(null, 0, null, 0, 10).isEmpty());
+        assertTrue(adapter.findByRunIdBounded(" ", 0, null, 0, 10).isEmpty());
+
+        assertEquals(0L, adapter.countByRunId(null));
+        assertEquals(0L, adapter.countByRunId(" "));
+
+        assertTrue(adapter.findRunsBySessionId(null, 0, 10).isEmpty());
+        assertTrue(adapter.findRunsBySessionId(" ", 0, 10).isEmpty());
+
+        assertEquals(0L, adapter.pruneBefore(null));
+        assertEquals(0L, adapter.pruneExcessRuns(0));
+        assertEquals(0L, adapter.pruneExcessRuns(-1));
+
+        // These return void; reaching the end of the test without an exception is the contract.
+        adapter.deleteBySessionId(null);
+        adapter.deleteBySessionId(" ");
+        adapter.saveBatch(null);
+        adapter.saveBatch(List.of());
+    }
 }

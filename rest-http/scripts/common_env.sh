@@ -3,6 +3,12 @@
 
 # API Keys resolved from the registry
 VALID_KEY="${VALID_KEY:-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=}"
+if [ -n "${AMSHA_API_KEYS_CI:-}" ]; then
+  CI_KEY="$AMSHA_API_KEYS_CI"
+elif [ "${AMSHA_CI:-false}" = "true" ] && [ -z "${CI_KEY:-}" ]; then
+  echo "Error: CI mode requires AMSHA_API_KEYS_CI or CI_KEY to be set." >&2
+  exit 1
+fi
 CI_KEY="${CI_KEY:-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=}"
 INVALID_KEY="${INVALID_KEY:-totally-wrong-key}"
 
@@ -15,7 +21,13 @@ BASE_URL="$B"
 
 # Auto-discover default data directory if not explicitly set
 COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$COMMON_DIR/../.." && pwd)"
+if [ -f "$COMMON_DIR/../../scripts/lib/repo_root.sh" ]; then
+  # shellcheck source=../../scripts/lib/repo_root.sh
+  source "$COMMON_DIR/../../scripts/lib/repo_root.sh"
+  REPO_ROOT="$(get_repo_root "$COMMON_DIR")"
+else
+  REPO_ROOT="$(cd "$COMMON_DIR/../.." && pwd)"
+fi
 
 if [ -z "${AMSHA_DATA_DIR:-}" ]; then
   if [ -f "$REPO_ROOT/dist/data/amsha-meta.db" ]; then

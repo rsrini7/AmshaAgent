@@ -91,5 +91,9 @@ class PostgresCronRunStoreAdapterTest {
 
         long totalCount = store.countAll(null);
         assertTrue(totalCount > 0);
+
+        // The status-filtered branch of countAll takes a different DAO query from the unfiltered one.
+        // Asserted as a lower bound because the run table is shared across the module's test classes.
+        assertTrue(store.countAll("SUCCESS") >= 1, "the filtered count must include the run just saved");
     }
 }

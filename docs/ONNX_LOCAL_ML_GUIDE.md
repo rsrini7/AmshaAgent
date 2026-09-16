@@ -8,7 +8,7 @@ Amsha Agent has an **opt-in JVM implementation** of in-process local embeddings 
 
 ## 2. Implementation Status & Scope
 
-The implementation follows [ADR-ONNX-In-Process-Local-ML-Inference.md](../Ideas-Pending/ADR-ONNX-In-Process-Local-ML-Inference.md):
+The implementation follows [ADR-ONNX-In-Process-Local-ML-Inference.md](./adr/domain/ADR-ONNX-In-Process-Local-ML-Inference.md):
 
 | Rollout Phase | Status | Key Deliverables & Components |
 |---|---|---|

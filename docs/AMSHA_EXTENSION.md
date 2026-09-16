@@ -238,7 +238,7 @@ case "analyst" -> analystTemplate;
 ### Step 5 - Update documentation
 
 1. **`AGENTS.md`** - Ensure Section 7 covers the new persona
-2. **`telegram-test-amsha.txt`** - Add test cases
+2. **`scripts/autotest/files/telegram-test-amsha.txt`** - Add test cases
 3. **`04_agent_roles.http`** - Add HTTP test cases
 
 ### Step 6 - Verify
@@ -246,7 +246,7 @@ case "analyst" -> analystTemplate;
 ```bash
 python3 ./scripts/fix_fqns.py
 ./mvnw compile -DskipTests -q
-./mvnw test -pl amsha-core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"
+./mvnw test -pl core -Dtest="AgentRoleTest,PersonaEscalationServiceTest"
 ```
 
 ### Step 7 - Register for native image reflection (if applicable)
@@ -398,8 +398,8 @@ curl -X POST http://localhost:8080/api/v1/skills \
 
 ### Built-in classpath skill (compiled into binary)
 
-1. Place the `.md` file in `core/src/main/resources/skills/`
-2. Add its filename (without path) to `core/src/main/resources/skills/index.txt`
+1. Place the `.md` file in `skills/src/main/resources/skills/`
+2. Add its filename (without path) to `skills/src/main/resources/skills/index.txt`
 3. Rebuild
 
 ### Skill frontmatter constraints
@@ -520,9 +520,9 @@ public class MyRoutingProviderFactory implements RoutingChatModelProvider {
 
 ```properties
 AMSHA_LLM_PROVIDER=myprovider
-AMSHA_LLM_API_KEY=your-key
-AMSHA_LLM_BASE_URL=https://api.myprovider.com/v1
-AMSHA_LLM_MODEL_NAME=my-model-name
+AMSHA_MYPROVIDER_API_KEY=your-key
+AMSHA_MYPROVIDER_BASE_URL=https://api.myprovider.com/v1
+AMSHA_MYPROVIDER_MODEL=my-model-name
 ```
 
 > [!NOTE]
@@ -536,7 +536,7 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 | `OpenAiProviderFactory` | `openai` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `OllamaProviderFactory` | `ollama` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `OpenRouterProviderFactory` | `openrouter` | `AgentChatModelProvider` | `amsha-llm-providers` |
-| `ClaudeCodeProviderFactory` | `claude` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `ClaudeCodeProviderFactory` | `claude-code` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `OmlxProviderFactory` | `omlx` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `GeminiProviderFactory` | `gemini` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `NvidiaProviderFactory` | `nvidia` | `AgentChatModelProvider` | `amsha-llm-providers` |
@@ -553,7 +553,7 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 | `FoundryProviderFactory` | `foundry` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `LlamaCppProviderFactory` | `llamacpp` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `GenericOpenAiProviderFactory` | `generic-openai` | `AgentChatModelProvider` | `amsha-llm-providers` |
-| `InfiniteLoopAgentChatModelProvider` | `infiniteloop` | `AgentChatModelProvider` | `amsha-core` |
+| `InfiniteLoopAgentChatModelProvider` | `infinite-loop` | `AgentChatModelProvider` | `amsha-core` |
 
 Each provider also has a corresponding `RoutingChatModelProvider` implementation in `amsha-llm-providers` for intent classification and compaction.
 
@@ -850,7 +850,7 @@ public class S3SkillProvider implements SkillProvider {
 |---|---|---|
 | `DatabaseSkillProvider` | 10 | SQLite `agent_skill` table (user-created, wins on collision) |
 | `SkillsJarSkillProvider` | 50 | `META-INF/skills/` in JAR dependencies (bundled SkillsJars) |
-| `ClasspathSkillProvider` | 100 | `src/main/resources/skills/` (bundled baseline) |
+| `ClasspathSkillProvider` | 100 | Optional `skills/src/main/resources/skills/` index and resources |
 
 Lower priority = processed first, wins on name collision. Use values between 10 and 100 for custom providers.
 
@@ -953,4 +953,4 @@ If your new class is used reflectively at runtime (e.g., Jackson deserialization
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.38.3 · JDK 25 · 18 LLM providers*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider)*

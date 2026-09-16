@@ -72,8 +72,12 @@ public class SkillsJarSkillProvider implements SkillProvider {
         return skills;
     }
 
-    private boolean loadFromIndex(List<SkillDefinition> skills) {
-        InputStream indexStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(INDEX_PATH);
+    InputStream openIndexStream() {
+        return Thread.currentThread().getContextClassLoader().getResourceAsStream(INDEX_PATH);
+    }
+
+    boolean loadFromIndex(List<SkillDefinition> skills) {
+        InputStream indexStream = openIndexStream();
 
         if (indexStream == null) {
             LOG.debugf("SkillsJars index %s not found. Falling back to classpath scan.", INDEX_PATH);
@@ -98,7 +102,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
     }
 
     /** Loads an indexed resource and extracts its companion files for native/indexed mode. */
-    private void loadIndexedSkill(String resourcePath, List<SkillDefinition> skills) {
+    void loadIndexedSkill(String resourcePath, List<SkillDefinition> skills) {
         String classpathPath = "/" + resourcePath;
         try {
             URL resource = Thread.currentThread().getContextClassLoader().getResource(resourcePath);
@@ -156,7 +160,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
     }
 
-    private void scanUrl(URL url, List<SkillDefinition> skills) {
+    void scanUrl(URL url, List<SkillDefinition> skills) {
         try {
             String protocol = url.getProtocol();
             if ("jar".equals(protocol)) {
@@ -169,7 +173,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
     }
 
-    private void scanJar(URL url, List<SkillDefinition> skills) {
+    void scanJar(URL url, List<SkillDefinition> skills) {
         try {
             URLConnection conn = url.openConnection();
             if (conn instanceof JarURLConnection jarConn) {
@@ -197,7 +201,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
      *
      * @return the extracted skill home path, or null if nothing was extracted
      */
-    private String extractSkillAssets(JarFile jarFile, String skillMdPath) {
+    String extractSkillAssets(JarFile jarFile, String skillMdPath) {
         // e.g. META-INF/skills/brunoborges/jdb-agentic-debugger/jdb-debugger/SKILL.md
         String skillDir = skillMdPath.substring(0, skillMdPath.lastIndexOf('/') + 1);
         String skillName = skillDir.endsWith("/") ? skillDir.substring(0, skillDir.length() - 1) : skillDir;
@@ -246,7 +250,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
     /**
      * Writes .skill-source.json to track where the skill came from.
      */
-    private void writeSourceMetadata(Path skillDir, String skillName, JarFile jarFile) {
+    void writeSourceMetadata(Path skillDir, String skillName, JarFile jarFile) {
         try {
             Path metaFile = skillDir.resolve(".skill-source.json");
             String version = null;
@@ -294,7 +298,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
     }
 
-    private void scanDirectory(URL url, List<SkillDefinition> skills) {
+    void scanDirectory(URL url, List<SkillDefinition> skills) {
         try {
             Path dir = Path.of(url.toURI());
             Files.walk(dir).filter(p -> p.toString().endsWith("/SKILL.md")).forEach(p -> {
@@ -312,7 +316,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
      * run previously extracted to the stable SkillsJars home remain usable by the
      * native distribution as a fallback.
      */
-    private void loadFromExtractedSkills(List<SkillDefinition> skills) {
+    void loadFromExtractedSkills(List<SkillDefinition> skills) {
         Path skillsHome = Path.of(System.getProperty("user.home"), ".amsha", "skills", "skillsjars");
         if (!Files.isDirectory(skillsHome)) {
             return;
@@ -329,11 +333,11 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
     }
 
-    private void loadSkillFromResource(String classpathPath, List<SkillDefinition> skills) {
+    void loadSkillFromResource(String classpathPath, List<SkillDefinition> skills) {
         loadSkillFromResource(classpathPath, skills, null);
     }
 
-    private void loadSkillFromResource(String classpathPath, List<SkillDefinition> skills, String skillHome) {
+    void loadSkillFromResource(String classpathPath, List<SkillDefinition> skills, String skillHome) {
         try (InputStream stream = getClass().getResourceAsStream(classpathPath)) {
             if (stream == null) {
                 LOG.warnf("SkillsJar skill '%s' not found on classpath", classpathPath);
@@ -346,7 +350,7 @@ public class SkillsJarSkillProvider implements SkillProvider {
         }
     }
 
-    private void loadSkillFromFile(Path skillFile, List<SkillDefinition> skills) {
+    void loadSkillFromFile(Path skillFile, List<SkillDefinition> skills) {
         try {
             String content = Files.readString(skillFile, StandardCharsets.UTF_8);
             loadSkillContent(

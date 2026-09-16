@@ -1,6 +1,6 @@
 # Amsha Security API Module (`amsha-security-api`)
 
-Pure API contracts for security in Amsha Agent: risk vocabulary, autonomy levels, outbound policy decisions, and the secret-vault port. Extracted from `amsha-core` (stream S4 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../Ideas-Pending/Architecture/ADR-extract-core-subsystems.md)).
+Pure API contracts for security in Amsha Agent: risk vocabulary, autonomy levels, outbound policy decisions, and the secret-vault port. Extracted from `amsha-core` (stream S4 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../docs/adr/architecture/ADR-extract-core-subsystems.md)).
 
 `amsha-security-api` contains **zero dependencies on `amsha-core`**, so consumers (`amsha-sandbox`, `amsha-tools-builtin`, `amsha-llm-providers`, `amsha-mcp`, `amsha-onboarding`) reference security contracts without importing core internals. Implementations live in [`amsha-security`](../security/README.md).
 

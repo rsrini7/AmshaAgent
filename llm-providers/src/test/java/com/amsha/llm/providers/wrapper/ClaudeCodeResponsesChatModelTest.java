@@ -1,6 +1,7 @@
 package com.amsha.llm.providers.wrapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -19,6 +20,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.output.FinishReason;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -42,11 +44,29 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
 
 class ClaudeCodeResponsesChatModelTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /** A stream that never reports usage, so the token estimate path is exercised. */
+    private static final String SSE_TEXT_ONLY_NO_USAGE = """
+            event: content_block_start
+            data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}
+
+            event: content_block_stop
+            data: {"type":"content_block_stop","index":0}
+            """;
 
     private HttpServer server;
     private int port;
@@ -440,5 +460,286 @@ class ClaudeCodeResponsesChatModelTest {
                         .messages(List.of(new UserMessage("Ping remote")))
                         .build()));
         assertTrue(ex.getMessage().contains("Governed outbound transport"));
+    }
+
+    // ---- endpoint resolution and auth ----
+
+    @Test
+    void aBlankBaseUrlFallsBackToTheDefaultAnthropicEndpoint() {
+        stubSse("data: {\"type\":\"message_stop\"}\n\n", 200);
+        ClaudeCodeResponsesChatModel model = new ClaudeCodeResponsesChatModel(
+                "   ", "sk-ant-oauth-test", "claude-sonnet-4-5", 4096, Duration.ofSeconds(5), 0.0, governedTransport);
+
+        model.chat(request("hi"));
+
+        ArgumentCaptor<String> sentUrl = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(governedTransport).send(sentUrl.capture(), any(), any(), any(), anyBoolean(), any(), any());
+        assertEquals("https://api.anthropic.com/v1/messages", sentUrl.getValue());
+    }
+
+    @Test
+    void aBlankTokenSendsNoAuthHeaderAtAll() {
+        sseResponseData.set(SSE_TEXT_ONLY_NO_USAGE);
+
+        model("   ").chat(request("hi"));
+
+        RecordedRequest req = recordedRequests.getFirst();
+        assertTrue(req.authHeader() == null || req.authHeader().isBlank());
+        assertTrue(req.apiKeyHeader() == null || req.apiKeyHeader().isBlank());
+        assertTrue(req.betaHeader() == null || req.betaHeader().isBlank());
+    }
+
+    @Test
+    void anUnexpectedFailureIsWrappedWithItsRootMessage() {
+        ClaudeCodeResponsesChatModel model = new ClaudeCodeResponsesChatModel(
+                "http://[not-a-host",
+                "sk-ant-oauth-test",
+                "claude-sonnet-4-5",
+                4096,
+                Duration.ofSeconds(5),
+                0.0,
+                governedTransport);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> model.chat(request("hi")));
+
+        assertTrue(ex.getMessage().contains("Failed to communicate with Claude Code API"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theConvenienceConstructorResolvesTheTransportFromCdi() {
+        InstanceHandle<GovernedTransportService> handle = Mockito.mock(InstanceHandle.class);
+        Mockito.when(handle.isAvailable()).thenReturn(true);
+        Mockito.when(handle.get()).thenReturn(governedTransport);
+        ArcContainer container = Mockito.mock(ArcContainer.class);
+        Mockito.when(container.instance(GovernedTransportService.class)).thenReturn(handle);
+        stubSse(
+                "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"via cdi\"}}\n\n",
+                200);
+
+        try (MockedStatic<Arc> arc = Mockito.mockStatic(Arc.class)) {
+            arc.when(Arc::container).thenReturn(container);
+
+            ClaudeCodeResponsesChatModel model = new ClaudeCodeResponsesChatModel(
+                    "http://127.0.0.1:" + port,
+                    "sk-ant-oauth-test",
+                    "claude-sonnet-4-5",
+                    4096,
+                    Duration.ofSeconds(5),
+                    0.0);
+
+            assertEquals("via cdi", model.chat(request("hi")).aiMessage().text());
+        }
+    }
+
+    @Test
+    void aBrokenCdiContainerLeavesTheTransportUnresolved() {
+        try (MockedStatic<Arc> arc = Mockito.mockStatic(Arc.class)) {
+            arc.when(Arc::container).thenThrow(new IllegalStateException("no arc container"));
+
+            // The 6-argument constructor has no transport parameter, so it must come from CDI.
+            ClaudeCodeResponsesChatModel model = new ClaudeCodeResponsesChatModel(
+                    "http://127.0.0.1:" + port,
+                    "sk-ant-oauth-test",
+                    "claude-sonnet-4-5",
+                    4096,
+                    Duration.ofSeconds(5),
+                    0.0);
+
+            IllegalStateException ex = assertThrows(IllegalStateException.class, () -> model.chat(request("hi")));
+            assertTrue(ex.getMessage().contains("Governed outbound transport"));
+        }
+    }
+
+    // ---- request payload shape ----
+
+    @Test
+    void assistantToolRequestsBecomeToolUseContentParts() throws Exception {
+        sseResponseData.set(SSE_TEXT_ONLY_NO_USAGE);
+
+        model().chat(ChatRequest.builder()
+                .messages(List.of(
+                        new UserMessage("go"),
+                        AiMessage.from(
+                                "Let me check",
+                                List.of(
+                                        ToolExecutionRequest.builder()
+                                                .id("toolu_1")
+                                                .name("calculate")
+                                                .arguments("{\"expr\":\"2+2\"}")
+                                                .build(),
+                                        ToolExecutionRequest.builder()
+                                                .id(null)
+                                                .name("lookup")
+                                                .arguments(null)
+                                                .build(),
+                                        ToolExecutionRequest.builder()
+                                                .id("toolu_3")
+                                                .name("broken")
+                                                .arguments("not json")
+                                                .build()))))
+                .build());
+
+        JsonNode content = MAPPER.readTree(recordedRequests.getFirst().body())
+                .path("messages")
+                .get(1)
+                .path("content");
+
+        assertEquals(4, content.size(), "one text part plus three tool_use parts");
+        assertEquals("text", content.get(0).path("type").asText());
+        assertEquals("Let me check", content.get(0).path("text").asText());
+        assertEquals("tool_use", content.get(1).path("type").asText());
+        assertEquals("toolu_1", content.get(1).path("id").asText());
+        assertEquals("calculate", content.get(1).path("name").asText());
+        assertEquals("2+2", content.get(1).path("input").path("expr").asText());
+        // A missing id is replaced with a generated one; absent or unparseable arguments degrade to {}.
+        assertFalse(content.get(2).path("id").asText().isBlank());
+        assertTrue(content.get(2).path("input").isObject());
+        assertTrue(content.get(2).path("input").isEmpty());
+        assertTrue(content.get(3).path("input").isEmpty());
+    }
+
+    @Test
+    void consecutiveToolResultsAreMergedIntoASingleUserMessage() throws Exception {
+        sseResponseData.set(SSE_TEXT_ONLY_NO_USAGE);
+
+        // Tool results are sent as user-role messages, so consecutive ones coalesce into one entry.
+        model().chat(ChatRequest.builder()
+                .messages(List.of(
+                        new ToolExecutionResultMessage("toolu_1", "calculate", "4"),
+                        new ToolExecutionResultMessage("toolu_2", "lookup", "found")))
+                .build());
+
+        JsonNode messages = MAPPER.readTree(recordedRequests.getFirst().body()).path("messages");
+
+        assertEquals(1, messages.size(), "the two tool results merge into one user message");
+        assertEquals("user", messages.get(0).path("role").asText());
+        JsonNode merged = messages.get(0).path("content");
+        assertEquals(2, merged.size());
+        assertEquals("tool_result", merged.get(0).path("type").asText());
+        assertEquals("toolu_1", merged.get(0).path("tool_use_id").asText());
+        assertEquals("4", merged.get(0).path("content").asText());
+        assertEquals("toolu_2", merged.get(1).path("tool_use_id").asText());
+        assertEquals("found", merged.get(1).path("content").asText());
+    }
+
+    @Test
+    void aToolWithoutParametersGetsAnEmptyInputSchema() throws Exception {
+        sseResponseData.set(SSE_TEXT_ONLY_NO_USAGE);
+
+        model().chat(ChatRequest.builder()
+                .messages(List.of(new UserMessage("go")))
+                .toolSpecifications(
+                        List.of(ToolSpecification.builder().name("ping").build()))
+                .build());
+
+        JsonNode tool = MAPPER.readTree(recordedRequests.getFirst().body())
+                .path("tools")
+                .get(0);
+
+        assertEquals("ping", tool.path("name").asText());
+        assertEquals("object", tool.path("input_schema").path("type").asText());
+    }
+
+    // ---- SSE event handling ----
+
+    @Test
+    void tokenUsageIsEstimatedWhenTheStreamReportsNone() {
+        sseResponseData.set(SSE_TEXT_ONLY_NO_USAGE);
+
+        ChatResponse response = model().chat(request("hi"));
+
+        assertEquals("hi", response.aiMessage().text());
+        assertEquals(FinishReason.STOP, response.finishReason());
+        // No usage events: a fixed 10 input tokens plus max(1, characters / 4) output tokens.
+        assertEquals(10, response.tokenUsage().inputTokenCount().intValue());
+        assertEquals(1, response.tokenUsage().outputTokenCount().intValue());
+        assertEquals(11, response.tokenUsage().totalTokenCount().intValue());
+    }
+
+    @Test
+    void textAndToolUseInOneStreamProduceAMessageCarryingBoth() {
+        sseResponseData.set("""
+                event: message_start
+                data: {"type":"message_start","message":{"id":"msg_7","usage":{"input_tokens":9,"output_tokens":1}}}
+
+                event: content_block_start
+                data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Let me calculate"}}
+
+                event: content_block_stop
+                data: {"type":"content_block_stop","index":0}
+
+                event: content_block_start
+                data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_9","name":"calculate","input":{}}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"expr\\":\\"2+2\\"}"}}
+
+                event: content_block_stop
+                data: {"type":"content_block_stop","index":1}
+
+                event: message_delta
+                data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}
+
+                event: message_stop
+                data: {"type":"message_stop"}
+                """);
+
+        ChatResponse response = model().chat(request("Calculate 2+2"));
+
+        assertEquals(FinishReason.TOOL_EXECUTION, response.finishReason());
+        assertEquals("Let me calculate", response.aiMessage().text());
+        assertEquals(1, response.aiMessage().toolExecutionRequests().size());
+        assertEquals(
+                "calculate",
+                response.aiMessage().toolExecutionRequests().getFirst().name());
+    }
+
+    @Test
+    void anErrorEventFailsTheChatWithTheUpstreamMessage() {
+        sseResponseData.set("""
+                event: error
+                data: {"type":"error","error":{"message":"overloaded"}}
+                """);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> model().chat(request("hi")));
+
+        assertTrue(ex.getMessage().contains("Claude Code SSE Error"));
+        assertTrue(ex.getMessage().contains("overloaded"));
+    }
+
+    // ---- helpers ----
+
+    private ClaudeCodeResponsesChatModel model() {
+        return model("sk-ant-oauth-test");
+    }
+
+    private ClaudeCodeResponsesChatModel model(String token) {
+        return new ClaudeCodeResponsesChatModel(
+                "http://127.0.0.1:" + port,
+                token,
+                "claude-sonnet-4-5",
+                4096,
+                Duration.ofSeconds(5),
+                0.0,
+                governedTransport);
+    }
+
+    private static ChatRequest request(String prompt) {
+        return ChatRequest.builder().messages(List.of(new UserMessage(prompt))).build();
+    }
+
+    /** Serves a fixed SSE payload instead of going through the loopback handler. */
+    @SuppressWarnings("unchecked")
+    private void stubSse(String ssePayload, int status) {
+        HttpResponse<InputStream> response = Mockito.mock(HttpResponse.class);
+        Mockito.when(response.statusCode()).thenReturn(status);
+        Mockito.when(response.body()).thenReturn(new ByteArrayInputStream(ssePayload.getBytes(StandardCharsets.UTF_8)));
+        Mockito.doReturn(response)
+                .when(governedTransport)
+                .send(anyString(), any(), any(), any(), anyBoolean(), any(), any());
     }
 }

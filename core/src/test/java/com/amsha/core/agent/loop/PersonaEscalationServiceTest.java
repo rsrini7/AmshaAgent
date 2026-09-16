@@ -11,6 +11,7 @@ import java.util.List;
 
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 
@@ -234,5 +235,111 @@ class PersonaEscalationServiceTest {
         assertTrue(res.success());
         assertEquals("researcher", res.targetPersona());
         assertEquals("Final answer after secondary escalation", res.result());
+    }
+
+    // ── Task #8: cover previously-missed reachable branches ──
+
+    @Test
+    void determineEscalationTarget_returnsNullWhenNothingMatches() {
+        assertNull(service.determineEscalationTarget("optimizer", "random error text", "random goal text"));
+    }
+
+    @Test
+    void determineEscalationTarget_coderArchitecturePattern_toArchitect() {
+        assertEquals(
+                "architect", service.determineEscalationTarget("coder", "", "design the architecture and trade-off"));
+    }
+
+    @Test
+    void determineEscalationTarget_coderNoPattern_returnsNull() {
+        // coder with no sandbox / unknown-api / architecture pattern -> escalateFromCoder returns null (line 220)
+        assertNull(service.determineEscalationTarget(
+                AgentRoleEnum.CODER.toScopedName(), "a completely unrelated message", "write a unit test"));
+    }
+
+    @Test
+    void determineEscalationTarget_debuggerNoPattern_returnsNull() {
+        assertNull(service.determineEscalationTarget("debugger", "nothing relevant here", "plain goal"));
+    }
+
+    @Test
+    void determineEscalationTarget_architectNoPattern_returnsNull() {
+        assertNull(service.determineEscalationTarget("architect", "err", "design a system"));
+    }
+
+    @Test
+    void determineEscalationTarget_researcherNoPattern_returnsNull() {
+        assertNull(service.determineEscalationTarget("researcher", "err", "analyze the data"));
+    }
+
+    @Test
+    void determineEscalationTarget_eachSandboxPhraseEscalatesToDebugger() {
+        for (String phrase : List.of(
+                "compile error in module",
+                "syntax error on line 1",
+                "classnotfound exception",
+                "nosuchmethod error",
+                "nullpointerexception thrown",
+                "arrayindexoutofbounds failure",
+                "classcastexception occurred",
+                "illegalargument supplied",
+                "fatal error: in Main.java")) {
+            assertEquals("debugger", service.determineEscalationTarget("unknown_role", phrase, null), phrase);
+        }
+    }
+
+    @Test
+    void attemptEscalation_delegationThrows_wrappedAsFailure() {
+        when(agentLoop.run(anyString(), eq("researcher"), anyString(), eq(reasoningEngine), anyInt()))
+                .thenThrow(new RuntimeException("loop exploded"));
+        var res = service.attemptEscalation(
+                "sess-1", "usr-1", "chat-1", "coder", "researcher", "err", "goal", null, null, "cli", "cli");
+        assertFalse(res.success());
+        assertTrue(res.errorIfFailed().contains("Escalation delegation failed"));
+    }
+
+    @Test
+    void attemptEscalation_nonFinishedResult_formatsError() {
+        when(agentLoop.run(anyString(), eq("researcher"), anyString(), eq(reasoningEngine), anyInt()))
+                .thenReturn(AgentResult.failed("boom", AgentResult.FailureCategory.SYSTEM_ERROR, List.of()));
+        var res = service.attemptEscalation(
+                "sess-1", "usr-1", "chat-1", "coder", "researcher", "err", "goal", null, null, "cli", "cli");
+        assertFalse(res.success());
+        assertEquals("boom", res.errorIfFailed());
+    }
+
+    @Test
+    void buildEscalationGoal_includesRelevantCodeBlock() {
+        String goal = service.buildEscalationGoal(
+                "coder", "researcher", "cannot find symbol", "use List", "int x=1;", "java");
+        assertTrue(goal.contains("## RELEVANT CODE:"));
+        assertTrue(goal.contains("java"));
+        assertTrue(goal.contains("int x=1;"));
+
+        String goalNoLang = service.buildEscalationGoal("coder", "researcher", "err", "goal", "body", null);
+        assertTrue(goalNoLang.contains("## RELEVANT CODE:"));
+        assertTrue(goalNoLang.contains("text"));
+    }
+
+    @Test
+    void buildEscalationGoal_displaysEveryPersonaName() {
+        service.buildEscalationGoal("architect", "coordinator", "e", "g", null, null);
+        service.buildEscalationGoal("synthesizer", "optimizer", "e", "g", null, null);
+        service.buildEscalationGoal("sentinel", "healer", "e", "g", null, null);
+        service.buildEscalationGoal("protector", "purifier", "e", "g", null, null);
+        service.buildEscalationGoal("nurturer", "totally_unknown_role", "e", "g", null, null);
+    }
+
+    @Test
+    void buildEscalationGoal_truncatesLongErrorOutput() {
+        String longError = "x".repeat(4100);
+        String goal = service.buildEscalationGoal("coder", "researcher", longError, "goal", null, null);
+        assertTrue(goal.contains("[truncated]"));
+    }
+
+    @Test
+    void formatAgentResultError_defaultBranchForUnknownType() {
+        var finished = new AgentResult.Finished("answer", List.of(), 1, 1);
+        assertTrue(service.formatAgentResultError(finished).contains("Unknown agent result"));
     }
 }

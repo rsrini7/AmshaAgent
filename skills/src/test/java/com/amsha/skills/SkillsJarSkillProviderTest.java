@@ -4,13 +4,21 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.jar.Attributes;
+import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 
 import com.amsha.core.skill.SkillAdaptationManager;
 import com.amsha.core.skill.SkillDefinition;
@@ -146,60 +154,159 @@ class SkillsJarSkillProviderTest {
     }
 
     @Test
-    void testLoadFromExtractedSkills(@TempDir Path tempDir) throws Exception {
-        var loadExtracted = provider.getClass().getDeclaredMethod("loadFromExtractedSkills", List.class);
-        loadExtracted.setAccessible(true);
+    void testLoadFromIndexWithEntries() {
+        SkillsJarSkillProvider spyProvider = spy(provider);
+        String indexContent = "# Header\n\nMETA-INF/skills/vendor/skill-a/SKILL.md\n";
+        ByteArrayInputStream is = new ByteArrayInputStream(indexContent.getBytes(StandardCharsets.UTF_8));
+        doReturn(is).when(spyProvider).openIndexStream();
+        doNothing().when(spyProvider).loadIndexedSkill(anyString(), anyList());
 
         List<SkillDefinition> skills = new ArrayList<>();
-        assertDoesNotThrow(() -> loadExtracted.invoke(provider, skills));
+        assertTrue(spyProvider.loadFromIndex(skills));
+        verify(spyProvider).loadIndexedSkill(eq("META-INF/skills/vendor/skill-a/SKILL.md"), eq(skills));
     }
 
     @Test
-    void testWriteSourceMetadata(@TempDir Path tempDir) throws Exception {
-        JarFile mockJar = mock(JarFile.class);
-        when(mockJar.getName()).thenReturn("com.skillsjars.test-skill-1.2.3.jar");
+    void testLoadFromIndexStreamFailure() throws Exception {
+        SkillsJarSkillProvider spyProvider = spy(provider);
+        InputStream failing = mock(InputStream.class);
+        when(failing.read(any(byte[].class), anyInt(), anyInt())).thenThrow(new IOException("boom"));
+        when(failing.read()).thenThrow(new IOException("boom"));
+        doReturn(failing).when(spyProvider).openIndexStream();
 
-        var writeMeta =
-                provider.getClass().getDeclaredMethod("writeSourceMetadata", Path.class, String.class, JarFile.class);
-        writeMeta.setAccessible(true);
+        List<SkillDefinition> skills = new ArrayList<>();
+        assertTrue(spyProvider.loadFromIndex(skills));
+    }
 
-        assertDoesNotThrow(() -> writeMeta.invoke(provider, tempDir, "test-skill", mockJar));
-        assertTrue(Files.exists(tempDir.resolve(".skill-source.json")));
+    @Test
+    void testScanJarAndExtractAssets(@TempDir Path tempDir) throws Exception {
+        String origHome = System.getProperty("user.home");
+        try {
+            System.setProperty("user.home", tempDir.toString());
+            Path jarPath = tempDir.resolve("com.skillsjars.demo-skill-1.5.0.jar");
+            Manifest manifest = new Manifest();
+            manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+            manifest.getMainAttributes().putValue("Implementation-Version", "1.5.0");
+
+            try (var jos = new JarOutputStream(Files.newOutputStream(jarPath), manifest)) {
+                jos.putNextEntry(new JarEntry("META-INF/skills/demo/demo-skill/SKILL.md"));
+                jos.write("# Demo Skill\nallowed-tools: Bash()\n".getBytes(StandardCharsets.UTF_8));
+                jos.closeEntry();
+
+                jos.putNextEntry(new JarEntry("META-INF/skills/demo/demo-skill/scripts/run.sh"));
+                jos.write("#!/bin/bash\necho 1\n".getBytes(StandardCharsets.UTF_8));
+                jos.closeEntry();
+            }
+
+            try (JarFile jarFile = new JarFile(jarPath.toFile())) {
+                String extractedHome = provider.extractSkillAssets(jarFile, "META-INF/skills/demo/demo-skill/SKILL.md");
+                assertNotNull(extractedHome);
+                assertTrue(Files.isRegularFile(Path.of(extractedHome, "scripts", "run.sh")));
+                assertTrue(Files.isRegularFile(Path.of(extractedHome, ".skill-source.json")));
+                String meta = Files.readString(Path.of(extractedHome, ".skill-source.json"));
+                assertTrue(meta.contains("\"version\": \"1.5.0\""));
+                assertTrue(meta.contains("\"skillName\": \"demo-skill\""));
+            }
+        } finally {
+            System.setProperty("user.home", origHome);
+        }
+    }
+
+    @Test
+    void testWriteSourceMetadataFallbacks(@TempDir Path tempDir) throws Exception {
+        Path jarPath = tempDir.resolve("vendor-custom-tool-3.2.1.jar");
+        Manifest manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        manifest.getMainAttributes().putValue("Specification-Version", "3.2.1");
+
+        try (var jos = new JarOutputStream(Files.newOutputStream(jarPath), manifest)) {
+            jos.putNextEntry(new JarEntry("file.txt"));
+            jos.write("data".getBytes(StandardCharsets.UTF_8));
+            jos.closeEntry();
+        }
+
+        try (JarFile jarFile = new JarFile(jarPath.toFile())) {
+            Path targetDir = tempDir.resolve("target1");
+            Files.createDirectories(targetDir);
+            provider.writeSourceMetadata(targetDir, "custom-tool", jarFile);
+            String meta = Files.readString(targetDir.resolve(".skill-source.json"));
+            assertTrue(meta.contains("\"version\": \"3.2.1\""));
+        }
+
+        // Test without manifest: filename fallback
+        Path plainJar = tempDir.resolve("custom-lib-9.8.7.jar");
+        try (var jos = new JarOutputStream(Files.newOutputStream(plainJar))) {
+            jos.putNextEntry(new JarEntry("dummy.txt"));
+            jos.write("dummy".getBytes(StandardCharsets.UTF_8));
+            jos.closeEntry();
+        }
+        try (JarFile jarFile = new JarFile(plainJar.toFile())) {
+            Path targetDir = tempDir.resolve("target2");
+            Files.createDirectories(targetDir);
+            provider.writeSourceMetadata(targetDir, "custom-lib", jarFile);
+            String meta = Files.readString(targetDir.resolve(".skill-source.json"));
+            assertTrue(meta.contains("\"version\": \"9.8.7\""));
+        }
+    }
+
+    @Test
+    void testLoadFromExtractedSkillsDirectory(@TempDir Path tempDir) throws Exception {
+        String origHome = System.getProperty("user.home");
+        try {
+            System.setProperty("user.home", tempDir.toString());
+            Path skillDir = tempDir.resolve(".amsha/skills/skillsjars/saved-skill");
+            Files.createDirectories(skillDir);
+            Files.writeString(skillDir.resolve("SKILL.md"), "# Saved Skill\n");
+
+            SkillDefinition parsedDef = new SkillDefinition(
+                    "s-saved", "saved", "desc", List.of(), List.of(), 5, "prompt", skillDir.toString(), false, null);
+            when(parser.parse(anyString(), eq(skillDir.toString()))).thenReturn(parsedDef);
+
+            List<SkillDefinition> skills = new ArrayList<>();
+            provider.loadFromExtractedSkills(skills);
+            assertEquals(1, skills.size());
+            assertEquals("s-saved", skills.get(0).id());
+        } finally {
+            System.setProperty("user.home", origHome);
+        }
     }
 
     @Test
     void testStripConflictingSections() throws Exception {
-        var stripMethod = provider.getClass().getDeclaredMethod("stripConflictingSections", String.class);
+        String input = """
+                # Decision Tree
+                Skip whole tree
+                ## Quick Start
+                Skip quick start
+                ### Prerequisites
+                Skip prereqs
+                #### Enabling JDWP
+                Skip jdwp
+                # Allowed Section
+                Keep this line
+                """;
+        var stripMethod = SkillsJarSkillProvider.class.getDeclaredMethod("stripConflictingSections", String.class);
         stripMethod.setAccessible(true);
-
-        String input =
-                "# Heading\n## Decision Tree\nskip this\n## Valid Section\nkeep this\n## Quick Start\nskip this too\n";
-        String stripped = (String) stripMethod.invoke(provider, input);
+        String stripped = (String) stripMethod.invoke(null, input);
         assertNotNull(stripped);
-        assertTrue(stripped.contains("## Valid Section"));
-        assertTrue(stripped.contains("keep this"));
-        assertFalse(stripped.contains("skip this"));
-        assertFalse(stripped.contains("skip this too"));
+        assertTrue(stripped.contains("# Allowed Section"));
+        assertTrue(stripped.contains("Keep this line"));
+        assertFalse(stripped.contains("Skip whole tree"));
+        assertFalse(stripped.contains("Skip prereqs"));
     }
 
     @Test
     void testScanUrlWithUnknownProtocol() throws Exception {
-        var scanMethod = provider.getClass().getDeclaredMethod("scanUrl", URL.class, List.class);
-        scanMethod.setAccessible(true);
-
         List<SkillDefinition> skills = new ArrayList<>();
         URL customUrl = new URI("http://example.com/skill").toURL();
-        assertDoesNotThrow(() -> scanMethod.invoke(provider, customUrl, skills));
+        assertDoesNotThrow(() -> provider.scanUrl(customUrl, skills));
         assertTrue(skills.isEmpty());
     }
 
     @Test
-    void testLoadSkillFromResourceNonExistent() throws Exception {
-        var loadResMethod = provider.getClass().getDeclaredMethod("loadSkillFromResource", String.class, List.class);
-        loadResMethod.setAccessible(true);
-
+    void testLoadSkillFromResourceNonExistent() {
         List<SkillDefinition> skills = new ArrayList<>();
-        assertDoesNotThrow(() -> loadResMethod.invoke(provider, "/non/existent/path/SKILL.md", skills));
+        assertDoesNotThrow(() -> provider.loadSkillFromResource("/non/existent/path/SKILL.md", skills));
         assertTrue(skills.isEmpty());
     }
 

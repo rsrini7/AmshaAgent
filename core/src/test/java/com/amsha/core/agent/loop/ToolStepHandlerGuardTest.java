@@ -214,6 +214,25 @@ class ToolStepHandlerGuardTest {
     }
 
     @Test
+    void invokeToolAndObserve_equivalentBlockedCallsTerminate() {
+        AgentExecutionContext ctx = createCtx("researcher", "analyze the application");
+        ReasoningStep previous = ReasoningStep.pending(
+                        "thought", ToolCapability.GITHUB.toolName(), Map.of("command", "list", "target", "rsrini7"))
+                .withObservation("GitHub access is blocked for this goal.", false);
+        ReasoningStep current = ReasoningStep.pending(
+                "retry", ToolCapability.GITHUB.toolName(), Map.of("action", "list", "target", "rsrini7"));
+
+        when(guard.evaluate(anyString(), anyString(), any(), anyString(), any(), anyList(), anyString(), anyList()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Blocked("GitHub access is blocked for this goal."));
+
+        List<ReasoningStep> history = new ArrayList<>(List.of(previous));
+        StepDecision decision = handler.invokeToolAndObserve(ctx, history, current, 0, List.of());
+
+        assertEquals(DecisionType.TERMINAL, decision.type());
+        assertTrue(((AgentResult.Failed) decision.result()).reason().contains("blocked repeatedly"));
+    }
+
+    @Test
     void invokeToolAndObserve_successfulInvocation() {
         AgentExecutionContext ctx = createCtx("researcher", "execute tool");
         ReasoningStep step = ReasoningStep.pending("thought", "my_tool", Map.of("key", "val"));

@@ -215,6 +215,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SafeSymbolMetadata.class
         },
         classNames = {
+            "com.amsha.core.agent.reasoning.AttachmentContentMapper",
             // Nested trace contract type: registered by binary name rather than adding a
             // type-level @RegisterForReflection (§6.7 / AGENTS.md §8).
             "com.amsha.core.agent.trace.AgentTraceEvent$TraceMetrics",

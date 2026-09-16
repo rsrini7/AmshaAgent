@@ -190,6 +190,91 @@ class SqliteLlmProfileStoreAdapterTest {
         assertTrue(grantStore.findByWorkspaceAndConnection("ws-1", "c-shared").isEmpty());
     }
 
+    @Test
+    void activateConnectionRejectsAMissingConnection() {
+        assertFalse(store.activateConnection("missing-" + UUID.randomUUID(), 1));
+    }
+
+    @Test
+    void modelProfileUpdateAndDelete() {
+        String prefix = "sqlite-" + UUID.randomUUID();
+        store.saveConnection(connection(prefix + "-c4", "USER", prefix + "-user-4"));
+        Instant now = Instant.now();
+        store.saveModelProfile(
+                new ModelProfileDto(prefix + "-p4", prefix + "-c4", "gpt-4o", "NATIVE", null, null, true, 1, now, now));
+        assertTrue(store.findModelProfile(prefix + "-p4").isPresent());
+
+        ModelProfileDto renamed = new ModelProfileDto(
+                prefix + "-p4", prefix + "-c4", "gpt-4o-mini", "NATIVE", null, null, false, 2, now, Instant.now());
+        assertTrue(store.updateModelProfile(renamed, 1));
+
+        ModelProfileDto after = store.findModelProfile(prefix + "-p4").orElseThrow();
+        assertEquals("gpt-4o-mini", after.modelId());
+        assertFalse(after.enabled());
+
+        assertFalse(store.updateModelProfile(renamed, 1), "stale revision must fail");
+
+        assertEquals(1, store.deleteModelProfile(prefix + "-p4"));
+        assertTrue(store.findModelProfile(prefix + "-p4").isEmpty());
+        assertEquals(0, store.deleteModelProfile(prefix + "-p4"), "already deleted");
+    }
+
+    @Test
+    void routeAssignmentUpdateAndDelete() {
+        String prefix = "sqlite-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        store.saveRouteAssignment(new ModelRouteAssignmentDto(
+                prefix + "-r4",
+                "USER",
+                prefix + "-user-4",
+                "DEFAULT",
+                null,
+                List.of(prefix + "-p4"),
+                true,
+                1,
+                now,
+                now));
+        assertTrue(store.findRouteAssignment(prefix + "-r4").isPresent());
+
+        ModelRouteAssignmentDto disabled = new ModelRouteAssignmentDto(
+                prefix + "-r4",
+                "USER",
+                prefix + "-user-4",
+                "DEFAULT",
+                null,
+                List.of(prefix + "-p4"),
+                false,
+                2,
+                now,
+                Instant.now());
+        assertTrue(store.updateRouteAssignment(disabled, 1));
+        assertFalse(store.findRouteAssignment(prefix + "-r4").orElseThrow().enabled());
+
+        assertFalse(store.updateRouteAssignment(disabled, 1), "stale revision must fail");
+
+        assertEquals(1, store.deleteRouteAssignment(prefix + "-r4"));
+        assertTrue(store.findRouteAssignment(prefix + "-r4").isEmpty());
+    }
+
+    @Test
+    void aCorruptOrderedProfileIdsColumnDegradesToAnEmptyList() {
+        String prefix = "sqlite-corrupt-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        store.saveRouteAssignment(new ModelRouteAssignmentDto(
+                prefix + "-r", "USER", prefix + "-user", "DEFAULT", null, List.of(prefix + "-p"), true, 1, now, now));
+
+        // Simulate text that is not valid JSON in the ordered-profile-ids column.
+        jdbi.useHandle(h -> h.execute(
+                "UPDATE model_route_assignment SET ordered_profile_ids = ? WHERE id = ?", "[not json", prefix + "-r"));
+
+        ModelRouteAssignmentDto read = store.findRouteAssignment(prefix + "-r").orElseThrow();
+
+        assertTrue(
+                read.orderedProfileIds().isEmpty(),
+                "a malformed JSON column must degrade to an empty list rather than failing the read");
+        assertTrue(read.enabled(), "an intact sibling column must still be read");
+    }
+
     private static LlmConnectionDto connection(String id, String scopeType, String scopeId) {
         Instant now = Instant.now();
         return new LlmConnectionDto(

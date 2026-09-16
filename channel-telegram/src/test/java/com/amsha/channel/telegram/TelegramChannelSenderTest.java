@@ -19,8 +19,10 @@ import com.amsha.channel.api.ChannelUser;
 import com.amsha.channel.api.ContentNode;
 
 import org.apache.camel.ProducerTemplate;
+import org.apache.camel.component.telegram.model.EditMessageTextMessage;
 import org.apache.camel.component.telegram.model.InlineKeyboardMarkup;
 import org.apache.camel.component.telegram.model.OutgoingTextMessage;
+import org.apache.camel.component.telegram.model.SendChatActionMessage;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -200,5 +203,96 @@ class TelegramChannelSenderTest {
 
         assertDoesNotThrow(() -> sender.sendRaw(blankChannel, "text"));
         verifyNoInteractions(producerTemplate);
+    }
+
+    @Test
+    void testSupportsReturnsTelegram() {
+        assertEquals(ChannelType.TELEGRAM, sender.supports());
+    }
+
+    @Test
+    void testSendChatActionValid() {
+        sender.sendChatAction("123", SendChatActionMessage.Action.TYPING);
+        verify(producerTemplate)
+                .sendBodyAndHeader(
+                        eq("telegram:bots"),
+                        any(SendChatActionMessage.class),
+                        eq(TelegramConstants.TELEGRAM_CHAT_ID),
+                        eq("123"));
+    }
+
+    @Test
+    void testSendChatActionNullOrBlankDropped() {
+        sender.sendChatAction(null, SendChatActionMessage.Action.TYPING);
+        sender.sendChatAction("  ", SendChatActionMessage.Action.TYPING);
+        sender.sendChatAction("123", null);
+        verifyNoInteractions(producerTemplate);
+    }
+
+    @Test
+    void testSendChatActionCatchesException() {
+        Mockito.doThrow(new RuntimeException("Simulated Camel failure"))
+                .when(producerTemplate)
+                .sendBodyAndHeader(anyString(), any(), anyString(), any());
+
+        assertDoesNotThrow(() -> sender.sendChatAction("123", SendChatActionMessage.Action.TYPING));
+    }
+
+    @Test
+    void testEditMessageValid() {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        sender.editMessage("123", 42, "Updated message", markup);
+
+        verify(producerTemplate)
+                .sendBodyAndHeader(
+                        eq("telegram:bots"),
+                        any(EditMessageTextMessage.class),
+                        eq(TelegramConstants.TELEGRAM_CHAT_ID),
+                        eq("123"));
+    }
+
+    @Test
+    void testEditMessageNullOrBlankChatIdDropped() {
+        sender.editMessage(null, 42, "text", null);
+        sender.editMessage("   ", 42, "text", null);
+        verifyNoInteractions(producerTemplate);
+    }
+
+    @Test
+    void testEditMessageCatchesException() {
+        Mockito.doThrow(new RuntimeException("Edit message failure"))
+                .when(producerTemplate)
+                .sendBodyAndHeader(anyString(), any(), anyString(), any());
+
+        assertDoesNotThrow(() -> sender.editMessage("123", 42, "text", null));
+    }
+
+    @Test
+    void testSendWithKeyboardGarbledTextDropped() {
+        sender.sendWithKeyboard(user, "   ", null);
+        verifyNoInteractions(producerTemplate);
+    }
+
+    @Test
+    void testSendWithKeyboardEntitiesParseErrorRetriesAsPlainText() {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        Mockito.doThrow(new RuntimeException("Telegram server error: Bad Request: can't parse entities"))
+                .doNothing()
+                .when(producerTemplate)
+                .sendBodyAndHeader(
+                        eq("telegram:bots"),
+                        any(OutgoingTextMessage.class),
+                        eq(TelegramConstants.TELEGRAM_CHAT_ID),
+                        eq("123"));
+
+        sender.sendWithKeyboard(user, "Pre-escaped message", markup);
+
+        // First attempt with parse mode, second retry attempt as plain text
+        verify(producerTemplate, times(2))
+                .sendBodyAndHeader(
+                        eq("telegram:bots"),
+                        any(OutgoingTextMessage.class),
+                        eq(TelegramConstants.TELEGRAM_CHAT_ID),
+                        eq("123"));
     }
 }
