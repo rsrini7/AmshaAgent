@@ -172,21 +172,21 @@ echo ' ALL-PERSONA DELEGATION VALIDATOR'
 echo ' garuda capability + delegation audit coverage'
 echo '═══════════════════════════════════════════'
 
-# role|target|task. Tasks deliberately cross persona boundaries so this
+# role|target|task. Tasks deliberately cross persona boundaries so each role
 # exercises real sub-agent dispatch rather than allowing a direct answer.
 ROLE_MATRIX=(
     'coordinator|researcher|Research the current difference between SQLite WAL and PostgreSQL durability.'
-    'researcher|coordinator|Schedule a daily task for a health check; do not schedule it yourself.'
-    'coder|researcher|Ask the researcher to summarize current Java library API compatibility guidance.'
-    'debugger|coder|Write the Java fix for this bug after delegation: a null value reaches UserService line 42.'
-    'architect|coder|Write production Java code for a UserDto record; you must not code, so delegate the implementation.'
-    'synthesizer|architect|Produce an ADR for event-driven versus direct calls; have the architect handle the design.'
-    'optimizer|debugger|Fix the root cause bug in UserService; you must not debug code, so delegate to the debugger.'
-    'sentinel|debugger|Debug a JWT validation failure caused by an expired signing key.'
-    'healer|optimizer|Optimize the token usage of a recursive algorithm; delegate the optimization analysis.'
-    'protector|researcher|Research the applicable policy requirements for retaining user data.'
-    'purifier|healer|Analyze a failed recovery job and ask the healer for a recovery plan.'
-    'nurturer|researcher|Research factual guidance for responding empathetically to a frustrated user.'
+    'researcher|coordinator|Plan a daily health-check schedule.'
+    'coder|researcher|Summarize current Java library API compatibility guidance.'
+    'debugger|coder|Provide a concise null-safety design for a UserService boundary.'
+    'architect|coder|Draft a production Java UserDto record.'
+    'synthesizer|architect|Design an ADR for event-driven versus direct calls.'
+    'optimizer|debugger|Analyze the root cause of a UserService bug.'
+    'sentinel|debugger|Provide a concise checklist for diagnosing an expired JWT signing key.'
+    'healer|optimizer|Analyze token usage in a recursive algorithm.'
+    'protector|researcher|Summarize policy requirements for retaining user data.'
+    'purifier|healer|Recommend a recovery plan for a failed recovery job.'
+    'nurturer|researcher|Provide factual guidance for responding empathetically to a frustrated user.'
 )
 
 requested_roles="${DELEGATION_ROLES:-}"
@@ -240,7 +240,7 @@ for entry in "${ROLE_MATRIX[@]}"; do
         FAIL=$((FAIL + 1))
         continue
     fi
-    goal="This is a mandatory delegation capability probe. Your first action MUST be to call garuda with agent $target. Do not call sandbox_exec or any other tool first, and do not answer directly before the specialist returns. $task"
+    goal="Please ask the $target specialist for help with this task using the garuda delegation tool, then summarize the specialist's response: $task"
     # Allow one follow-up turn for heavier personas to dispatch after their
     # first reasoning/tool step, while the audit event remains the assertion.
     payload="{\"goal\":\"$goal\",\"agentRole\":\"$role\",\"maxIterations\":$MAX_ITERATIONS}"
