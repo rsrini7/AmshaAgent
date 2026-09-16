@@ -45,7 +45,7 @@ vector scope is used only when a workspace scope is active.
 (`P6-EASYRAG-01`, LangChain4j `1.17.2` / Quarkus `3.38.3` / Quarkiverse `1.12.2`,
 `quarkus-langchain4j-easy-rag` member-BOM-managed but **not** declared in any module `pom.xml`
 and **not** on the classpath; Amsha source contains zero `RetrievalAugmentor`/`EasyRag*`
-references). Authority: [ADR-LangChain4j-Capability-Adoption](../docs/adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#easy-rag) §Easy-RAG + [Issue 09](../.scratch/lc4j-capability-adoption/issues/09-p6-easy-rag-gate.md). Evidence: [`.scratch/lc4j-capability-adoption/evidence/08-easy-rag-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/08-easy-rag-evaluation/README.md).
+references). Authority: [ADR-LangChain4j-Capability-Adoption](../docs/adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#easy-rag) §Easy-RAG. Issue 09 and its evaluation evidence are local ignored artifacts under `.scratch/lc4j-capability-adoption/`; the tracked ADR is the clean-checkout reference.
 
 **Why retain — verification against Amsha invariants (Easy RAG claims re-checked verbatim):**
 

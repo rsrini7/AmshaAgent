@@ -7,7 +7,7 @@
 - **Date**: 2026-08-24
 - **Decision Owners**: Amsha Architecture Committee / Operator
 - **Origin**: Native-binary incident review 2026-08-23 (session `cli-937d65b6…`, finding F7);
-  parked as [Issue 01](../../../.scratch/hitl-approval-policy/issues/01-schedule-task-hitl-under-supervised.md)
+  The Issue 01 tracker is a local ignored artifact under `.scratch/hitl-approval-policy/`; owner sign-off is recorded in this ADR, which is the clean-checkout authority.
   pending explicit owner sign-off, which is now recorded here.
 - **Related**: `AGENTS.md` (HITL invariants), `docs/Architecture_Invariants.md` §governance,
   `ADR-approval-lease-for-parallel-batches.md` (companion fatigue mitigation)

@@ -1,7 +1,8 @@
 # Java Test Coverage — Deep Analysis and Prioritized Action Plan
 
 > **Status**: **CLOSED / COMPLETE** (2026-09-16)  
-> **Final recorded outcome**: Reactor line coverage achieved **84.28%** (latest repository badge; the exact numerator depends on the clean full-reactor report), surpassing the 80.00% goal.
+> **Recorded outcome (2026-09-16)**: The full-reactor snapshot recorded **8,301 passing Java/JUnit tests** and **84.28% reactor line coverage**, surpassing the 82.00% JaCoCo build floor. Re-run a clean full-reactor build before treating this snapshot as current evidence.
+> **UI companion snapshot (2026-09-12)**: Vitest recorded **172 passing tests**, 0 failures and 0 errors, with **58.67% line coverage** (4,665/7,951 lines). UI and Java percentages have different denominators and are measured by separate pipelines.
 > **Gate Ratchet**: Root `pom.xml` `<jacoco.minimum.line.coverage>` permanently locked at **`0.82`** (82.00%).  
 > **Test Suite**: **8,301 passing Java tests** recorded across 28 child modules with 0 failures and 0 errors.
 > **Scope**: Multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator, JDK 25, Quarkus 3.39.3).  

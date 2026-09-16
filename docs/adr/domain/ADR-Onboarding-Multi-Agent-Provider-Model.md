@@ -22,6 +22,10 @@ Amsha already has the runtime pieces that make a richer design useful:
 
 The onboarding design must expose those capabilities without turning onboarding into a second configuration system, weakening tool governance, or giving plugins arbitrary configuration access.
 
+> **Route correction (2026-09-17):** The current operator health endpoint is `GET /api/v1/admin/cockpit/health`. Any older `/api/v1/cockpit/health` references in this historical ADR are superseded by the implemented route.
+
+> The implementation-status narrative below preserves historical milestone wording. In particular, its older health-route text refers to the superseded path; use `/api/v1/admin/cockpit/health` for the current API. The separate `/api/v1/onboarding/health/routing` endpoint remains the onboarding routing diagnostic.
+
 ## Decision
 
 Adopt an **identity-first, connection-first, assignment-second, profile-based onboarding flow**.

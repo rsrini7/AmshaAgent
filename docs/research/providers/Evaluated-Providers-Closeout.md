@@ -1,5 +1,9 @@
 # Evaluated Providers & Technology Closeout Reference
 
+Provider-ID note: the active Claude Code integration is the `claude-code`
+provider. References to `claude` below describe the CLI executable, not an
+Amsha provider ID.
+
 This document tracks providers, runtimes, and APIs evaluated for Amsha Agent that were **disqualified, closed, or deemed unsuitable for 100% free / no-card access**. It serves as a permanent reference to avoid redundant re-testing.
 
 ---

@@ -14,8 +14,9 @@ cd amsha
 
 # Copy and configure .env
 cp .env.example .env
-# Edit .env: set AMSHA_GROQ_API_KEY (Groq key starting with gsk_)
-#          set AMSHA_VAULT_PEPPER (32+ random chars)
+# Edit .env. For a Groq development setup, set AMSHA_GROQ_API_KEY and the
+# required stable security values: AMSHA_VAULT_PEPPER, AMSHA_AUDIT_HMAC_KEY,
+# AMSHA_API_KEYS_INTERNAL, and AMSHA_AUTH_HMAC_KEY.
 
 # Start in chat mode with hot reload
 ./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
@@ -47,7 +48,7 @@ java --enable-native-access=ALL-UNNAMED \
 ```bash
 # With mise (auto-switches to GraalVM)
 mise run build:native-local
-./dist/amsha ask "hello"
+./dist/amsha-sqlite ask "hello"
 
 # Or manual Maven
 ./mvnw package -Dnative -Pnative

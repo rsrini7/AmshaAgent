@@ -141,7 +141,7 @@ mise run setup:wsl-crlf
 mise run jdk:status
 
 # 9. Build (uses Temurin 25)
-mise run build-app
+mise run build:app
 
 # 10. macOS only - init Podman VM
 mise run podman:init
@@ -231,9 +231,9 @@ Amsha Agent/
 ├── dist/                ← produced by: mise run dist:dist  (gitignored)
 └── app/
     └── target/
-        ├── quarkus-app/quarkus-run.jar           ← produced by: mise run build-app
-        ├── amsha-app-0.1.0-SNAPSHOT-runner      ← Linux/macOS native
-        └── amsha-app-0.1.0-SNAPSHOT-runner.exe  ← Windows native
+        ├── quarkus-app/quarkus-run.jar           ← produced by: mise run build:app
+        ├── amsha-app-0.1.0-SNAPSHOT-runner      ← native build staging artifact (Linux/macOS)
+        └── amsha-app-0.1.0-SNAPSHOT-runner.exe  ← native build staging artifact (Windows)
 ```
 
 > `mise.bash.toml`, `mise.pwsh.toml`, `scripts/windows/`, and `mise-tasks/` are **no longer needed** - safe to delete.
@@ -473,20 +473,21 @@ Produces:
 
 ```
 dist/
-  amsha-app-0.1.0-SNAPSHOT-runner      (Linux/macOS)
-  amsha-app-0.1.0-SNAPSHOT-runner.exe  (Windows)
+  amsha-sqlite      (Linux/macOS)
+  amsha-sqlite.exe  (Windows)
 ```
 
 ### Using the launchers
 
-Both `amsha.exe` and `amsha` handle first-run `.env` setup automatically - generating secret keys, prompting for API keys, and configuring Telegram if needed.
+The `amsha-sqlite` launcher handles first-run `.env` setup automatically —
+generating secret keys, prompting for API keys, and configuring Telegram if needed.
 
 ```bash
 # Linux/macOS
-cd dist && ./amsha serve
+cd dist && ./amsha-sqlite serve
 
 # Windows
-cd dist; ./amsha.exe serve
+cd dist; ./amsha-sqlite.exe serve
 ```
 
 ### sqlite-vec (vec0) - auto-install
@@ -587,7 +588,7 @@ mise run db:sqlite:vec-check   # verify lib/vec0 extension for your platform
 | Variable | Source | Notes |
 |---|---|---|
 | All `.env` vars | `_.file = ".env"` | Auto-loaded by mise |
-| `AMSHA_LLM_API_KEY` | `.env` | Required, starts with `gsk_` |
+| `AMSHA_{PROVIDER}_API_KEY` | `.env` | Required for the selected cloud provider; for example `AMSHA_GROQ_API_KEY` starts with `gsk_` |
 | `AMSHA_VAULT_PEPPER` | `.env` | ≥32 bytes, never change after first boot |
 | `AMSHA_AUDIT_HMAC_KEY` | `.env` | ≥32 bytes, never change after first boot |
 | `AMSHA_API_KEYS_INTERNAL` | `.env` | Bearer token for REST API |
@@ -702,7 +703,7 @@ mise run setup:env-check
 ```powershell
 mise run native:serve    # or: native:chat / native:attach
 # or directly:
-.\app\target\app-0.1.0-SNAPSHOT-runner.exe serve
+.\app\target\amsha-app-0.1.0-SNAPSHOT-runner.exe serve
 ```
 
 ### `.env` `source` fails with syntax error near `<`

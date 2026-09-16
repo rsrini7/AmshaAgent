@@ -32,7 +32,7 @@
 | `amsha-rag` | Two-tier vector (vec0) + FTS5 RAG memory with pluggable `RerankerPort` and deterministic `RerankingService` fallback |
 | `amsha-local-ml-onnx` | In-process local ML inference (ONNX Runtime Java 1.27.0 + DJL HuggingFace Tokenizers 0.33.0); ONNX embeddings, shadow classifiers, and optional cross-encoder reranking (`LocalOnnxScoringAdapter`) |
 | `amsha-mcp` | MCP server bridge + dynamic client tool loading + durable credentialed connections |
-| `amsha-onboarding` | Durable draft/saga onboarding REST API (legacy numbered-step wizard + `/complete` removed in P110) |
+| `amsha-onboarding` | Durable draft/saga onboarding REST API; the legacy numbered-step wizard and `/complete` route were removed in P110 |
 | `amsha-self-evolve` | Self-Evolution trace capture and learning loop |
 | `amsha-common` | Shared utilities (LogUtil, constants) |
 | `ui` | Lit 3.x + TypeScript web frontend |
@@ -674,13 +674,13 @@ Roles with `requiresApproval=false` in their `RoleDefinition` skip non-sensitive
 
 ```bash
 # Default: SQLite (zero config)
-amsha chat
+./dist/amsha-sqlite chat
 
-# PostgreSQL (JVM mode — no rebuild)
-AMSHA_PERSISTENCE_BACKEND=postgres amsha serve
+# PostgreSQL (Quarkus dev re-augments on restart; packaged JVM/native artifacts need a backend-specific build)
+./mvnw quarkus:dev -pl app -am "-Damsha.persistence.backend=postgres -Dquarkus.args=serve"
 
 # Filesystem
-AMSHA_PERSISTENCE_BACKEND=fs amsha serve
+./mvnw quarkus:dev -pl app -am "-Damsha.persistence.backend=fs -Dquarkus.args=serve"
 ```
 
 See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
@@ -753,10 +753,10 @@ calls `AgentLoop.run()` directly, because it runs inside a scheduled
 
 | Mode | Command | Behaviour |
 |---|---|---|
-| `serve` | `amsha serve` | Quarkus HTTP server on port 8080; Telegram route self-registers via `@StartupEvent` |
-| `ask` | `amsha ask "goal"` | UUID session → `TurnDispatchService.dispatch()` → pipeline → print answer → terminate |
-| `chat` | `amsha chat [--role <role>] [--session-id <uuid>]` | Interactive REPL; every input is a `TurnRequest` through `TurnDispatchService`. `--session-id` resumes an existing persisted session. HITL approval is rendered through `CliChannelPlugin` and the interactive waiter is cancelled by `ResumeResultHelper` on `/approve` or `/deny` so the terminal result prints exactly once. |
-| `attach` | `amsha attach <channel>` | Discovers matching `ChannelDaemon` CDI bean by `channelId()` → `daemon.start()` |
+| `serve` | `<binary> serve` | Quarkus HTTP server on port 8080; Telegram route self-registers via `@StartupEvent` |
+| `ask` | `<binary> ask "goal"` | UUID session → `TurnDispatchService.dispatch()` → pipeline → print answer → terminate |
+| `chat` | `<binary> chat [--role <role>] [--session-id <uuid>]` | Interactive REPL; every input is a `TurnRequest` through `TurnDispatchService`. `--session-id` resumes an existing persisted session. HITL approval is rendered through `CliChannelPlugin` and the interactive waiter is cancelled by `ResumeResultHelper` on `/approve` or `/deny` so the terminal result prints exactly once. |
+| `attach` | `<binary> attach <channel>` | Discovers matching `ChannelDaemon` CDI bean by `channelId()` → `daemon.start()` |
 
 ---
 
@@ -925,11 +925,13 @@ identity rules are documented in [MCP Management](./MCP_MANAGEMENT.md).
 
 ### P4 Safety-Gated MCP Adapter Decision (2026-08-28) — Retain Native Bridge
 
-LangChain4j `langchain4j-mcp:1.17.2-beta27` was evaluated as transport/serialization adapter **beneath** existing `McpClientService`/`ExternalMcpToolAdapter` per [ADR-LangChain4j](./adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp) and [Issue 07](../.scratch/lc4j-capability-adoption/issues/07-p4-mcp-protocol-adapter-gate.md) Issue 07. Decision: **RETAIN** native bridge (`amsha-mcp` 193 tests) — `1.17.2` couples `McpToolProvider`/`ToolSpecification`/`ToolExecutor` to `AiServices` with no standalone transport/DTO layer, and adding the beta would violate the `1.17.2` version ceiling; adopting upstream execution would bypass `ToolInvocationGuard`/`PreflightState`/`LoopStuckDetector`, `NETWORK_OUTBOUND`/`EXECUTE_SHELL` HITL, `HostExecSkillGrant`, `SecretVault` zeroed `USER:<userId>` credential hygiene, user-scoped isolation, `FINISH` invariant, and `McpReflectionConfig` native-image verification. Evaluation matrix (5× Amsha Superior, 1× Parity — isolation, HITL, credentials, `FINISH`, native, transports) and full disposition in [`.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md); tracker P4 row in [`.scratch/lc4j-capability-adoption/spec.md`](../.scratch/lc4j-capability-adoption/spec.md). If a future GA exposes decoupled transport DTOs, re-evaluate as adapter with governed local-fixture corpus (stdio+HTTP, NDJSON, audit/workspace/HITL/`FINISH`, `Context.isOnEventLoopThread()`).
+> The referenced Issue 07 / Issue 09 trackers and evaluation receipts are local ignored artifacts under `.scratch/lc4j-capability-adoption/`; the tracked ADR and this architecture document are the authoritative summaries and remain usable on a clean checkout.
+
+LangChain4j `langchain4j-mcp:1.17.2-beta27` was evaluated as a transport/serialization adapter **beneath** the existing `McpClientService`/`ExternalMcpToolAdapter` per [ADR-LangChain4j](./adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp). Issue 07 and its evaluation receipts are local ignored artifacts under `.scratch/lc4j-capability-adoption/`; the tracked ADR and this architecture document are the clean-checkout authority. Decision: **RETAIN** the native bridge (`amsha-mcp` 193 tests) — `1.17.2` couples `McpToolProvider`/`ToolSpecification`/`ToolExecutor` to `AiServices` with no standalone transport/DTO layer, and adding the beta would violate the `1.17.2` version ceiling; adopting upstream execution would bypass `ToolInvocationGuard`/`PreflightState`/`LoopStuckDetector`, `NETWORK_OUTBOUND`/`EXECUTE_SHELL` HITL, `HostExecSkillGrant`, `SecretVault` zeroed `USER:<userId>` credential hygiene, user-scoped isolation, the `FINISH` invariant, and `McpReflectionConfig` native-image verification. The evaluation matrix recorded five Amsha-superior and one parity result across isolation, HITL, credentials, `FINISH`, native, and transport criteria. If a future GA exposes decoupled transport DTOs, re-evaluate as an adapter with a governed local-fixture corpus (stdio+HTTP, NDJSON, audit/workspace/HITL/`FINISH`, `Context.isOnEventLoopThread()`).
 
 ### P6 Safety-Gated Easy RAG Evaluation (2026-08-29) — Retain Amsha RAG Subsystem
 
-LangChain4j `quarkus-langchain4j-easy-rag` was evaluated as a retrieval path per [ADR-LangChain4j](./adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#easy-rag) §Easy-RAG and [Issue 09](../.scratch/lc4j-capability-adoption/issues/09-p6-easy-rag-gate.md) Issue 09. Decision: **RETAIN** the Amsha native RAG subsystem — Easy RAG is a member-BOM-managed starter (one `quarkus.langchain4j.easy-rag.path` property, boot-time Apache Tika scan into an auto-registered in-memory `EmbeddingStore`, auto-wired default `RetrievalAugmentor`, **explicitly not native-image compatible**) that performs vector-cosine retrieval only. Adopting it would replace Amsha's governed ingestion (`IngestDocumentTool` → `MemoryRetrievalPort.index()` via `ToolInvocationGuard`/PII scan/audit), hybrid FTS5/BM25 + vector (sqlite-vec / pgvector) RRF retrieval, `RerankingService` deterministic fallback, `userId`/session-scoped retrieval with cron exclusion, and the `EmbeddingIndexDescriptor` non-destructive fallback gate with an unguarded global vector store and a broken native build. Evaluation matrix (6× Amsha Superior, 1× Easy RAG Superior — onboarding simplicity only) and full disposition in [`.scratch/lc4j-capability-adoption/evidence/08-easy-rag-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/08-easy-rag-evaluation/README.md); tracker P6 row in [`.scratch/lc4j-capability-adoption/spec.md`](../.scratch/lc4j-capability-adoption/spec.md). No proof of equivalence means retain the current Amsha-owned implementation.
+LangChain4j `quarkus-langchain4j-easy-rag` was evaluated against Amsha's RAG subsystem. Decision: **RETAIN** Amsha's native implementation, including governed ingestion, hybrid sqlite-vec/pgvector plus FTS5/BM25 retrieval, deterministic reranking fallback, scoped retrieval, and non-destructive descriptor handling. Issue 09 and its evaluation receipts are local ignored artifacts under `.scratch/lc4j-capability-adoption/`; the tracked ADR is the clean-checkout reference.
 
 ### Amsha Agent as MCP Client (Dynamic Tool Loading)
 
@@ -1196,7 +1198,13 @@ Amsha Agent provides operator-facing diagnostic and management consoles designed
   - Bounded token ceilings: $\le 2,048$ input tokens and $\le 1,024$ output tokens with script-aware truncation for multi-byte Unicode/CJK text.
   - Zero tool execution: Arena calls execute pure reasoning models without tool or shell invocation capabilities.
 
-### 4. Execution Tracing, Replay & Scrubbing (`GET /api/v1/traces`, `GET /api/v1/traces/{runId}`)
+### 4. Execution Tracing, Replay & Scrubbing
+
+The cockpit exposes trace data through the following routes:
+
+- `GET /api/v1/cockpit/sessions/{sessionId}/runs` lists bounded run summaries.
+- `GET /api/v1/cockpit/runs/{runId}/trace` returns bounded trace events for a run.
+- `GET /api/v1/cockpit/symbolicate?symbol=...` resolves an allowlisted symbol for the UI.
 - **Stage Lifecycle**: Every agent turn emits versioned, redacted `AgentTraceEvent` objects across the 10-station execution sequence (`INPUT_RECEIVED`, `GOAL_EXPANDED`, `REFLEX_EVALUATED`, `RETRIEVAL_DISPATCHED`, `REASONING_INVOKED`, `TOOL_GUARD_EVALUATED`, `HITL_SUSPENDED`, `TOOL_EXECUTED`, `COMPACTED`, `TURN_COMPLETED`).
 - **Durable Persistence**: Stored via `ExecutionTraceStorePort` across SQLite (`V12__execution_trace.sql`), PostgreSQL, and filesystem backends with complete semantic parity.
 - **Scrubbing & Replay UI**: Rendered in `arc-flow-canvas.ts` and `arc-harness-conveyor.ts`, allowing operators to inspect discrete lifecycle stages, execution metrics, and time/step scrubbing without synthesizing non-existent backend steps.

@@ -2,7 +2,7 @@
 
 Skill loading machinery: providers (classpath / database / SkillsJar), the loader, YAML frontmatter
 parser, hot-reload file watcher, admission evaluation, and host-exec skill grants. Extracted from
-`amsha-core` in S9 ([Issue 09](../.scratch/extract-core-subsystems/issues/09-create-amsha-skills.md)).
+`amsha-core` in S9 (Issue 09; local tracker: `.scratch/extract-core-subsystems/issues/09-create-amsha-skills.md`).
 
 ## Dependency direction (the cycle gate)
 

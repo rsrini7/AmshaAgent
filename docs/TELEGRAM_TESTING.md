@@ -69,7 +69,8 @@ TELEGRAM_BOT_TOKEN=<token from @BotFather>
 AMSHA_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>
 AMSHA_TELEGRAM_ALLOWED_USERS=<your @username without @>
 AMSHA_API_KEYS_INTERNAL=key-internal-changeme   # or your custom key
-AMSHA_LLM_API_KEY=<your groq key>                     # must start with gsk_
+AMSHA_LLM_PROVIDER=groq
+AMSHA_GROQ_API_KEY=<your groq key>                    # must start with gsk_
 AMSHA_VAULT_PEPPER=<32+ char random string>
 AMSHA_AUDIT_HMAC_KEY=<32+ char random string>
 ```
@@ -125,7 +126,7 @@ Before running any section of this guide, confirm:
 - [ ] Bot responds to a simple `Hello` message within a few seconds
 - [ ] Logs show `Resolved session <uuid> for chat <chatId>` for your chat
 - [ ] `AMSHA_TELEGRAM_ALLOWED_USER_IDS` contains your numeric user ID
-- [ ] `AMSHA_LLM_API_KEY` is set and valid (key starts with `gsk_`)
+- [ ] The selected provider API key (for Groq, `AMSHA_GROQ_API_KEY`) is set and valid (key starts with `gsk_`)
 - [ ] Boot logs show `WORM triggers installed on audit_event`
 - [ ] Boot logs show `FTS5 memory index and triggers verified`
 - [ ] Boot logs show `sqlite-vec extension loaded` OR `vector search disabled, FTS5 only`

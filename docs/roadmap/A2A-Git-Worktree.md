@@ -1,4 +1,4 @@
-./mvnw help:system -pl amsha-mcp
+./mvnw help:system -pl mcp
 
 ### Phase 63 - A2A Federation (Capstone)
 

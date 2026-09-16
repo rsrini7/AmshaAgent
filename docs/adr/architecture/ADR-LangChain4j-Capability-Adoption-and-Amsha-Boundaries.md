@@ -142,7 +142,7 @@ retired because OMLX cannot load its `nemotron_voicechat` model type.
 
 The full invariant set, output-policy precedence, slab plan, configuration, and
 acceptance criteria live in
-[`Issue 12`](../../../.scratch/lc4j-capability-adoption/issues/12-p8-speech-synthesis-output.md)
+`Issue 12` (local tracker: `.scratch/lc4j-capability-adoption/issues/12-p8-speech-synthesis-output.md`)
 §2–§6. The binding invariants are:
 
 1. Execution port, not persistence — no SQLite/PostgreSQL/filesystem state.
@@ -160,7 +160,7 @@ acceptance criteria live in
 ### Exit gate
 
 P8 moves to Accepted once the live gate in
-[Issue 12 §6.2](../../../.scratch/lc4j-capability-adoption/issues/12-p8-speech-synthesis-output.md#62-live-exit-gate)
+`Issue 12 §6.2` (local tracker: `.scratch/lc4j-capability-adoption/issues/12-p8-speech-synthesis-output.md#62-live-exit-gate`)
 passes: a text request with an explicit audio directive yields text plus
 playable audio, an audio-input turn yields text plus audio when configured, and
 both paths safely return text when TTS is disabled or unavailable — verified in
@@ -170,7 +170,7 @@ JAR and native modes with categorical-only metrics.
 
 Implementation, test inventory, gate results, and the Telegram live-test steps
 are recorded in
-[`evidence/10-speech-synthesis-output/README.md`](../../../.scratch/lc4j-capability-adoption/evidence/10-speech-synthesis-output/README.md).
+Evidence is in the local artifact `.scratch/lc4j-capability-adoption/evidence/10-speech-synthesis-output/README.md`.
 
 ## Priority and sequencing
 

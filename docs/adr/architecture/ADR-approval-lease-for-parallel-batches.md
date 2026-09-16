@@ -9,7 +9,7 @@
 - **Decision Owners**: Amsha Architecture Committee / Operator
 - **Origin**: Native-binary incident review 2026-08-23 (session `cli-937d65b6…`, finding F2 —
   the operator approved a fresh `parallel|batch` for nearly every LLM turn of one researcher
-  delegation). Parked as [Issue 02](../../../.scratch/hitl-approval-policy/issues/02-parallel-batch-approval-lease.md).
+  delegation). The Issue 02 tracker is a local ignored artifact under `.scratch/hitl-approval-policy/`; this ADR is the clean-checkout authority.
 - **Related**: `ADR-schedule-task-hitl-under-supervised.md`; `AGENTS.md` invariant
   "Pre-policy tool-guard Allow decisions still pass through every mandatory check";
   §F9 fix (resume no longer wraps loops in FULL autonomy).

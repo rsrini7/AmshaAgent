@@ -520,9 +520,9 @@ public class MyRoutingProviderFactory implements RoutingChatModelProvider {
 
 ```properties
 AMSHA_LLM_PROVIDER=myprovider
-AMSHA_LLM_API_KEY=your-key
-AMSHA_LLM_BASE_URL=https://api.myprovider.com/v1
-AMSHA_LLM_MODEL_NAME=my-model-name
+AMSHA_MYPROVIDER_API_KEY=your-key
+AMSHA_MYPROVIDER_BASE_URL=https://api.myprovider.com/v1
+AMSHA_MYPROVIDER_MODEL=my-model-name
 ```
 
 > [!NOTE]
@@ -536,7 +536,7 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 | `OpenAiProviderFactory` | `openai` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `OllamaProviderFactory` | `ollama` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `OpenRouterProviderFactory` | `openrouter` | `AgentChatModelProvider` | `amsha-llm-providers` |
-| `ClaudeCodeProviderFactory` | `claude` | `AgentChatModelProvider` | `amsha-llm-providers` |
+| `ClaudeCodeProviderFactory` | `claude-code` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `OmlxProviderFactory` | `omlx` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `GeminiProviderFactory` | `gemini` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `NvidiaProviderFactory` | `nvidia` | `AgentChatModelProvider` | `amsha-llm-providers` |
@@ -553,7 +553,7 @@ AMSHA_LLM_MODEL_NAME=my-model-name
 | `FoundryProviderFactory` | `foundry` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `LlamaCppProviderFactory` | `llamacpp` | `AgentChatModelProvider` | `amsha-llm-providers` |
 | `GenericOpenAiProviderFactory` | `generic-openai` | `AgentChatModelProvider` | `amsha-llm-providers` |
-| `InfiniteLoopAgentChatModelProvider` | `infiniteloop` | `AgentChatModelProvider` | `amsha-core` |
+| `InfiniteLoopAgentChatModelProvider` | `infinite-loop` | `AgentChatModelProvider` | `amsha-core` |
 
 Each provider also has a corresponding `RoutingChatModelProvider` implementation in `amsha-llm-providers` for intent classification and compaction.
 
@@ -953,4 +953,4 @@ If your new class is used reflectively at runtime (e.g., Jackson deserialization
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 18 LLM providers*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider)*

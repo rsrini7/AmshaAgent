@@ -16,7 +16,7 @@ Amsha Agent has two setup guides depending on your preference:
 ```bash
 # mise (recommended)
 mise install
-mise run build
+mise run build:app
 mise run dev:chat
 
 # or manual

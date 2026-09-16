@@ -11,7 +11,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_{PROVIDER}_API_KEY` | — | Provider-specific LLM API key, for example `AMSHA_GROQ_API_KEY` (`gsk_...`) |
-| `AMSHA_LLM_PROVIDER` | `groq` | Provider: `groq`, `openai`, `ollama`, `openrouter`, `claude-code`, `cerebras`, `gemini`, `nvidia`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `omlx`, `generic-openai` |
+| `AMSHA_LLM_PROVIDER` | `groq` in `application.yaml`; the repository `.env.example` explicitly selects `infinite-loop` | Provider ID: `groq`, `openai`, `ollama`, `claude-code`, `openrouter`, `nvidia`, `cerebras`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `agy`, `kimchi`, `foundry`, `gemini`, `omlx`, `llamacpp`, `generic-openai`, or the internal `infinite-loop` provider |
 | `AMSHA_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `AMSHA_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
 | `AMSHA_LLM_TEMPERATURE` | `0.1` | LLM temperature |
@@ -26,8 +26,9 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | `AMSHA_LLM_CIRCUIT_BREAKER_ENABLED` | `true` | Enable per-model circuit breaker isolation |
 
 Claude Code uses `CLI_OAUTH` with optional direct API key fallback. The
-runtime resolves its credentials from the system vault, macOS Keychain, local Claude Code
-credentials file (`~/.claude/.credentials.json`), or `AMSHA_CLAUDE_CODE_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`;
+runtime resolves its credentials from the system vault, macOS Keychain, supported local
+Claude Code credential files (`~/.claude/.credentials.json` or
+`~/.claude/credentials.json`), or `AMSHA_CLAUDE_CODE_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`;
 onboarding status reports only whether the credential is configured.
 
 ### Onboarding and native first-run testing
@@ -138,7 +139,7 @@ Cloudflare Workers AI provider for serverless model inference. Requires an API t
 | `AMSHA_COHERE_BASE_URL` | `https://api.cohere.ai/compatibility/v1` | Base URL for Cohere OpenAI-compatibility endpoint |
 | `AMSHA_CODEX_API_KEY` | — | Optional direct API key / token (defaults to `~/.codex/auth.json` OAuth session) |
 | `AMSHA_CODEX_MODEL` | `gpt-5.6-luna` | Default chat model |
-| `AMSHA_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Base URL for Codex endpoint (defaults to direct ChatGPT Plus Responses endpoint; or `http://127.0.0.1:8787/v1` for hroom proxy, or `https://api.openai.com/v1`) |
+| `AMSHA_CODEX_BASE_URL` | `https://chatgpt.com/backend-api/codex` | Base URL for Codex endpoint (defaults to a direct ChatGPT Plus Responses endpoint; or `http://127.0.0.1:8787/v1` for Headroom proxy, or `https://api.openai.com/v1`) |
 
 Do not put `{account_id}` inside a MicroProfile `${ENV:default}` default string.
 MP Config closes on the first `}`, which corrupts the URL (e.g. trailing `/ai/v1}`).

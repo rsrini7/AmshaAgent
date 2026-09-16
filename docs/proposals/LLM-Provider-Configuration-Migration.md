@@ -1,6 +1,6 @@
 # LLM Provider Configuration Migration
 
-- **Status**: Proposed
+- **Status**: In progress
 
 ## Observation
 
@@ -16,9 +16,11 @@ The current configuration model uses provider-specific environment variables:
 - `AMSHA_OMLX_API_KEY`
 
 `AMSHA_LLM_API_KEY` is not present in the current `.env.example` or native
-`dist/.env`. It remains in older documentation, Docker configuration, tests,
-error messages, and startup validation. Onboarding/settings skip detection now
-uses the selected provider's canonical key instead of this legacy variable.
+`dist/.env`. The selected provider's canonical key is used by onboarding and
+the reasoning-provider factories. A legacy placeholder check, some routing
+factory error messages, Docker configuration, startup validation, and test
+fixtures still mention the old variable; those references are migration debt,
+not a supported replacement for `AMSHA_{PROVIDER}_API_KEY`.
 
 The variable is therefore a legacy compatibility path, not an alias that is
 automatically derived from provider-specific keys. Exporting it alone does not

@@ -62,7 +62,7 @@ Amsha Agent partitions secrets into two distinct lifecycles based on bootstrappi
 │  AMSHA_DATA_DIR       ← database and storage paths          │
 │  AMSHA_AUDIT_HMAC_KEY ← stable audit signing key (prod)     │
 │  QUARKUS_PROFILE      ← active execution profile            │
-│  AMSHA_LLM_API_KEY    ← provider boot configuration         │
+│  AMSHA_<PROVIDER>_API_KEY ← provider boot configuration     │
 └─────────────────────────────────────────────────────────────┘
                             ↓ Quarkus boots, database connection online
 ┌─────────────────────────────────────────────────────────────┐
@@ -75,6 +75,8 @@ Amsha Agent partitions secrets into two distinct lifecycles based on bootstrappi
 └─────────────────────────────────────────────────────────────┘
 ```
 
+The bootstrap slot is intentionally generic: new deployments should use the selected provider's canonical `AMSHA_<PROVIDER>_API_KEY` variable. `AMSHA_LLM_API_KEY` remains a legacy bootstrap/system-vault compatibility key in older paths and is not a substitute for that provider credential.
+
 ### 2. Build-Time Native Environment Shielding (`build.env`)
 GraalVM `native-image` captures compile-time environment variables and bakes their literal values directly into the binary's data segments. To prevent developer `.env` credentials from being compiled into distributable binaries:
 - The `build:native` and `native-wsl2.sh` tasks temporarily shield the workspace by renaming `.env` to `.env.build-backup` before invoking Maven, restoring it on exit.
@@ -85,7 +87,7 @@ GraalVM `native-image` captures compile-time environment variables and bakes the
 
 ### 4. Dev Secret Seeding (`DevSecretSeeder`) & Production Boundaries
 - `AMSHA_AUTO_SEED_SECRETS` defaults to `false` in production (`.env.example`, `application.yaml`, and `DevSecretSeeder.java`).
-- In multi-tenant environments, Tier 2 secrets are uploaded via authenticated REST endpoints (`POST /api/v1/vault/keys`) and encrypted under user-specific session scopes (`USER:<userId>`).
+- In multi-tenant environments, Tier 2 secrets are submitted through authenticated onboarding/settings flows or the guarded `/vault KEY=VALUE` command and encrypted under user-specific session scopes (`USER:<userId>`). There is no public `/api/v1/vault/keys` endpoint.
 - When explicitly enabled (`AMSHA_AUTO_SEED_SECRETS=true`) in single-user development or local workflows, `DevSecretSeeder` executes upon the `StartupEvent`, copying tool keys from the environment into the encrypted vault for developer convenience.
 
 ### 5. HMAC Audit Key Seeding Lifecycle

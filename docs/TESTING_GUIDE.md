@@ -39,11 +39,35 @@
 
 ## 1. Running the Test Suite
 
-Amsha Agent currently records **8,301 passing Java tests** across the multi-module reactor. A fresh count must come from a clean full-reactor run. The following 2026-09-14 figures are historical:
-6,528 tests in 905 suites, 0 failures, 0 errors, 7 skipped, reactor line coverage 76.10%). This number is
-intentionally given as a floor — derive the exact current count with `mise run test:summary`
-(see [§1.6](#16-target-0-failures-0-errors-no-drop-in-test-count)),
-and run it after a `clean` build: the task aggregates surefire XML and will count leftover report files otherwise.
+### Recorded test snapshot
+
+The concrete figures below are retained because they make test health and regression
+trends visible. They are dated measurements, not a promise that every checkout has
+the same generated reports; rerun the commands in the table before quoting them as
+current.
+
+| Suite | Recorded result | Line coverage | Evidence date |
+|---|---:|---:|---|
+| Java/JUnit, full Maven reactor | **8,301 passing**; 0 failures, 0 errors | **84.28%** | 2026-09-16 |
+| UI/Vitest | **172 passing**; 0 failures, 0 errors | **58.67%** (4,665/7,951 lines) | 2026-09-12 |
+
+Run `./mvnw --batch-mode clean verify` followed by `mise run test:summary` for
+Java/JUnit and `mise run test:ui` followed by `mise run test:ui:summary` for the UI.
+The Java total is aggregated from Surefire XML and the UI total from Vitest JUnit
+XML; a clean run matters because stale or partial report files can produce a
+misleading count.
+
+My interpretation of this snapshot: Java is 2.28 percentage points above the
+current 82.00% JaCoCo build floor, which is useful headroom but not a reason to
+stop adding tests. The UI line figure is 8.67 points above the analyzer's 50.00%
+target, but UI coverage has no equivalent Maven build gate. The two percentages
+use different codebases and denominators, so they should be tracked separately;
+neither percentage replaces behavioral, integration, native, or REST validation.
+
+The earlier 2026-09-14 measurement is retained below as historical analysis:
+6,528 tests in 905 suites, 0 failures, 0 errors, 7 skipped, reactor line coverage 76.10%.
+Derive a fresh exact count with `mise run test:summary`
+(see [§1.6](#16-target-0-failures-0-errors-no-drop-in-test-count)).
 
 ### 1.1 Run all tests
 
@@ -148,7 +172,8 @@ For REST client testing (manual), start the app in dev or serve mode with a `.en
 **Minimum required:**
 
 ```env
-AMSHA_LLM_API_KEY=gsk_your_groq_key
+AMSHA_LLM_PROVIDER=groq
+AMSHA_GROQ_API_KEY=gsk_your_groq_key
 AMSHA_API_KEYS_INTERNAL=key-internal-changeme
 AMSHA_API_KEYS_CI=key-ci-changeme
 AMSHA_VAULT_PEPPER=test-pepper-32-chars-min-xxxxxxxxxx
@@ -2132,10 +2157,10 @@ read-only.
 
 ```bash
 # Start CLI with the most recent catalogued session
-./amsha chat --last-session
+./dist/amsha-sqlite chat --last-session
 
 # Start CLI with a fresh catalogued session (skips --last-session)
-./amsha chat --new-session
+./dist/amsha-sqlite chat --new-session
 
 # Inside chat, rotate and verify the prompt shows the new ID
 /newsession
@@ -2543,4 +2568,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 8,301 passing Java tests · 28 Maven modules · 21 tools · 18 LLM providers · Tiered Memory · Answer Quality Guard*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · recorded snapshot: 8,301 passing Java/JUnit tests at 84.28% line coverage and 172 passing UI/Vitest tests at 58.67% line coverage · 28 Maven modules · 21 tools · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider) · Tiered Memory · Answer Quality Guard.*

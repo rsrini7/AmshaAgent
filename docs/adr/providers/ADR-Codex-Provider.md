@@ -3,6 +3,10 @@
 - **Status**: Accepted
 
 ## Context
+
+Terminology note: `claude` in this ADR denotes the Claude Code executable; the
+canonical Amsha provider ID is `claude-code`. The optional local proxy is
+Headroom (`http://127.0.0.1:8787/v1`).
 Amsha Agent supports multiple LLM providers, including zero-configuration CLI OAuth extraction for `claude` via Claude Code (`~/.claude/credentials.json`).
 Users with active ChatGPT Plus subscriptions using the Codex CLI (`/opt/homebrew/bin/codex`) have local OAuth credentials stored at `~/.codex/auth.json` and optional local proxy settings (`hroom` / Headroom).
 Integrating `codex` as a first-class provider in Amsha allows users to utilize OpenAI's frontier reasoning and chat models (e.g. `gpt-5.6-luna`, `gpt-4o`) under their existing ChatGPT Plus subscription without per-token API charges and without requiring external proxies.

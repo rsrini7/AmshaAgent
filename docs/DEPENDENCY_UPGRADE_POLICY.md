@@ -15,7 +15,7 @@ routine maintenance after the Quarkus 3.39.3 staging migration.
 Quarkus `3.40 LTS` is tracked as the next target for **September 2026
 (targeted)**. It is not an available upgrade until the final platform and
 member BOMs are published and the official support/security pages identify the
-line as LTS. See [Quarkus 3.40 LTS backlog issue](../.scratch/quarkus-upgrade/issues/10-quarkus-340-lts.md).
+line as LTS. See the local Quarkus 3.40 LTS backlog issue at `.scratch/quarkus-upgrade/issues/10-quarkus-340-lts.md` when the working tracker is available.
 
 Advancing from 3.39.3 to 3.40 LTS must begin with a fresh updater dry-run and
 migration-guide review, then prove JVM, persistence, native, REST, delegation, ML,

@@ -1,7 +1,7 @@
 # amsha-memory
 
 Tiered memory services (core / recall / archival), prompt budgeting, and the directive SPIs — extracted from
-`amsha-core` in S8 ([Issue 08](../.scratch/extract-core-subsystems/issues/08-create-amsha-memory.md)).
+`amsha-core` in S8 (Issue 08; local tracker: `.scratch/extract-core-subsystems/issues/08-create-amsha-memory.md`).
 
 This is the **one strict zero-core impl module**: it must never import `com.amsha.core` (enforced by ArchUnit
 rule 20, `memoryMustNotImportCore`). The dependency direction is core → memory.

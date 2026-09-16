@@ -56,7 +56,10 @@ cd amsha
 
 # Copy and edit .env (see docs/CONFIGURATION.md for all variables)
 cp .env.example .env
-# At minimum: AMSHA_GROQ_API_KEY=gsk_... (Groq), AMSHA_VAULT_PEPPER=<random>
+# At minimum for a Groq development setup: AMSHA_GROQ_API_KEY=gsk_...,
+# AMSHA_VAULT_PEPPER, AMSHA_AUDIT_HMAC_KEY, AMSHA_API_KEYS_INTERNAL, and
+# AMSHA_AUTH_HMAC_KEY must be set to strong stable values. See the configuration
+# reference for keyless providers and the complete startup requirements.
 
 # Dev mode (hot reload, no sandbox isolation)
 ./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
@@ -107,7 +110,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Read-Only Database Console (`#/db-console`)** — operator SQL console with AST parser validation (JSqlParser), read-only transaction guarantees (`PRAGMA query_only = ON;`), schema allowlisting, column truncation tooltips, and Micrometer telemetry
 - **Model Arena (`#/arena`)** — multi-model comparative benchmarking with dynamic CDI provider discovery, categorical slot grouping (`Subscription / CLI OAuth`, `Cloud API`, `Local Runtime`), fail-closed credential detection (400 Bad Request), token bounding, and script-aware truncation
 - **Guided setup and observability** — onboarding wizard, encrypted provider settings, OpenTelemetry tracing (LangChain4j `ChatModelListener` pilot: `off`/`shadow`/`active` with zero payload, `amsha.observability.chat-listener.mode`), SSE status updates, and web management panels
-- **Backend-aware deployment** — JVM backend selection at startup, native backend selection at build time, with PostgreSQL and filesystem runtime profiles
+- **Backend-aware deployment** — backend selection is a build-time/Quarkus-augmentation choice for packaged JVM and native artifacts; PostgreSQL and filesystem variants are built separately from SQLite
 
 ---
 
@@ -188,7 +191,7 @@ tools-builtin/        ← Built-in AgentTool implementations + Lucene tool searc
 rag/                  ← Two-tier vector (vec0) + FTS5 RAG memory + deterministic reranking
 local-ml-onnx/        ← Verified local ONNX embeddings, shadow classifiers, and cross-encoder reranking
 mcp/                  ← MCP server bridge + dynamic client tool loading
-onboarding/           ← 6-step setup wizard REST API
+onboarding/           ← Durable draft/saga onboarding REST API
 self-evolve/          ← Trace capture and self-evolution learning loop
 deployment/           ← Build-time: custom CDI scope, MCP reflection
 │
@@ -283,4 +286,4 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 18 LLM providers
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-16; UI 2026-09-12): 8,301 Java tests at 84.28% line coverage and 172 UI tests at 58.67% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.

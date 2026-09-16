@@ -141,4 +141,4 @@ The REST Client file contains inbound protocol, outbound self-connect, secure-he
 | GraalVM Native Image | Verified, no proxies | Unproven | **Amsha Superior** |
 | Transport Protocols | HTTP/SSE + Governed STDIO + NDJSON | HTTP/SSE + STDIO | **Parity** |
 
-Disposition per [ADR-LangChain4j](./adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp) and [Issue 07](../.scratch/lc4j-capability-adoption/issues/07-p4-mcp-protocol-adapter-gate.md): retain native bridge, no version override, P4 gate closed. Evidence: [`.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md`](../.scratch/lc4j-capability-adoption/evidence/06-mcp-evaluation/README.md); tracker: [`.scratch/lc4j-capability-adoption/spec.md`](../.scratch/lc4j-capability-adoption/spec.md) P4 row.
+Disposition per [ADR-LangChain4j](./adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md#mcp): retain native bridge, no version override, P4 gate closed. Issue 07, its evaluation evidence, and its specification are local ignored artifacts under `.scratch/lc4j-capability-adoption/`; they are not required for a clean checkout.
