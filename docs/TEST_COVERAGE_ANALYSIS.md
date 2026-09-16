@@ -2936,7 +2936,7 @@ mise run test:summary
 - **Static scan limits.** The "no test reference" scan matches class simple names against test-source text.
   It cannot see reflective use, string-keyed DI, or indirect execution — which is why 115 of 399 flagged
   classes turned out to be covered. Treat the static list as a *candidate* set, and the JaCoCo report as truth.
-- **7 skipped tests** across the suite were not investigated.
+- **24 skipped tests** across the reactor are fully audited and expected on developer environments: 13 environment-hermeticity guards (`AMSHA_ONNX_MODEL_ROOT`), 1 OS platform guard (Windows path safety), 2 headless TTY guards (`ChatCommandApprovalTest`), and 8 dynamic machine assumption checks (local binaries on PATH, optional local credentials, release-only gates). See `docs/TESTING_GUIDE.md` §1.7 for the complete roster and verification commands.
 - **UI coverage is out of scope** (separate Vitest/V8 pipeline via `analyze_ui_coverage.py`).
 
 **Reproduction artifacts** (this run, not committed):

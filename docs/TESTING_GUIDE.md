@@ -122,6 +122,23 @@ number is worse than none (this section previously read "1664", which had drifte
 mise run test:summary   # surefire totals + reactor JaCoCo coverage
 ```
 
+### 1.7 Skipped tests roster & rationale (24 expected on developer environments)
+
+When running `mise run test:summary`, the test suite reports **24 skipped tests**. Every skip is intentional and guarded by deliberate JUnit conditional mechanisms:
+
+| Category | Count | Primary Test Classes | Mechanism & Rationale |
+|---|---:|---|---|
+| **Environment hermeticity** | 13 | `LocalModelValidatorTest` (9)<br>`ModelInstallerTest` (4) | `@DisabledIfEnvironmentVariable(named = "AMSHA_ONNX_MODEL_ROOT", matches = ".+")`<br>On local developer environments where `AMSHA_ONNX_MODEL_ROOT` is exported, these property-driven tests skip to avoid asserting against actual on-disk model directories. In clean CI environments where this variable is unset, they run. |
+| **OS platform guard** | 1 | `WorkspacePathSafetyTest` (1) | `@EnabledOnOs(OS.WINDOWS)`<br>Exercises Windows drive-letter (`C:\...`) and backslash path safety rules; skipped when running on macOS / Linux. |
+| **Headless TTY guard** | 2 | `ChatCommandApprovalTest` (2) | `@Disabled("JLine3 readLine() blocks indefinitely in Surefire forked JVM — no real TTY available")`<br>JLine3 interactive terminal reads block indefinitely without a real TTY. The interactive logic is tested hermetically in `ChatCommandUnitTest`. |
+| **Machine tooling & assumptions** | 8 | `AgyCliExecutorTest` (1)<br>`FoundryCliExecutorTest` (2)<br>`KimchiTokenResolverTest` (2)<br>`AgentProviderFactoryCoverageTest` (1)<br>`OnnxGoldenCorpusEquivalenceTest` (1)<br>`OnnxResourceLeakTest` (1) | `Assumptions.assumeTrue(...)`<br>Dynamic assertions that adapt to host setup: skips when local CLI tools (`agy`, `foundry`) or credentials (`KIMCHI_API_KEY`, Cloudflare account ID) are present or absent on the machine, or for release-evidence gates (golden corpus / resident memory). |
+
+To inspect all skipped tests and their exact skip messages on the current host:
+
+```bash
+python3 -c "import xml.etree.ElementTree as ET, glob; [print(f'{tc.get(\"classname\")}#{tc.get(\"name\")}: {tc.find(\"skipped\").get(\"message\", \"\")}') for r in glob.glob('*/target/surefire-reports/TEST-*.xml') for tc in ET.parse(r).findall('.//testcase') if tc.find('skipped') is not None]"
+```
+
 ---
 
 ## 2. Environment Configuration for Testing
