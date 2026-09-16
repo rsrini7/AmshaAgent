@@ -108,13 +108,19 @@ jobs:
               wait "$SERVER_PID" 2>/dev/null || true
             fi
 
+            if [ -f "$SERVER_LOG" ]; then
+              echo "---- Server startup log ----" >&2
+              sed -n '1,200p' "$SERVER_LOG" >&2
+            fi
+
             # Redact credentials and authorization tokens from logs on failure
             if [ -f "$SERVER_LOG" ]; then
-          sed -E \
-            -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
-            -e 's/((X-Amsha-API-Key:|API_KEY[=:]|CI_KEY=|AMSHA_API_KEYS_(CI|INTERNAL)=|AMSHA_GENERIC_OPENAI_API_KEY=)[[:space:]]*)[^[:space:]]+/\1[REDACTED]/g' \
-            "$SERVER_LOG" > "$REDACTED_LOG" 2>/dev/null || cp "$SERVER_LOG" "$REDACTED_LOG"
-          fi
+              sed -E \
+                -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
+                -e 's/((X-Amsha-API-Key:|API_KEY[=:]|CI_KEY=|AMSHA_API_KEYS_(CI|INTERNAL)=|AMSHA_GENERIC_OPENAI_API_KEY=)[[:space:]]*)[^[:space:]]+/\1[REDACTED]/g' \
+                "$SERVER_LOG" > "$REDACTED_LOG" 2>/dev/null || cp "$SERVER_LOG" "$REDACTED_LOG"
+              cp "$REDACTED_LOG" server.redacted.log 2>/dev/null || true
+            fi
 
             rm -rf "$DATA_DIR"
             exit "$exit_code"
@@ -134,6 +140,7 @@ jobs:
             -Dsun.stdout.encoding=UTF-8
             -Dsun.stderr.encoding=UTF-8
             -Dquarkus.profile=cli
+            -Dquarkus.http.host=127.0.0.1
             -Dquarkus.http.port="$PORT"
             -Dquarkus.mcp.server.stdio.enabled=false
             -Damsha.telegram.enabled=false
@@ -141,26 +148,33 @@ jobs:
             -Damsha.data-dir="$DATA_DIR"
           )
 
-          java "${JVM_ARGS[@]}" -jar app/target/quarkus-app/quarkus-run.jar serve < /dev/null > "$SERVER_LOG" 2>&1 &
+          java "${JVM_ARGS[@]}" -jar app/target/quarkus-app/quarkus-run.jar serve \
+            < /dev/null > "$SERVER_LOG" 2>&1 &
           SERVER_PID=$!
 
           # 5. Poll readiness
           READY=false
           for _ in $(seq 1 60); do
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "Error: Validation server exited before readiness." >&2
+              echo "---- Startup log ----" >&2
+              sed -n '1,250p' "$SERVER_LOG" >&2 || true
+              exit 1
+            fi
+
             if curl -fsS -m 2 -o /dev/null "$TEST_BASE/q/health/live" 2>/dev/null \
               || curl -fsS -m 2 -o /dev/null -H "X-Amsha-API-Key: $CI_KEY" "$TEST_BASE/api/v1/mcp/status" 2>/dev/null; then
               READY=true
               break
             fi
-            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-              echo "Error: Validation server died before readiness." >&2
-              exit 1
-            fi
+
             sleep 1
           done
 
           if [ "$READY" != "true" ]; then
             echo "Error: Validation server failed to become ready within 60s." >&2
+            echo "---- Startup log ----" >&2
+            sed -n '1,250p' "$SERVER_LOG" >&2 || true
             exit 1
           fi
 
