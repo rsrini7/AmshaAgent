@@ -2019,11 +2019,13 @@ inside `Select`, where `this` is `Select` — always picks `visit(Select)`. Beha
 override) and 113 (`scanBody`'s null guard, whose only caller is inside an `instanceof PlainSelect` branch);
 `DbResultMapper` 85/86 (dead catch); `IdentityResourceHelper` 66/67/69 (the dead escalation-guard body).
 
-**Where the remaining `app` mass is** (measured, after this slice): `ChatCommand` 195, `HitlService` 127,
-`OidcIdentityProvider` 119, `ModelInstaller` 109, `CronJobRunner` 88, `DbConsoleResource` 75,
-`McpConnectResource` 75, `CronResultHandler` 74, `AgentCronScheduler` 70, `PlaywrightCliInstaller` 70,
-`Vec0NativeLibraryInstaller` 59, `AuthResource` 56, `GithubIdentityProvider` 50, `BootstrapOrchestrator` 46,
-`AmshaCli` 45, `EnvConfigInitializer` 43, `McpImportResource` 42 (fully dark), `IdentityResource` 40.
+**Where the remaining `app` mass is** (re-measured, after the ChatCommand + HitlService + CronJobRunner slices): top targets
+`OidcIdentityProvider` 107 (BLOCKED on #37 — needs a stub-IdP `@QuarkusTest` + `QuarkusTestResourceLifecycleManager`,
+none exists yet), `CronJobRunner` 23 (residual: lease lambda deliberate + 1 catch-brace artifact), `DbConsoleResource` 75, `CronResultHandler` 74,
+`PlaywrightCliInstaller` 70 (**no seam — skip**), `AgentCronScheduler` 70, `Vec0NativeLibraryInstaller` 59,
+`AuthResource` 56, `GithubIdentityProvider` 50 (BLOCKED on #37), `BootstrapOrchestrator` 46, `AmshaCli` 45,
+`EnvConfigInitializer` 43, `McpImportResource` 42, `IdentityResource` 40. Covered this phase: `ChatCommand`
+(17 residual, deliberate) and `HitlService` (0).
 **`PlaywrightCliInstaller` has no seam** — the command names are hardcoded and its install path would run a real
 `npm install -g`; leave it unless you first add a seam (which is a production change, out of scope here).
 
@@ -2109,11 +2111,13 @@ use `PosixFilePermissions.fromString("---------")` to make an unreadable *file* 
 distribution layout where the process runs from a parent of the data directory with a relative setting; a unit test
 cannot reach them without relocating the JVM's working directory.
 
-**Where the remaining `app` mass is** (measured, after this slice): `ChatCommand` 195, `HitlService` 127,
-`OidcIdentityProvider` 119, `CronJobRunner` 88, `DbConsoleResource` 75, `McpConnectResource` 75,
-`CronResultHandler` 74, `PlaywrightCliInstaller` 70, `AgentCronScheduler` 70, `Vec0NativeLibraryInstaller` 59,
-`AuthResource` 56, `GithubIdentityProvider` 50, `BootstrapOrchestrator` 46, `AmshaCli` 45, `EnvConfigInitializer` 43,
-`McpImportResource` 42, `IdentityResource` 40, `CliUtils` 37, `HitlResource` 36, `ModelArenaResource` 36.
+**Where the remaining `app` mass is** (re-measured, after the ChatCommand + HitlService + CronJobRunner slices): top targets
+`OidcIdentityProvider` 107 (BLOCKED on #37 — needs a stub-IdP `@QuarkusTest` + `QuarkusTestResourceLifecycleManager`,
+none exists yet), `CronJobRunner` 23 (residual: lease lambda deliberate + 1 catch-brace artifact), `DbConsoleResource` 75, `CronResultHandler` 74,
+`PlaywrightCliInstaller` 70 (**no seam — skip**), `AgentCronScheduler` 70, `Vec0NativeLibraryInstaller` 59,
+`AuthResource` 56, `GithubIdentityProvider` 50 (BLOCKED on #37), `BootstrapOrchestrator` 46, `AmshaCli` 45,
+`EnvConfigInitializer` 43, `McpImportResource` 42, `IdentityResource` 40, `CliUtils` 37, `HitlResource` 36,
+`ModelArenaResource` 36. Covered this phase: `ChatCommand` (17 residual, deliberate), `HitlService` (0), `CronJobRunner` (23 residual: lease lambda deliberate + 1 catch-brace artifact), and `McpConnectResource` (0).
 
 #### `app` notes (2026-09-15, Phase 5 third slice — `OidcIdentityProvider`, and the JAX-RS client wall)
 
@@ -2206,6 +2210,103 @@ result instead.
 `CliInputSupport`'s one residual line is `console.readLine(...)` — the branch taken only with a real `Console`.
 Guard such tests with `Assumptions.assumeTrue(System.console() == null)`, or a developer running from a real
 terminal blocks the build on their own keystrokes.
+
+#### `app` notes (2026-09-16, Phase 5 fifth slice — `HitlService`, and why a real `ObjectMapper` beat a mock)
+
+`HitlService` **127 → 0 missed / 221 covered (100%)** — the first Phase-5 class taken to *full* line coverage, and
+the largest dark class left in `app`. The safety logic lives in a new plain-JUnit class
+`HitlServiceDecisionSafetyTest` (53 tests, eight `@Nested` groups); siblings `HitlServiceTest` (`@QuarkusTest`,
+tenant scoping), `HitlServiceAbstractionTest` and `HitlServicePerToolApprovalTest` cover the rest. **The two lines
+that read missed when the class runs alone** (explicit-tool + bulk **deny** arms of `executeResolveDecision`) are
+covered by those two delegation classes — an isolated `jacoco.exec` just had no record of them.
+
+**The decision-safety surface, in order** (all now pinned by asserting *which* exception / delegation comes out):
+`resolve` → `findCheckpoint` 4-step lookup → `verifyRequester` → `isIdempotentReplay` (`isAwaitingReplay` /
+`isFailedReplay` / `uniformFinalDecision` / `readBatchDecisions` / `contradictoryDecision` / `unsafeApprovalState`)
+→ delegated `executeResolveDecision` inside an OTel `span`. `approveTool` / `denyTool` / `triggerResume` return
+`AgentCheckpoint` (stub with `CheckpointRecord.fromDto(...)`); the resolution-race path (`isResolutionRace` +
+`replayedAfterRace`) is exercised both ways — a corroborated race ends OK, an uncorroborated one stays an error.
+
+**⚠️ Use a real `ObjectMapper`, not a mock, for any JSON the production code parses itself.** `readBatchDecisions`
+(363–378) parses genuine batch-decision JSON and treats parse-failure / empty map / blank key / null value / unknown
+enum as the "cannot be determined safely" guard. A mocked mapper leaves all five branches vacuous-green — the test
+proves only that it stubbed itself. The same trap waits in `BatchDecisionUtil.pendingToolNames`.
+
+**API traps hit here** (same family as the CLI slices): (a) `approveTool`/`denyTool`/`triggerResume` return
+`AgentCheckpoint`, never `CheckpointDto`; (b) `Span.setAttribute` is overloaded (`String,String` vs
+`AttributeKey<T>,T`) → `any()` is ambiguous, assert the exact `AgentOTelConstants.*` keys; (c) `Lookup` /
+`Authorization` fixtures MUST omit `pendingToolName` (use the 3-arg `dto(id, sessionId, status)`), else
+`executeResolveDecision` targets that single tool and contradicts an `approveAll` assertion; (d) a `lenient()`
+`@BeforeEach` stub of `heartbeatTracker.getOwner(anyString())` counts as an invocation, so an "ownership bypassed"
+assertion must target `tryBindOwner`, not `getOwner`.
+
+**Module effect.** `app` **1,836 → 1,701 missed, 75.45% → 77.26%**; module suite **1,077 / 0 / 0 / 3 skipped**.
+Reactor `clean verify`: **83.64%** (was 83.42%), 28 modules, BUILD SUCCESS. Next largest target: `CronJobRunner` (88).
+
+#### `app` notes (2026-09-16, Phase 5 sixth slice — `CronJobRunner`, and the submit(Runnable) overload trap)
+
+`CronJobRunner` **88 → 23 missed / 207 covered (89.0%)**; new `CronJobRunnerExecuteTest` **11 tests** (alongside the
+existing 62-test `CronJobRunnerDeepTest` + 1-test `CronJobRunnerTest`); `app` module suite **1,077 → 1,088 tests, 0
+failures, 3 skipped**. Full-reactor `clean verify`: **83.76%** (was 83.64%), 28 modules, BUILD SUCCESS.
+
+**⚠️ `ManagedExecutor.submit` is overloaded (`submit(Callable)` vs `submit(Runnable)`), and the lease-renewal lambda is
+a `Runnable` (no return value) — so the call site is `submit(Runnable)`, NOT `submit(Callable)`.** Stubbing
+`any(Callable.class)` silently never matches, `vThreads.submit(...)` returns `null`, `leaseFuture` stays null, and the
+`finally`-block `leaseFuture.cancel(true)` (line 197) reads as dark with no failure. Stub `any(Runnable.class)` so the
+returned `Future` is non-null. A `lenient()` stub also suppresses Mockito's synthetic-class strict-stubbing
+false-positive (it would otherwise be thrown *into* `execute()`'s `catch` and mis-routed to `handleFailure`).
+
+**`WorkspaceScopeHolder.wrap` returns the Runnable as-is when no workspace is active** (the unit-test path), so the arg
+to `submit` is the plain lease lambda — `any(Runnable.class)` matches it directly, no synthetic-class mismatch.
+
+**Residual 23 lines, 22 of them a deliberate exclusion + 1 JaCoCo artifact — zero reachable gaps.** Lines 118–144 are the
+lease-renewal background-lambda body, guarded by `Thread.sleep(60_000)`; the lambda is never executed (we stub the
+submission to return a mock `Future` without running it), exactly like the `ChatCommand` 20s ticker. Line 316 is the
+`unwrapToolCallGoal` JSON-`catch` closing brace; the catch body (315, `log.warnf`) provably executes — the WARN line
+prints during the test — so 316 is a benign JaCoCo brace-probe artifact, not a real gap. To close it you would have to
+make JaCoCo's probe happy on a `}` which carries no logic; leave it.
+
+**What the 11 tests cover:** `oneArgOverloadDelegates` (the `execute(AgentCron)` → `execute(AgentCron, executionId)`
+delegation), `announcementShortCircuit` + `timeCheckShortCircuit` (the two early `return` paths), `mainPathSuccess`
+(the `WorkspaceContext.run` → `agentLoop.run` → `handleSuccess` spine), `unwrappedToolCallGoalRunsThroughAgentLoop` (a
+`{"goal":...}` payload exercises the `CRON-UNWRAP` log at 174 and the unwrap success path), `unknownChannelTypeFails`
+(the `ChannelType.fromString(...).orElseThrow` → `handleFailure` at 146–148), `missingPlatformAndChatIdFails` +
+`missingChatIdFails` (the `createCronContext` validation throws → `handleFailure` at 393/397), `agentLoopFailureIsHandled`
++ `executeIsThrowableSafe` (a thrown `agentLoop.run` is caught and routed to `handleFailure` — `execute` never rethrows),
+and `unwrapToolCallGoalInvalidJsonWithGoalKey` (reflection into the JSON-`catch`, proving fallback to the original goal).
+
+**Module effect.** `app` reactor-gate report: **6,934 missed / 26,604 covered (79.31%)** — the full-module figure from
+`app/target/site/jacoco/jacoco.xml` after the reactor `clean verify` (the earlier "1,701 missed / 77.26%" was a
+partial tracked-dark-class subtree sum, not the full module; only the full-reactor gate is authoritative). Next largest
+target: `McpConnectResource` / `DbConsoleResource` (75), `CronResultHandler` (74), `AgentCronScheduler` (70).
+
+#### `app` notes (2026-09-16, Phase 5 seventh slice — `McpConnectResource`, and why a thin JAX-RS adapter is trivially unit-testable)
+
+`McpConnectResource` **77 → 0 missed / 149 covered (100%)** — the first Phase-5 `app` REST adapter to full line
+coverage. The class is a THIN adapter: every method delegates to an injected `McpManagementService` / `McpApprovalService`
+port and builds a `jakarta.ws.rs.core.Response`; the JAX-RS annotations (`@POST`, `@Path`, `@Context`) are inert in a
+plain JUnit test, so the class is unit-testable with **no Quarkus and no JAX-RS client** (unlike `OidcIdentityProvider`,
+which makes *outbound* HTTP calls). `McpConnectResourceTest` grew **16 → 47 tests** (31 added) covering every
+`approvalToken`-present branch and every exception `catch`.
+
+**The dark lines were exactly two shapes.** (1) The five `X-MCP-APPROVAL-TOKEN`-present branches (`connect`→`connectNewWithApproval`,
+`discover`→`discoverWithApproval`, `activate`→`connectWithApproval`, `reconfigure`→`reconfigureWithApproval`,
+`rotateHeaders`→`rotateHeadersWithApproval`) — driven by passing the 4-arg `ConnectRequest`/`DiscoverRequest` ctors and a
+non-blank `approvalToken` header. (2) Every `catch` block across `connect`/`disconnect`/`discover`/`approve`/`reject`/`tools`
+and the shared `operation(...)` / `pendingOperation(...)` wrappers — driven by `managementService.X(...)` throwing
+`IllegalArgumentException` / `McpRevisionConflictException` (ctor is `(long,long)`, NOT `(String)`) / `McpConnectionException`.
+The 3-arg `ConnectRequest(name,url,headers)` ctor was the last dark line; a single test instantiating it closed it.
+
+**⚠️ Two `record`-ctor traps.** `ConnectRequest`/`ReconfigureRequest` expose 2-arg ctors, but `DiscoverRequest` does NOT
+(only canonical 4-arg + 3-arg `(name,url,headers)`) — a `new DiscoverRequest(name, url)` won't compile; use the 3-arg form.
+And `discoverWithApproval` returns `McpManagementServiceModels.DiscoveryPreview` (a `record`), not `ConnectionSnapshot` — stub
+it with `new McpManagementServiceModels.DiscoveryPreview(name, endpoint, transport, List.of())`.
+
+**Reactor `clean verify`: 83.89%** (was 83.76%, +0.13 pp, +79 covered lines), 28 modules, BUILD SUCCESS. The +0.13 pp is
+explained *exactly* by the 77 `McpConnectResource` lines closed — the app module's full-report `6,934 → 6,644 missed`
+swing is partly a stale-report artifact; trust the reactor delta, not the per-module jacoco.xml subtotal. `app` module
+(full, this gate): **6,644 missed / 26,894 covered (80.2%)**. Next largest target: `DbConsoleResource` (75),
+`CronResultHandler` (74), `AgentCronScheduler` (70).
 
 ## Reporting the Verdict
 

@@ -718,4 +718,173 @@ class DbConsoleResourceTest {
         AmshaErrorResponse err = (AmshaErrorResponse) resp.getEntity();
         assertEquals("Mandatory audit logging failed", err.error());
     }
+
+    // ---- Mandatory-audit-failure branches (the nested audit catches) ----
+
+    @Test
+    void fsBackendAuditFailureReturns500() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "op";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        resource.runtimeBackend = "fs";
+        doThrow(new RuntimeException("audit down"))
+                .when(auditService)
+                .recordMandatory(
+                        eq("db-console"), eq("op"), eq("operator"), eq(SecurityEventType.SESSION_INSPECTED), any());
+
+        Response resp = resource.executeQuery(new DbQueryRequest("SELECT 1 FROM sqlite_master", 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+    }
+
+    @Test
+    void unsupportedProductAuditFailureReturns500() throws Exception {
+        // Execution-time DbValidationException (Unsupported database product) -> UNAUTHORIZED_ACCESS audit -> 500.
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "op";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        Connection conn = mock(Connection.class);
+        DatabaseMetaData dbMeta = mock(DatabaseMetaData.class);
+        when(dataSource.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenReturn(dbMeta);
+        when(dbMeta.getDatabaseProductName()).thenReturn("UnknownDB");
+        doThrow(new RuntimeException("audit down"))
+                .when(auditService)
+                .recordMandatory(
+                        eq("db-console"), eq("op"), eq("operator"), eq(SecurityEventType.UNAUTHORIZED_ACCESS), any());
+
+        Response resp = resource.executeQuery(new DbQueryRequest("SELECT 1 FROM sqlite_master", 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+    }
+
+    @Test
+    void sqlErrorAuditFailureReturns500() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "op";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        Connection conn = mock(Connection.class);
+        when(dataSource.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenThrow(new SQLException("meta fail"));
+        doThrow(new RuntimeException("audit down"))
+                .when(auditService)
+                .recordMandatory(
+                        eq("db-console"), eq("op"), eq("operator"), eq(SecurityEventType.DATABASE_QUERY_FAILED), any());
+
+        Response resp = resource.executeQuery(new DbQueryRequest("SELECT 1 FROM sqlite_master", 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+    }
+
+    @Test
+    void runtimeErrorAuditFailureReturns500() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "op";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        Connection conn = mock(Connection.class);
+        Statement pragmaStmt = mock(Statement.class);
+        DatabaseMetaData dbMeta = mock(DatabaseMetaData.class);
+        when(dataSource.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenReturn(dbMeta);
+        when(dbMeta.getDatabaseProductName()).thenReturn("SQLite");
+        when(conn.createStatement()).thenReturn(pragmaStmt);
+        when(conn.prepareStatement(anyString())).thenReturn(null); // -> NPE inside executeOnDataSource
+        doThrow(new RuntimeException("audit down"))
+                .when(auditService)
+                .recordMandatory(
+                        eq("db-console"), eq("op"), eq("operator"), eq(SecurityEventType.DATABASE_QUERY_FAILED), any());
+
+        Response resp = resource.executeQuery(new DbQueryRequest("SELECT 1 FROM sqlite_master", 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+    }
+
+    @Test
+    void runtimeErrorReturns503WhenAuditSucceeds() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "op";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        Connection conn = mock(Connection.class);
+        Statement pragmaStmt = mock(Statement.class);
+        DatabaseMetaData dbMeta = mock(DatabaseMetaData.class);
+        when(dataSource.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenReturn(dbMeta);
+        when(dbMeta.getDatabaseProductName()).thenReturn("SQLite");
+        when(conn.createStatement()).thenReturn(pragmaStmt);
+        when(conn.prepareStatement(anyString())).thenReturn(null); // -> NPE inside executeOnDataSource
+
+        Response resp = resource.executeQuery(new DbQueryRequest("SELECT 1 FROM sqlite_master", 10));
+        assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), resp.getStatus());
+    }
+
+    @Test
+    void auditServiceUnavailableReturns500() {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        resource.auditService = null; // recordMandatoryAudit throws IllegalStateException
+
+        Response resp = resource.executeQuery(new DbQueryRequest("SELECT DROP TABLE x", 10));
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), resp.getStatus());
+    }
+
+    // ---- JDBC connection-state-reset / discard defensive branches ----
+
+    @Test
+    void postgresExecutionFailureRollsBackAndDiscardsOnResetError() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "op";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        Connection conn = mock(Connection.class);
+        Statement timeoutStmt = mock(Statement.class);
+        PreparedStatement stmt = mock(PreparedStatement.class);
+        DatabaseMetaData dbMeta = mock(DatabaseMetaData.class);
+        when(dataSource.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenReturn(dbMeta);
+        when(dbMeta.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(conn.createStatement()).thenReturn(timeoutStmt);
+        when(conn.prepareStatement(anyString())).thenReturn(stmt);
+        when(stmt.executeQuery()).thenThrow(new SQLException("exec failed"));
+        doThrow(new SQLException("rollback failed")).when(conn).rollback();
+        doThrow(new SQLException("setReadOnly failed")).when(conn).setReadOnly(false);
+
+        Response resp =
+                resource.executeQuery(new DbQueryRequest("SELECT message FROM recent_traces_view", 10, "ws-1", "s-1"));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), resp.getStatus());
+        verify(conn).rollback();
+        verify(conn).setReadOnly(false);
+    }
+
+    @Test
+    void sqliteResetFailureUnwrapsAndAbortsCorruptedConnection() throws Exception {
+        when(securityContext.isUserInRole("internal")).thenReturn(true);
+        Principal principal = () -> "op";
+        when(securityContext.getUserPrincipal()).thenReturn(principal);
+        Connection conn = mock(Connection.class);
+        Connection raw = mock(Connection.class);
+        Statement pragmaStmt = mock(Statement.class);
+        Statement queryStmt = mock(Statement.class);
+        Statement resetStmt = mock(Statement.class);
+        ResultSet rs = mock(ResultSet.class);
+        ResultSetMetaData meta = mock(ResultSetMetaData.class);
+        DatabaseMetaData dbMeta = mock(DatabaseMetaData.class);
+        when(dataSource.getConnection()).thenReturn(conn);
+        when(conn.getMetaData()).thenReturn(dbMeta);
+        when(dbMeta.getDatabaseProductName()).thenReturn("SQLite");
+        // PRAGMA query path calls createStatement 3x: (1) query_only=ON, (2) the pragma executeQuery,
+        // (3) the query_only=OFF reset. Only the 3rd must throw.
+        when(conn.createStatement())
+                .thenReturn(pragmaStmt)
+                .thenReturn(queryStmt)
+                .thenReturn(resetStmt);
+        when(queryStmt.executeQuery(anyString())).thenReturn(rs);
+        when(pragmaStmt.executeQuery(anyString())).thenReturn(rs);
+        when(rs.getMetaData()).thenReturn(meta);
+        when(meta.getColumnCount()).thenReturn(1);
+        when(meta.getColumnLabel(1)).thenReturn("name");
+        when(rs.next()).thenReturn(false);
+        when(conn.isWrapperFor(Connection.class)).thenReturn(true);
+        when(conn.unwrap(Connection.class)).thenReturn(raw);
+        doThrow(new SQLException("reset failed")).when(resetStmt).execute("PRAGMA query_only = OFF;");
+        doThrow(new SQLException("abort failed")).when(conn).abort(any());
+
+        Response resp = resource.executeQuery(new DbQueryRequest("PRAGMA table_list;", 10));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), resp.getStatus());
+        verify(raw).close();
+        verify(conn).abort(any());
+    }
 }

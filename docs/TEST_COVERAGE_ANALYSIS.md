@@ -2693,6 +2693,150 @@ blocking on an operator's terminal.
 **Module effect.** `app` **2,306 → 1,836 missed, 69.17% → 75.45%** across the four slices; module suite
 **986 → 1,024 tests, 0 failures, 3 skipped**. The class that remains the largest target is `HitlService` (127).
 
+#### Phase 5 status (2026-09-16) — `HitlService`, and why a real `ObjectMapper` beat a mock
+
+`HitlService` **127 → 0 missed / 221 covered (100%)** — the first class this phase has taken to *full* line
+coverage, and the largest dark class left in `app`. The safety logic lives in a new plain-JUnit class
+`HitlServiceDecisionSafetyTest` (53 tests across eight `@Nested` groups); three siblings already covered the rest —
+`HitlServiceTest` (`@QuarkusTest`, persistence-backed tenant scoping), `HitlServiceAbstractionTest`
+(approve/deny-all delegation) and `HitlServicePerToolApprovalTest` (per-tool delegation). The **two lines that read
+as missed when the class was run alone** (the explicit-tool and bulk **deny** arms of `executeResolveDecision`)
+are in fact covered by those two delegation classes — they only showed missed because an isolated `jacoco.exec`
+carried no record of the sibling runs. Run in the full reactor they are green.
+
+**What the safety logic is, and how it is now pinned.** `resolve` (172–213) runs four checks in order: a 4-step
+`findCheckpoint` lookup (249–272), `verifyRequester` (215–247), an idempotent-replay classification
+(`isIdempotentReplay`, 282–302), then the delegated `executeResolveDecision` inside an OpenTelemetry `span`. The
+tests assert on *which* exception or delegation comes out, not merely that a call happened:
+
+- **Lookup** (`Lookup`): a blank id is rejected before any store access; a missing numeric id falls through to
+  `findLatestAwaitingApproval`; a non-numeric id skips the primary-key lookup entirely; the chain ends at
+  `findLatestAwaitingApprovalBySessionContaining` then `findLatestBySession`; a total miss is rejected ("No pending
+  approval found").
+- **Requester authorization** (`Authorization`): cron sessions are rejected ("originating channel"); a null / blank /
+  `anonymous` requester is rejected ("identity is required"); the `INTERNAL` requester bypasses the ownership check
+  (`tryBindOwner` is never called); a checkpoint owned by someone else is rejected ("does not belong"); an unowned
+  CLI session is claimed (`recordHeartbeat` + `tryBindOwner`); an unowned-but-bindable session is bound; a refused
+  bind with a still-pending approval re-claims; a refused bind with nothing pending is rejected ("no longer active").
+- **Replay classification** (`ReplayClassification`): a null / unknown (`NOT_STARTED`, `ORPHANED`) status is *unsafe*;
+  `DENIED` replays a denial and contradicts an approval; every accepted status (`APPROVED`, `RESUMING`, `IN_PROGRESS`,
+  `AWAITING_RETRY`, `COMPLETED`, `LOOP_EXCEEDED`) replays an approval and contradicts a denial; a fully-approved batch
+  replays; a batch containing an opposite decision is contradictory; per-tool same / opposite / missing decisions
+  behave; a still-`PENDING` per-tool decision is *not* a replay and proceeds.
+- **Failed-checkpoint replay** (`FailedReplay`): denial- and rejection-caused failures replay a denial; a failure
+  whose cause names no decision is *unsafe*; a failed batch with a pending or self-contradictory decision is unsafe;
+  a denial reason that conflicts with the batch decision is unsafe; a matching failed-batch decision is a replay.
+- **Malformed batch** (`MalformedBatch`): unparseable JSON, an empty map, a blank key / null value, and an unknown
+  enum value all resolve to the "cannot be determined safely" guard rather than silently emptying.
+- **Resolve wiring** (`ResolveWiring`): the span is annotated with `ATTR_HITL_TASK_ID` / `ATTR_HITL_TOOL_NAME` /
+  `ATTR_HITL_APPROVED`, ended, and `triggerResume`d on success; a null decision skips resume; a resolution race that
+  the latest checkpoint corroborates is reported success (no exception recorded), while an uncorroborated race stays
+  an error; an ordinary failure is recorded and rethrown unchanged; a message-less exception is never treated as a
+  race.
+- **Scoping** (`Scoping`) and **Tool targeting** (`ToolTargeting`): blank users see nothing; the count is scoped to
+  visible sessions; cron and session-less checkpoints never surface; owned / unowned / child-session checkpoints are
+  reachable; approving or denying the only pending tool targets *that* tool (not the whole batch); with nothing
+  identifiable pending the decision falls back to `approveAll`; an explicit "all" tool name resolves the pending set,
+  never a tool literally named "all".
+
+**Finding — a real `ObjectMapper` beat a mock here.** `readBatchDecisions` (363–378) parses genuine batch-decision
+JSON with Jackson and treats any parse failure, empty map, blank key, null value, or unknown enum as the "batch
+decision state is invalid" guard. A mocked mapper would have left every one of those branches as a vacuous green
+line — the test would have proved only that it stubbed itself. Using the real mapper (`private final ObjectMapper
+objectMapper = new ObjectMapper()`, line 69) drives all five malformed-batch guards on real input. The same holds for
+`BatchDecisionUtil.pendingToolNames`, exercised on real JSON in `ToolTargeting`.
+
+**Four test-design corrections worth recording** (the same traps as earlier slices): (1) `approveTool` / `denyTool`
+/ `triggerResume` return `AgentCheckpoint`, not `CheckpointDto`, so the stub must `thenReturn(CheckpointRecord.fromDto(...))`
+and the resume assertion uses the `AgentCheckpoint` instance; (2) `Span.setAttribute` is overloaded (`String,String`
+vs `AttributeKey<T>,T`), so `any()` is ambiguous — assert the exact `AgentOTelConstants.*` keys instead; (3)
+`Lookup` / `Authorization` fixtures must build their `CheckpointDto` with *no* `pendingToolName` (the 3-arg
+`dto(id, sessionId, status)`), otherwise `executeResolveDecision` targets that single tool and contradicts an
+`approveAll` assertion; (4) the `@BeforeEach` `lenient()` stub of `heartbeatTracker.getOwner(anyString())` counts as
+an invocation, so an "ownership check bypassed" assertion must target `tryBindOwner`, not `getOwner`.
+
+**Module effect.** `app` **1,836 → 1,701 missed, 75.45% → 77.26%**; module suite **1,024 → 1,077 tests, 0
+failures, 3 skipped**. Reactor `clean verify` for this slice: **83.64%** (was 83.42%), 28 modules, BUILD SUCCESS. The
+next largest target is `CronJobRunner` (88).
+
+#### Phase 5 status (2026-09-16) — `CronJobRunner`, and the `submit(Runnable)` overload trap
+
+`CronJobRunner` **88 → 23 missed / 207 covered (89.0%)** — the run-orchestration surface that was the last dark
+`execute(AgentCron)` in `app`. New `CronJobRunnerExecuteTest` **11 tests** (alongside the pre-existing
+`CronJobRunnerDeepTest` 62 tests covering the five private helpers by reflection, and `CronJobRunnerTest` 1 test).
+Module suite **1,077 → 1,088 tests, 0 failures, 3 skipped**. Reactor `clean verify`: **83.76%** (was 83.64%), 28
+modules, BUILD SUCCESS.
+
+**The class is unit-testable without Quarkus.** `execute` injects its collaborators (`agentLoop`, `engine`,
+`resultHandler`, `cronStore`, `cronRunStore`, `heartbeatTracker`, `vThreads`) by reflection; `WorkspaceContext.run`
+binds plain `ScopedValue`s and `WorkspaceScopeHolder.call/run` call `Arc.container()` but guard `container != null`, so
+they no-op cleanly outside a running container. No `@QuarkusTest` needed.
+
+**⚠️ The `submit` overload trap.** `ManagedExecutor` extends `ExecutorService`, so `submit` is overloaded
+(`submit(Callable)` vs `submit(Runnable)`). The lease-renewal lambda at 117–144 has no return value, so the call site is
+`submit(Runnable)`, **not** `submit(Callable)`. Stubbing `any(Callable.class)` compiles but never matches at runtime:
+`vThreads.submit(...)` returns `null`, `leaseFuture` stays null, and the `finally`-block `leaseFuture.cancel(true)` (197)
+reads as dark with no test failure. Stub `any(Runnable.class)` so the returned `Future` is non-null. Wrap it in
+`lenient()` as well — Mockito's strict-stubbing check misreads the synthetic lambda class and would otherwise throw a
+`PotentialStubbingProblem` *into* `execute()`'s `catch`, routing a green path to `handleFailure`.
+
+**The 11 tests, mapped to the dark surface:**
+- `oneArgOverloadDelegates` — `execute(AgentCron)` delegates to `execute(AgentCron, executionId)` and still reaches `handleSuccess`.
+- `announcementShortCircuit` / `timeCheckShortCircuit` — the two early `return` paths (`isPureAnnouncement` / `isTimeCheck`) hit `handleSuccess` without entering the agent loop.
+- `mainPathSuccess` — the spine: `unwrapToolCallGoal` → `resolveRole` → `WorkspaceContext.<AgentResult>run(...)` → `agentLoop.run` → `handleSuccess`.
+- `unwrappedToolCallGoalRunsThroughAgentLoop` — a `{"goal":"fetch the latest data"}` payload makes `finalGoal != stripped`, firing the `CRON-UNWRAP` log (174) and exercising the JSON-unwrap success path (313).
+- `unknownChannelTypeFails` — `ChannelType.fromString(job.getChannelType()).orElseThrow(...)` (146–148) throws → `handleFailure`.
+- `missingPlatformAndChatIdFails` / `missingChatIdFails` — `createCronContext` validation (393 / 397) throws `IllegalArgumentException` → `handleFailure`.
+- `agentLoopFailureIsHandled` / `executeIsThrowableSafe` — a thrown `agentLoop.run` is caught by `execute`'s `catch (Throwable)` and routed to `handleFailure`; `execute` never rethrows past its own guard.
+- `unwrapToolCallGoalInvalidJsonWithGoalKey` — reflection into `unwrapToolCallGoal` with malformed JSON (`{"goal": oops…`) proves the `catch` (314–315) falls back to the original goal rather than throwing.
+
+**Residual 23 lines — 22 deliberate exclusion + 1 JaCoCo artifact, zero reachable gaps.** Lines 118–144 are the
+lease-renewal background-lambda body, guarded by `Thread.sleep(60_000)`; the lambda is never executed (we stub the
+submission to return a mock `Future` without running it), exactly like the `ChatCommand` 20-second ticker. Line 316 is
+the `unwrapToolCallGoal` JSON-`catch` closing brace; the catch body (315, `log.warnf`) provably executes — the WARN line
+prints during the test run — so 316 is a benign JaCoCo brace-probe artifact, not a real gap. To "close" it you would
+have to satisfy a probe on a `}` that carries no logic; leave it.
+
+**Module effect.** `app` reactor-gate report: **6,934 missed / 26,604 covered (79.31%)** — the full-module figure from
+`app/target/site/jacoco/jacoco.xml` after the reactor `clean verify`. (The earlier "1,701 missed / 77.26%" was a
+partial tracked-dark-class subtree sum, not the full module; only the full-reactor gate is authoritative — recall the
+memory note that `clean verify -pl app` aggregates stale reports and is meaningless.) The next largest targets are
+`McpConnectResource` / `DbConsoleResource` (75), `CronResultHandler` (74), `AgentCronScheduler` (70). `OidcIdentityProvider`
+(107) and `GithubIdentityProvider` (50) stay BLOCKED on #37 (stub-IdP `@QuarkusTest` + `QuarkusTestResourceLifecycleManager`).
+
+#### Phase 5 status (2026-09-16) — `McpConnectResource`, and why a thin JAX-RS adapter is trivially unit-testable
+
+`McpConnectResource` **77 → 0 missed / 149 covered (100%)** — the first Phase-5 `app` REST adapter to reach full line
+coverage. `McpConnectResourceTest` grew **16 → 47 tests** (31 added), covering every `approvalToken`-present branch and
+every exception `catch`. Reactor `clean verify`: **83.89%** (was 83.76%, +0.13 pp), 28 modules, BUILD SUCCESS.
+
+**The class is a thin adapter, so it is unit-testable with no Quarkus and no JAX-RS client.** Every method delegates to
+an injected `McpManagementService` / `McpApprovalService` port and returns a `jakarta.ws.rs.core.Response`; the JAX-RS
+annotations are inert in a plain JUnit test. This is the crucial distinction from `OidcIdentityProvider`: that class makes
+*outbound* HTTP calls (which need a container's JSON `MessageBodyReader`); `McpConnectResource` makes *none* — it only
+wraps port calls. Inject `config` / `managementService` / `securityContext` / `httpHeaders` by reflection (the existing
+test's `setField` helper) and stub the port.
+
+**The 77 dark lines were exactly two shapes.** (1) The five `X-MCP-APPROVAL-TOKEN`-present arms —
+`connect`→`connectNewWithApproval`, `discover`→`discoverWithApproval`, `activate`→`connectWithApproval`,
+`reconfigure`→`reconfigureWithApproval`, `rotateHeaders`→`rotateHeadersWithApproval` — exercised by passing the 4-arg
+`ConnectRequest` / `DiscoverRequest` ctors with a non-blank `approvalToken` and stubbing the approval method. (2) Every
+`catch` block across `connect` / `disconnect` / `discover` / `approve` / `reject` / `tools` and the shared `operation(...)`
+/ `pendingOperation(...)` wrappers — exercised by making `managementService.X(...)` throw `IllegalArgumentException`,
+`McpRevisionConflictException` (ctor is `(long expected, long actual)` — NOT `(String)`), or `McpConnectionException`.
+
+**Two `record`-ctor traps worth recording.** `ConnectRequest` and `ReconfigureRequest` expose a 2-arg ctor, but
+`DiscoverRequest` does **not** (only the canonical 4-arg and a 3-arg `(name, url, headers)`) — a `new DiscoverRequest(name, url)`
+fails to compile; use the 3-arg form. And `discoverWithApproval` returns `McpManagementServiceModels.DiscoveryPreview`
+(a `record`), not `ConnectionSnapshot` — stub it with `new McpManagementServiceModels.DiscoveryPreview(name, endpoint, transport, List.of())`.
+The last dark line, the 3-arg `ConnectRequest(name, url, headers)` ctor, closed with one test that instantiates it.
+
+**Module effect.** `app` full module (this gate): **6,644 missed / 26,894 covered (80.2%)**. The reactor +0.13 pp is
+explained *exactly* by the 77 closed `McpConnectResource` lines (trust the reactor delta; the app module's per-report
+`6,934 → 6,644` swing includes a stale-report artifact). Next largest target: `DbConsoleResource` (75), `CronResultHandler`
+(74), `AgentCronScheduler` (70). `OidcIdentityProvider` (107) + `GithubIdentityProvider` (50) remain BLOCKED on #37.
+
+
 ### Phase 6 — Cross-cutting invariant tests *(cheap, high value)*
 
 | Test | Rationale | Est. effort |
