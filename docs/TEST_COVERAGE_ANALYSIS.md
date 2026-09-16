@@ -1,10 +1,11 @@
 # Java Test Coverage — Deep Analysis and Prioritized Action Plan
 
-> **Scope**: multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator,
-> JDK 25, Quarkus 3.39.3)
-> **Method**: full-reactor test execution + JaCoCo 0.8.15 line/branch/method analysis, cross-referenced with a
-> static test-reference scan
-> **Measured**: 2026-09-14
+> **Status**: **CLOSED / COMPLETE** (2026-09-16)  
+> **Final Outcome**: Reactor line coverage achieved **84.66%** (50,795 / 59,999 lines), decisively surpassing the 80.00% goal.  
+> **Gate Ratchet**: Root `pom.xml` `<jacoco.minimum.line.coverage>` permanently locked at **`0.82`** (82.00%).  
+> **Test Suite**: **8,315+ tests** executed across 28 child modules with 0 failures and 0 errors.  
+> **Scope**: Multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator, JDK 25, Quarkus 3.39.3).  
+> **Method**: Full-reactor test execution + JaCoCo 0.8.15 line/branch/method analysis, cross-referenced with a static test-reference scan.
 
 ---
 
@@ -2854,6 +2855,12 @@ With the targets in `skills`, `local-ml-onnx`, and `app` scheduler addressed, Ph
   - `CronResultHandler`: Expanded `CronResultHandlerTest` (23 tests) covering run status transitions, lease lost notifications, interactive chat HITL queuing, failure handler chains, and fallback notification dispatch.
   - `AgentCronScheduler`: Expanded `AgentCronSchedulerTest` (20 tests) covering orphan sweeping, `scheduleSoon` immediate trigger dispatch, permit rate throttling, and graceful scheduler shutdown.
 
+- **`channel-telegram` module:**
+  - `TelegramJobNotifier`: Added dedicated unit tests (`TelegramJobNotifierTest`, 11 tests) covering completion alerts, inline approval keyboard dispatches, timeout notices, recipient validation, and exception safety, reaching **100% line coverage** (40/40 covered).
+  - `TelegramVoiceKeyboardBuilder`: Added dedicated unit tests (`TelegramVoiceKeyboardBuilderTest`) verifying paired button layouts, callback prefixes, and voice label formatting, reaching **100% line coverage** (23/23 covered).
+  - `BatchHitlKeyboardBuilder`: Expanded tests with multi-tool batch rows (Approve All / Deny All), double-UUID cron compression/decompression, and token-overflow caching (line coverage raised to **89.8%**).
+  - `TelegramChannelSender`: Expanded tests for `sendChatAction`, `editMessage`, and MarkdownV2 entity-parse error fallbacks (line coverage raised to **81.3%**).
+
 
 ### Phase 6 — Cross-cutting invariant tests *(cheap, high value)*
 
@@ -2876,8 +2883,8 @@ Added `NativeReflectionCompletenessTest` under `app` (`app.config`), asserting t
 1. **CI enforcement (non-negotiable).** ✅ **In place** — the `java-tests` job runs `./mvnw verify` on every push
    and fails on the coverage gate. It must stay on `verify`: `package` reaches neither PMD nor JaCoCo.
 2. **Ratchet, don't just threshold.** ✅ **In place** — `jacoco.minimum.line.coverage` has been ratcheted
-   from `0.70` → `0.74` → **`0.82`** (82.00%). The latest full reactor coverage measures **84.45%**
-   (50,671 / 59,999 lines), leaving **+2.45pp** (~1,470 lines) of deliberate headroom so incidental churn does
+   from `0.70` → `0.74` → **`0.82`** (82.00%). The latest full reactor coverage measures **84.66%**
+   (50,795 / 59,999 lines), leaving **+2.66pp** (~1,595 lines) of deliberate headroom so incidental churn does
    not trip the gate while locking in the 82% floor.
 3. **Per-module floor.** Add `--module`-level minimums (start at 60%) so `classifier-api` at 100% cannot
    subsidise `persistence-postgres` at 66%.

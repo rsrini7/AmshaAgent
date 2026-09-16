@@ -117,4 +117,63 @@ class BatchHitlKeyboardBuilderTest {
                 ((BatchHitlKeyboardBuilder.BatchCallbackEvent.ApproveTool) event.get()).sessionId());
         assertEquals(UUID_STR, decompressed);
     }
+
+    @Test
+    void test_buildKeyboard_multiple_tools_includes_approve_and_deny_all() {
+        var markup = BatchHitlKeyboardBuilder.buildKeyboard(UUID_STR, List.of("tool_a", "tool_b"));
+        var rows = markup.getInlineKeyboard();
+        assertEquals(3, rows.size());
+
+        // First tool row
+        assertEquals("✅ tool_a", rows.get(0).get(0).getText());
+        assertEquals("🚫 tool_a", rows.get(0).get(1).getText());
+
+        // Second tool row
+        assertEquals("✅ tool_b", rows.get(1).get(0).getText());
+        assertEquals("🚫 tool_b", rows.get(1).get(1).getText());
+
+        // Batch row (Approve All / Deny All)
+        assertEquals("✅ Approve All", rows.get(2).get(0).getText());
+        assertEquals("🚫 Deny All", rows.get(2).get(1).getText());
+        assertTrue(rows.get(2).get(0).getCallbackData().endsWith("|all"));
+        assertTrue(rows.get(2).get(1).getCallbackData().endsWith("|all"));
+    }
+
+    @Test
+    void test_compress_decompress_roundtrip_double_uuid_cron() {
+        String uuid2 = "12345678-1234-1234-1234-123456789abc";
+        String cronDouble = "cron-" + UUID_STR + "-" + uuid2;
+        String compressed = BatchHitlKeyboardBuilder.compressSessionId(cronDouble);
+        assertNotNull(compressed);
+        assertTrue(compressed.startsWith("c-"));
+        assertEquals(46, compressed.length()); // "c-" (2) + 22 + 22 = 46
+
+        String decompressed = BatchHitlKeyboardBuilder.decompressSessionId(compressed);
+        assertEquals(cronDouble, decompressed);
+    }
+
+    @Test
+    void test_callback_cache_when_exceeding_64_bytes() {
+        String delegateSid = UUID_STR + "_delegate_shiva_1778823728364_very_long_chain_child";
+        var markup = BatchHitlKeyboardBuilder.buildKeyboard(delegateSid, List.of("sandbox_exec"));
+        var rows = markup.getInlineKeyboard();
+        String cb = rows.get(0).get(0).getCallbackData();
+        assertTrue(cb.length() <= 64);
+
+        // Parse callback — session token should be resolved
+        String[] parts = cb.split("\\|", -1);
+        assertEquals(3, parts.length);
+        String token = parts[1];
+        String resolvedSession = BatchHitlKeyboardBuilder.resolveAndRemoveCachedSessionId(token);
+        assertEquals(delegateSid, resolvedSession);
+
+        // Second resolution should return null (already removed)
+        assertNull(BatchHitlKeyboardBuilder.resolveAndRemoveCachedSessionId(token));
+    }
+
+    @Test
+    void test_decompress_malformed_returns_as_is() {
+        String malformed = "c-!!invalid_base64_symbols_that_fail_decoding!!_1234567890";
+        assertEquals(malformed, BatchHitlKeyboardBuilder.decompressSessionId(malformed));
+    }
 }
