@@ -334,12 +334,7 @@ public class ToolStepHandler {
             // but terminate this turn after the same blocked invocation is
             // observed twice so the caller can correct the parameters and
             // resume the session.
-            long repeatedBlockedCalls = history.stream()
-                    .filter(s -> s instanceof ReasoningStep.ToolCallStep)
-                    .filter(s -> Objects.equals(s.action(), step.action()))
-                    .filter(s -> Objects.equals(s.actionInput(), step.actionInput()))
-                    .filter(s -> Boolean.FALSE.equals(s.success()))
-                    .count();
+            long repeatedBlockedCalls = countEquivalentBlockedCalls(history, step, b.observation());
             log.warnf(
                     "[TOOL-GUARD] Blocked tool '%s' for session %s (repeat=%d): %s",
                     step.action(), context.sessionId(), repeatedBlockedCalls, b.observation());
@@ -368,6 +363,23 @@ public class ToolStepHandler {
                     context, p.frame(), historyAtPause, context.channelType(), context.channelPlatformId()));
         }
         return null; // PROCEED
+    }
+
+    /**
+     * Counts blocked calls with the same actionable guard feedback.
+     *
+     * <p>Equivalent requests can be serialized with different argument maps
+     * while the model retries the same forbidden operation. A changed guard
+     * observation remains a legitimate correction attempt and is not counted.
+     */
+    private static long countEquivalentBlockedCalls(
+            List<ReasoningStep> history, ReasoningStep step, String observation) {
+        return history.stream()
+                .filter(s -> s instanceof ReasoningStep.ToolCallStep)
+                .filter(s -> Objects.equals(s.action(), step.action()))
+                .filter(s -> Boolean.FALSE.equals(s.success()))
+                .filter(s -> Objects.equals(s.observation(), observation))
+                .count();
     }
 
     private InvokeResult invokeTool(

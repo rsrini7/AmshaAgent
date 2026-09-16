@@ -129,6 +129,9 @@ public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
     @Override
     public List<MemoryChunkDto> search(String query, int topK, String userId) {
         // userId is ignored — FS backend is global (no user isolation yet)
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
         if (vectorSearchEnabled) {
             try {
                 var embeddingResult = embeddingModel.get().embed(query);

@@ -8,7 +8,7 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Java Tests](https://img.shields.io/badge/Tests-8299_passing-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-8301_passing-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-84.28%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-172_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-58.67%25-yellow.svg?style=flat)
