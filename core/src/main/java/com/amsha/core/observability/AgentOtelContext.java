@@ -11,7 +11,6 @@ import org.jboss.logging.Logger;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
 
 /**
  * OTel session-level span management.
@@ -28,7 +27,6 @@ public class AgentOtelContext implements AgentObserver {
     Tracer tracer;
 
     private final ConcurrentHashMap<String, Span> rootSpans = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Scope> rootScopes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicLong> totalInputTokens = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicLong> totalOutputTokens = new ConcurrentHashMap<>();
 
@@ -51,10 +49,8 @@ public class AgentOtelContext implements AgentObserver {
         if (agentRole != null) builder.setAttribute(AgentOTelConstants.ATTR_AGENT_ROLE, agentRole);
         Span span = builder.startSpan();
         rootSpans.put(sessionId, span);
-        // §OTel Fix: Spans must be made current to be visible to child builders
-        @SuppressWarnings("MustBeClosedChecker") // Scope stored in rootScopes, closed in endSessionSpan()
-        Scope scope = span.makeCurrent();
-        rootScopes.put(sessionId, scope);
+        // Child spans use the explicit root span as their parent. Do not retain
+        // an OpenTelemetry Scope because sessions may finish on another thread.
         return span;
     }
 
@@ -65,10 +61,6 @@ public class AgentOtelContext implements AgentObserver {
      */
     public void endSessionSpan(String sessionId) {
         if (sessionId == null) return;
-        Scope scope = rootScopes.remove(sessionId);
-        if (scope != null) {
-            scope.close();
-        }
         Span span = rootSpans.remove(sessionId);
         if (span != null) {
             span.end();

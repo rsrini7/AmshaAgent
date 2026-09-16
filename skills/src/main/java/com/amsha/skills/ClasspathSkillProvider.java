@@ -9,6 +9,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.skill.SkillDefinition;
@@ -30,6 +31,7 @@ public class ClasspathSkillProvider implements SkillProvider {
 
     private static final Logger LOG = Logger.getLogger(ClasspathSkillProvider.class);
     private static final String INDEX_PATH = "/skills/index.txt";
+    private final AtomicBoolean missingIndexLogged = new AtomicBoolean();
 
     @Inject
     SkillDefinitionParser parser;
@@ -49,7 +51,9 @@ public class ClasspathSkillProvider implements SkillProvider {
         List<SkillDefinition> skills = new ArrayList<>();
         try (InputStream indexStream = getResourceStream(INDEX_PATH)) {
             if (indexStream == null) {
-                LOG.warnf("classpath %s missing. Skipping static tier.", INDEX_PATH);
+                if (missingIndexLogged.compareAndSet(false, true)) {
+                    LOG.debugf("Optional classpath skill index %s is absent; static tier is empty.", INDEX_PATH);
+                }
                 return skills;
             }
 

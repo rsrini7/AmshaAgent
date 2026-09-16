@@ -25,6 +25,13 @@ public interface ConversationBuffer {
     List<EvolutionEvent> drain(FlushReason reason);
 
     /**
+     * Restores events that were drained but could not be persisted.
+     *
+     * @param events events to restore in their original order
+     */
+    void restore(List<EvolutionEvent> events);
+
+    /**
      * Returns the current number of accumulated events without draining.
      */
     int size();

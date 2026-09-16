@@ -51,6 +51,17 @@ public class InMemoryConversationBuffer implements ConversationBuffer {
     }
 
     @Override
+    public synchronized void restore(List<EvolutionEvent> restoredEvents) {
+        if (restoredEvents == null || restoredEvents.isEmpty()) {
+            return;
+        }
+        List<EvolutionEvent> currentEvents = new ArrayList<>(events);
+        events.clear();
+        events.addAll(restoredEvents);
+        events.addAll(currentEvents);
+    }
+
+    @Override
     public synchronized int size() {
         return events.size();
     }

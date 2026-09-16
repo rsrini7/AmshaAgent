@@ -53,6 +53,21 @@ class InMemoryConversationBufferTest {
     }
 
     @Test
+    void restore_putsFailedBatchBeforeEventsAppendedDuringPersistence() {
+        var buffer = new InMemoryConversationBuffer("s1", 10);
+        EvolutionEvent first = event("s1");
+        EvolutionEvent later = event("s1");
+        buffer.append(first);
+
+        List<EvolutionEvent> drained = buffer.drain(FlushReason.EVENT_THRESHOLD);
+        buffer.append(later);
+        buffer.restore(drained);
+
+        List<EvolutionEvent> restored = buffer.drain(FlushReason.SESSION_END);
+        assertEquals(List.of(first, later), restored);
+    }
+
+    @Test
     void sessionId_returnsBoundSession() {
         var buffer = new InMemoryConversationBuffer("my-session", 5);
         assertEquals("my-session", buffer.sessionId());

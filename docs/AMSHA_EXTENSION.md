@@ -398,8 +398,8 @@ curl -X POST http://localhost:8080/api/v1/skills \
 
 ### Built-in classpath skill (compiled into binary)
 
-1. Place the `.md` file in `core/src/main/resources/skills/`
-2. Add its filename (without path) to `core/src/main/resources/skills/index.txt`
+1. Place the `.md` file in `skills/src/main/resources/skills/`
+2. Add its filename (without path) to `skills/src/main/resources/skills/index.txt`
 3. Rebuild
 
 ### Skill frontmatter constraints
@@ -850,7 +850,7 @@ public class S3SkillProvider implements SkillProvider {
 |---|---|---|
 | `DatabaseSkillProvider` | 10 | SQLite `agent_skill` table (user-created, wins on collision) |
 | `SkillsJarSkillProvider` | 50 | `META-INF/skills/` in JAR dependencies (bundled SkillsJars) |
-| `ClasspathSkillProvider` | 100 | `src/main/resources/skills/` (bundled baseline) |
+| `ClasspathSkillProvider` | 100 | Optional `skills/src/main/resources/skills/` index and resources |
 
 Lower priority = processed first, wins on name collision. Use values between 10 and 100 for custom providers.
 

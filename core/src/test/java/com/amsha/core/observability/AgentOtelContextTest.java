@@ -6,50 +6,45 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-import jakarta.inject.Inject;
-
 import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
-import io.quarkus.test.InjectMock;
-import io.quarkus.test.junit.QuarkusTest;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class AgentOtelContextTest {
 
-    @Inject
+    @InjectMocks
     AgentOtelContext agentOtelContext;
 
-    @InjectMock
+    @Mock
     Tracer tracer;
 
     SpanBuilder spanBuilder;
     Span span;
-    Scope scope;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
         spanBuilder = mock(SpanBuilder.class);
         span = mock(Span.class);
-        scope = mock(Scope.class);
 
-        when(tracer.spanBuilder(anyString())).thenReturn(spanBuilder);
-        when(spanBuilder.setAttribute(anyString(), anyString())).thenReturn(spanBuilder);
-        when(spanBuilder.setAttribute(anyString(), anyLong())).thenReturn(spanBuilder);
-        when(spanBuilder.setAttribute(any(AttributeKey.class), any())).thenReturn(spanBuilder);
-        when(spanBuilder.setParent(any())).thenReturn(spanBuilder);
-        when(spanBuilder.startSpan()).thenReturn(span);
-        when(span.makeCurrent()).thenReturn(scope);
+        lenient().when(tracer.spanBuilder(anyString())).thenReturn(spanBuilder);
+        lenient().when(spanBuilder.setAttribute(anyString(), anyString())).thenReturn(spanBuilder);
+        lenient().when(spanBuilder.setAttribute(anyString(), anyLong())).thenReturn(spanBuilder);
+        lenient().when(spanBuilder.setAttribute(any(AttributeKey.class), any())).thenReturn(spanBuilder);
+        lenient().when(spanBuilder.setParent(any())).thenReturn(spanBuilder);
+        lenient().when(spanBuilder.startSpan()).thenReturn(span);
     }
 
     @Test
@@ -63,7 +58,6 @@ class AgentOtelContextTest {
         verify(tracer).spanBuilder(AgentOTelConstants.SPAN_SESSION);
         verify(spanBuilder).setAttribute(AgentOTelConstants.ATTR_SESSION_ID, sessionId);
         verify(spanBuilder).startSpan();
-        verify(span).makeCurrent();
 
         // Record pseudo LLM call
         agentOtelContext.recordLlmCall(sessionId, 150, 50);
@@ -74,9 +68,19 @@ class AgentOtelContextTest {
         // End session span
         agentOtelContext.endSessionSpan(sessionId);
 
-        InOrder inOrder = inOrder(scope, span);
-        inOrder.verify(scope).close();
-        inOrder.verify(span).end();
+        verify(span).end();
+    }
+
+    @Test
+    void sessionSpanCanEndOnDifferentThreadWithoutRetainedScope() throws Exception {
+        String sessionId = "cross-thread-otel-session";
+        agentOtelContext.startSessionSpan(sessionId);
+
+        Thread endThread = Thread.startVirtualThread(() -> agentOtelContext.endSessionSpan(sessionId));
+        endThread.join();
+
+        verify(span).end();
+        verify(span, never()).makeCurrent();
     }
 
     @Test
