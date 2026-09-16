@@ -1778,8 +1778,8 @@ wizard patches deployment `.env` values.
   - `<forkedProcessExitTimeoutInSeconds>10</forkedProcessExitTimeoutInSeconds>` (Forces a hard kill after 10s if graceful shutdown fails)
 - Additionally, `src/test/resources/application.yaml` MUST include:
   - `quarkus.transaction-manager.enable-recovery: false`
-  - `quarkiverse.mcp.server.http.enabled: false`
-  - `quarkiverse.mcp.server.stdio.enabled: false`
+  - `quarkus.mcp.server.http.enabled: false`
+  - `quarkus.mcp.server.stdio.enabled: false`
   - `quarkus.shutdown.timeout: 5S`
 
 ### 16.7 App Indexing contract
@@ -2206,7 +2206,14 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 1. **Explicit vs. Default Resolution**: `SpeechOutputPolicy.resolve` inspects user text directives first (`"reply audio"`, `"audio only"`, `"no audio"`). When text lacks explicit directives:
    - If the user sent voice-only input (blank text with `inboundAudioPresent = true`), the policy falls back to `amsha.tts.default-output-mode` (`TEXT_ONLY`, `AUDIO_ONLY`, or `TEXT_AND_AUDIO`).
    - Blank voice-only turns MUST NOT be classified as trivial greetings or simple conversational turns in `IntentClassificationService.isSimpleConversational()`.
-2. **Deterministic Text Projection**: `SpeechReplyService.projectSpeakableText()` strips markdown code blocks, tables, and internal artifacts before passing prose to speech synthesis ports (`OmlxSpeechSynthesisProvider` / `OpenAiSpeechSynthesisProvider`).
+2. **Deterministic Text Projection**: `SpeechReplyService.projectSpeakableText()` strips markdown code blocks, tables, and internal artifacts before passing prose to the OMLX `OmlxSpeechSynthesisProvider` through `SpeechSynthesisPort`.
+
+### 25.1a Speech provider boundaries
+
+- `AudioTranscriptionPort` is an execution/provider seam, not a chat-model capability and not a persistence port. OMLX must not create an `AUDIO` model profile, and the retired Nemotron audio-chat profile must not be reintroduced while the configured OMLX runtime rejects its `nemotron_voicechat` model type.
+- `CompositeAudioTranscriptionPort` orders available adapters by priority: local ONNX Whisper (`100`) before OMLX Whisper (`50`). `UNSUPPORTED` results may proceed to the next adapter; `FAILED` and `TIMEOUT` results stop the cascade unless `amsha.stt.allow-fallback-on-failure=true` explicitly permits it. The default is fail-closed to avoid unexpected audio egress.
+- Every transcription adapter enforces bounded audio and transcript sizes, uses governed media/transport boundaries, and releases temporary or request-owned audio data after the operation. Local ONNX inference remains disabled unless both `amsha.stt.local.enabled` and `amsha.onnx.enabled` are enabled.
+- `OmlxSpeechSynthesisProvider` is output-only, is not an `AUDIO` route, and currently accepts WAV only. TTS is attempted only for eligible finished turns; approval, intermediate, and failed responses remain text. Provider egress remains governed and a synthesis or delivery failure must preserve the text response.
 
 ### 25.2 Channel Audio Fallback Guarantee
 
@@ -2254,4 +2261,3 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 ### 26.5 Dynamic Provider Discovery Invariant (§26.5 INVARIANT)
 - **No Hardcoded Static Provider Sets**: `ModelArenaHelper` and health resources MUST NOT hardcode static sets of allowed providers or base URL maps in application source code.
 - **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`, `requiresCustomBaseUrl()`, `probeUrlForProvider()`, `authHeadersForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
-

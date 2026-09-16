@@ -586,19 +586,29 @@ Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDown
 
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_TTS_PROVIDER` | `omlx` | Speech synthesis provider (`omlx` or `openai`). |
-| `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` | Model identifier for TTS synthesis. |
-| `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` | Default voice delivery mode (`TEXT_ONLY`, `AUDIO_ONLY`, `TEXT_AND_AUDIO`). |
-| `AMSHA_TTS_RESPONSE_FORMAT` | `wav` | Audio encoding format emitted by the synthesis port (`wav`, `mp3`, `ogg`). |
-| `AMSHA_STT_PROVIDER` | `omlx` | Speech-to-text recognition provider (`omlx` or `openai`). |
-| `AMSHA_STT_MODEL` | `whisper-large-v3` | Model identifier for STT transcription. |
-| `AMSHA_STT_LOCAL_ENABLED` | `false` | Enables local in-process ONNX Whisper audio transcription under `AudioTranscriptionPort` (requires `AMSHA_ONNX_ENABLED=true`). |
-| `AMSHA_STT_LOCAL_BUNDLE_ID` | `whisper-tiny-en-v1` | Verified local Whisper model bundle identifier under `data/models/`. |
+| `AMSHA_TTS_ENABLED` | `false` | Enables the optional OMLX Qwen3-TTS output path. |
+| `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` | OMLX model identifier for TTS synthesis. |
+| `AMSHA_TTS_VOICE` | *(empty)* | Optional voice identifier; omitted from the provider request when blank. |
+| `AMSHA_TTS_RESPONSE_FORMAT` | `wav` | TTS response format. V1 supports WAV only; other values fail closed as `UNSUPPORTED`. |
+| `AMSHA_TTS_TIMEOUT` | `PT120S` | Maximum TTS provider request duration. |
+| `AMSHA_TTS_MAX_INPUT_CHARS` | `1200` | Maximum projected prose sent to synthesis. |
+| `AMSHA_TTS_MAX_BYTES` | `8388608` | Maximum streamed TTS response size (8 MiB). |
+| `AMSHA_TTS_MAX_CONCURRENT` | `1` | Maximum concurrent TTS requests. |
+| `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` | Default mode for inbound-audio turns without an explicit directive (`TEXT_ONLY`, `AUDIO_ONLY`, `TEXT_AND_AUDIO`). |
+| `AMSHA_STT_ENABLED` | `false` | Enables the governed OMLX Whisper transcription path. |
+| `AMSHA_STT_MODEL` | `whisper-large-v3-turbo` | OMLX Whisper model identifier for remote STT. |
+| `AMSHA_STT_TIMEOUT` | `PT60S` | Maximum remote STT provider request duration. |
+| `AMSHA_STT_MAX_BYTES` | `26214400` | Maximum remote STT audio payload size (25 MiB). |
+| `AMSHA_STT_MAX_TRANSCRIPT_CHARS` | `12000` | Maximum remote STT transcript length. |
+| `AMSHA_STT_LOCAL_ENABLED` | `false` | Enables in-process ONNX Whisper under `AudioTranscriptionPort`; requires `AMSHA_ONNX_ENABLED=true`. |
+| `AMSHA_STT_LOCAL_BUNDLE_ID` | `whisper-tiny-en-v1` | Verified local Whisper bundle identifier under `data/models/`. |
 | `AMSHA_STT_LOCAL_TIMEOUT` | `PT30S` | Total deadline for one local audio transcription request. |
-| `AMSHA_STT_LOCAL_MAX_AUDIO_BYTES` | `26214400` | Maximum raw audio payload bytes accepted for admission (<= 25 MiB). |
-| `AMSHA_STT_LOCAL_MAX_TRANSCRIPT_CHARS` | `12000` | Maximum character length of output transcript text. |
-| `AMSHA_STT_FFMPEG_PATH` | `ffmpeg` | Path to ffmpeg executable used to transcode compressed audio to mono 16 kHz WAV. |
-| `AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE` | `false` | If true, cascades to secondary STT providers on failure/timeout. False guarantees zero egress. |
+| `AMSHA_STT_LOCAL_MAX_AUDIO_BYTES` | `26214400` | Maximum local STT audio payload size (25 MiB). |
+| `AMSHA_STT_LOCAL_MAX_TRANSCRIPT_CHARS` | `12000` | Maximum local STT transcript length. |
+| `AMSHA_STT_FFMPEG_PATH` | `ffmpeg` | Executable used to transcode compressed audio to mono 16 kHz WAV. |
+| `AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE` | `false` | Allows the composite STT port to try a lower-priority provider after a failure or timeout. Keep false to prevent unintended audio egress. |
+
+Both STT and TTS reuse `AMSHA_OMLX_API_KEY` and `AMSHA_OMLX_BASE_URL` for the OMLX provider. STT is an execution port, not a chat-model capability: local ONNX Whisper has priority over OMLX, while `UNSUPPORTED` results may cascade and failures/timeouts cascade only when explicitly enabled. TTS is output-only, governed, and currently emits WAV only; it does not create an `AUDIO` model route.
 
 ## Retry
 

@@ -129,7 +129,7 @@ When constructing user prompts for LLM reasoning, `MultimodalMessageMapper` (`am
 
 **Audio Ingestion, STT & Speech Synthesis (TTS) Architecture:**
 
-Voice recordings and audio attachments pass through dynamic normalization (`OggOpusToWavConverter`), transcription (`SpeechToTextPort` / Whisper), intent preservation (`IntentClassificationService`), speech output policy resolution (`SpeechOutputPolicy`), prose projection (`SpeechReplyService`), TTS synthesis (`SpeechSynthesisPort` / Qwen3-TTS), and channel-specific transport guards (36 MiB WebSocket frame buffer ceiling; local `ffmpeg` OGG Opus compression for Telegram Bot API).
+Voice recordings and audio attachments pass through governed media download, dynamic normalization (`LocalAudioTranscoder` for local ONNX Whisper or `OggOpusToWavConverter` for OMLX), transcription (`AudioTranscriptionPort` / Whisper), intent preservation (`IntentClassificationService`), speech output policy resolution (`SpeechOutputPolicy`), prose projection (`SpeechReplyService`), TTS synthesis (`SpeechSynthesisPort` / OMLX Qwen3-TTS), and channel-specific transport guards (36 MiB WebSocket frame buffer ceiling; local `ffmpeg` OGG Opus compression for Telegram Bot API). `CompositeAudioTranscriptionPort` tries the local ONNX adapter before OMLX and only cascades failures/timeouts when `amsha.stt.allow-fallback-on-failure=true`.
 
 ![Audio & Speech Synthesis Architecture](./assets/amsha_audio_speech_pipeline.svg)
 

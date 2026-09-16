@@ -1,23 +1,25 @@
 # Java Test Coverage — Deep Analysis and Prioritized Action Plan
 
 > **Status**: **CLOSED / COMPLETE** (2026-09-16)  
-> **Final Outcome**: Reactor line coverage achieved **84.66%** (50,795 / 59,999 lines), decisively surpassing the 80.00% goal.  
+> **Final recorded outcome**: Reactor line coverage achieved **84.28%** (latest repository badge; the exact numerator depends on the clean full-reactor report), surpassing the 80.00% goal.
 > **Gate Ratchet**: Root `pom.xml` `<jacoco.minimum.line.coverage>` permanently locked at **`0.82`** (82.00%).  
-> **Test Suite**: **8,315+ tests** executed across 28 child modules with 0 failures and 0 errors.  
+> **Test Suite**: **8,301 passing Java tests** recorded across 28 child modules with 0 failures and 0 errors.
 > **Scope**: Multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator, JDK 25, Quarkus 3.39.3).  
 > **Method**: Full-reactor test execution + JaCoCo 0.8.15 line/branch/method analysis, cross-referenced with a static test-reference scan.
 
 ---
 
-## 1. Executive summary
+## 1. Executive summary — historical baseline
 
 | Metric | Measured |
 |---|---|
-| Reactor line coverage | **74.51%** (44,706 / 59,997 lines) |
+| Reactor line coverage | **74.51%** (44,706 / 59,997 lines; historical baseline) |
 | Reactor branch coverage | **58.31%** (20,235 / 34,702 branches) |
 | Reactor method coverage | **78.85%** (8,857 / 11,233 methods) |
-| `onboarding` line coverage | **82.31%** (2,210 / 2,685 lines) |
+| `onboarding` line coverage | **82.31%** (2,210 / 2,685 lines; historical baseline) |
 | Test suites / tests executed | 900 suites, **6,199 tests**, 0 failures, 0 errors, 7 skipped |
+
+The table above records the pre-Phase-1 measurement and is retained as historical analysis. It is not the current repository status; use the final recorded outcome at the top of this document.
 
 > **These figures replace the earlier 70.66% baseline, which was wrong.** That number was depressed by
 > two independent defects, both now fixed (see §1.2): a module permanently recorded as 0% covered, and a
@@ -2883,8 +2885,8 @@ Added `NativeReflectionCompletenessTest` under `app` (`app.config`), asserting t
 1. **CI enforcement (non-negotiable).** ✅ **In place** — the `java-tests` job runs `./mvnw verify` on every push
    and fails on the coverage gate. It must stay on `verify`: `package` reaches neither PMD nor JaCoCo.
 2. **Ratchet, don't just threshold.** ✅ **In place** — `jacoco.minimum.line.coverage` has been ratcheted
-   from `0.70` → `0.74` → **`0.82`** (82.00%). The latest full reactor coverage measures **84.66%**
-   (50,795 / 59,999 lines), leaving **+2.66pp** (~1,595 lines) of deliberate headroom so incidental churn does
+   from `0.70` → `0.74` → **`0.82`** (82.00%). The latest recorded repository coverage is **84.28%**
+   (the exact numerator must come from a fresh clean full-reactor report), leaving measurable headroom so incidental churn does
    not trip the gate while locking in the 82% floor.
 3. **Per-module floor.** Add `--module`-level minimums (start at 60%) so `classifier-api` at 100% cannot
    subsidise `persistence-postgres` at 66%.
