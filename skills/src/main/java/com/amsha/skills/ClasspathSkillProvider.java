@@ -47,7 +47,7 @@ public class ClasspathSkillProvider implements SkillProvider {
     @Override
     public List<SkillDefinition> load() {
         List<SkillDefinition> skills = new ArrayList<>();
-        try (InputStream indexStream = getClass().getResourceAsStream(INDEX_PATH)) {
+        try (InputStream indexStream = getResourceStream(INDEX_PATH)) {
             if (indexStream == null) {
                 LOG.warnf("classpath %s missing. Skipping static tier.", INDEX_PATH);
                 return skills;
@@ -61,7 +61,7 @@ public class ClasspathSkillProvider implements SkillProvider {
                     if (line.isEmpty() || line.startsWith("#")) continue;
 
                     String resourcePath = "/skills/" + line;
-                    try (InputStream skillStream = getClass().getResourceAsStream(resourcePath)) {
+                    try (InputStream skillStream = getResourceStream(resourcePath)) {
                         if (skillStream == null) {
                             LOG.warnf("Skill file '%s' listed in index.txt but not found on classpath", resourcePath);
                             continue;
@@ -77,5 +77,9 @@ public class ClasspathSkillProvider implements SkillProvider {
             LOG.errorf("Fatal failure reading static skill index %s: %s", INDEX_PATH, LogUtil.rootMessage(e));
         }
         return skills;
+    }
+
+    InputStream getResourceStream(String path) {
+        return getClass().getResourceAsStream(path);
     }
 }

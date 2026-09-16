@@ -3,6 +3,7 @@ package com.amsha.app.scheduler;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atMost;
@@ -27,7 +28,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
+import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.persistence.api.AdvisoryLockPort;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStorePort;
@@ -40,6 +43,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
@@ -281,5 +285,91 @@ class AgentCronSchedulerTest {
         boolean hasProducerTemplate = Arrays.stream(AgentCronScheduler.class.getDeclaredFields())
                 .anyMatch(f -> f.getType().getSimpleName().equals("ProducerTemplate"));
         assertFalse(hasProducerTemplate, "AgentCronScheduler must not depend on ProducerTemplate");
+    }
+
+    @Test
+    void testOnShutdownSetsInactive() {
+        scheduler.onShutdown(null);
+        scheduler.pollAndDispatch();
+        verify(cronStore, never()).findDueCrons();
+    }
+
+    @Test
+    void testOrphanSweepFailsJobs() {
+        AgentCronDto orphan = createDueJob(true);
+        when(cronStore.findAllAwaitingApproval()).thenReturn(List.of(orphan));
+
+        scheduler.onStartup(null);
+
+        verify(cronStore).markFailed(eq(orphan.id()), ArgumentMatchers.contains("Orphaned"));
+    }
+
+    @Test
+    void testOrphanSweepHandlesException() {
+        when(cronStore.findAllAwaitingApproval()).thenThrow(new RuntimeException("DB error"));
+        scheduler.onStartup(null);
+    }
+
+    @Test
+    void testScheduleSoonBranches() throws Exception {
+        ScheduledExecutorService mockExec = mock(ScheduledExecutorService.class);
+        setField("preciseScheduler", mockExec);
+
+        scheduler.scheduleSoon("nonexistent");
+
+        AgentCronDto notRunOnce = createJob(false, Instant.now().plusSeconds(60));
+        when(cronStore.findById("not-run-once")).thenReturn(Optional.of(notRunOnce));
+        scheduler.scheduleSoon("not-run-once");
+
+        AgentCronDto farFuture = createJob(true, Instant.now().plusSeconds(300));
+        when(cronStore.findById("far-future")).thenReturn(Optional.of(farFuture));
+        scheduler.scheduleSoon("far-future");
+
+        AgentCronDto soon = createJob(true, Instant.now().plusSeconds(30));
+        when(cronStore.findById("soon")).thenReturn(Optional.of(soon));
+        scheduler.scheduleSoon("soon");
+        verify(mockExec).schedule(any(Runnable.class), anyLong(), eq(TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    void testOnTaskScheduled() {
+        scheduler.onTaskScheduled(new CronTaskScheduled("job-123"));
+    }
+
+    @Test
+    void testResetConcurrencyLimit() {
+        scheduler.resetConcurrencyLimit(5);
+        Assertions.assertEquals(5, scheduler.getAvailablePermits());
+    }
+
+    @Test
+    void testPollAndDispatchNotLeader() {
+        when(advisoryLockPort.tryLock(anyString(), anyInt())).thenReturn(false);
+        scheduler.pollAndDispatch();
+        verify(cronStore, never()).findDueCrons();
+    }
+
+    @Test
+    void testPollAndDispatchReclaimStaleFails() {
+        Mockito.doThrow(new RuntimeException("reclaim fail")).when(cronStore).reclaimStaleCrons(any());
+        scheduler.pollAndDispatch();
+        verify(cronStore, never()).findDueCrons();
+    }
+
+    @Test
+    void testPollAndDispatchThrottled() {
+        AgentCronDto dueJob = createDueJob(true);
+        when(cronStore.findDueCrons()).thenReturn(List.of(dueJob));
+        when(cronStore.claimForFire(eq(dueJob.id()), anyString())).thenReturn(true);
+
+        scheduler.resetConcurrencyLimit(0);
+        scheduler.pollAndDispatch();
+
+        verify(cronStore).releaseClaimToActive(dueJob.id());
+    }
+
+    @Test
+    void testShutdown() {
+        scheduler.shutdown();
     }
 }

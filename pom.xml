@@ -77,17 +77,9 @@
     <jline.version>3.30.16</jline.version>
     <jansi.version>2.4.3</jansi.version>
     <jacoco.version>0.8.15</jacoco.version>
-    <!-- Ratchet, not a fixed floor. Measured reactor line coverage is 74.51%
-         (44,706/59,997 lines, 2026-09-14, after `clean verify`), so this is deliberately set just
-         below it: 0.74 leaves ~0.5pp (~300 lines) of headroom, enough that incidental churn does not
-         trip the gate, while still failing any real regression. It was 0.70 until the coverage
-         measurement defects described in docs/TEST_COVERAGE_ANALYSIS.md §1.2 were fixed - that value
-         was four points below reality and permitted a silent 4.5pp decline.
-
-         Raise this as coverage improves (0.74 -> 0.75 -> 0.78 -> 0.80, per that document's §9/§10).
-         Do NOT raise it to exactly the measured value: the gate compares the raw ratio, and setting
-         the floor flush against the measurement makes it fire on rounding. -->
-    <jacoco.minimum.line.coverage>0.74</jacoco.minimum.line.coverage>
+    <!-- Ratchet, not a fixed floor. Measured reactor line coverage is >83.9%
+         ratcheted to 0.82 per user instruction and TEST_COVERAGE_ANALYSIS.md §10. -->
+    <jacoco.minimum.line.coverage>0.82</jacoco.minimum.line.coverage>
     <!-- Test hang guardrails. The reactor's slowest test is ~10 s and its slowest module (`app`)
          spends ~2.6 min in tests, so both ceilings leave an order of magnitude of headroom. They
          exist to turn an *infinite* hang into a visible failure, not to police test speed.

@@ -2836,6 +2836,24 @@ explained *exactly* by the 77 closed `McpConnectResource` lines (trust the react
 `6,934 → 6,644` swing includes a stale-report artifact). Next largest target: `DbConsoleResource` (75), `CronResultHandler`
 (74), `AgentCronScheduler` (70). `OidcIdentityProvider` (107) + `GithubIdentityProvider` (50) remain BLOCKED on #37.
 
+#### Phase 5 status (2026-09-16) — `skills`, `local-ml-onnx`, and `app` scheduler targets
+
+With the targets in `skills`, `local-ml-onnx`, and `app` scheduler addressed, Phase 5 closure made significant gains across codec edge cases, dynamic skill loading, and cron orchestration:
+
+- **`skills` module:**
+  - `ClasspathSkillProvider`: Added dedicated unit test suite (`ClasspathSkillProviderTest`, 6 tests) covering valid frontmatter extraction, YAML/JSON multi-doc parsing, empty directory handling, and malformed resource isolation, reaching **100% line coverage** (29/29 covered).
+  - `DatabaseSkillProvider`: Added dedicated unit test suite (`DatabaseSkillProviderTest`, 4 tests) asserting database record conversion to `SkillDefinition`, parameter mapping, empty list handling, and persistence exception handling, reaching **100% line coverage** (16/16 covered).
+  - `SkillsJarSkillProvider`: Expanded `SkillsJarSkillProviderTest` with synthetic in-memory JAR archives, testing manifest spec-version headers, asset extraction from nested directory structures, index fallback, and corrupted archive handling (line coverage reached 71.2%).
+
+- **`local-ml-onnx` module (Audio & Whisper):**
+  - `LocalAudioTranscoder`: Expanded `LocalAudioTranscoderTest` with tests for ffmpeg detection, wave header validation, custom ffmpeg executable configuration, and PCM transcoding edge cases (line coverage raised from 43.0% to 83.3%).
+  - `LocalOnnxAudioTranscriptionAdapter`: Created `LocalOnnxAudioTranscriptionAdapterDeepTest` covering request payload bounds, executor queue saturation, cancellation tokens, and runtime transcription exceptions (adapter line coverage raised to 69.5%).
+  - `OnnxAudioTranscriptionBundleSpec`: Expanded `OnnxAudioTranscriptionBundleSpecTest` with validation tests for bundle model paths, tokenizer configs, invalid tensor limits, and parameter bounds (line coverage raised from 32.6% to 70.8%).
+
+- **`app` module (Scheduler):**
+  - `CronResultHandler`: Expanded `CronResultHandlerTest` (23 tests) covering run status transitions, lease lost notifications, interactive chat HITL queuing, failure handler chains, and fallback notification dispatch.
+  - `AgentCronScheduler`: Expanded `AgentCronSchedulerTest` (20 tests) covering orphan sweeping, `scheduleSoon` immediate trigger dispatch, permit rate throttling, and graceful scheduler shutdown.
+
 
 ### Phase 6 — Cross-cutting invariant tests *(cheap, high value)*
 
@@ -2847,17 +2865,20 @@ explained *exactly* by the 77 closed `McpConnectResource` lines (trust the react
 | **Global timeout guard** | Prevents the observed indefinite hang. | Very low |
 | **`@QuarkusTest` coverage for modules at zero** (`tools-builtin`, `mcp`, `persistence-fs`, `security`, `channel-web`) | These modules never boot a CDI container in tests. | Medium |
 
+#### Phase 6 status (2026-09-16) — Native reflection completeness invariant tests
+
+Added `NativeReflectionCompletenessTest` under `app` (`app.config`), asserting that `AppReflectionConfig` and `ChannelReflectionConfig` declare non-empty target classes and valid classpath entries without throwing `ClassNotFoundException`. This establishes automated verification for native reflection manifests across Quarkus and GraalVM targets.
+
 ---
 
 ## 10. Guardrails to prevent regression
 
 1. **CI enforcement (non-negotiable).** ✅ **In place** — the `java-tests` job runs `./mvnw verify` on every push
    and fails on the coverage gate. It must stay on `verify`: `package` reaches neither PMD nor JaCoCo.
-2. **Ratchet, don't just threshold.** ✅ **In place** — `jacoco.minimum.line.coverage` was `0.70` while the real
-   number was **74.51%**, four points of slack a regression could quietly consume. It is now **`0.74`**, leaving
-   ~0.5pp (~300 lines) of deliberate headroom so incidental churn does not trip the gate. Continue raising it as
-   §9 lands: 0.74 → 0.75 → 0.78 → 0.80. Do not set it flush against the measured value — the gate compares the raw
-   ratio and would fire on rounding.
+2. **Ratchet, don't just threshold.** ✅ **In place** — `jacoco.minimum.line.coverage` has been ratcheted
+   from `0.70` → `0.74` → **`0.82`** (82.00%). The latest full reactor coverage measures **84.45%**
+   (50,671 / 59,999 lines), leaving **+2.45pp** (~1,470 lines) of deliberate headroom so incidental churn does
+   not trip the gate while locking in the 82% floor.
 3. **Per-module floor.** Add `--module`-level minimums (start at 60%) so `classifier-api` at 100% cannot
    subsidise `persistence-postgres` at 66%.
 4. **Add a branch gate.** Line coverage is **74.51%** while branch is **58.31%** — a 16-point gap that a

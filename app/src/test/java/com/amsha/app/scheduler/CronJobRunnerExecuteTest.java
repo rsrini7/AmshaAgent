@@ -24,6 +24,7 @@ import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -229,7 +230,7 @@ class CronJobRunnerExecuteTest {
         m.setAccessible(true);
         String result = assertDoesNotThrow(() -> (String) m.invoke(runner, goal));
         // Returns the original goal unchanged (the catch logs and falls through).
-        org.junit.jupiter.api.Assertions.assertEquals(goal, result);
+        Assertions.assertEquals(goal, result);
     }
 
     @Test
