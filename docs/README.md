@@ -153,6 +153,9 @@ Evaluations of alternatives and boundaries that document why specific approaches
   - [Early ONNX Notes](research/explorations/ONNX.md)
   - [Quarkus 3.38 Upgrade Research](research/explorations/Quarkus-Upgrade-Research.md)
 
+- **Agent Decision-Plane Research**:
+  - [Jev/System One Decision Plane Scout](research/Jev-Amsha-Decision-Plane-Scout-2026.md) — Proposed comparison and safe integration seam for typed Jev judgments.
+
 ---
 
 ## 6. Active RFC Proposals (`docs/proposals/`)
