@@ -11,6 +11,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.classifier.api.ProviderPlacementValidator;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import io.quarkus.arc.Unremovable;
@@ -53,13 +55,25 @@ public class OnnxClassifierRuntimeControl {
 
     /**
      * Registers one verified and promotion-approved active implementation.
+     * Enforces structural provider placement validation before activating the implementation slot.
+     *
+     * <p>Shadow-only classifiers MUST NOT call this method.
+     */
+    public Registration registerReadyImplementation(Classifier classifier, Object implementation) {
+        Objects.requireNonNull(implementation, "implementation");
+        ProviderPlacementValidator.validateClassifierSpiPlacement(implementation);
+        Slot slot = slot(classifier);
+        slot.registerImplementation();
+        return new Registration(slot);
+    }
+
+    /**
+     * Registers one verified and promotion-approved active implementation.
      *
      * <p>Shadow-only classifiers MUST NOT call this method.
      */
     public Registration registerReadyImplementation(Classifier classifier) {
-        Slot slot = slot(classifier);
-        slot.registerImplementation();
-        return new Registration(slot);
+        return registerReadyImplementation(classifier, this);
     }
 
     /** Acquires one active inference lease only while the classifier is effectively enabled. */

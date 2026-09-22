@@ -18,6 +18,7 @@ import com.amsha.classifier.api.AnswerQualityShadowClassifier;
 import com.amsha.classifier.api.AnswerQualityShadowContext;
 import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.ProviderPlacementValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -120,6 +121,7 @@ public class OnnxAnswerQualityShadowClassifier implements AnswerQualityShadowCla
         if (!readinessCheck.getAsBoolean()) {
             return Optional.empty();
         }
+        ProviderPlacementValidator.validateClassifierSpiPlacement(this);
         return Optional.of(
                 runtimeControl.registerReadyImplementation(OnnxClassifierRuntimeControl.Classifier.ANSWER_QUALITY));
     }

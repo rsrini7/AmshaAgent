@@ -16,6 +16,7 @@ import java.util.function.Function;
 
 import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.ProviderPlacementValidator;
 import com.amsha.classifier.api.ToolRiskPrediction;
 import com.amsha.classifier.api.ToolRiskShadowClassifier;
 import com.amsha.classifier.api.ToolRiskShadowContext;
@@ -128,6 +129,7 @@ public class OnnxToolRiskShadowClassifier implements ToolRiskShadowClassifier {
         if (!readinessCheck.getAsBoolean()) {
             return Optional.empty();
         }
+        ProviderPlacementValidator.validateClassifierSpiPlacement(this);
         return Optional.of(
                 runtimeControl.registerReadyImplementation(OnnxClassifierRuntimeControl.Classifier.TOOL_RISK));
     }

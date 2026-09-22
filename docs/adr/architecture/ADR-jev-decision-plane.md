@@ -180,3 +180,20 @@ The ADR is not ready for implementation completion until:
 
 Implementation ownership and the target latency/cost budget must be assigned in
 the spec before the first active rollout.
+
+## 7. Implementation Checkpoints
+
+### 7.1 Issue 01 Completed: Contract and Vocabulary (2026-09-22)
+
+The provider-neutral decision vocabulary and contract have been implemented in `classifier-api`:
+
+* **Functional Seam**: Defined the typed evaluation seam `DecisionEngine.evaluate(DecisionRequest)`.
+* **Sealed Result Contract**: Sealed `DecisionResult` with `Opinion` and `NoOpinion`, preserving payload-free diagnostics and reusing `ClassifierResult.NoOpinionReason` compatibility.
+* **Typed Question Correlation**: Implemented `QuestionKey<A extends DecisionAnswer>` with request-bound owner identity; `Opinion` enforces handle equality and answer type validation at construction time, failing closed on duplicate or unknown handles without unchecked casts.
+* **Primitive Semantics**: Enforced domain invariants on `Choice` (bounded options), `Score` (ordered rubric, distinct probabilities, normalized scores), and `Noul` (proposition probability $\in [0.0, 1.0]$) using JDK 25 compact constructors. Values are never compared or converted implicitly across primitives.
+* **Absence Preservation & Fail-Closed Decoding**: `DecisionPayloadDecoder` validates container types and rejects unexpected handles; missing fields remain absent, and the `ClassifierResult` compatibility bridge never invents confidence or rule IDs.
+* **Provider Placement Enforcement**: Implemented `ProviderPlacementValidator` and integrated structural placement validation into the classifier SPI registration and CDI discovery paths (`core` and `local-ml-onnx`).
+* **Central Reflection Registration**: Registered all contract types and nested records centrally in `ClassifierApiReflectionConfig`.
+
+*Scope Deferred to Issue 02+*:
+Defensive transaction boundary checks (preventing evaluation inside active JTA write transactions), in-process ONNX adapters, self-hosted and remote adapters, policy threshold integration, shadow evaluation, and routing pilot remain scoped to Issues 02–07. The master ADR status remains **Proposed**.
