@@ -47,6 +47,13 @@ public final class DecisionPayloadDecoder {
                     request.decisionId(), request.schemaVersion(), null, "Provider payload is null");
         }
 
+        for (Object rawKeyObj : raw.keySet()) {
+            if (!(rawKeyObj instanceof String)) {
+                return DecisionResult.NoOpinion.ofMalformedResponse(
+                        request.decisionId(), request.schemaVersion(), null, "Malformed non-string top-level key");
+            }
+        }
+
         String ruleId = parseString(raw.get("ruleId"));
         if (raw.containsKey("ruleId") && ruleId == null) {
             return DecisionResult.NoOpinion.ofMalformedResponse(
@@ -78,7 +85,14 @@ public final class DecisionPayloadDecoder {
         }
 
         // Reject unknown handles (full-payload reference validation)
-        for (String submittedKey : answersMap.keySet()) {
+        for (Object submittedKeyObj : answersMap.keySet()) {
+            if (!(submittedKeyObj instanceof String submittedKey)) {
+                return DecisionResult.NoOpinion.ofMalformedResponse(
+                        request.decisionId(),
+                        request.schemaVersion(),
+                        ruleId,
+                        "Malformed non-string answer handle in payload");
+            }
             if (nested) {
                 if (!request.questions().containsKey(submittedKey)) {
                     return DecisionResult.NoOpinion.ofMalformedResponse(

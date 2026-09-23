@@ -47,7 +47,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RemoteDecisionProvider.class,
             DecisionPayloadDecoder.class,
             ProviderPlacementValidator.class,
-            DecisionResult.OpinionBuilder.class
+            DecisionResult.OpinionBuilder.class,
+            InMemoryDecisionEngine.class,
+            InMemoryDecisionEngine.Builder.class,
+            DecisionTransactionGuard.class,
+            TransactionViolationPolicy.class
         },
         classNames = {
             "com.amsha.classifier.api.ClassifierResult$Opinion",

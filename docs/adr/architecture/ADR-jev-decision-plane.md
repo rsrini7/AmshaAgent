@@ -195,5 +195,16 @@ The provider-neutral decision vocabulary and contract have been implemented in `
 * **Provider Placement Enforcement**: Implemented `ProviderPlacementValidator` and integrated structural placement validation into the classifier SPI registration and CDI discovery paths (`core` and `local-ml-onnx`).
 * **Central Reflection Registration**: Registered all contract types and nested records centrally in `ClassifierApiReflectionConfig`.
 
-*Scope Deferred to Issue 02+*:
-Defensive transaction boundary checks (preventing evaluation inside active JTA write transactions), in-process ONNX adapters, self-hosted and remote adapters, policy threshold integration, shadow evaluation, and routing pilot remain scoped to Issues 02–07. The master ADR status remains **Proposed**.
+### 7.2 Issue 02 Completed: In-Process Adapter and Transaction Boundary (2026-09-22)
+
+The deterministic in-process adapter and defensive transaction boundary have been implemented in `classifier-api`:
+
+* **In-Process Adapter**: Implemented `InMemoryDecisionEngine` implementing `InProcessDecisionEngine` with zero network I/O, persistence, or side effects, operating synchronously and safely within the in-process seam. All arbitrary executable callback factories (`Function`, `Supplier`, etc.) have been removed to structurally prevent wrapping remote or stateful providers; the engine evaluates exclusively from immutable static answers, raw provider response maps decoded via `DecisionPayloadDecoder`, static results, or declarative failure simulation.
+* **Defensive Transaction Boundary**: Implemented `DecisionTransactionGuard` inspecting ambient JTA transaction status (with Arc container resolution and explicit status injection) enforcing the §5.9 transaction-free zone.
+* **Transaction Violation Policies**: Implemented `TransactionViolationPolicy` supporting both `FAIL_FAST_EXCEPTION` (immediate `IllegalStateException`) and `FAIL_CLOSED_NO_OPINION` (`OVERLOAD_REJECTED`), proving through tests that the underlying provider/evaluator is never reached when transaction rejection occurs.
+* **Architectural Invariants Verified**: Verified by reflection that neither `InMemoryDecisionEngine`, `DecisionEngine`, `InProcessDecisionEngine`, nor `DecisionTransactionGuard` carries `@Transactional` annotations, and verified that `InMemoryDecisionEngine` contains zero fields or method parameters of functional callback interface types.
+* **Contract Boundary & Absence Preservation**: Proved through real `DecisionEngine.evaluate(DecisionRequest)` tests that malformed responses, partial answers, wrong primitives, missing identifiers, and unknown references fail closed to `INFERENCE_ERROR`, and absent confidence/probabilities are preserved without invented certainty.
+* **Central Reflection Registration**: Registered `InMemoryDecisionEngine`, `InMemoryDecisionEngine.Builder`, `DecisionTransactionGuard`, and `TransactionViolationPolicy` centrally in `ClassifierApiReflectionConfig`.
+
+*Scope Deferred to Issue 03+*:
+Policy threshold integration, lifecycle leases, shadow evaluation, self-hosted and remote adapters, and routing pilot remain scoped to Issues 03–07. The master ADR status remains **Proposed**.
