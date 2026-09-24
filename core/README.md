@@ -234,6 +234,16 @@ Amsha provides zero-payload-leakage observability for LLM invocations with stric
 |---|---|---|---|
 | `amsha.observability.chat-listener.mode` | `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | Mode for LangChain4j `ChatModelListener` pilot (`off`, `shadow`, `active`) |
 
+## Decision Plane Shadow Classifiers (Issue 04)
+
+Observational-only shadow evaluation for intent routing, tool risk, and answer quality. Shadow evaluation operates in parallel to authoritative components without mutating live routing, tool authorization, HITL decisions, or retry budgets. Disabled by default.
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.decision.shadow.intent.enabled` | `AMSHA_DECISION_SHADOW_INTENT_ENABLED` | `false` | Enables shadow intent classification using `DecisionEngine`. |
+| `amsha.decision.shadow.tool-risk.enabled` | `AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED` | `false` | Enables shadow tool risk evaluation using `DecisionEngine`. |
+| `amsha.decision.shadow.answer-quality.enabled` | `AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED` | `false` | Enables shadow answer quality evaluation using `DecisionEngine`. |
+
 ## Multimodal Message Mapping & Capability Resolution
 
 When channel messages contain media attachments (`MediaAttachment`), `MultimodalMessageMapper` converts validated attachments into LangChain4j `Content` items:

@@ -49,7 +49,10 @@ import com.amsha.core.api.dto.SessionStatusResponse;
 import com.amsha.core.audit.AuditOutcome;
 import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.classifier.DecisionAnswerQualityShadowClassifier;
+import com.amsha.core.classifier.DecisionIntentShadowClassifier;
 import com.amsha.core.classifier.DecisionTelemetry;
+import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.governance.ApprovalFrame;
@@ -214,7 +217,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ResumeCronNotificationDispatcher.class,
             ResumeToolInfoFormatter.class,
             SafeSymbolMetadata.class,
-            DecisionTelemetry.class
+            DecisionTelemetry.class,
+            DecisionIntentShadowClassifier.class,
+            DecisionToolRiskShadowClassifier.class,
+            DecisionAnswerQualityShadowClassifier.class
         },
         classNames = {
             "com.amsha.core.agent.reasoning.AttachmentContentMapper",

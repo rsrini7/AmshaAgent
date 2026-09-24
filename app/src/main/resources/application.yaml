@@ -493,6 +493,14 @@ amsha:
         enabled: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_ENABLED:false}
         model: "${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_MODEL:}"
         timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_TIMEOUT_SECONDS:2}
+  decision:
+    shadow:
+      intent:
+        enabled: ${AMSHA_DECISION_SHADOW_INTENT_ENABLED:false}
+      tool-risk:
+        enabled: ${AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED:false}
+      answer-quality:
+        enabled: ${AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED:false}
   fs:
     data-dir: "${AMSHA_FS_DATA_DIR:./data/fs}"
     lock-timeout-seconds: 30
