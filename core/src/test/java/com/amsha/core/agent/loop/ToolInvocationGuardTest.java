@@ -83,6 +83,9 @@ class ToolInvocationGuardTest {
         guard.postPolicyToolRiskDispatcher = postPolicyToolRiskDispatcher;
         when(postPolicyToolRiskDispatcher.evaluate(any()))
                 .thenReturn(new ClassifierResult.NoOpinion<>(NoOpinionReason.MISSING_MODEL));
+        when(postPolicyToolRiskDispatcher.evaluateResolution(any()))
+                .thenAnswer(invocation -> PostPolicyToolRiskTestSupport.resolution(
+                        postPolicyToolRiskDispatcher.evaluate(invocation.getArgument(0))));
 
         guard.dynamicToolAdmissionLookup = mock(Instance.class);
         when(guard.dynamicToolAdmissionLookup.isUnsatisfied()).thenReturn(true);
@@ -110,7 +113,7 @@ class ToolInvocationGuardTest {
                 "s1", "coder", AutonomyLevel.FULL, "tool", Map.of(), List.of(pending), "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
-        verify(postPolicyToolRiskDispatcher).evaluate(any());
+        verify(postPolicyToolRiskDispatcher).evaluateResolution(any());
     }
 
     @Test
@@ -126,7 +129,7 @@ class ToolInvocationGuardTest {
         assertTrue(((ToolInvocationGuard.GuardDecision.Deduplicate) result)
                 .cachedObservation()
                 .contains("result 1"));
-        verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
+        verify(postPolicyToolRiskDispatcher, never()).evaluateResolution(any());
     }
 
     @Test
@@ -157,7 +160,7 @@ class ToolInvocationGuardTest {
                     List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
-            verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
+            verify(postPolicyToolRiskDispatcher, never()).evaluateResolution(any());
         });
     }
 
@@ -274,7 +277,7 @@ class ToolInvocationGuardTest {
                 "s1", "coordinator", AutonomyLevel.SUPERVISED, "tool", Map.of(), List.of(), "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
-        verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
+        verify(postPolicyToolRiskDispatcher, never()).evaluateResolution(any());
     }
 
     @Test

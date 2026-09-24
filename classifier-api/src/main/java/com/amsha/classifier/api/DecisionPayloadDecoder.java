@@ -441,14 +441,6 @@ public final class DecisionPayloadDecoder {
             double d = n.doubleValue();
             return Double.isFinite(d) ? d : null;
         }
-        if (obj instanceof String s) {
-            try {
-                double d = Double.parseDouble(s.trim());
-                return Double.isFinite(d) ? d : null;
-            } catch (NumberFormatException _) {
-                return null;
-            }
-        }
         return null;
     }
 

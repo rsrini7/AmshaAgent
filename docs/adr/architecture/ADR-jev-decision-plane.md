@@ -206,5 +206,24 @@ The deterministic in-process adapter and defensive transaction boundary have bee
 * **Contract Boundary & Absence Preservation**: Proved through real `DecisionEngine.evaluate(DecisionRequest)` tests that malformed responses, partial answers, wrong primitives, missing identifiers, and unknown references fail closed to `INFERENCE_ERROR`, and absent confidence/probabilities are preserved without invented certainty.
 * **Central Reflection Registration**: Registered `InMemoryDecisionEngine`, `InMemoryDecisionEngine.Builder`, `DecisionTransactionGuard`, and `TransactionViolationPolicy` centrally in `ClassifierApiReflectionConfig`.
 
-*Scope Deferred to Issue 03+*:
-Policy threshold integration, lifecycle leases, shadow evaluation, self-hosted and remote adapters, and routing pilot remain scoped to Issues 03–07. The master ADR status remains **Proposed**.
+### 7.3 Issue 03 Completed: Policy and Lifecycle (2026-09-23)
+
+Existing classifier lifecycle and deterministic policy machinery have been integrated with the decision contract without creating a second control model:
+
+* **Lifecycle and Control Reuse**: Reused existing `ClassifierShadowDispatcher`, `OptionalClassifierBeanResolver`, `OnnxClassifierRuntimeControl`, leases, readiness checks, disable-and-drain, and `NoOpinionReason`. No secondary enablement or registration plane was introduced.
+* **Deterministic Policy Modules**: Implemented `ToolRiskDecisionPolicy` with `ReviewBand` thresholds, `CandidateReductionPolicy` shortlist filtering and bounding, strictly monotonic risk escalation (`BLOCK > REQUIRE_APPROVAL > existing decision (ALLOW)`), and deterministic fallback on `NoOpinion` under `FAIL_OPEN` and `FAIL_CLOSED`.
+* **Authoritative Safety Boundaries Preserved**: Preserved `ToolInvocationGuard`, HITL boundaries, `PreflightState`, `LoopStuckDetector`, `AnswerQualityGuard`, single retry limits, and `FINISH` action handling as authoritative. A decision can escalate risk but can never downgrade an existing block or bypass human-in-the-loop approval.
+* **Option Validation & Payload-Free Diagnostics**: Enforced choice option validation in `InMemoryDecisionEngine` failing closed with payload-free fixed diagnostics (`"Choice label not in allowed options"`), preventing rejected choice labels or option sets from echoing into `NoOpinion.detail`.
+* **Bounded Low-Cardinality Telemetry**: Created `DecisionTelemetry` emitting strictly bounded, finite-cardinality metric tags (`action`, `escalated`, `fallback`, `outcome`), keeping arbitrary strings, decision IDs, rule IDs, and payloads off metrics counters.
+* **Uncertainty and Absence Policy**: In `ToolRiskDecisionPolicy`:
+  * Low-confidence restrictive labels (`BLOCK` or `REQUIRE_APPROVAL`) escalate to `REQUIRE_APPROVAL` with `escalated = true` under either fail mode. Clean `NoOpinion` and low-confidence non-restrictive labels preserve the configured `FAIL_OPEN` fallback; `FAIL_CLOSED` escalates those fallback cases to approval.
+  * Policy resolutions retain confidence as `OptionalDouble`; conversion through `toClassifierResult` never fabricates confidence. Restrictive actions without confidence required by the legacy classifier opinion contract are rejected at that compatibility boundary rather than silently dropped or assigned synthetic certainty. `QuestionKey` correlation remains identity-safe and type-checked.
+  * Clean absence preserves its `NoOpinionReason` and does not invent approval under `FAIL_OPEN`; approval is introduced only by `FAIL_CLOSED` fallback or the explicit low-confidence restrictive-label rule.
+  * Unrecognized `Choice` labels trigger fallback (`UNRECOGNIZED_CHOICE_LABEL`), failing closed under `FAIL_CLOSED` rather than silently allowing.
+  * Unmapped primitives (`Noul`, `Score`) trigger fallback (`UNMAPPED_PRIMITIVE`) rather than making ungrounded risk assumptions.
+  * Multi-question requests support exact target `QuestionKey<Choice>` correlation or monotonic composition.
+* **Production Dispatcher & Boundary Integration Tests**: Wired production `PostPolicyToolRiskDispatcher` to execute `ToolRiskDecisionPolicy.resolveCumulative` over its interceptor evaluations; added `ClassifierLifecyclePolicyBoundaryIT` verifying lifecycle paths, runtime controls, readiness checks, and lease draining; added `ToolInvocationGuardPostPolicyRiskTest` proving end-to-end production integration through `ToolInvocationGuard`, `PostPolicyToolRiskDispatcher`, `ToolRiskDecisionPolicy`, and `DecisionTelemetry`; and verified mandatory audit-before-mutation and internal role authorization in `OnnxAdminResourceTest`.
+* **Native Reflection Registration**: Registered `ToolRiskDecisionPolicy`, `PolicyResolution`, and `DecisionTelemetry` in `ClassifierApiReflectionConfig` and `CoreReflectionConfig`.
+
+*Scope Deferred to Issue 04+*:
+Shadow evaluation across baselines, self-hosted and remote adapters, and low-risk routing pilot remain scoped to Issues 04–07. The master ADR status remains **Proposed**.

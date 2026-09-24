@@ -551,4 +551,42 @@ class InMemoryDecisionEngineTest {
         builder.withAnswer(key, new Choice("x"));
         assertThrows(IllegalArgumentException.class, () -> builder.withAnswer(key, new Choice("y")));
     }
+
+    @Test
+    void staticAnswerWithDisallowedChoiceOptionFailsClosed() {
+        var reqBuilder = DecisionRequest.builder("choice.options.test", 1, "state");
+        QuestionKey<Choice> choiceKey = reqBuilder.registerChoice("c", "c", List.of("allow", "deny"));
+        DecisionRequest request = reqBuilder.build();
+
+        var engine = InMemoryDecisionEngine.builder()
+                .withAnswer(choiceKey, new Choice("invalid_option"))
+                .build();
+
+        DecisionResult result = engine.evaluate(request);
+        assertTrue(result.isNoOpinion());
+        assertEquals(
+                ClassifierResult.NoOpinionReason.INFERENCE_ERROR,
+                result.asNoOpinion().reason());
+        assertTrue(result.asNoOpinion().optionalDetail().orElse("").contains("not in allowed options"));
+    }
+
+    @Test
+    void configuredOpinionWithDisallowedChoiceOptionFailsClosed() {
+        var reqBuilder = DecisionRequest.builder("choice.options.opinion.test", 1, "state");
+        QuestionKey<Choice> choiceKey = reqBuilder.registerChoice("c", "c", List.of("allow", "deny"));
+        DecisionRequest request = reqBuilder.build();
+
+        var opinion = DecisionResult.opinionBuilder("choice.options.opinion.test", 1)
+                .put(choiceKey, new Choice("disallowed_action"))
+                .build();
+
+        var engine = InMemoryDecisionEngine.ofResult(opinion);
+
+        DecisionResult result = engine.evaluate(request);
+        assertTrue(result.isNoOpinion());
+        assertEquals(
+                ClassifierResult.NoOpinionReason.INFERENCE_ERROR,
+                result.asNoOpinion().reason());
+        assertTrue(result.asNoOpinion().optionalDetail().orElse("").contains("not in allowed options"));
+    }
 }

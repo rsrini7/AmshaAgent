@@ -179,6 +179,34 @@ class DecisionPlaneEvaluationTest {
     }
 
     @Test
+    void numericStringsAreRejectedForConfidenceFields() {
+        QuestionKey<Choice> choiceKey = QuestionKey.choice("c");
+        DecisionRequest request = DecisionRequest.builder("numeric.string", 1, "state")
+                .addQuestion(DecisionQuestion.choice(choiceKey, "choose", List.of("a", "b")))
+                .build();
+
+        DecisionResult result = DecisionPayloadDecoder.decode(
+                request, Map.of("answers", Map.of("c", Map.of("label", "a", "confidence", "0.9"))));
+
+        assertTrue(result.isNoOpinion());
+        assertEquals(
+                ClassifierResult.NoOpinionReason.INFERENCE_ERROR,
+                result.asNoOpinion().reason());
+    }
+
+    @Test
+    void opinionToStringDoesNotExposeAnswers() {
+        QuestionKey<Choice> key = QuestionKey.choice("sensitive");
+        DecisionResult.Opinion opinion = DecisionResult.opinionBuilder("safe.id", 1)
+                .put(key, new Choice("SECRET_ANSWER"))
+                .ruleId("test-rule")
+                .build();
+
+        assertFalse(opinion.toString().contains("SECRET_ANSWER"));
+        assertTrue(opinion.toString().contains("answerCount=1"));
+    }
+
+    @Test
     void malformedOptionalFieldsFailClosedToInferenceError() {
         var choiceKey = QuestionKey.choice("c");
         var scoreKey = QuestionKey.score("s");

@@ -1,7 +1,10 @@
 package com.amsha.core.agent.loop;
 
+import com.amsha.classifier.api.Choice;
 import com.amsha.classifier.api.ClassifierResult;
+import com.amsha.classifier.api.DecisionResult;
 import com.amsha.classifier.api.PostPolicyToolContext;
+import com.amsha.classifier.api.QuestionKey;
 import com.amsha.classifier.api.ToolRiskAction;
 
 /**
@@ -17,4 +20,18 @@ public interface PostPolicyToolRiskInterceptor {
 
     /** Evaluates one ephemeral context without retaining or externally transmitting its payload. */
     ClassifierResult<ToolRiskAction> evaluate(PostPolicyToolContext context);
+
+    /**
+     * Evaluates one ephemeral context producing a typed {@link DecisionResult}.
+     * The dispatcher treats this method as authoritative when overridden. Its default bridges from
+     * {@link #evaluate(PostPolicyToolContext)} for legacy implementations.
+     */
+    default DecisionResult evaluateDecision(PostPolicyToolContext context) {
+        ClassifierResult<ToolRiskAction> legacy = evaluate(context);
+        if (legacy == null) {
+            return null;
+        }
+        return DecisionResult.fromClassifierResult(
+                "tool.risk.post_policy", 1, QuestionKey.of("tool_risk", Choice.class), legacy);
+    }
 }

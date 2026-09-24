@@ -14,9 +14,8 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.classifier.api.PostPolicyToolContext;
-import com.amsha.classifier.api.ToolRiskAction;
+import com.amsha.classifier.api.ToolRiskDecisionPolicy;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
@@ -329,22 +328,20 @@ public class ToolInvocationGuard {
             ToolOperation operation) {
         if (postPolicyToolRiskDispatcher == null) return new GuardDecision.Allow();
         try {
-            ClassifierResult<ToolRiskAction> result = postPolicyToolRiskDispatcher.evaluate(new PostPolicyToolContext(
-                    agentRole,
-                    level,
-                    toolName,
-                    params == null ? Map.of() : params,
-                    goal,
-                    history != null && history.stream().anyMatch(ReasoningStepSupport::isToolCallStep)));
-            return switch (result) {
-                case ClassifierResult.Opinion<ToolRiskAction> opinion ->
-                    switch (opinion.value()) {
-                        case BLOCK -> new GuardDecision.Blocked("Tool call blocked by the post-policy risk gate.");
-                        case REQUIRE_APPROVAL ->
-                            new GuardDecision.PauseForApproval(new ApprovalFrame(
-                                    toolName, params == null ? Map.of() : params, operation.riskLevel()));
-                    };
-                case ClassifierResult.NoOpinion<ToolRiskAction> _ -> new GuardDecision.Allow();
+            ToolRiskDecisionPolicy.PolicyResolution result =
+                    postPolicyToolRiskDispatcher.evaluateResolution(new PostPolicyToolContext(
+                            agentRole,
+                            level,
+                            toolName,
+                            params == null ? Map.of() : params,
+                            goal,
+                            history != null && history.stream().anyMatch(ReasoningStepSupport::isToolCallStep)));
+            return switch (result.effectiveAction()) {
+                case BLOCK -> new GuardDecision.Blocked("Tool call blocked by the post-policy risk gate.");
+                case REQUIRE_APPROVAL ->
+                    new GuardDecision.PauseForApproval(
+                            new ApprovalFrame(toolName, params == null ? Map.of() : params, operation.riskLevel()));
+                case null -> new GuardDecision.Allow();
             };
         } catch (RuntimeException | LinkageError _) {
             return new GuardDecision.Allow();

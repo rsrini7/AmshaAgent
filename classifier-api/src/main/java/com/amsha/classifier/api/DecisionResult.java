@@ -136,6 +136,12 @@ public sealed interface DecisionResult permits DecisionResult.Opinion, DecisionR
             return get(key);
         }
 
+        @Override
+        public String toString() {
+            return "Opinion[decisionId=" + decisionId + ", schemaVersion=" + schemaVersion + ", answerCount="
+                    + answers.size() + "]";
+        }
+
         /**
          * Returns the single answer when exactly one question was evaluated.
          *
@@ -297,7 +303,7 @@ public sealed interface DecisionResult permits DecisionResult.Opinion, DecisionR
      * @param legacyResult legacy classifier result
      * @return equivalent DecisionResult
      */
-    static <T> DecisionResult fromClassifierResult(
+    public static <T> DecisionResult fromClassifierResult(
             String decisionId, int schemaVersion, QuestionKey<Choice> key, ClassifierResult<T> legacyResult) {
         Objects.requireNonNull(decisionId, "decisionId");
         Objects.requireNonNull(key, "key");

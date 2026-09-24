@@ -49,6 +49,7 @@ import com.amsha.core.api.dto.SessionStatusResponse;
 import com.amsha.core.audit.AuditOutcome;
 import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.classifier.DecisionTelemetry;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.governance.ApprovalFrame;
@@ -212,7 +213,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SpeechDeliveryService.class,
             ResumeCronNotificationDispatcher.class,
             ResumeToolInfoFormatter.class,
-            SafeSymbolMetadata.class
+            SafeSymbolMetadata.class,
+            DecisionTelemetry.class
         },
         classNames = {
             "com.amsha.core.agent.reasoning.AttachmentContentMapper",

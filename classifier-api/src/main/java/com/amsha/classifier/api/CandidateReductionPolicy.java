@@ -57,4 +57,26 @@ public record CandidateReductionPolicy(
         return new CandidateReductionPolicy(
                 "ALL_ADMISSIBLE", "No candidate reduction applied", DEFAULT_MAX_CANDIDATES, List.of());
     }
+
+    /**
+     * Filters candidate options according to the admissible candidate shortlist and maximum candidate count.
+     *
+     * @param candidates raw candidates to filter
+     * @return unmodifiable list of eligible candidates
+     */
+    public List<String> filter(List<String> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
+        List<String> filtered = new ArrayList<>();
+        for (String c : candidates) {
+            if (c != null && !c.isBlank() && (admissibleCandidates.isEmpty() || admissibleCandidates.contains(c))) {
+                filtered.add(c);
+                if (filtered.size() >= maxCandidates) {
+                    break;
+                }
+            }
+        }
+        return Collections.unmodifiableList(filtered);
+    }
 }

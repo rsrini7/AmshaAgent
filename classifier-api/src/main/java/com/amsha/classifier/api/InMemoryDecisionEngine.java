@@ -108,12 +108,30 @@ public final class InMemoryDecisionEngine implements InProcessDecisionEngine {
             for (DecisionQuestion<?> q : request.questions().values()) {
                 DecisionAnswer ans = staticAnswers.get(q.key());
                 if (ans == null) {
+                    for (Map.Entry<QuestionKey<?>, DecisionAnswer> entry : staticAnswers.entrySet()) {
+                        if (entry.getKey().owner() == null
+                                && entry.getKey().name().equals(q.key().name())
+                                && entry.getKey().answerType().equals(q.key().answerType())) {
+                            ans = entry.getValue();
+                            break;
+                        }
+                    }
+                }
+                if (ans == null) {
                     return DecisionResult.NoOpinion.ofMalformedResponse(
                             request.decisionId(),
                             request.schemaVersion(),
                             ruleId,
-                            "Missing static answer for question handle: '"
-                                    + q.key().name() + "'");
+                            "Missing static answer for question handle");
+                }
+                if (ans instanceof Choice choice
+                        && !q.options().isEmpty()
+                        && !q.options().contains(choice.label())) {
+                    return DecisionResult.NoOpinion.ofMalformedResponse(
+                            request.decisionId(),
+                            request.schemaVersion(),
+                            ruleId,
+                            "Choice label not in allowed options");
                 }
                 answersForReq.put(q.key(), ans);
             }
@@ -148,20 +166,12 @@ public final class InMemoryDecisionEngine implements InProcessDecisionEngine {
 
         if (!result.decisionId().equals(request.decisionId())) {
             return DecisionResult.NoOpinion.ofMalformedResponse(
-                    request.decisionId(),
-                    request.schemaVersion(),
-                    result.ruleId(),
-                    "Result decisionId mismatch: expected '" + request.decisionId() + "', got '" + result.decisionId()
-                            + "'");
+                    request.decisionId(), request.schemaVersion(), result.ruleId(), "Result decisionId mismatch");
         }
 
         if (result.schemaVersion() != request.schemaVersion()) {
             return DecisionResult.NoOpinion.ofMalformedResponse(
-                    request.decisionId(),
-                    request.schemaVersion(),
-                    result.ruleId(),
-                    "Result schemaVersion mismatch: expected " + request.schemaVersion() + ", got "
-                            + result.schemaVersion());
+                    request.decisionId(), request.schemaVersion(), result.ruleId(), "Result schemaVersion mismatch");
         }
 
         if (result instanceof DecisionResult.Opinion op) {
@@ -170,16 +180,26 @@ public final class InMemoryDecisionEngine implements InProcessDecisionEngine {
                         request.decisionId(),
                         request.schemaVersion(),
                         op.ruleId(),
-                        "Result answer count (" + op.answers().size() + ") does not match request question count ("
-                                + request.questions().size() + ")");
+                        "Result answer count does not match request question count");
             }
-            for (QuestionKey<?> answerKey : op.answers().keySet()) {
+            for (Map.Entry<QuestionKey<?>, DecisionAnswer> entry : op.answers().entrySet()) {
+                QuestionKey<?> answerKey = entry.getKey();
                 if (!request.contains(answerKey)) {
                     return DecisionResult.NoOpinion.ofMalformedResponse(
                             request.decisionId(),
                             request.schemaVersion(),
                             op.ruleId(),
-                            "Result contains foreign or unknown question handle: '" + answerKey + "'");
+                            "Result contains foreign or unknown question handle");
+                }
+                DecisionQuestion<?> question = request.questions().get(answerKey.name());
+                if (entry.getValue() instanceof Choice choice
+                        && !question.options().isEmpty()
+                        && !question.options().contains(choice.label())) {
+                    return DecisionResult.NoOpinion.ofMalformedResponse(
+                            request.decisionId(),
+                            request.schemaVersion(),
+                            op.ruleId(),
+                            "Choice label not in allowed options");
                 }
             }
         }
