@@ -90,6 +90,16 @@ mise run dist:validate-pg
 mise run dist:validate-fs
 ```
 
+Full validation runs a short LLM preflight against the first provider in
+`AMSHA_INFINITE_LOOP_LLM_PROVIDERS` before building, cleaning data, or starting
+the suite. It requests the provider's model-list endpoint only—no prompt or
+completion is sent. An unreachable/unhealthy endpoint stops the run early;
+`--fast` skips this check. For providers with a non-standard health endpoint,
+set `AMSHA_LLM_PREFLIGHT_URL` to that complete HTTP(S) URL. A 401/403 confirms
+network reachability only; the preflight does not verify credentials or model
+generation. Direct calls to `run_all_validations.sh` use the provider settings
+exported in that shell.
+
 To validate a server that is already running, set `TEST_BASE`. The wrapper
 will not start or stop another server, and a local native binary is not needed
 unless `--build` is also supplied:

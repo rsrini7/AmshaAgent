@@ -155,6 +155,21 @@ if [ "$FAST" = true ]; then
     RUN_MCP=true
 fi
 
+# Full and selected agent-backed suites need a working chat provider. This
+# endpoint-only probe sends no prompt and runs before any suite mutates state.
+if [ "$FAST" != true ] && {
+  [ "$RUN_ALL" = true ] || [ "$LLM" = true ] \
+    || [ "${RUN_REFLEX:-false}" = true ] || [ "${RUN_MCP:-false}" = true ] \
+    || [ "${RUN_MEMORY:-false}" = true ] \
+    || [ "${RUN_WEB:-false}" = true ] || [ "${RUN_ROLES:-false}" = true ] \
+    || [ "$RUN_DELEGATION" = true ] || [ "${RUN_CRON:-false}" = true ] \
+    || [ "${RUN_SELF_EVOLVE:-false}" = true ] || [ "${RUN_HITL:-false}" = true ] \
+    || [ "${RUN_RAG:-false}" = true ] || [ "${RUN_BUDGET:-false}" = true ] \
+    || [ "${RUN_DATA_COLLECTION:-false}" = true ];
+}; then
+  python3 "$SCRIPT_DIR/../../scripts/distribution/check_llm_preflight.py" || exit $?
+fi
+
 # ── Pre-flight check ──
 echo "═══════════════════════════════════════════"
 echo " AMSHA REST-HTTP VALIDATION SUITE"

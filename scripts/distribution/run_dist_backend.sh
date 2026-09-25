@@ -409,6 +409,12 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
+# Fail before native compilation or --clean when a full validation run cannot
+# reach the primary configured chat provider. Fast validators make no LLM calls.
+if [[ "$VALIDATE_MODE" == true && "$FAST_MODE" == false ]]; then
+  python3 "$PROJECT_ROOT/scripts/distribution/check_llm_preflight.py"
+fi
+
 if [[ "$CLEAN_REQUESTED" == true ]]; then
   clean_backend_state true
 fi

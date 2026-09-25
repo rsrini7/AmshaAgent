@@ -108,6 +108,28 @@ class DistributionWrapperContractTest(unittest.TestCase):
                 )
                 self.assertEqual(plan["clean"], "true")
 
+    def test_full_validation_preflight_runs_before_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data_dir = Path(directory) / "data"
+            data_dir.mkdir()
+            sentinel = data_dir / "preserve-me"
+            sentinel.write_text("untouched", encoding="utf-8")
+
+            result = self.run_wrapper(
+                "sqlite",
+                "--validate",
+                "--full",
+                "--clean",
+                extra_env={
+                    "AMSHA_DATA_DIR": str(data_dir),
+                    "AMSHA_LLM_PREFLIGHT_URL": "http://127.0.0.1:1/models",
+                },
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("LLM preflight", result.stderr)
+            self.assertTrue(sentinel.exists(), "preflight failure must happen before --clean")
+
     def test_safe_env_loader_does_not_execute_values(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             marker = Path(directory) / "should-not-exist"
