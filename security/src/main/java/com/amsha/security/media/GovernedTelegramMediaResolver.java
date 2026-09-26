@@ -25,10 +25,10 @@ import com.amsha.channel.api.MediaAttachment;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.scope.ContextAwareExecutorService;
 import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.http.GovernedHttpClient;
 import com.amsha.security.api.DownloadedMedia;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
-import com.amsha.security.http.GovernedHttpClient;
 import com.amsha.security.http.OutboundHttpException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -417,7 +417,7 @@ class GovernedTelegramMediaResolver {
         if (ex == null) return null;
         String msg = scrubString(ex.getMessage(), token);
         Throwable cause = ex.getCause() != null ? scrubTokenException(ex.getCause(), token) : null;
-        RuntimeException scrubbed = ex instanceof OutboundHttpException ohe
+        RuntimeException scrubbed = ex instanceof com.amsha.core.security.http.OutboundHttpException ohe
                 ? new OutboundHttpException(ohe.category(), msg, cause)
                 : new RuntimeException(msg, cause);
         for (Throwable suppressed : ex.getSuppressed()) {

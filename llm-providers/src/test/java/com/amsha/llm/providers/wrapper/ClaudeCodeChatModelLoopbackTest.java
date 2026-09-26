@@ -60,7 +60,7 @@ class ClaudeCodeChatModelLoopbackTest {
     ClaudeCodeProviderFactory routingFactory;
 
     @Inject
-    com.amsha.llm.providers.reasoning.ClaudeCodeProviderFactory reasoningFactory; // fully qualified to disambiguate
+    com.amsha.llm.providers.reasoning.ClaudeCodeProviderFactory reasoningFactory;
 
     private HttpServer server;
     private int port;

@@ -23,10 +23,13 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.mcp.tool.DynamicToolCapabilityRegistry;
 import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.ApprovalReceiptIssuer;
 import com.amsha.security.http.OutboundApprovalReceipt;
@@ -355,6 +358,23 @@ class McpClientServiceTest {
                                 "phase",
                                 "connect_exception")
                         .count());
+    }
+
+    @Test
+    void testOutboundPolicyDenialWrapsToMcpConnectionException() {
+        OutboundHttpPolicyService policyService = mock(OutboundHttpPolicyService.class);
+        when(policyService.evaluate(anyString(), any(), any(), any(), any(boolean.class)))
+                .thenReturn(
+                        OutboundPolicyDecision.deny("Test egress policy block", OutboundPurpose.MCP_CONNECT, "system"));
+        service.outboundPolicyService = policyService;
+        service.init();
+
+        McpConnectionException ex = assertThrows(
+                McpConnectionException.class,
+                () -> service.connect("blocked-server", "https://blocked.example.com/mcp"));
+        assertTrue(ex.getMessage().contains("rejected: POLICY_DENIED"));
+        assertNotNull(ex.getCause());
+        assertInstanceOf(OutboundHttpException.class, ex.getCause());
     }
 
     private static McpConnectionHeaderSecretRefDto headerRef(

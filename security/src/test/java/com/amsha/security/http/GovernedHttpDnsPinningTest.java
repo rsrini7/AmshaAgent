@@ -9,6 +9,8 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 
 import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;

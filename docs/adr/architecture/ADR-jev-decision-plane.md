@@ -284,5 +284,53 @@ Self-hosted decision engines (such as local Laya/Kev processes) have been evalua
 * **Activation Gate Strictly Pending**: Wire compatibility does not trigger active activation; provider remains disabled by default (`enabled = false`) and candidate model activation gates remain **strictly PENDING**.
 * **Central Native Reflection Registration**: Registered `StateProjectionPolicy` in `ClassifierApiReflectionConfig`; registered `SelfHostedDecisionEngine`, `SelfHostedEndpointValidator`, `SelfHostedProviderConfig`, `SelfHostedProviderConfig.Builder`, and `StateProjectionRedactor` in `CoreReflectionConfig`.
 
-*Scope Deferred to Issue 06+*:
-Remote provider boundary and outbound controls (Issue 06) and the low-risk routing pilot and final closeout (Issue 07) remain pending. The master ADR status remains **Proposed**.
+### 7.6 Issue 06 Completed: Remote Provider Boundary and Outbound Network Governance (2026-09-26)
+
+Remote decision engines have been modeled as an explicit external provider category (`ProviderCategory.REMOTE`) with strict outbound network governance, TLS enforcement, allow-listed projection, and non-blocking event loop protection:
+
+* **Placement & Classifier SPI Boundary**:
+  * Implemented `RemoteDecisionEngine` declaring `ProviderCategory.REMOTE` and implementing `RemoteDecisionProvider`, `DecisionEngine`, and `AutoCloseable`.
+  * `ProviderPlacementValidator` strictly throws `SecurityException` if any attempt is made to place `RemoteDecisionEngine` behind synchronous, network-free classifier SPIs (`PostPolicyToolRiskInterceptor`, `AnswerQualityInterceptor`, or shadow classifier SPIs).
+* **Outbound Policy & HITL Self-Authorization Prevention**:
+  * A remote decision cannot authorize its own outbound network call.
+  * Injected `OutboundHttpPolicyService` validates target egress under `OutboundPurpose.PROVIDER_API_CALL`.
+  * When outbound policy denies egress, evaluation fails closed to `NoOpinion(INFERENCE_ERROR)` with payload-free diagnostic `"Outbound policy denied egress for remote decision provider"`.
+  * When outbound policy requires HITL approval, evaluation returns `NoOpinion(OVERLOAD_REJECTED)` with `"Outbound policy requires HITL approval; remote evaluation cannot self-authorize"`.
+* **Canonical Governed HTTP Transport & SSRF Validation**:
+  * Outbound HTTP transport routes exclusively through `GovernedHttpClient`, eliminating duplicate unmediated `HttpClient` paths.
+  * Enforces trusted-proxy socket pinning, pre-connect destination DNS validation, and address safety checks via `GovernedHttpDnsPinning`.
+  * Integrates `SecretVault` for proxy credentials (`Authenticator`) and custom-CA TLS trust (`SSLContext`), failing closed when vault or references are unresolvable.
+  * `RemoteEndpointValidator` requires HTTPS for all non-loopback endpoints, rejecting unencrypted HTTP.
+  * Loopback addresses (`127.0.0.1`, `localhost`, `::1`) are permitted with HTTP strictly for local stub testing.
+  * Wildcard addresses (`0.0.0.0`, `::`) and URIs containing userinfo (`user:password@`) are strictly rejected.
+  * Reuses canonical `OutboundHttpPolicyService.isBlockedLiteralAddress(host)` to reject private, link-local, site-local, and cloud metadata IP literals.
+* **Strictly Single-Shot Evaluation (No Retries)**:
+  * Remote evaluations enforce a strictly single-shot execution policy with zero retries.
+  * Transient failures (HTTP 503, HTTP 429), server errors (HTTP 500), and client timeouts fail fast directly to deterministic `NoOpinion(OVERLOAD_REJECTED)` / `NoOpinion(TIMEOUT)` without resending.
+  * Prevents request amplification, upstream backpressure compounding, and thread starvation under degraded provider conditions.
+* **Non-Blocking Thread Guard & Transaction Guard**:
+  * Enforces the non-blocking thread guard via `Context.isOnEventLoopThread()`; evaluations executed on Vert.x event loops fail fast to `NoOpinion(OVERLOAD_REJECTED)` with `"Remote decision evaluation must not execute on Vert.x event-loop thread"`.
+  * Enforces the §5.9 defensive transaction boundary via `DecisionTransactionGuard`; evaluations inside active JTA write transactions fail fast to `NoOpinion(OVERLOAD_REJECTED)`.
+* **Allow-Listed State Projection & Redaction**:
+  * Reuses `StateProjectionRedactor` and `StateProjectionPolicy`: excluded fields are dropped before serialization, and `RedactionPolicy` strips secrets and PII with `[REDACTED]`.
+  * Missing, null, or empty allow-list projection policy fails closed immediately without inventing allow-lists from question IDs.
+  * Contract tests prove that excluded debug keys, internal session tokens, and passwords do not reach the wire.
+* **Credential Hygiene & Error Mapping**:
+  * `RemoteProviderConfig.toString()` redacts `apiKey` (emits `hasApiKey=true/false`).
+  * Outbound `Authorization: Bearer <token>` header is added without credential leakage in logs or exceptions.
+  * Wire responses decoded via `DecisionPayloadDecoder` for `Choice`, `Score`, and `Noul`.
+  * Status code mapping: 401/403 to `NoOpinion(INFERENCE_ERROR)`; 404 to `NoOpinion(MISSING_MODEL)`; 408 to `NoOpinion(TIMEOUT)`; 429/503 to `NoOpinion(OVERLOAD_REJECTED)`; and 502/504 to `NoOpinion(MISSING_MODEL)`.
+  * Transport errors (`ConnectException`, `IOException`) and client timeouts (`HttpTimeoutException`) map to payload-free `NoOpinion` results.
+* **Data Governance & Provider Behavior**:
+  * State Location: `REMOTE_HOSTED` (explicitly declared in config).
+  * Retention: `EPHEMERAL_DISCARD` (provider training strictly forbidden; `allowTrainingUse=true` rejected at config creation).
+  * Tenant Isolation: Required (`tenantIsolation=true` enforced at config creation).
+  * Shutdown: Sets `closed = true`, drains active requests up to 2 seconds, and fails subsequent evaluations with `NoOpinion(DISABLED)`; injected client lifecycle remains with its creator.
+* **Activation Gate Strictly Pending**:
+  * Provider remains disabled by default (`enabled = false`) and is not wired into active routing.
+  * Candidate model activation gates remain **strictly PENDING** until evaluated in Issue 07.
+* **Central Native Reflection Registration**:
+  * Registered `RemoteDecisionEngine`, `RemoteEndpointValidator`, `RemoteProviderConfig`, and `RemoteProviderConfig.Builder` centrally in `CoreReflectionConfig`.
+
+*Scope Deferred to Issue 07*:
+The low-risk routing pilot and final closeout (Issue 07) remain pending. The master ADR status remains **Proposed**.

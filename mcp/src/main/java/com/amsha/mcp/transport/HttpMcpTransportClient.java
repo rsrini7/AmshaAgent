@@ -14,11 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
-import com.amsha.security.http.GovernedHttpClient;
-import com.amsha.security.http.OutboundHttpException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;

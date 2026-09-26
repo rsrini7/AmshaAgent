@@ -53,6 +53,9 @@ import com.amsha.core.classifier.DecisionAnswerQualityShadowClassifier;
 import com.amsha.core.classifier.DecisionIntentShadowClassifier;
 import com.amsha.core.classifier.DecisionTelemetry;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
+import com.amsha.core.classifier.remote.RemoteDecisionEngine;
+import com.amsha.core.classifier.remote.RemoteEndpointValidator;
+import com.amsha.core.classifier.remote.RemoteProviderConfig;
 import com.amsha.core.classifier.selfhosted.SelfHostedDecisionEngine;
 import com.amsha.core.classifier.selfhosted.SelfHostedEndpointValidator;
 import com.amsha.core.classifier.selfhosted.SelfHostedProviderConfig;
@@ -88,6 +91,8 @@ import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.CredentialDetectionResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
@@ -229,7 +234,14 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SelfHostedEndpointValidator.class,
             SelfHostedProviderConfig.class,
             SelfHostedProviderConfig.Builder.class,
-            StateProjectionRedactor.class
+            StateProjectionRedactor.class,
+            RemoteDecisionEngine.class,
+            RemoteEndpointValidator.class,
+            RemoteProviderConfig.class,
+            RemoteProviderConfig.Builder.class,
+            GovernedHttpClient.class,
+            OutboundHttpException.class,
+            OutboundHttpException.Category.class
         },
         classNames = {
             "com.amsha.core.agent.reasoning.AttachmentContentMapper",
@@ -255,6 +267,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$SystemMessageMixin",
             "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ToolExecutionResultMessageMixin",
             "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$CustomMessageMixin",
-            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ToolExecutionRequestMixin"
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ToolExecutionRequestMixin",
+            "com.amsha.core.classifier.remote.RemoteDecisionWireCodec",
+            "com.amsha.core.security.http.GovernedHttpSecuritySupport"
         })
 public class CoreReflectionConfig {}
