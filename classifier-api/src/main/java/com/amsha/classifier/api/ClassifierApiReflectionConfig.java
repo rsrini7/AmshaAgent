@@ -37,6 +37,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             DecisionMetadata.class,
             ProviderCategory.class,
             RedactionPolicy.class,
+            StateProjectionPolicy.class,
             RetentionPolicy.class,
             CandidateReductionPolicy.class,
             ReviewBand.class,

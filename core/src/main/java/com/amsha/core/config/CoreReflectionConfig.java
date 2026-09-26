@@ -53,6 +53,10 @@ import com.amsha.core.classifier.DecisionAnswerQualityShadowClassifier;
 import com.amsha.core.classifier.DecisionIntentShadowClassifier;
 import com.amsha.core.classifier.DecisionTelemetry;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
+import com.amsha.core.classifier.selfhosted.SelfHostedDecisionEngine;
+import com.amsha.core.classifier.selfhosted.SelfHostedEndpointValidator;
+import com.amsha.core.classifier.selfhosted.SelfHostedProviderConfig;
+import com.amsha.core.classifier.selfhosted.StateProjectionRedactor;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.governance.ApprovalFrame;
@@ -220,7 +224,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             DecisionTelemetry.class,
             DecisionIntentShadowClassifier.class,
             DecisionToolRiskShadowClassifier.class,
-            DecisionAnswerQualityShadowClassifier.class
+            DecisionAnswerQualityShadowClassifier.class,
+            SelfHostedDecisionEngine.class,
+            SelfHostedEndpointValidator.class,
+            SelfHostedProviderConfig.class,
+            SelfHostedProviderConfig.Builder.class,
+            StateProjectionRedactor.class
         },
         classNames = {
             "com.amsha.core.agent.reasoning.AttachmentContentMapper",

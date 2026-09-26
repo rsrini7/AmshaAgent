@@ -251,5 +251,38 @@ Observational shadow evaluation has been implemented and verified across current
 * **Calibration Proxy & Abstention Semantics**: Safe abstention (`NoOpinion`) on contradictory or adversarial criteria is recognized as preferable to high-confidence false allow. Expected abstentions are credited correctly in accuracy evaluation. Reported calibration gap is documented as an illustrative coarse proxy, not a robust calibration assessment. Vendor benchmarks are explicitly rejected as Amsha production evidence.
 * **Central Native Reflection Registration**: Registered `DecisionIntentShadowClassifier`, `DecisionToolRiskShadowClassifier`, and `DecisionAnswerQualityShadowClassifier` centrally in `CoreReflectionConfig`.
 
-*Scope Deferred to Issue 05+*:
-Self-hosted provider isolation (Issue 05), remote provider boundary and outbound controls (Issue 06), and the low-risk routing pilot and final closeout (Issue 07) remain pending. The master ADR status remains **Proposed**.
+### 7.5 Issue 05 Completed: Self-Hosted Wire-Compatible Provider Evaluation (2026-09-25)
+
+The self-hosted HTTP engine accepts only non-blank JSON-object state and must be called from a worker or virtual thread, never a Vert.x event-loop thread, because evaluation uses blocking HTTP. The projection allow-list names top-level fields; allowing a nested object includes its entire subtree except values removed or masked by `RedactionPolicy`, so each configured subtree requires explicit review. Endpoint user information is rejected, and blank state fails closed before any request is sent. `StateProjectionRedactor` is a separate boundary control from `TraceRedactor` and `PiiScanReflex`; keep their sensitive-data coverage aligned when those rules change.
+
+Self-hosted decision engines (such as local Laya/Kev processes) have been evaluated as a distinct provider category with strict loopback isolation, allow-listed projection, and contract verification:
+
+* **Placement & Classifier SPI Boundary**:
+  * Embedded implementations may implement `InProcessDecisionEngine` with `ProviderCategory.IN_PROCESS` only if strictly synchronous and network-free.
+  * Separate-process implementations are modeled explicitly as `SelfHostedDecisionEngine` implementing `DecisionEngine` and `SelfHostedDecisionProvider`, declaring `ProviderCategory.SELF_HOSTED`.
+  * `ProviderPlacementValidator` strictly prevents `SelfHostedDecisionProvider` implementations from satisfying synchronous, network-free classifier SPIs (`SecurityException`).
+* **Local-Only Loopback Binding Invariant**:
+  * `SelfHostedEndpointValidator` requires endpoint URIs to bind strictly to IPv4 `127.0.0.1`.
+  * Wildcard exposure (`0.0.0.0`), `localhost` (DNS rebinding risk), non-loopback IPs, and external domains fail closed at startup with `SecurityException`.
+* **Allow-listed State Projection & RedactionPolicy**:
+  * Added `StateProjectionPolicy` in `classifier-api` and `StateProjectionRedactor` in `core`.
+  * Before any state is serialized across the loopback HTTP boundary, allow-listed state projection drops all unapproved fields, and `RedactionPolicy` strips secrets (Bearer tokens, API keys, passwords, credentials), PII (emails, SSNs, phone numbers), and explicitly masked fields.
+  * Missing, null, or invalid `RedactionPolicy` or empty allow-list fails closed immediately.
+  * Local HTTP contract tests prove excluded fields, unapproved debug keys, and raw secrets are absent from outbound HTTP request bodies, logs, and evidence.
+* **Wire Protocol & Defensive Mapping**:
+  * Verified wire compatibility for `Choice`, `Score`, and `Noul` responses with latency and token metadata via `DecisionPayloadDecoder`.
+  * Malformed JSON, partial answers (missing question keys in multi-question requests), unknown question handles, wrong primitives, and HTTP 400 fail closed to `NoOpinion(INFERENCE_ERROR)`.
+  * HTTP 503/429 maps to `NoOpinion(OVERLOAD_REJECTED)`, HTTP 408/client timeout maps to `NoOpinion(TIMEOUT)`, process failure / connection refused maps to `NoOpinion(MISSING_MODEL)`, and disabled provider returns `NoOpinion(DISABLED)`.
+* **Defensive Transaction Boundary**: Verified that `SelfHostedDecisionEngine` rejects evaluation when called inside an active JTA transaction via `DecisionTransactionGuard`, preventing external HTTP I/O inside `@Transactional` writes (§5.9).
+* **Data Governance & Provider Behavior**:
+  * State Location: `LOCAL_LOOPBACK_ONLY` (`127.0.0.1` unexposed to external networks).
+  * Authentication: Loopback token supported (`X-Amsha-Loopback-Token`).
+  * Retention: `EPHEMERAL_DISCARD_ON_EVALUATION` (local ephemeral memory only, zero disk retention).
+  * Training Use: `FORBIDDEN` (strictly zero training use).
+  * Tenant Isolation: `LOCAL_PROCESS_ISOLATION` (process-bound loopback boundary).
+  * Shutdown: Sets `closed = true`, drains active requests, and fails subsequent evaluations with `NoOpinion(DISABLED)`; injected client lifecycle remains with its creator.
+* **Activation Gate Strictly Pending**: Wire compatibility does not trigger active activation; provider remains disabled by default (`enabled = false`) and candidate model activation gates remain **strictly PENDING**.
+* **Central Native Reflection Registration**: Registered `StateProjectionPolicy` in `ClassifierApiReflectionConfig`; registered `SelfHostedDecisionEngine`, `SelfHostedEndpointValidator`, `SelfHostedProviderConfig`, `SelfHostedProviderConfig.Builder`, and `StateProjectionRedactor` in `CoreReflectionConfig`.
+
+*Scope Deferred to Issue 06+*:
+Remote provider boundary and outbound controls (Issue 06) and the low-risk routing pilot and final closeout (Issue 07) remain pending. The master ADR status remains **Proposed**.
