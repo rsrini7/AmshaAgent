@@ -243,6 +243,13 @@ Observational-only shadow evaluation for intent routing, tool risk, and answer q
 | `amsha.decision.shadow.intent.enabled` | `AMSHA_DECISION_SHADOW_INTENT_ENABLED` | `false` | Enables shadow intent classification using `DecisionEngine`. |
 | `amsha.decision.shadow.tool-risk.enabled` | `AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED` | `false` | Enables shadow tool risk evaluation using `DecisionEngine`. |
 | `amsha.decision.shadow.answer-quality.enabled` | `AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED` | `false` | Enables shadow answer quality evaluation using `DecisionEngine`. |
+| `amsha.routing.intent-decision-router.enabled` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED` | `false` | Enables low-risk typed intent decision pilot router (Issue 07). |
+| `amsha.routing.intent-decision-router.review-band.low` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW` | `0.50` | Lower threshold for intent review band (below which judgment falls back to deterministic default). |
+| `amsha.routing.intent-decision-router.review-band.high` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH` | `0.85` | Upper threshold for intent review band (at or above which direct routing applies). |
+| `amsha.routing.intent-decision-router.timeout-ms` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS` | `500` | Per-evaluation deadline in milliseconds for the intent decision router. |
+| `amsha.routing.intent-decision-router.activation-gate.candidate-evidence-approved` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED` | `false` | Activation gate: whether candidate model calibration on live traffic is formally approved. |
+| `amsha.routing.intent-decision-router.activation-gate.cost-ceiling-approved` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED` | `false` | Activation gate: whether target cost ceiling and latency budget are formally approved. |
+| `amsha.routing.intent-decision-router.activation-gate.rollout-owner` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | `""` | Activation gate: designated accountable rollout and rollback owner for the pilot. |
 
 ## Multimodal Message Mapping & Capability Resolution
 

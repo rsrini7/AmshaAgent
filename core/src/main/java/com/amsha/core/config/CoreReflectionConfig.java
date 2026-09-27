@@ -69,6 +69,7 @@ import com.amsha.core.observability.ChatModelListenerRuntimeControl;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.CapabilityJsonParser;
 import com.amsha.core.routing.InfiniteLoopChatModel;
+import com.amsha.core.routing.IntentDecisionRouter;
 import com.amsha.core.routing.LazyChatModel;
 import com.amsha.core.routing.ModalityRouteSeeder;
 import com.amsha.core.routing.ModelCacheInvalidator;
@@ -241,7 +242,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RemoteProviderConfig.Builder.class,
             GovernedHttpClient.class,
             OutboundHttpException.class,
-            OutboundHttpException.Category.class
+            OutboundHttpException.Category.class,
+            IntentDecisionRouter.class
         },
         classNames = {
             "com.amsha.core.agent.reasoning.AttachmentContentMapper",

@@ -1,6 +1,6 @@
 # ADR: Jev Decision Plane for Typed Agent Judgments
 
-- **Status**: Proposed
+- **Status**: Deferred
 - **Date**: 2026-09-22
 - **Decision Owners**: Amsha Architecture Committee
 - **Related Invariants**: `docs/Architecture_Invariants.md` §4.12, §7 parallel tool execution, §7.13.2–7.13.4; `AGENTS.md` §1.18, §8
@@ -332,5 +332,34 @@ Remote decision engines have been modeled as an explicit external provider categ
 * **Central Native Reflection Registration**:
   * Registered `RemoteDecisionEngine`, `RemoteEndpointValidator`, `RemoteProviderConfig`, and `RemoteProviderConfig.Builder` centrally in `CoreReflectionConfig`.
 
-*Scope Deferred to Issue 07*:
-The low-risk routing pilot and final closeout (Issue 07) remain pending. The master ADR status remains **Proposed**.
+### 7.7 Issue 07 Completed: Intent Decision Pilot Scaffolding and Decision Closeout (2026-09-27)
+
+Issue 07 evaluates activation gates for the low-risk ambiguous intent routing pilot and establishes the final architectural decision:
+
+* **Pre-Activation Gate Evaluation & Evidence Disposition**:
+  * **Empirical Candidate Calibration**: Missing. Issue 04 measured only the existing deterministic baseline across 30 curated test cases; candidate models were illustrative simulations explicitly flagged as `N/A (Synthetic)`. Issues 05 and 06 established wire/SSRF contracts against local stubs. No candidate model has been empirically calibrated against live production intent traffic, false specialist route distributions, or prompt drift.
+  * **Empirical Abstention & False-Allow Rates**: Unmeasured on representative production inputs.
+  * **Target Latency & Cost Ceilings**: No formal per-query cost ceiling or p95 SLA has been authorized by the Amsha Architecture Committee.
+  * **Rollout Ownership**: Unassigned.
+  * **Gate Disposition**: In accordance with the pre-activation gate policy, active candidate routing is **NOT ACTIVATED**. The active pilot is recorded as **Deferred**.
+* **Pilot Scaffolding & Zero-Migration Rollback**:
+  * Implemented `IntentDecisionAction` (`DIRECT_ROUTE`, `SECONDARY_REVIEW`, `DETERMINISTIC_FALLBACK`), `IntentPolicyResolution`, and `IntentDecisionPolicy` in `amsha-classifier-api`.
+  * **Result Identity Verification**: `IntentDecisionPolicy.resolve()` strictly validates that `decisionId` and `schemaVersion` match the expected intent request (`amsha.routing.intent.v1`, version 1). Foreign or mismatched results are rejected to deterministic fallback (`"DECISION_ID_MISMATCH"` / `"SCHEMA_VERSION_MISMATCH"`) before using any answer.
+  * Implemented `IntentDecisionRouter` in `amsha-core`, wired into `IntentDetectorService`.
+  * Preserved deterministic continuity, retry commands (`__CONTINUE__`), and SPI fast-path triggers ahead of the router; fast paths execute with zero router latency or overhead.
+  * **Enforced Activation Gate**: For this deferred pilot, setting `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` alone does NOT permit direct routing. Both `IntentDecisionRouter` and `IntentDetectorService` enforce `isActivationGateApproved()` and `isDirectRoutingPermitted()`, requiring `candidate-evidence-approved=true`, `cost-ceiling-approved=true`, and non-empty `rollout-owner`. Until all three exist, direct routing is programmatically blocked and requests fall through to the authoritative LLM / deterministic fallback with `"ACTIVATION_GATE_NOT_SATISFIED"`.
+  * When activation gate approvals are demonstrated, router enforces the three-way policy: high-confidence branch above `reviewBandHigh` (default 0.85) yields `DIRECT_ROUTE`; middle review band between `reviewBandLow` (0.50) and `reviewBandHigh` yields `SECONDARY_REVIEW` for escalation; confidence below `reviewBandLow` yields `DETERMINISTIC_FALLBACK`.
+  * Destructive vocabulary filtering strictly overrides any direct specialist route, ensuring destructive commands remain contained by the Coordinator.
+  * Controlled by configuration kill switch `amsha.routing.intent-decision-router.enabled=false` (default `false`). When disabled, `IntentDetectorService` executes the current baseline path immediately with zero data migration or schema mutation.
+* **Tool-Risk and Answer-Quality Rollout**:
+  * Active rollout of external decision engines for `ToolInvocationGuard` or `AnswerQualityDispatcher` remains strictly **DISABLED**.
+  * Preflight state, loop stuck detection, `ToolInvocationGuard`, HITL requirements (`NETWORK_OUTBOUND`, `EXECUTE_SHELL`), authorization, and side-effect policies remain completely untouched.
+* **Rollback Procedure**:
+  * Set `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=false` in environment or `amsha.routing.intent-decision-router.enabled=false` in application configuration.
+  * No database migration, session flush, or restart-dependent state cleanup is required.
+* **Unresolved Risks & Required Next Evidence**:
+  1. *Model Drift & Hallucinated Routing*: Candidate models must demonstrate < 1% false specialist routing on ambiguous prompts without degrading coordinator oversight.
+  2. *Cost & Token Budgets*: Committee-approved cost ceilings per 1,000 decisions and measurable latency p95 < 50ms must be established before re-opening the pilot.
+  3. *Accountable Owner*: An accountable rollout and rollback owner must be designated by the Amsha Architecture Committee.
+* **Final ADR Disposition**:
+  The ADR status is set to **Deferred**. The foundational interfaces (`DecisionEngine`, `DecisionRequest`, `DecisionResult`), local self-hosted boundary (Issue 05), remote governed boundary (Issue 06), and routing pilot scaffolding (Issue 07) remain preserved in the codebase in dormant/shadow state for future evaluation when candidate model evidence is established.

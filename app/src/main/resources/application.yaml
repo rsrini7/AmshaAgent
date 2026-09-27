@@ -845,6 +845,16 @@ amsha:
       ollama-fallback:
         enabled: ${AMSHA_INTENT_CLASSIFIER_OLLAMA_FALLBACK_ENABLED:false}
       sla-warn-ms: 2000
+    intent-decision-router:
+      enabled: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED:false}
+      review-band:
+        low: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW:0.50}
+        high: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH:0.85}
+      timeout-ms: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS:500}
+      activation-gate:
+        candidate-evidence-approved: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED:false}
+        cost-ceiling-approved: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED:false}
+        rollout-owner: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER:}
   memory:
     compaction:
       enabled: true

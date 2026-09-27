@@ -21,8 +21,11 @@ import jakarta.enterprise.inject.Instance;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.stream.Stream;
 
+import com.amsha.classifier.api.IntentPolicyResolution;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.persona.AgentRoleRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -58,6 +61,9 @@ class IntentDetectorServiceUnitTest {
     @Mock
     Instance<IntentRoutingProvider> providers;
 
+    @Mock
+    IntentDecisionRouter intentDecisionRouter;
+
     @InjectMocks
     IntentDetectorService service;
 
@@ -84,6 +90,7 @@ class IntentDetectorServiceUnitTest {
                 .execute(any(Runnable.class));
         setField(service, "managedExecutor", directExecutor);
         setField(service, "objectMapper", new ObjectMapper());
+        lenient().when(intentDecisionRouter.isEnabled()).thenReturn(false);
     }
 
     @Test
@@ -223,6 +230,153 @@ class IntentDetectorServiceUnitTest {
 
         String result = service.classify("find docs");
         assertEquals("researcher", result);
+    }
+
+    @Test
+    void fastPath_bypassesDecisionRouterEvenWhenEnabled() {
+        lenient().when(intentDecisionRouter.isEnabled()).thenReturn(true);
+        when(intentDetector.isRetryCommand("retry")).thenReturn(true);
+
+        assertEquals("__CONTINUE__", service.classify("retry"));
+        verify(intentDecisionRouter, times(0)).evaluateIntent(any(), any());
+    }
+
+    @Test
+    void pilotEnabled_directRoute_routesDirectlyToSpecialist() {
+        when(intentDecisionRouter.isEnabled()).thenReturn(true);
+        when(intentDecisionRouter.isDirectRoutingPermitted()).thenReturn(true);
+        IntentPolicyResolution resolution =
+                IntentPolicyResolution.direct("coder", 0.95, "amsha.routing.intent.v1", 1, "HIGH_CONFIDENCE_ROUTE");
+        when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
+        when(destructiveFilter.filter("coder", "write a java class")).thenReturn("coder");
+
+        String result = service.classify("write a java class");
+        assertEquals("coder", result);
+    }
+
+    @Test
+    void pilotEnabled_directRoute_destructiveFilterStillOverrides() {
+        when(intentDecisionRouter.isEnabled()).thenReturn(true);
+        when(intentDecisionRouter.isDirectRoutingPermitted()).thenReturn(true);
+        IntentPolicyResolution resolution = IntentPolicyResolution.direct(
+                "researcher", 0.92, "amsha.routing.intent.v1", 1, "HIGH_CONFIDENCE_ROUTE");
+        when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
+        when(destructiveFilter.filter("researcher", "delete database and search docs"))
+                .thenReturn("coordinator");
+
+        String result = service.classify("delete database and search docs");
+        assertEquals("coordinator", result);
+    }
+
+    @Test
+    void pilotEnabled_activationGatePending_blocksDirectRoutingAndFallsThrough() {
+        when(intentDecisionRouter.isEnabled()).thenReturn(true);
+        when(intentDecisionRouter.isDirectRoutingPermitted()).thenReturn(false);
+        IntentPolicyResolution resolution =
+                IntentPolicyResolution.direct("coder", 0.95, "amsha.routing.intent.v1", 1, "HIGH_CONFIDENCE_ROUTE");
+        when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
+
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(destructiveFilter.filter(anyString(), anyString())).thenAnswer(inv -> inv.getArgument(0));
+
+        ChatResponse resp = ChatResponse.builder()
+                .aiMessage(AiMessage.from("{\"role\": \"researcher\"}"))
+                .build();
+        when(capableModel.chat(any(ChatRequest.class))).thenReturn(resp);
+
+        Instance<StructuredOutputMode> modeInstance = mock(Instance.class);
+        when(modeInstance.isUnsatisfied()).thenReturn(false);
+        when(modeInstance.get()).thenReturn(StructuredOutputMode.NATIVE);
+
+        setField(service, "classifierModel", capableModel);
+        setField(service, "structuredOutputModeInstance", modeInstance);
+
+        String result = service.classify("write a java class");
+        // Direct route to "coder" was blocked by activation gate, falls through to authoritative model
+        assertEquals("researcher", result);
+    }
+
+    @Test
+    void pilotEnabled_secondaryReview_fallsThroughToAuthoritativeModel() {
+        when(intentDecisionRouter.isEnabled()).thenReturn(true);
+        IntentPolicyResolution resolution = IntentPolicyResolution.secondaryReview(
+                Optional.of("coder"), OptionalDouble.of(0.68), "amsha.routing.intent.v1", 1, "MIDDLE_REVIEW_BAND");
+        when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
+
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(destructiveFilter.filter(anyString(), anyString())).thenAnswer(inv -> inv.getArgument(0));
+
+        ChatResponse resp = ChatResponse.builder()
+                .aiMessage(AiMessage.from("{\"role\": \"researcher\"}"))
+                .build();
+        when(capableModel.chat(any(ChatRequest.class))).thenReturn(resp);
+
+        Instance<StructuredOutputMode> modeInstance = mock(Instance.class);
+        when(modeInstance.isUnsatisfied()).thenReturn(false);
+        when(modeInstance.get()).thenReturn(StructuredOutputMode.NATIVE);
+
+        setField(service, "classifierModel", capableModel);
+        setField(service, "structuredOutputModeInstance", modeInstance);
+
+        String result = service.classify("examine the codebase architecture");
+        assertEquals("researcher", result);
+        verify(capableModel, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void pilotEnabled_fallback_fallsThroughToAuthoritativeModel() {
+        when(intentDecisionRouter.isEnabled()).thenReturn(true);
+        IntentPolicyResolution resolution = IntentPolicyResolution.fallback(
+                "amsha.routing.intent.v1", 1, OptionalDouble.of(0.35), "LOW_CONFIDENCE");
+        when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
+
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(destructiveFilter.filter(anyString(), anyString())).thenAnswer(inv -> inv.getArgument(0));
+
+        ChatResponse resp = ChatResponse.builder()
+                .aiMessage(AiMessage.from("{\"role\": \"coordinator\"}"))
+                .build();
+        when(capableModel.chat(any(ChatRequest.class))).thenReturn(resp);
+
+        Instance<StructuredOutputMode> modeInstance = mock(Instance.class);
+        when(modeInstance.isUnsatisfied()).thenReturn(false);
+        when(modeInstance.get()).thenReturn(StructuredOutputMode.NATIVE);
+
+        setField(service, "classifierModel", capableModel);
+        setField(service, "structuredOutputModeInstance", modeInstance);
+
+        String result = service.classify("do whatever is needed");
+        assertEquals("coordinator", result);
+        verify(capableModel, times(1)).chat(any(ChatRequest.class));
+    }
+
+    @Test
+    void pilotRollback_disablingRestoresStandardRouteWithZeroMigration() {
+        // Router is disabled (rollback / kill switch)
+        when(intentDecisionRouter.isEnabled()).thenReturn(false);
+
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(destructiveFilter.filter(anyString(), anyString())).thenAnswer(inv -> inv.getArgument(0));
+
+        ChatResponse resp = ChatResponse.builder()
+                .aiMessage(AiMessage.from("{\"role\": \"researcher\"}"))
+                .build();
+        when(capableModel.chat(any(ChatRequest.class))).thenReturn(resp);
+
+        Instance<StructuredOutputMode> modeInstance = mock(Instance.class);
+        when(modeInstance.isUnsatisfied()).thenReturn(false);
+        when(modeInstance.get()).thenReturn(StructuredOutputMode.NATIVE);
+
+        setField(service, "classifierModel", capableModel);
+        setField(service, "structuredOutputModeInstance", modeInstance);
+
+        String result = service.classify("read documents");
+        assertEquals("researcher", result);
+        verify(intentDecisionRouter, times(0)).evaluateIntent(any(), any());
     }
 
     private static void setField(Object target, String name, Object value) {

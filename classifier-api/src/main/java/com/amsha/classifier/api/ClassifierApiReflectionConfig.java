@@ -54,7 +54,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             DecisionTransactionGuard.class,
             TransactionViolationPolicy.class,
             ToolRiskDecisionPolicy.class,
-            ToolRiskDecisionPolicy.PolicyResolution.class
+            ToolRiskDecisionPolicy.PolicyResolution.class,
+            IntentDecisionAction.class,
+            IntentPolicyResolution.class,
+            IntentDecisionPolicy.class
         },
         classNames = {
             "com.amsha.classifier.api.ClassifierResult$Opinion",
