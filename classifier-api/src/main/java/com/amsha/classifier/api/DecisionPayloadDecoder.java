@@ -280,6 +280,12 @@ public final class DecisionPayloadDecoder {
         if (!question.options().isEmpty() && !question.options().contains(label)) {
             return null;
         }
+        // The declared option set is the closed universe for this question. A probability key outside it
+        // is a provider-chosen label that no policy declared, so it is rejected rather than carried into
+        // the answer, where it would silently widen the option set and any metric cardinality derived from it.
+        if (!probabilitiesWithinOptions(question, probabilities)) {
+            return null;
+        }
         try {
             return new Choice(label, probabilities, confidence);
         } catch (Exception _) {
@@ -350,11 +356,39 @@ public final class DecisionPayloadDecoder {
         if (legend.isEmpty() && !question.rubricLevels().isEmpty()) {
             legend = question.rubricLevels();
         }
+        // Mirror of the choice option-set check: a provider-supplied legend must stay inside the declared
+        // rubric, otherwise an unregistered level would leak into Score.normalizedScore()/mostLikelyLevel().
+        // A legend derived from the rubric above trivially satisfies this.
+        if (!legendWithinRubric(question, legend)) {
+            return null;
+        }
         try {
             return new Score(score, probabilities, legend, confidence);
         } catch (Exception _) {
             return null;
         }
+    }
+
+    /**
+     * Whether every reported choice probability names an option the question declared. An empty declared
+     * option set is treated as unrestricted; an empty distribution is always acceptable.
+     */
+    private static boolean probabilitiesWithinOptions(DecisionQuestion<?> question, Map<String, Double> probabilities) {
+        if (probabilities.isEmpty() || question.options().isEmpty()) {
+            return true;
+        }
+        return question.options().containsAll(probabilities.keySet());
+    }
+
+    /**
+     * Whether every reported score legend entry names a rubric level the question declared. An empty
+     * declared rubric is treated as unrestricted; an empty legend is always acceptable.
+     */
+    private static boolean legendWithinRubric(DecisionQuestion<?> question, List<String> legend) {
+        if (legend.isEmpty() || question.rubricLevels().isEmpty()) {
+            return true;
+        }
+        return question.rubricLevels().containsAll(legend);
     }
 
     private static Noul decodeNoul(Object raw) {

@@ -1,6 +1,7 @@
 package com.amsha.classifier.api;
 
 import jakarta.transaction.Status;
+import jakarta.transaction.SystemException;
 import jakarta.transaction.TransactionManager;
 
 import java.util.Objects;
@@ -97,16 +98,57 @@ public final class DecisionTransactionGuard {
 
     private static int defaultStatusSupplier() {
         var container = Arc.container();
-        if (container != null && container.isRunning()) {
-            try {
-                var handle = container.instance(TransactionManager.class);
-                if (handle.isAvailable()) {
-                    return handle.get().getStatus();
-                }
-            } catch (Exception _) {
-                return Status.STATUS_ACTIVE;
-            }
+        if (container == null || !container.isRunning()) {
+            return resolveStatus(false, false, DecisionTransactionGuard::noTransaction);
         }
+        try {
+            var handle = container.instance(TransactionManager.class);
+            if (!handle.isAvailable()) {
+                return resolveStatus(true, false, DecisionTransactionGuard::noTransaction);
+            }
+            TransactionManager manager = handle.get();
+            return resolveStatus(true, true, () -> {
+                try {
+                    return manager.getStatus();
+                } catch (SystemException _) {
+                    return Status.STATUS_ACTIVE;
+                }
+            });
+        } catch (Exception _) {
+            // If checking transaction status throws, fail closed as active to prevent unverified execution
+            return Status.STATUS_ACTIVE;
+        }
+    }
+
+    /**
+     * Resolves the JTA status for the current thread from the two facts the guard can establish, so the
+     * fail posture of each "cannot determine" case is explicit and testable rather than incidental.
+     *
+     * @param containerRunning whether an Arc container is running
+     * @param managerAvailable whether the {@link TransactionManager} could be resolved
+     * @param statusSupplier reads the current status when the manager is available
+     * @return the JTA status to act on
+     */
+    static int resolveStatus(boolean containerRunning, boolean managerAvailable, IntSupplier statusSupplier) {
+        if (!containerRunning) {
+            // No Arc container: there is no JTA subsystem in play, so no transaction can be active.
+            // This is a definite answer, not an unknown one.
+            return Status.STATUS_NO_TRANSACTION;
+        }
+        if (!managerAvailable) {
+            // The container is running but the guard cannot be resolved. "Cannot determine" is not the same
+            // epistemic state as "no transaction": treating an unresolvable guard as transaction-free would
+            // let a container misconfiguration silently disable this safety boundary, so it fails closed.
+            return Status.STATUS_ACTIVE;
+        }
+        try {
+            return statusSupplier.getAsInt();
+        } catch (Exception _) {
+            return Status.STATUS_ACTIVE;
+        }
+    }
+
+    private static int noTransaction() {
         return Status.STATUS_NO_TRANSACTION;
     }
 }

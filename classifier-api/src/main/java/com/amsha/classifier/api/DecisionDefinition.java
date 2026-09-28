@@ -61,6 +61,13 @@ public record DecisionDefinition(
             throw new IllegalArgumentException("allowedProviders must not be empty");
         }
         allowedProviders = Set.copyOf(allowedProviders);
+        // A definition that permits a REMOTE provider cannot simultaneously declare evaluation to be
+        // constrained to local execution; the two are contradictory and a reviewer reading only one field
+        // would draw the wrong conclusion about where state may go.
+        if (retentionPolicy.localOnly() && allowedProviders.contains(ProviderCategory.REMOTE)) {
+            throw new IllegalArgumentException(
+                    "retentionPolicy.localOnly() contradicts allowedProviders containing " + ProviderCategory.REMOTE);
+        }
         Objects.requireNonNull(failMode, "failMode");
         Objects.requireNonNull(timeout, "timeout");
         if (timeout.isNegative() || timeout.isZero()) {

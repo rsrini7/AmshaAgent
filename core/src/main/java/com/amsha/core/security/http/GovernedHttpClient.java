@@ -30,10 +30,12 @@ import org.jboss.logging.Logger;
  * <p>Every call sequence is:
  * <ol>
  *   <li>Validate the target against {@link OutboundHttpPolicyService} (TLS, SSRF, proxy, host
- *       allow-list, HITL).</li>
+ *       allow-list, HITL). HITL-required results are surfaced as {@link OutboundHttpException.Category#HITL_REQUIRED}
+ *       so the caller can route to the approval lifecycle.</li>
  *   <li>Build a per-connection {@link HttpClient} honoring the connection's {@link NetworkProfilePolicy}:
  *       bounded connect/read timeouts, optional proxy (bypassed only for no-proxy hosts), and a TLS
- *       trust mode of {@code SYSTEM} or an explicit custom-CA vault reference.</li>
+ *       trust mode of {@code SYSTEM} or an explicit custom-CA vault reference (verification bypass is
+ *       never available).</li>
  *   <li>Revalidate DNS immediately before connecting: resolve the host and reject any resolved
  *       address that is loopback/link-local/site-local/metadata, preventing DNS rebinding.</li>
  *   <li>Never auto-follow redirects. On a 3xx the transport validates the next hop through the same
@@ -196,6 +198,14 @@ public final class GovernedHttpClient {
         return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
+    /**
+     * Revalidates the resolved destination address immediately before connect against SSRF/rebinding
+     * policies and against any configured pinnedAddress. Note: In the absence of an egress proxy that
+     * terminates and pins transport resolution, direct remote connections through JDK HttpClient resolve
+     * via system DNS; socket-level connection pinning is enforced for proxies and deferred for direct
+     * egress as documented in ADR-Onboarding-Multi-Agent-Provider-Model. Sensitive targets subject to
+     * DNS rebinding attacks must configure {@code requireProxy=true} on their network profile.
+     */
     private void revalidateDns(URI uri) {
         String host = uri.getHost();
         if (host == null || isLocalhost(host)) return;
@@ -372,16 +382,22 @@ public final class GovernedHttpClient {
             return this;
         }
 
+        /** Marks the operation as already HITL-approved (e.g. committed via the onboarding saga). */
         public Builder preApproved(boolean preApproved) {
             this.preApproved = preApproved;
             return this;
         }
 
+        /**
+         * Supplies the URI used for policy evaluation and diagnostics while leaving the actual
+         * request URI unchanged. This is intended for requests whose path contains a credential.
+         */
         public Builder policyUriMapper(UnaryOperator<URI> policyUriMapper) {
             this.policyUriMapper = Objects.requireNonNull(policyUriMapper, "policyUriMapper must not be null");
             return this;
         }
 
+        /** Overrides the connection-derived connect timeout for a bounded transport caller. */
         public Builder connectTimeout(Duration connectTimeout) {
             if (connectTimeout == null || connectTimeout.isZero() || connectTimeout.isNegative()) {
                 throw new IllegalArgumentException("connectTimeout must be positive");
@@ -390,6 +406,11 @@ public final class GovernedHttpClient {
             return this;
         }
 
+        /**
+         * Sets the expected validated destination address for pre-connect safety checks and address matching.
+         * For direct connections, Java HttpClient resolves DNS via system resolver; strict socket-level pinning
+         * requires an egress proxy with {@code requireProxy=true}.
+         */
         public Builder pinnedAddress(InetAddress pinnedAddress) {
             this.pinnedAddress = pinnedAddress;
             return this;

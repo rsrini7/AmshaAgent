@@ -68,7 +68,13 @@ public class OnnxClassifierRuntimeControl {
     }
 
     /**
-     * Registers one verified and promotion-approved active implementation.
+     * Registers the calling classifier as its own ready active implementation.
+     *
+     * <p>This overload performs <b>no</b> provider placement validation. It delegates with this runtime
+     * control as the object to validate, and a runtime control is not a {@code DecisionEngine}, so
+     * {@link ProviderPlacementValidator#validateClassifierSpiPlacement(Object)} has nothing to reject.
+     * Placement enforcement for this seam lives in {@link #registerReadyImplementation(Classifier, Object)},
+     * which is the overload that actually receives the implementation.
      *
      * <p>Shadow-only classifiers MUST NOT call this method.
      */

@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.classifier.api.Choice;
@@ -36,6 +38,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import io.vertx.core.Vertx;
 
 class SelfHostedDecisionEngineContractTest {
 
@@ -123,6 +127,40 @@ class SelfHostedDecisionEngineContractTest {
             assertTrue(choice.confidence().isPresent());
             assertEquals(0.94, choice.confidence().getAsDouble(), 1e-4);
             assertEquals("laya-rule-01", opinion.ruleId());
+        }
+    }
+
+    @Test
+    void verifiesEventLoopThreadGuardFailsFast() throws Exception {
+        var config = SelfHostedProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("risk"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
+            var reqBuilder = DecisionRequest.builder("dec.eventloop", 1, "{\"risk\":\"low\"}");
+            reqBuilder.registerChoice("risk", "Assess risk", List.of("LOW_RISK", "BLOCK"));
+            DecisionRequest request = reqBuilder.build();
+
+            Vertx vertx = Vertx.vertx();
+            try {
+                CountDownLatch latch = new CountDownLatch(1);
+                AtomicReference<DecisionResult> resultRef = new AtomicReference<>();
+                vertx.runOnContext(v -> {
+                    resultRef.set(engine.evaluate(request));
+                    latch.countDown();
+                });
+                assertTrue(latch.await(5, TimeUnit.SECONDS));
+                assertInstanceOf(DecisionResult.NoOpinion.class, resultRef.get());
+                var noOpinion = (DecisionResult.NoOpinion) resultRef.get();
+                assertEquals(NoOpinionReason.OVERLOAD_REJECTED, noOpinion.reason());
+                assertTrue(noOpinion.detail().contains("Vert.x event-loop thread"), noOpinion.detail());
+                assertEquals(null, lastReceivedRequestBody.get(), "No HTTP call should be made from event-loop thread");
+            } finally {
+                vertx.close().toCompletionStage().toCompletableFuture().get(5, TimeUnit.SECONDS);
+            }
         }
     }
 

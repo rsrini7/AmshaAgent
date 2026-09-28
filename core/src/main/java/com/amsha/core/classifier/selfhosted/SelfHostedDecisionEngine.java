@@ -30,6 +30,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.vertx.core.Context;
+
 /**
  * Separate-process decision engine evaluating against a self-hosted loopback HTTP service (§7.5).
  * State inputs must be non-blank JSON objects; arbitrary text states are not supported.
@@ -42,6 +44,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *   <li>Category is {@link ProviderCategory#SELF_HOSTED}; forbidden from classifier SPI placement.</li>
  *   <li>Requires strict 127.0.0.1 loopback binding unconditionally; fails closed on wildcard or non-loopback exposure.</li>
  *   <li>Enforces explicit allow-listed state projection and redaction before serialization; excluded fields dropped.</li>
+ *   <li>Rejects evaluation on a Vert.x event-loop thread before any blocking work, testing the actual executing thread.</li>
  *   <li>Defensive transaction guard prevents external HTTP calls inside active JTA transactions.</li>
  *   <li>Missing model, timeout, overload, and provider failure return deterministic fallback NoOpinion.</li>
  *   <li>Shutdown drains in-flight requests and rejects new evaluations with NoOpinion(DISABLED); injected client lifecycle remains with its creator.</li>
@@ -98,7 +101,20 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
     public DecisionResult evaluate(DecisionRequest request) {
         Objects.requireNonNull(request, "request");
 
-        // 1. Transaction Guard Check (§5.9)
+        // 1. Non-blocking Event-Loop Guard (§2.3, AGENTS.md)
+        // This engine blocks on HttpClient#send, so it must never run on a Vert.x event-loop thread. The
+        // check tests the actual executing thread rather than inferring it from the Vert.x context, because
+        // @RunOnVirtualThread handlers retain an event-loop-derived context while running safely elsewhere.
+        if (Context.isOnEventLoopThread()) {
+            return new DecisionResult.NoOpinion(
+                    request.decisionId(),
+                    request.schemaVersion(),
+                    NoOpinionReason.OVERLOAD_REJECTED,
+                    null,
+                    "Self-hosted decision evaluation must not execute on Vert.x event-loop thread");
+        }
+
+        // 2. Transaction Guard Check (§5.9)
         if (transactionGuard.isInActiveTransaction()) {
             return new DecisionResult.NoOpinion(
                     request.decisionId(),
@@ -108,7 +124,7 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
                     "Decision evaluation rejected: active JTA write transaction detected (§5.9)");
         }
 
-        // 2. Disabled/Shutdown Check
+        // 3. Disabled/Shutdown Check
         if (!isEnabled()) {
             return new DecisionResult.NoOpinion(
                     request.decisionId(),
@@ -139,7 +155,7 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
     }
 
     private DecisionResult executeEvaluation(DecisionRequest request) {
-        // 3. Unconditional Loopback Endpoint Enforcement (§7.5, Issue 05)
+        // 4. Unconditional Loopback Endpoint Enforcement (§7.5, Issue 05)
         try {
             SelfHostedEndpointValidator.validateLoopbackEndpoint(config.endpoint());
         } catch (SecurityException | IllegalArgumentException _) {
@@ -147,7 +163,7 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
                     request.decisionId(), request.schemaVersion(), null, "Local-only endpoint validation failed");
         }
 
-        // 4. Explicit Allow-listed State Projection and Redaction (§7.4, §7.5)
+        // 5. Explicit Allow-listed State Projection and Redaction (§7.4, §7.5)
         StateProjectionPolicy projectionPolicy = resolveProjectionPolicy(request);
         if (projectionPolicy == null) {
             return DecisionResult.NoOpinion.ofMalformedResponse(
@@ -165,7 +181,7 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
                     request.decisionId(), request.schemaVersion(), null, "State projection or redaction failed");
         }
 
-        // 5. Serialize Wire Request Payload
+        // 6. Serialize Wire Request Payload
         String requestBody;
         try {
             requestBody = buildWireRequestBody(request, projectedStateJson);
@@ -174,7 +190,7 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
                     request.decisionId(), request.schemaVersion(), null, "Failed to serialize wire request payload");
         }
 
-        // 6. Execute Outbound Loopback HTTP Call
+        // 7. Execute Outbound Loopback HTTP Call
         return executeHttpCall(request, requestBody);
     }
 

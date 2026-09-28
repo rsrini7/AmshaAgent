@@ -28,6 +28,15 @@ public final class GovernedHttpDnsPinning {
 
     private static volatile HostResolver hostResolver = GovernedHttpDnsPinning::defaultResolveAndValidateHost;
 
+    /**
+     * Replaces the process-wide DNS resolver for tests; {@code null} restores the production resolver.
+     *
+     * <p>This is a process-wide test seam rather than a configuration surface: the resolver lives in a static
+     * field, so a replacement is visible to every caller in the JVM, including concurrent ones, for as long as
+     * it is installed. It is {@code public} only because
+     * {@code com.amsha.security.http.GovernedHttpDnsPinning} delegates to it from a different package.
+     * Production code must not call it, and every caller must restore the default when finished.
+     */
     public static void setHostResolverForTesting(HostResolver resolver) {
         hostResolver = resolver != null ? resolver : GovernedHttpDnsPinning::defaultResolveAndValidateHost;
     }

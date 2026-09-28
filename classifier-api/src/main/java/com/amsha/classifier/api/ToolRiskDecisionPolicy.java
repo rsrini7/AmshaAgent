@@ -227,7 +227,11 @@ public final class ToolRiskDecisionPolicy {
         if (targetKey.owner() == null) {
             for (Map.Entry<QuestionKey<?>, DecisionAnswer> entry :
                     opinion.answers().entrySet()) {
-                if (entry.getKey().name().equals(targetKey.name())) {
+                QuestionKey<?> key = entry.getKey();
+                // Match on name *and* answer type, mirroring QuestionKey.equals. Name alone would let a
+                // handle carrying the same name under a different primitive resolve here; today that is
+                // caught downstream by the instanceof Choice check, but only by accident of ordering.
+                if (key.name().equals(targetKey.name()) && key.answerType().equals(targetKey.answerType())) {
                     return entry.getValue();
                 }
             }
@@ -335,7 +339,7 @@ public final class ToolRiskDecisionPolicy {
      *
      * @param decisionId decision identifier
      * @param schemaVersion decision schema version
-     * @param effectiveAction effective risk action (null for allow, REQUIRE_APPROVAL, or BLOCK)
+     * @param effectiveAction effective risk action, or null when the outcome is allow (no restriction)
      * @param confidence optional evaluated confidence or probability
      * @param escalated whether risk was increased above the existing decision
      * @param fallback whether fallback posture was applied due to NoOpinion or low confidence
@@ -354,6 +358,13 @@ public final class ToolRiskDecisionPolicy {
             Objects.requireNonNull(decisionId, "decisionId");
             Objects.requireNonNull(confidence, "confidence");
             Objects.requireNonNull(reason, "reason");
+            // Escalation means risk was raised above the existing decision. A null effectiveAction means
+            // "allow", which is the zero-severity floor and can never be an escalation, so the flag and the
+            // action cannot disagree. Every construction site already satisfies this; enforcing it keeps a
+            // future one from claiming an escalation the action does not show.
+            if (escalated && effectiveAction == null) {
+                throw new IllegalArgumentException("escalated=true requires a non-null effectiveAction");
+            }
         }
 
         public PolicyResolution(

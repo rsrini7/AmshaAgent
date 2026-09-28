@@ -320,6 +320,66 @@ class DecisionPlaneEvaluationTest {
     }
 
     @Test
+    void choiceProbabilitiesOutsideDeclaredOptionSetFailClosed() {
+        var builder = DecisionRequest.builder("d1", 1, "state");
+        QuestionKey<Choice> choiceKey = builder.addChoice("c", "choose", List.of("alpha", "beta"));
+        DecisionRequest request = builder.build();
+
+        // A distribution confined to the declared options is accepted.
+        Map<String, Object> declared = Map.of(
+                "answers", Map.of("c", Map.of("choice", "alpha", "probabilities", Map.of("alpha", 0.9, "beta", 0.1))));
+        DecisionResult accepted = DecisionPayloadDecoder.decode(request, declared);
+        assertTrue(accepted.isOpinion());
+        assertEquals(2, accepted.asOpinion().get(choiceKey).probabilities().size());
+
+        // An extra provider-chosen key names an option no policy declared. It must not be carried into the
+        // answer, where it would silently widen the closed option set for any downstream metric tag.
+        Map<String, Object> injected = Map.of(
+                "answers",
+                Map.of(
+                        "c",
+                        Map.of(
+                                "choice",
+                                "alpha",
+                                "probabilities",
+                                Map.of("alpha", 0.8, "beta", 0.1, "attacker_supplied", 0.1))));
+        DecisionResult rejected = DecisionPayloadDecoder.decode(request, injected);
+        assertEquals(
+                ClassifierResult.NoOpinionReason.INFERENCE_ERROR,
+                rejected.asNoOpinion().reason());
+    }
+
+    @Test
+    void scoreLegendOutsideDeclaredRubricFailsClosed() {
+        var builder = DecisionRequest.builder("d1", 1, "state");
+        QuestionKey<Score> scoreKey = builder.addScore("s", "rate", List.of("low", "medium", "high"));
+        DecisionRequest request = builder.build();
+
+        Map<String, Object> declared =
+                Map.of("answers", Map.of("s", Map.of("score", 1.0, "legend", List.of("low", "medium", "high"))));
+        DecisionResult accepted = DecisionPayloadDecoder.decode(request, declared);
+        assertTrue(accepted.isOpinion());
+        assertEquals(
+                List.of("low", "medium", "high"),
+                accepted.asOpinion().get(scoreKey).legend());
+
+        Map<String, Object> injected = Map.of(
+                "answers", Map.of("s", Map.of("score", 1.0, "legend", List.of("low", "unregistered_level", "high"))));
+        DecisionResult rejected = DecisionPayloadDecoder.decode(request, injected);
+        assertEquals(
+                ClassifierResult.NoOpinionReason.INFERENCE_ERROR,
+                rejected.asNoOpinion().reason());
+
+        // A provider that omits the legend entirely still gets the declared rubric, unchanged.
+        Map<String, Object> omitted = Map.of("answers", Map.of("s", Map.of("score", 1.0)));
+        DecisionResult defaulted = DecisionPayloadDecoder.decode(request, omitted);
+        assertTrue(defaulted.isOpinion());
+        assertEquals(
+                List.of("low", "medium", "high"),
+                defaulted.asOpinion().get(scoreKey).legend());
+    }
+
+    @Test
     void legacyBridgeDoesNotInventCertainty() {
         var choiceKey = QuestionKey.choice("role");
 

@@ -14,6 +14,15 @@ public record RetentionPolicy(Duration maxRetention, boolean allowTrainingUse, b
 
     public static final RetentionPolicy EPHEMERAL = new RetentionPolicy(Duration.ZERO, false, true);
 
+    /**
+     * Ephemeral retention with training use forbidden and <em>no</em> local-only constraint.
+     *
+     * <p>This is the shape a {@link DecisionDefinition} needs when its {@code allowedProviders} set
+     * contains {@link ProviderCategory#REMOTE}: {@link #EPHEMERAL} declares evaluation to be constrained
+     * to local execution, which contradicts permitting a remote provider.
+     */
+    public static final RetentionPolicy EPHEMERAL_EXPORTABLE = new RetentionPolicy(Duration.ZERO, false, false);
+
     public RetentionPolicy {
         Objects.requireNonNull(maxRetention, "maxRetention");
         if (maxRetention.isNegative()) {

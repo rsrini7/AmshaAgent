@@ -332,6 +332,33 @@ class InMemoryDecisionEngineTest {
     }
 
     @Test
+    void transactionStatusResolutionFailsClosedWhenTheGuardCannotBeResolved() {
+        // No container at all: definitively transaction-free.
+        assertEquals(
+                Status.STATUS_NO_TRANSACTION,
+                DecisionTransactionGuard.resolveStatus(false, false, () -> Status.STATUS_NO_TRANSACTION));
+
+        // Container running but the TransactionManager is unresolvable. "Cannot determine" must not be read
+        // as "no transaction", or a container misconfiguration would silently disable this boundary. This is
+        // the case the earlier implementation fell through to STATUS_NO_TRANSACTION.
+        assertEquals(
+                Status.STATUS_ACTIVE,
+                DecisionTransactionGuard.resolveStatus(true, false, () -> Status.STATUS_NO_TRANSACTION));
+
+        // Manager available: the real status is used, in both directions.
+        assertEquals(
+                Status.STATUS_NO_TRANSACTION,
+                DecisionTransactionGuard.resolveStatus(true, true, () -> Status.STATUS_NO_TRANSACTION));
+        assertEquals(
+                Status.STATUS_ACTIVE, DecisionTransactionGuard.resolveStatus(true, true, () -> Status.STATUS_ACTIVE));
+
+        // A status read that throws also fails closed.
+        assertEquals(Status.STATUS_ACTIVE, DecisionTransactionGuard.resolveStatus(true, true, () -> {
+            throw new IllegalStateException("status unavailable");
+        }));
+    }
+
+    @Test
     void structuralFreedomFromExecutableCallbacks() {
         // Architecture & placement safety: InMemoryDecisionEngine must not hold any executable callback fields
         List<Class<?>> forbiddenCallbackTypes =

@@ -205,6 +205,35 @@ class ToolRiskDecisionPolicyTest {
     }
 
     @Test
+    void targetKeyLookupRequiresMatchingAnswerTypeNotJustName() {
+        QuestionKey<Choice> choiceKey = QuestionKey.choice("risk");
+        QuestionKey<Score> scoreKey = QuestionKey.score("risk");
+
+        // Same handle name under a different primitive. Name-only matching resolved this Score and then
+        // reported UNMAPPED_PRIMITIVE; matching on answer type (as QuestionKey.equals does) reports what is
+        // actually true — there is no Choice answer under this handle at all.
+        DecisionResult scoreOnly = DecisionResult.opinionBuilder("dec.type", 1)
+                .put(scoreKey, new Score(1.0, List.of(0.4, 0.6), List.of("low", "high"), OptionalDouble.of(0.7)))
+                .ruleId("type-rule")
+                .build();
+
+        ToolRiskDecisionPolicy.PolicyResolution mismatched =
+                ToolRiskDecisionPolicy.resolve(null, scoreOnly, choiceKey, BAND, FailMode.FAIL_OPEN);
+        assertTrue(mismatched.fallback());
+        assertEquals("MISSING_TARGET_KEY", mismatched.reason());
+
+        // A correctly-typed handle under the same name still resolves.
+        DecisionResult choiceOnly = DecisionResult.opinionBuilder("dec.type", 1)
+                .put(choiceKey, new Choice("BLOCK"))
+                .ruleId("type-rule")
+                .build();
+        assertEquals(
+                ToolRiskAction.BLOCK,
+                ToolRiskDecisionPolicy.resolve(null, choiceOnly, choiceKey, BAND, FailMode.FAIL_OPEN)
+                        .effectiveAction());
+    }
+
+    @Test
     void deterministicFallbackUnderFailOpenAndFailClosed() {
         for (ClassifierResult.NoOpinionReason reason : ClassifierResult.NoOpinionReason.values()) {
             DecisionResult.NoOpinion noOp = new DecisionResult.NoOpinion(reason);

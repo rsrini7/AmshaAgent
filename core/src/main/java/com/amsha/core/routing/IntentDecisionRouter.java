@@ -221,7 +221,9 @@ public class IntentDecisionRouter {
                 "Classify ambiguous user intent into an eligible agent role with review band fallback",
                 "user_message",
                 RedactionPolicy.DEFAULT,
-                RetentionPolicy.EPHEMERAL,
+                // EPHEMERAL_EXPORTABLE, not EPHEMERAL: this definition admits REMOTE in allowedProviders,
+                // and DecisionDefinition rejects a local-only retention policy alongside REMOTE.
+                RetentionPolicy.EPHEMERAL_EXPORTABLE,
                 CandidateReductionPolicy.none(),
                 reviewBand,
                 Set.of(ProviderCategory.IN_PROCESS, ProviderCategory.SELF_HOSTED, ProviderCategory.REMOTE),

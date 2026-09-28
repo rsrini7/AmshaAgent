@@ -2,6 +2,7 @@ package com.amsha.classifier.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,6 +10,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Set;
 
@@ -206,6 +208,128 @@ class DecisionPlaneVocabularyTest {
         assertEquals("intent.router", def.decisionId());
         assertEquals(1, def.schemaVersion());
         assertEquals(FailMode.FAIL_CLOSED, def.failMode());
+    }
+
+    @Test
+    void decisionDefinitionRejectsLocalOnlyRetentionWithRemoteProvider() {
+        var redPolicy = new RedactionPolicy(true, true, Set.of("password"));
+        var band = new ReviewBand(0.4, 0.8);
+
+        // RetentionPolicy.EPHEMERAL declares localOnly, which contradicts permitting a REMOTE provider:
+        // a reviewer reading only one field would conclude the wrong thing about where state may go.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionDefinition(
+                        "intent.router",
+                        1,
+                        DecisionPrimitive.CHOICE,
+                        "criteria",
+                        "goal.text",
+                        redPolicy,
+                        RetentionPolicy.EPHEMERAL,
+                        CandidateReductionPolicy.none(),
+                        band,
+                        Set.of(ProviderCategory.IN_PROCESS, ProviderCategory.REMOTE),
+                        FailMode.FAIL_OPEN,
+                        Duration.ofSeconds(2),
+                        true));
+
+        // The same provider set is valid once retention stops claiming local-only execution.
+        var exportable = new DecisionDefinition(
+                "intent.router",
+                1,
+                DecisionPrimitive.CHOICE,
+                "criteria",
+                "goal.text",
+                redPolicy,
+                RetentionPolicy.EPHEMERAL_EXPORTABLE,
+                CandidateReductionPolicy.none(),
+                band,
+                Set.of(ProviderCategory.IN_PROCESS, ProviderCategory.REMOTE),
+                FailMode.FAIL_OPEN,
+                Duration.ofSeconds(2),
+                true);
+        assertFalse(exportable.retentionPolicy().localOnly());
+        assertTrue(exportable.allowedProviders().contains(ProviderCategory.REMOTE));
+
+        // localOnly retention remains valid while no remote provider is admitted.
+        var localOnly = new DecisionDefinition(
+                "intent.router",
+                1,
+                DecisionPrimitive.CHOICE,
+                "criteria",
+                "goal.text",
+                redPolicy,
+                RetentionPolicy.EPHEMERAL,
+                CandidateReductionPolicy.none(),
+                band,
+                Set.of(ProviderCategory.IN_PROCESS, ProviderCategory.SELF_HOSTED),
+                FailMode.FAIL_OPEN,
+                Duration.ofSeconds(2),
+                true);
+        assertTrue(localOnly.retentionPolicy().localOnly());
+    }
+
+    @Test
+    void intentPolicyResolutionEnforcesCrossFieldRules() {
+        // DIRECT_ROUTE must name the role it routes to.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new IntentPolicyResolution(
+                        IntentDecisionAction.DIRECT_ROUTE,
+                        Optional.empty(),
+                        OptionalDouble.of(0.9),
+                        "intent.route",
+                        1,
+                        "HIGH_CONFIDENCE_ROUTE",
+                        false));
+
+        // The fallback flag must agree with the action in both directions.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new IntentPolicyResolution(
+                        IntentDecisionAction.DETERMINISTIC_FALLBACK,
+                        Optional.empty(),
+                        OptionalDouble.empty(),
+                        "intent.route",
+                        1,
+                        "DISABLED",
+                        false));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new IntentPolicyResolution(
+                        IntentDecisionAction.SECONDARY_REVIEW,
+                        Optional.of("researcher"),
+                        OptionalDouble.of(0.6),
+                        "intent.route",
+                        1,
+                        "MIDDLE_REVIEW_BAND",
+                        true));
+
+        // The factories this record is built through remain valid.
+        assertTrue(IntentPolicyResolution.direct("researcher", 0.9, "intent.route", 1, "HIGH_CONFIDENCE_ROUTE")
+                .selectedRole()
+                .isPresent());
+        assertTrue(IntentPolicyResolution.fallback("intent.route", 1, OptionalDouble.empty(), "DISABLED")
+                .fallback());
+        assertFalse(IntentPolicyResolution.secondaryReview(
+                        Optional.of("researcher"), OptionalDouble.of(0.6), "intent.route", 1, "MIDDLE_REVIEW_BAND")
+                .fallback());
+    }
+
+    @Test
+    void policyResolutionRejectsEscalationWithoutEffectiveAction() {
+        // escalated=true asserts risk was raised; a null action means allow, the zero-severity floor,
+        // so the two can never both be true.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ToolRiskDecisionPolicy.PolicyResolution(
+                        "tool.risk", 1, null, OptionalDouble.empty(), true, false, "EXISTING_DECISION"));
+
+        var allow = new ToolRiskDecisionPolicy.PolicyResolution(
+                "tool.risk", 1, null, OptionalDouble.empty(), false, false, "CHOICE_ACTION");
+        assertNull(allow.effectiveAction());
+        assertFalse(allow.escalated());
     }
 
     @Test
