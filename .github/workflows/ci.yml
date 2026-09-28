@@ -30,9 +30,11 @@ jobs:
         run: |
           python3 scripts/test_repo_root.py
           python3 scripts/test_dist_wrappers.py
+          python3 scripts/distribution/test_llm_preflight.py
           python3 scripts/test_autotest_runners.py
           python3 scripts/test_freeze_sarvam_static.py
           python3 scripts/test_prove_sarvam_offline.py
+          python3 scripts/quality/test_fix_fqns.py
           python3 rest-http/scripts/test_common_http.py
 
   jvm-validation:
@@ -77,12 +79,27 @@ jobs:
 
           # 2. Generate transient CI credentials (fail-closed contract)
           export CI_KEY="$(openssl rand -base64 32)"
+          echo "::add-mask::$CI_KEY"
           export AMSHA_API_KEYS_CI="$CI_KEY"
           export AMSHA_API_KEYS_INTERNAL="$CI_KEY"
           export AMSHA_DATA_DIR="$DATA_DIR"
 
           # 3. Teardown trap with bounded SIGKILL and log redaction
           SERVER_PID=""
+          redact_and_print_server_log() {
+            [ -f "$SERVER_LOG" ] || return 0
+            if ! sed -E \
+              -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
+              -e 's/((X-Amsha-API-Key:|API_KEY[=:]|CI_KEY=|AMSHA_API_KEYS_(CI|INTERNAL)=|AMSHA_GENERIC_OPENAI_API_KEY=)[[:space:]]*)[^[:space:]]+/\1[REDACTED]/g' \
+              "$SERVER_LOG" > "$REDACTED_LOG"; then
+              rm -f "$REDACTED_LOG"
+              echo "Server log omitted because redaction failed." >&2
+              return 0
+            fi
+            echo "---- Redacted server startup log ----" >&2
+            sed -n '1,250p' "$REDACTED_LOG" >&2
+          }
+
           cleanup() {
             local exit_code=$?
             trap - EXIT INT TERM
@@ -109,17 +126,10 @@ jobs:
             fi
 
             if [ -f "$SERVER_LOG" ]; then
-              echo "---- Server startup log ----" >&2
-              sed -n '1,200p' "$SERVER_LOG" >&2
-            fi
-
-            # Redact credentials and authorization tokens from logs on failure
-            if [ -f "$SERVER_LOG" ]; then
-              sed -E \
-                -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
-                -e 's/((X-Amsha-API-Key:|API_KEY[=:]|CI_KEY=|AMSHA_API_KEYS_(CI|INTERNAL)=|AMSHA_GENERIC_OPENAI_API_KEY=)[[:space:]]*)[^[:space:]]+/\1[REDACTED]/g' \
-                "$SERVER_LOG" > "$REDACTED_LOG" 2>/dev/null || cp "$SERVER_LOG" "$REDACTED_LOG"
-              cp "$REDACTED_LOG" server.redacted.log 2>/dev/null || true
+              redact_and_print_server_log
+              if [ -f "$REDACTED_LOG" ]; then
+                cp "$REDACTED_LOG" server.redacted.log 2>/dev/null || true
+              fi
             fi
 
             rm -rf "$DATA_DIR"
@@ -157,8 +167,8 @@ jobs:
           for _ in $(seq 1 60); do
             if ! kill -0 "$SERVER_PID" 2>/dev/null; then
               echo "Error: Validation server exited before readiness." >&2
-              echo "---- Startup log ----" >&2
-              sed -n '1,250p' "$SERVER_LOG" >&2 || true
+              echo "---- Redacted startup log ----" >&2
+              redact_and_print_server_log
               exit 1
             fi
 
@@ -173,8 +183,8 @@ jobs:
 
           if [ "$READY" != "true" ]; then
             echo "Error: Validation server failed to become ready within 60s." >&2
-            echo "---- Startup log ----" >&2
-            sed -n '1,250p' "$SERVER_LOG" >&2 || true
+            echo "---- Redacted startup log ----" >&2
+            redact_and_print_server_log
             exit 1
           fi
 

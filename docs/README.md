@@ -87,7 +87,7 @@ Decisions that define the system structure and operational boundaries:
 - [ADR-Quarkus-Upgrade-Strategy](adr/architecture/ADR-Quarkus-Upgrade-Strategy.md) — Quarkus platform upgrade strategy and verification matrix (Status: Accepted).
 - [ADR-approval-lease-for-parallel-batches](adr/architecture/ADR-approval-lease-for-parallel-batches.md) — Approval lease semantics for concurrent batch operations (Status: Accepted).
 - [ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries](adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md) — Capability adoption boundaries for LangChain4j (Status: Accepted).
-- [ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md) — Proposed typed decision seam for Jev-compatible judgments and Amsha-owned policy (Status: Proposed).
+- [ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md) — Proposed typed decision seam for Jev-compatible judgments and Amsha-owned policy (Status: Deferred).
 - [ADR-onboarding-route-assignments](adr/architecture/ADR-onboarding-route-assignments.md) — Onboarding route assignments and model profile mapping (Status: Accepted).
 - [ADR-schedule-task-hitl-under-supervised](adr/architecture/ADR-schedule-task-hitl-under-supervised.md) — Scheduled task HITL governance under supervised autonomy (Status: Accepted).
 
