@@ -255,8 +255,10 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: java-surefire-reports
-          path: "**/target/surefire-reports/**"
+          name: java-test-reports
+          path: |
+            **/target/surefire-reports/**
+            **/target/failsafe-reports/**
           if-no-files-found: ignore
           retention-days: 7
 
