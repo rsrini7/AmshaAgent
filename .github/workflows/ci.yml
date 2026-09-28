@@ -35,6 +35,7 @@ jobs:
           python3 scripts/test_freeze_sarvam_static.py
           python3 scripts/test_prove_sarvam_offline.py
           python3 scripts/quality/test_fix_fqns.py
+          python3 scripts/quality/test_verify_jacoco_coverage.py
           python3 rest-http/scripts/test_common_http.py
 
   jvm-validation:

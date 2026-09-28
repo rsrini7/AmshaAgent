@@ -52,22 +52,28 @@ def line_counts(report: Path) -> tuple[int, int]:
 
 
 def executed_test_count(module: Path) -> int:
-    """Count tests reported by Surefire.
+    """Count tests reported by Surefire and Failsafe.
 
     Distinguishes "this module has no tests" (fine) from "tests ran but the coverage
     agent never attached" (a silent measurement failure that must not be averaged in
     as 0% coverage).
+
+    Both report directories must be read. Surefire runs the `*Test` classes and Failsafe
+    runs the `*IT` classes, and Failsafe is inherited by every reactor module. Counting
+    only Surefire would make a module whose only tests are integration tests look
+    untested, silently exempting it from the strict-instrumentation check below.
     """
-    reports = module / "target" / "surefire-reports"
-    if not reports.is_dir():
-        return 0
     total = 0
-    for report in reports.glob("TEST-*.xml"):
-        try:
-            suite = ET.parse(report).getroot()
-        except ET.ParseError:
+    for directory in ("surefire-reports", "failsafe-reports"):
+        reports = module / "target" / directory
+        if not reports.is_dir():
             continue
-        total += int(suite.get("tests", 0) or 0)
+        for report in reports.glob("TEST-*.xml"):
+            try:
+                suite = ET.parse(report).getroot()
+            except ET.ParseError:
+                continue
+            total += int(suite.get("tests", 0) or 0)
     return total
 
 
@@ -126,7 +132,7 @@ def main() -> int:
         )
         hint = (
             "These modules are counted as 0% covered, which understates the reactor figure. "
-            "Verify the module's Surefire <argLine> composes with jacoco:prepare-agent "
+            "Verify the module's Surefire/Failsafe <argLine> composes with jacoco:prepare-agent "
             "(the parent uses late evaluation '@{argLine}')."
         )
         if args.strict_instrumentation:
