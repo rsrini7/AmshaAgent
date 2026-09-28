@@ -9,15 +9,18 @@ import java.util.Optional;
 import com.amsha.classifier.api.RetentionPolicy;
 import com.amsha.classifier.api.StateProjectionPolicy;
 import com.amsha.persistence.api.LlmConnectionDto;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Configuration and data governance controls for a remote decision provider (§3, §7.6).
  * Enforces TLS, data residency, zero-training, tenant-isolation, and connection/proxy constraints.
- * Redacts credentials in {@link #toString()}.
+ * Redacts credentials in {@link #toString()} and never serializes them: {@code apiKey} is
+ * {@code WRITE_ONLY} for Jackson, so no serializer (telemetry, audit, REST) can emit it.
  *
  * @param enabled whether the provider is enabled (defaults to false; disabled by default)
  * @param endpoint HTTPS endpoint URI (strictly validated against non-TLS and SSRF addresses)
- * @param apiKey optional API key or bearer token for remote authentication
+ * @param apiKey optional API key or bearer token for remote authentication; bindable from configuration
+ *     but never serialized
  * @param timeout request execution timeout
  * @param defaultProjectionPolicy default state projection and redaction policy
  * @param dataLocation declared geographic/cloud data location (e.g. "US_EAST", "REMOTE_HOSTED")
@@ -28,7 +31,10 @@ import com.amsha.persistence.api.LlmConnectionDto;
 public record RemoteProviderConfig(
         boolean enabled,
         URI endpoint,
+
+        @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
         String apiKey,
+
         Duration timeout,
         StateProjectionPolicy defaultProjectionPolicy,
         String dataLocation,

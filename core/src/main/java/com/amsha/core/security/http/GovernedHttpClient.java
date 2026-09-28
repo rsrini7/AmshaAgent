@@ -395,7 +395,23 @@ public final class GovernedHttpClient {
             return this;
         }
 
+        /**
+         * Installs a caller-supplied {@link HttpClient} (test seam).
+         *
+         * <p>The override must not follow redirects. {@link #send} depends on seeing the 3xx response
+         * itself so it can re-run policy evaluation and DNS revalidation on the next hop; a client that
+         * follows redirects internally would skip both, turning a governed transport into an ungoverned
+         * one. A supplied {@link HttpClient} cannot be reconfigured after construction, so an unsafe one
+         * is rejected rather than repaired.
+         */
         public Builder httpClient(HttpClient httpClient) {
+            Objects.requireNonNull(httpClient, "httpClient must not be null");
+            HttpClient.Redirect redirectPolicy = httpClient.followRedirects();
+            if (redirectPolicy != HttpClient.Redirect.NEVER) {
+                throw new IllegalArgumentException("httpClient override must not follow redirects, but was "
+                        + redirectPolicy
+                        + ": per-hop policy evaluation and DNS revalidation depend on observing the redirect");
+            }
             this.httpClientOverride = httpClient;
             return this;
         }
