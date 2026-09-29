@@ -246,6 +246,10 @@ and `python3 scripts/test_review_staged.py`.
   `rest-http/scripts/run_all_validations.sh` and child scripts through
   `rest-http/scripts/common_env.sh`.
 - The master validator must return a nonzero exit code when any suite fails.
+- Every `validate_*.sh` must be registered in `run_all_validations.sh`; the guard in
+  `scripts/distribution/test_dist_wrappers.py` fails when a validator is orphaned or a
+  `*_SCRIPT` path is stale. Zero-token validators belong in the `--fast` set, because a
+  check that only an opt-in flag can reach is invisible coverage.
 
 ## Agent skills
 

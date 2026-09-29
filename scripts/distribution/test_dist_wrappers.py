@@ -8,6 +8,8 @@ server, credentials, an ONNX bundle, or network access.
 from __future__ import annotations
 
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -256,6 +258,143 @@ class DistributionWrapperContractTest(unittest.TestCase):
         self.assertNotIn("lsof -ti", runner.read_text(encoding="utf-8"))
         for validator in (ROOT / "rest-http" / "scripts").glob("validate_*.sh"):
             self.assertNotIn("head -c", validator.read_text(encoding="utf-8"), validator.name)
+
+    def test_every_validator_is_registered_in_the_master_runner(self) -> None:
+        """A validator no profile can reach is invisible coverage.
+
+        The classifier control plane hid behind --onnx for exactly this reason:
+        validate_onnx.sh was the only caller, so the default profile never ran it.
+        """
+        scripts_dir = ROOT / "rest-http" / "scripts"
+        runner = (scripts_dir / "run_all_validations.sh").read_text(encoding="utf-8")
+        on_disk = sorted(path.name for path in scripts_dir.glob("validate_*.sh"))
+        self.assertTrue(on_disk, "no validator scripts found")
+        assigned = set(re.findall(r"SCRIPT_DIR/(validate_[a-z0-9_]+\.sh)", runner))
+        self.assertEqual(
+            [name for name in on_disk if name not in assigned],
+            [],
+            "these validators have no *_SCRIPT assignment in run_all_validations.sh",
+        )
+        self.assertEqual(
+            sorted(name for name in assigned if not (scripts_dir / name).is_file()),
+            [],
+            "run_all_validations.sh references validator scripts that do not exist",
+        )
+
+    def test_zero_token_decision_plane_validator_runs_in_the_fast_profile(self) -> None:
+        """The decision-plane contract needs no model and no LLM, so it must not be opt-in."""
+        runner = (ROOT / "rest-http" / "scripts" / "run_all_validations.sh").read_text(encoding="utf-8")
+        fast_case = next(line for line in runner.splitlines() if line.strip().startswith("--fast)"))
+        self.assertIn("RUN_DECISION_PLANE=true", fast_case)
+
+    def test_validation_run_always_sets_the_inert_plane_diagnostic_expectation(self) -> None:
+        """Leaving the expectation unset makes the startup-diagnostic check vacuous.
+
+        The validator reads an unset AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING as "switches
+        disabled", so a wrapper that does not derive it from the loaded configuration would
+        pass even when the diagnostic is missing. It must therefore always be exported.
+        """
+        switches = {
+            "AMSHA_DECISION_SHADOW_INTENT_ENABLED": "false",
+            "AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED": "false",
+            "AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED": "false",
+            "AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED": "false",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            captured = directory_path / "captured-expectation"
+            validator = directory_path / "validator.sh"
+            validator.write_text(
+                "#!/usr/bin/env bash\n"
+                'printf \'%s\\n\' "${AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING:-UNSET}"'
+                ' > "$AMSHA_CAPTURE_FILE"\n',
+                encoding="utf-8",
+            )
+            validator.chmod(0o755)
+            base_env = {
+                "AMSHA_VALIDATION_SCRIPT": str(validator),
+                "AMSHA_CAPTURE_FILE": str(captured),
+                # An existing runtime: the wrapper runs the suite without owning a server.
+                "TEST_BASE": "http://127.0.0.1:1",
+                **switches,
+            }
+
+            for enabled, expected in (
+                (None, "false"),
+                ("AMSHA_DECISION_SHADOW_INTENT_ENABLED", "true"),
+                ("AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED", "true"),
+            ):
+                extra_env = dict(base_env)
+                if enabled:
+                    extra_env[enabled] = "true"
+                result = self.run_wrapper("sqlite", "--validate", "--fast", extra_env=extra_env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    captured.read_text(encoding="utf-8").strip(),
+                    expected,
+                    f"expectation wrong when {enabled or 'no switch'} is enabled",
+                )
+
+    def test_decision_switch_lookup_tolerates_unset_variables(self) -> None:
+        """A clean checkout has no root .env, so the four decision switches are simply absent.
+
+        run_dist_backend.sh runs under `set -u`, and an indirect lookup without an inline
+        default aborts the whole run with "unbound variable" before any suite starts. The
+        repository .env defines these keys, which masks the failure locally, so this runs the
+        real wrapper from a project root that has no env files at all.
+        """
+        switch_names = (
+            "AMSHA_DECISION_SHADOW_INTENT_ENABLED",
+            "AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED",
+            "AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED",
+            "AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            project_root = directory_path / "project"
+            shutil.copytree(ROOT / "scripts", project_root / "scripts")
+            captured = directory_path / "captured-expectation"
+            validator = directory_path / "validator.sh"
+            validator.write_text(
+                "#!/usr/bin/env bash\n"
+                'printf \'%s\\n\' "${AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING:-UNSET}"'
+                ' > "$AMSHA_CAPTURE_FILE"\n',
+                encoding="utf-8",
+            )
+            validator.chmod(0o755)
+            environment = os.environ.copy()
+            for name in (
+                "AMSHA_DATA_DIR",
+                "AMSHA_ONNX_MODEL_ROOT",
+                "AMSHA_ONNX_ENABLED",
+                "AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS",
+                "AMSHA_PERSISTENCE_BACKEND",
+                *switch_names,
+            ):
+                environment.pop(name, None)
+            environment.update(
+                {
+                    "AMSHA_VALIDATION_SCRIPT": str(validator),
+                    "AMSHA_CAPTURE_FILE": str(captured),
+                    # An existing runtime: the wrapper runs the suite without owning a server.
+                    "TEST_BASE": "http://127.0.0.1:1",
+                }
+            )
+            result = subprocess.run(
+                [str(project_root / "scripts" / "run_dist_sqlite.sh"), "--validate", "--fast"],
+                cwd=project_root,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=60,
+            )
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"an absent decision switch must read as disabled, not abort: {result.stderr}",
+            )
+            self.assertEqual(captured.read_text(encoding="utf-8").strip(), "false")
 
     def test_mise_adapters_keep_backend_builds_and_fast_validation_separate(self) -> None:
         dist_tasks = ROOT / ".mise" / "tasks" / "dist"

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # validate_onnx.sh — Validate deployed in-process local ONNX Runtime readiness and bundle integrity
 # Covers: ONNX health → metric wiring → bundle digest verification → active index compatibility
-#         → non-activating Phase 3A classifier control plane
+#         → classifier control plane stays non-activating under ONNX
+#
+# The decision-plane contract that does not need the ONNX bundle lives in
+# validate_decision_plane.sh, which runs in the default and --fast profiles.
 #
 # Needs: serve mode with AMSHA_ONNX_ENABLED=true and verified model bundle in data/models.
 
@@ -76,6 +79,9 @@ if health.get("status") != "UP" or check.get("status") != "UP" or data.get("vect
 PY
 }
 
+# Asserts the decision plane stays inert even with the local ONNX bundle loaded:
+# no classifier may report a ready implementation or an effective enable. The
+# ONNX-independent half of this contract is covered by validate_decision_plane.sh.
 classifier_scaffold_status() {
   python3 - "$RESP_FILE" <<'PY'
 import json
@@ -91,13 +97,8 @@ if actual != expected:
     raise SystemExit(1)
 if any(item.get("effectiveEnabled") for item in classifiers):
     raise SystemExit(1)
-for item in classifiers:
-    id = item.get("classifier")
-    available = item.get("implementationAvailable")
-    if id == "intent" and available:
-        raise SystemExit(1)
-    if id in {"tool-risk", "answer-quality"} and available:
-        raise SystemExit(1)
+if any(item.get("implementationAvailable") for item in classifiers):
+    raise SystemExit(1)
 PY
 }
 

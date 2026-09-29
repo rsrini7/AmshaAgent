@@ -543,7 +543,8 @@ complete flow across the rate-limit window.
 | `--auth-session` | `validate_auth_session.sh` | API-key auth + session lifecycle | fast |
 | `--identity` | `validate_identity_access.sh` | P109 bootstrap/identity/OAuth | fast |
 | `--pii-audit` | `validate_pii_injection_audit.sh` | PII redaction + injection + audit HMAC | fast |
-| `--onnx` | `validate_onnx.sh` | ONNX health, fixed-text inference metric, bundle digests, vector compatibility, non-activating classifier controls | local CPU |
+| `--onnx` | `validate_onnx.sh` | ONNX health, fixed-text inference metric, bundle digests, vector compatibility, classifier controls stay non-activating under ONNX | local CPU |
+| `--decision-plane` | `validate_decision_plane.sh` | Jev decision-plane Deferred contract: auth matrix, snapshot shape and coherence, fail-closed enable, revision stability, startup diagnostic | zero-token |
 | `--self-evolve` | `validate_self_evolve.sh` | Directives lifecycle (seeds when `--data-dir` given) | LLM |
 | `--hitl` | `validate_hitl.sh` | Approve/deny (REST + goal-string + taskId), 401/409 | LLM |
 | `--rag` | `validate_rag.sh` | Ingest → approve → recall + rag_chunk isolation | LLM |
@@ -561,6 +562,16 @@ OMLX OpenAI-compatible API and manage an isolated native lifecycle, keep the req
 forces `generic-openai` plus ONNX, never selects Ollama, and does not print raw HTTP
 payloads or credentials. See the
 [local ONNX guide](../docs/ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
+
+`--decision-plane` is the zero-token half of the classifier control-plane contract. The
+decision plane is Deferred, so no `DecisionEngine` bean exists and every evaluation fails
+closed; the validator asserts that posture is observable and coherent rather than merely
+documented. It overlaps deliberately with `validate_onnx.sh` ONNX-5..7 — the same
+invariant must hold with and without the local ONNX bundle loaded, so do not remove one
+copy. When `AMSHA_VALIDATION_LOG_FILE` is set (the `run_dist_*` wrappers export it) the
+validator also asserts the `DecisionPlaneReadiness` startup diagnostic fired exactly once;
+set `AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true` to require it, or `=false` to forbid
+it when the shadow switches are disabled.
 
 ### New P109 config flags (also in `.env.example`)
 

@@ -245,6 +245,25 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   # Validation launches the server with stdin closed; never enter the
   # interactive first-run setup in that mode.
   export AMSHA_UI_SKIP_ONBOARDING=true
+
+  # The decision plane is inert whenever a decision switch is enabled and no
+  # DecisionEngine is resolvable, and the startup diagnostic is the only signal for it.
+  # Derive the validator's expectation from the configuration this run actually loads, so a
+  # missing diagnostic fails instead of being read as "switches disabled".
+  decision_plane_switches=false
+  for decision_switch in \
+    AMSHA_DECISION_SHADOW_INTENT_ENABLED \
+    AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED \
+    AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED \
+    AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED; do
+    # Indirect expansion must carry its own default: `set -u` aborts on an unset name, and a
+    # clean checkout or distribution without a root .env has none of these variables set.
+    # That must read as "disabled", not crash the run.
+    if [[ "${!decision_switch:-false}" == "true" ]]; then
+      decision_plane_switches=true
+    fi
+  done
+  export AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING="$decision_plane_switches"
 fi
 if [[ "$ONNX_REQUESTED" == false ]] && ! is_process_env_key "AMSHA_ONNX_ENABLED"; then
   # A file-level ONNX opt-in must not make ordinary validation download or
@@ -468,6 +487,9 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   # advertised wrapper log so it contains the actual server diagnostics.
   export QUARKUS_LOG_FILE_ENABLE=true
   export QUARKUS_LOG_FILE_PATH="$log_file"
+  # Publish the resolved path so validators can assert startup diagnostics
+  # (for example the deferred decision-plane warning) without scraping stdout.
+  export AMSHA_VALIDATION_LOG_FILE="$log_file"
   printf '🚀 Starting %s validation server on %s.\n' "$BACKEND" "$validation_base"
   printf '📄 Server logs: %s\n' "$log_file"
   (cd "$PROJECT_ROOT" && exec "$BINARY" serve) < /dev/null > "$log_file" 2>&1 &
