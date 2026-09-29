@@ -423,6 +423,14 @@ print_plan() {
   fi
 }
 
+run_validation() {
+  if [[ ${#VALIDATE_ARGS[@]} -gt 0 ]]; then
+    (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT" "${VALIDATE_ARGS[@]}")
+  else
+    (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT")
+  fi
+}
+
 if [[ "$DRY_RUN" == true ]]; then
   print_plan
   exit 0
@@ -446,7 +454,7 @@ fi
 # migration smoke tests and prevents the wrapper from touching port 8080 or a
 # shared database while validating an existing runtime.
 if [[ "$VALIDATE_MODE" == true && -n "${TEST_BASE:-}" && "$AUTO_BUILD" == false ]]; then
-  (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT" "${VALIDATE_ARGS[@]}")
+  run_validation
   exit $?
 fi
 
@@ -470,7 +478,7 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   [[ "$validation_port" =~ ^[0-9]+$ ]] || die "AMSHA_VALIDATION_PORT must be numeric."
 
   if [[ -n "${TEST_BASE:-}" ]]; then
-    (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT" "${VALIDATE_ARGS[@]}")
+    run_validation
     exit $?
   fi
 
@@ -542,7 +550,7 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   [[ "$ready" == true ]] || die "Validation server did not become ready; inspect $log_file."
 
   export TEST_BASE="$validation_base"
-  (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT" "${VALIDATE_ARGS[@]}")
+  run_validation
   exit $?
 fi
 

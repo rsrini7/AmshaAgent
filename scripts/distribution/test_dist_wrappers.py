@@ -416,7 +416,11 @@ class DistributionWrapperContractTest(unittest.TestCase):
             validator = directory_path / "validator.sh"
             (fake_bin_dir / "curl").write_text(
                 "#!/usr/bin/env bash\n"
-                "exit 0\n",
+                "for _ in $(seq 1 500); do\n"
+                "  [[ -f \"$AMSHA_FAKE_ENV_FILE\" ]] && exit 0\n"
+                "  sleep 0.01\n"
+                "done\n"
+                "exit 1\n",
                 encoding="utf-8",
             )
             (fake_bin_dir / "curl").chmod(0o755)
