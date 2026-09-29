@@ -34,6 +34,31 @@ def reactor_modules(root: Path) -> list[Path]:
     return [root / item.text for item in project.findall("./m:modules/m:module", namespace)]
 
 
+def build_gate(root: Path) -> float:
+    """Read the reactor's JaCoCo line-coverage floor from the root pom.
+
+    Read rather than hardcoded: the floor is a ratchet and has already moved once, and a stale
+    constant here makes the badge colour disagree with what the build actually enforces.
+    """
+    project = ET.parse(root / "pom.xml").getroot()
+    namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+    node = project.find("./m:properties/m:jacoco.minimum.line.coverage", namespace)
+    if node is None or not node.text or not node.text.strip():
+        raise ValueError("jacoco.minimum.line.coverage is missing from the root pom properties")
+    return float(node.text.strip())
+
+
+def badge_color(pct: float, gate: float) -> str:
+    """Pick the shields.io colour for a coverage percentage relative to the build gate.
+
+    Extracted so the invariant that matters can be asserted directly: coverage below the gate must
+    never render "brightgreen", because the build would reject it.
+    """
+    if pct >= gate:
+        return "brightgreen"
+    return "yellow" if pct >= 0.50 else "red"
+
+
 def read_gaps(root: Path) -> tuple[list[CoverageGap], list[str]]:
     gaps: list[CoverageGap] = []
     missing_reports: list[str] = []
@@ -101,9 +126,9 @@ def main() -> int:
         default=0.80,
         help=(
             "desired reactor line coverage as a fraction (default: 0.80, the goal recommended in "
-            "docs/TEST_COVERAGE_ANALYSIS.md section 8). Must stay above the build gate "
-            "(`jacoco.minimum.line.coverage` in the root pom, currently 0.74) or the analyzer will "
-            "report 'target met' for a level the build rejects."
+            "docs/TEST_COVERAGE_ANALYSIS.md section 8). Must stay at or above the build gate "
+            "(`jacoco.minimum.line.coverage` in the root pom) or the analyzer will report "
+            "'target met' for a level the build rejects."
         ),
     )
     parser.add_argument("--top", type=int, default=25, help="number of coverage gaps to show")
@@ -149,9 +174,14 @@ def main() -> int:
     pct = covered / total if total else 0.0
 
     if args.badge:
-        # Colour bands track the build gate (jacoco.minimum.line.coverage, currently 0.74): the badge
+        # Colour bands track the build gate, read from the root pom rather than hardcoded: the badge
         # must not read "green" at a coverage level the build would reject.
-        color = "brightgreen" if pct >= 0.74 else "yellow" if pct >= 0.50 else "red"
+        try:
+            gate = build_gate(root)
+        except ValueError as error:
+            print(f"Cannot read the coverage gate from pom.xml: {error}", file=sys.stderr)
+            return 1
+        color = badge_color(pct, gate)
         print(f"![Coverage](https://img.shields.io/badge/Coverage-{pct * 100:.2f}%25-{color}.svg?style=flat)")
         return 0
 
