@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -19,14 +20,14 @@ for _path in (_QUALITY_DIR, _SCRIPTS_DIR / "lib"):
 
 import repo_root
 
-from analyze_jacoco_coverage import badge_color, build_gate, main
+from analyze_jacoco_coverage import CoverageGap, badge_color, build_gate, main, module_summaries
 
 REPO_ROOT = _SCRIPTS_DIR.parent
 
 _POM_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <properties>{properties}</properties>
-  <modules><module>mod</module></modules>
+  <modules>{modules}</modules>
 </project>
 """
 
@@ -36,18 +37,33 @@ _CSV_HEADER = (
 )
 
 
-def _write_pom(root: Path, gate: str | None) -> None:
+def _write_pom(root: Path, gate: str | None, modules: tuple[str, ...] = ("mod",)) -> None:
     """Write a minimal root pom; ``gate=None`` omits the coverage property entirely."""
     root.mkdir(parents=True, exist_ok=True)
     properties = "" if gate is None else f"<jacoco.minimum.line.coverage>{gate}</jacoco.minimum.line.coverage>"
-    (root / "pom.xml").write_text(_POM_TEMPLATE.format(properties=properties), encoding="utf-8")
+    declared = "".join(f"<module>{name}</module>" for name in modules)
+    (root / "pom.xml").write_text(
+        _POM_TEMPLATE.format(properties=properties, modules=declared), encoding="utf-8"
+    )
 
 
-def _write_report(root: Path, covered: int, missed: int) -> None:
-    """Write a one-class jacoco.csv for module ``mod`` at the path read_gaps expects."""
-    report = root / "mod" / "target" / "site" / "jacoco" / "jacoco.csv"
+def _write_report(
+    root: Path,
+    covered: int,
+    missed: int,
+    *,
+    module: str = "mod",
+    covered_branches: int = 0,
+    missed_branches: int = 0,
+) -> None:
+    """Write a one-class jacoco.csv for ``module`` at the path read_gaps expects."""
+    report = root / module / "target" / "site" / "jacoco" / "jacoco.csv"
     report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(f"{_CSV_HEADER}\ncom/example,Cls,{missed},{covered},0,0,0,0,0,0\n", encoding="utf-8")
+    report.write_text(
+        f"{_CSV_HEADER}\ncom/example,Cls,{missed},{covered},"
+        f"{missed_branches},{covered_branches},0,0,0,0\n",
+        encoding="utf-8",
+    )
 
 
 @contextlib.contextmanager
@@ -175,6 +191,120 @@ class BadgeOutputTest(unittest.TestCase):
             with _analyzing(root):
                 code, _output = _run_main("--badge")
         self.assertEqual(code, 1)
+
+
+class ModuleSummaryTest(unittest.TestCase):
+    """Per-module aggregation: the view that shows one module subsidising another."""
+
+    def test_aggregates_classes_into_module_totals(self) -> None:
+        gaps = [
+            CoverageGap("core", "p", "A", missed_lines=10, covered_lines=90, missed_branches=1, covered_branches=9),
+            CoverageGap("core", "p", "B", missed_lines=20, covered_lines=80, missed_branches=2, covered_branches=8),
+            CoverageGap("app", "p", "C", missed_lines=50, covered_lines=50, missed_branches=5, covered_branches=5),
+        ]
+        summaries = module_summaries(gaps)
+        self.assertEqual([item.module for item in summaries], ["app", "core"])
+        core = summaries[1]
+        self.assertEqual((core.covered_lines, core.total_lines, core.missed_lines), (170, 200, 30))
+        self.assertAlmostEqual(core.line_coverage, 0.85)
+        self.assertAlmostEqual(core.branch_coverage, 17 / 20)
+
+    def test_weakest_line_coverage_sorts_first(self) -> None:
+        gaps = [
+            CoverageGap("strong", "p", "A", missed_lines=1, covered_lines=99),
+            CoverageGap("weak", "p", "B", missed_lines=90, covered_lines=10),
+            CoverageGap("middle", "p", "C", missed_lines=50, covered_lines=50),
+        ]
+        self.assertEqual([item.module for item in module_summaries(gaps)], ["weak", "middle", "strong"])
+
+    def test_module_with_no_instrumented_lines_is_zero_not_complete(self) -> None:
+        # The trap: CoverageGap.coverage returns 1.0 for a zero-line class. A module that was never
+        # measured must not read as fully covered, or the module most in need sorts to the bottom.
+        summaries = module_summaries([CoverageGap("unmeasured", "p", "A", missed_lines=0, covered_lines=0)])
+        self.assertEqual(summaries[0].line_coverage, 0.0)
+
+    def test_branch_coverage_is_undefined_without_branch_instructions(self) -> None:
+        # persistence-common has a single branch-free class, so the ratio is undefined rather than
+        # 0% or 100%. Returning None is what keeps the report honest.
+        summaries = module_summaries([CoverageGap("mod", "p", "A", missed_lines=1, covered_lines=9)])
+        self.assertIsNone(summaries[0].branch_coverage)
+
+
+class ModuleReportOutputTest(unittest.TestCase):
+    """End-to-end: --modules must report per-module totals, not only the reactor number."""
+
+    def _two_module_reactor(self, root: Path) -> None:
+        _write_pom(root, "0.82", modules=("core", "app"))
+        _write_report(root, covered=170, missed=30, module="core", covered_branches=17, missed_branches=3)
+        _write_report(root, covered=50, missed=50, module="app", covered_branches=5, missed_branches=5)
+
+    def test_reports_every_module_weakest_first_plus_a_total(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._two_module_reactor(root)
+            with _analyzing(root):
+                code, output = _run_main("--modules")
+        self.assertEqual(code, 0)
+        lines = output.splitlines()
+        self.assertTrue(lines[0].startswith("MODULE"), lines[0])
+        self.assertTrue(lines[1].startswith("app"), lines[1])
+        self.assertIn("50.00%", lines[1])
+        self.assertTrue(lines[2].startswith("core"), lines[2])
+        self.assertIn("85.00%", lines[2])
+        self.assertTrue(lines[3].startswith("TOTAL"), lines[3])
+        # 220 / 300 lines and 22 / 30 branches
+        self.assertIn("73.33%", lines[3])
+        self.assertIn("220", lines[3])
+
+    def test_filtering_to_one_module_drops_the_total_row(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._two_module_reactor(root)
+            with _analyzing(root):
+                code, output = _run_main("--modules", "--module", "core")
+        self.assertEqual(code, 0)
+        self.assertIn("core", output)
+        self.assertNotIn("app", output)
+        # The header legitimately has a TOTAL *column*; it is the TOTAL *row* that must be absent.
+        self.assertFalse([line for line in output.splitlines() if line.startswith("TOTAL")], output)
+
+    def test_an_unknown_module_filter_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._two_module_reactor(root)
+            with _analyzing(root):
+                code, _output = _run_main("--modules", "--module", "nope")
+        self.assertEqual(code, 1)
+
+    def test_modules_json_carries_per_module_line_and_branch_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            _write_pom(root, "0.82", modules=("core", "branchless"))
+            _write_report(root, covered=170, missed=30, module="core", covered_branches=17, missed_branches=3)
+            _write_report(root, covered=9, missed=1, module="branchless")
+            with _analyzing(root):
+                code, output = _run_main("--modules", "--json")
+        self.assertEqual(code, 0)
+        payload = json.loads(output)
+        by_module = {item["module"]: item for item in payload["modules"]}
+        self.assertAlmostEqual(by_module["core"]["line_coverage"], 0.85)
+        self.assertAlmostEqual(by_module["core"]["branch_coverage"], 0.85)
+        self.assertEqual(by_module["core"]["missed_lines"], 30)
+        self.assertIsNone(by_module["branchless"]["branch_coverage"])
+        self.assertAlmostEqual(payload["coverage"], 179 / 210)
+
+    def test_class_ranking_json_also_carries_module_totals(self) -> None:
+        # --json is the machine-readable entry point used by the coverage docs, so the per-module
+        # view must be reachable without a second invocation.
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._two_module_reactor(root)
+            with _analyzing(root):
+                code, output = _run_main("--json")
+        self.assertEqual(code, 0)
+        payload = json.loads(output)
+        self.assertEqual(sorted(item["module"] for item in payload["modules"]), ["app", "core"])
+        self.assertAlmostEqual(payload["coverage_branches"], 22 / 30)
 
 
 if __name__ == "__main__":

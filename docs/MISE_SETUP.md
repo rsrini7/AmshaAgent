@@ -323,6 +323,16 @@ mise run help    # or: mise tasks
 | `mise run db:sqlite:inspect` | Open `amsha-meta.db` in sqlite3 |
 | `mise run db:sqlite:fts-check` | Verify FTS5 available |
 | `mise run db:sqlite:vec-check` | Check `lib/vec0` extension for current platform |
+| **`mise run test:summary`** | Surefire+failsafe counts + reactor JaCoCo summary + UI coverage |
+| `mise run test:ui` | UI Vitest suite with V8 coverage |
+| `mise run test:ui:summary` | UI test count + V8 line/branch coverage |
+| **`mise run quality:coverage`** | Reactor summary **and per-module line/branch totals** (reads existing reports) |
+| `mise run quality:coverage-gaps` | Largest coverage gaps, with the missed line numbers to target |
+| **`mise run quality:coverage-gate`** | The JaCoCo gate alone — seconds instead of a full reactor build |
+| `mise run quality:py-tests` | Python script/harness contract suites (CI parity plus two) |
+| `mise run quality:docs` | Verify Markdown links and anchors across the workspace |
+| `mise run quality:staged` | Review staged changes read-only (never touches the index) |
+| `mise run format` | `fix_fqns.py` + `spotless:apply` (required after Java edits) |
 | `mise run info` | Print Java, Podman, Docker versions |
 | `mise run help` | List all tasks |
 
@@ -369,6 +379,30 @@ The PMD rules are project-specific: 500 lines per class, 80 NCSS statements
 per method, and cognitive complexity 50. `package` does not execute this gate;
 `verify` does. Before handoff, run `mise run sonar:issues` when the SonarQube
 service is available.
+
+### Coverage gates
+
+`verify` is likewise the only phase that reaches the JaCoCo gate: `app/pom.xml`
+binds `scripts/verify_jacoco_coverage.py` to it, and the floor is read from
+`jacoco.minimum.line.coverage` in the root `pom.xml` (currently `0.82`).
+`package` reaches neither PMD nor JaCoCo.
+
+Since the gate therefore costs a full reactor build, three tasks read the reports
+already on disk instead. **None of them build** — run `build:test` (or a reactor
+`verify`) first, and note they report whatever those reports contain:
+
+```bash
+mise run quality:coverage        # reactor summary + per-module line/branch totals
+mise run quality:coverage-gaps   # largest gaps, with the missed line numbers
+mise run quality:coverage-gate   # the gate itself, with --strict-instrumentation
+```
+
+`quality:coverage-gate` mirrors the CI step, including the fatal empty-report
+check that catches a module whose JaCoCo agent never attached.
+`quality:coverage` adds the per-module view that `test:summary` does not: the
+reactor total can hide a module at 35% being subsidised by one at 99%.
+`quality:coverage-gaps` reads each module's `jacoco.xml` to attach the actual
+missed line numbers, turning the report into a worklist.
 
 ### Native build strategy
 

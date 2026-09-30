@@ -273,9 +273,14 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 After `mise run build:test` or `mise run test:ui`, run `mise run test:summary` to view total test counts
 and coverage across both Java and UI suites. For detailed breakdowns:
-- **Java**: `python3 ./scripts/analyze_jacoco_coverage.py --target 0.80` (`--module <mod>`, `--top 10`, `--badge`, `--json`).
+- **Java**: `mise run quality:coverage` (reactor summary + per-module line/branch totals), `mise run quality:coverage-gaps`
+  (largest gaps with the missed line numbers), and `mise run quality:coverage-gate` (the coverage gate alone, against
+  reports already on disk — seconds instead of a full reactor build). These wrap
+  `python3 ./scripts/analyze_jacoco_coverage.py --target 0.80` (`--module <mod>`, `--modules`, `--top 10`, `--badge`, `--json`)
+  and `python3 ./scripts/verify_jacoco_coverage.py`; pass flags through after `--`, e.g. `mise run quality:coverage -- --json`.
   The default target tracks the goal in [`docs/TEST_COVERAGE_ANALYSIS.md`](./docs/TEST_COVERAGE_ANALYSIS.md) §8; the build gate itself is
-  `jacoco.minimum.line.coverage` in the root `pom.xml`.
+  `jacoco.minimum.line.coverage` in the root `pom.xml`. Use `--modules` for per-module line and branch totals — the view that shows
+  whether one module is subsidising another inside the reactor-wide number.
 - **UI**: `mise run test:ui` (runs Vitest with V8 coverage) and `python3 ./scripts/analyze_ui_coverage.py --target 0.50` (`--top 10`, `--badge`, `--badge-tests`, `--json`).
 
 ### ❓ Reference

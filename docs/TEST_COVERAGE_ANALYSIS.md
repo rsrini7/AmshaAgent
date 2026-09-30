@@ -503,8 +503,12 @@ pom.xml                          jacoco-maven-plugin 0.8.15
 app/pom.xml                      antrun (verify)
   → scripts/verify_jacoco_coverage.py --minimum ${jacoco.minimum.line.coverage}
 scripts/quality/verify_jacoco_coverage.py   sums LINE_MISSED/LINE_COVERED across modules; fails < 82%
-scripts/quality/analyze_jacoco_coverage.py  ranks gaps; --target default 0.80
+scripts/quality/analyze_jacoco_coverage.py  ranks gaps; --target default 0.80; --modules for per-module totals
 mise run test:summary                       surefire counts + jacoco summary + UI coverage
+mise run quality:coverage                   summary + per-module line/branch totals (reads existing reports)
+mise run quality:coverage-gate              the gate standalone: ~1 s instead of an ~11 min reactor
+mise run quality:coverage-gaps              top gaps with the missed line numbers to target
+mise run quality:py-tests                   the Python script/harness contract suites
 ```
 
 > The floor is defined once, in `pom.xml` as `jacoco.minimum.line.coverage` — currently **`0.82`**. `app/pom.xml`
@@ -516,6 +520,24 @@ mise run test:summary                       surefire counts + jacoco summary + U
 > `badge_color(pct, gate)` reads the live gate from the root POM through `build_gate()`, so the badge cannot read
 > "green" at a coverage level the build would reject. An earlier revision hardcoded `0.74`, which went stale the
 > moment the gate moved to `0.82`; reading the POM is what prevents that class of drift.
+>
+> `--modules` was added for the per-module view (§3, §10 item 3). It is a separate flag rather than an overload of
+> `--module` because the two answer different questions: `--module <mod>` *filters the class gap ranking* to one
+> module, whereas `--modules` *aggregates to module totals* (line and branch) across the whole reactor, weakest line
+> coverage first, with a `TOTAL` row. It reuses the rows `read_gaps()` already returns — no second CSV parse and no
+> second glob, which matters because a recursive `**/jacoco.csv` glob also matches the reactor-wide aggregate under
+> `target/jacoco-report/` and inflates the totals roughly 34×. The check that the aggregation is honest is that its
+> `TOTAL` row reproduces the reactor figure exactly: **84.17% (52,507 / 62,379 lines)**, branch **68.21%**
+> (24,636 / 36,118).
+>
+> The four `mise run quality:*` lines above are thin wrappers over these same scripts, added because the gate and
+> the analyzer previously had **no task entry point at all** — `test:summary` was the only task touching coverage,
+> and it reports the reactor total only. Two consequences worth knowing: the gate normally runs *only* inside
+> `./mvnw verify` (an ~11 minute reactor), so `quality:coverage-gate` turns "am I still above the floor?" into a
+> ~1 second check against reports already on disk; and `quality:py-tests` runs the contract suites CI runs plus
+> the two it does not (`test_verify_docs.py`, `test_jacoco_lines.py`), which are green but otherwise unguarded.
+> All four read existing reports and never build, and they print their own diagnostics to **stderr** so that
+> `--json` and `--badge` output on stdout stays parseable.
 
 **Integrity problems in this pipeline — with current status:**
 
@@ -542,13 +564,26 @@ mise run test:summary                       surefire counts + jacoco summary + U
 Sorted ascending by line coverage. `missed` = uncovered lines (the absolute size of each gap).
 
 > **This table is the analysis-time baseline (2026-09-15/16), not the current state.** It is retained because the
-> phases below are measured against it. Several modules have since moved substantially — `llm-providers`
-> 65.80% → **97.88%**, `persistence-sqlite`/`postgres`/`fs` ~66–77% → **~99.5%**, `sandbox` 65.04% → **91.39%**,
-> `app` 69.18% → **81.23%**, `core` 78.19% → **83.06%**. `classifier-api` moved the other way: the Jev decision
-> plane added **32 new contract types** (+3,380 source lines) and took the module from **73** to **1,372**
-> instrumented lines (+1,299), so the `100.00` in the row below is historical — the module now measures **79.08%**
-> (1,085 / 1,372), with the residual concentrated in `DecisionPayloadDecoder` (83 missed) and `InMemoryDecisionEngine`
-> (33). For current per-module figures, run `python3 scripts/analyze_jacoco_coverage.py --module <module>`.
+> phases below are measured against it. Most rows have moved since; the current figures are listed below as of
+> 2026-09-29, and `python3 scripts/analyze_jacoco_coverage.py --modules` is authoritative for all of them.
+>
+> - **Moved up:** `persistence-postgres` 66.06 → **99.49**, `persistence-sqlite` 70.40 → **99.63**,
+>   `persistence-fs` 76.85 → **99.43**, `llm-providers` 65.80 → **97.88**, `sandbox` 65.04 → **91.39**,
+>   `security` 75.29 → **88.93**, `skills` 66.28 → **79.90**, `channel-telegram` 68.82 → **81.75**,
+>   `app` 69.18 → **81.23**, `tools-builtin` 67.41 → **76.18**, `core` 78.19 → **83.06**,
+>   `local-ml-onnx` 72.63 → **75.50**, `self-evolve` 71.67 → **73.13**, `mcp` 78.05 → **78.42**.
+> - **Unchanged:** `tool-api` 35.83, `common` 35.90, `persistence-api` 67.67, `deployment` 69.66, `memory` 72.69,
+>   `channel-web` 78.07, `persistence-common` 81.82, `onboarding` 82.31, `rag` 83.29, `llm-provider-api` 83.35,
+>   `channel-api` 84.51, `security-api` 95.90.
+> - **Moved down:** `classifier-api` 100.00 → **79.08**. The Jev decision plane added **32 new contract types**
+>   (+3,380 source lines) and took the module from **73** to **1,372** instrumented lines (+1,299), so the `100.00`
+>   in the row below is historical; the residual is concentrated in `DecisionPayloadDecoder` (83 missed) and
+>   `InMemoryDecisionEngine` (33).
+>
+> For current per-module figures, run `python3 scripts/analyze_jacoco_coverage.py --modules` — it prints line and
+> branch totals for every module, weakest line coverage first, plus a reactor `TOTAL` row. Add
+> `--modules --module <module>` for a single module, or `--modules --json` for machine-readable output. Note that
+> `--module` on its own only *filters the class gap ranking*; it does not produce per-module totals.
 
 > **Four rows differ from the first draft of this table.** `onboarding` was listed at 0.00% — a measurement defect,
 > not a coverage level (see §1.2.2); it is in fact one of the better-covered modules at **82.31%**. `app` rose from
@@ -606,11 +641,19 @@ branch percentage is undefined rather than 0% or 100%. It is 1.5% of nothing; ig
 | persistence-postgres | 465 | 3.0% |
 | security | 407 | 2.7% |
 
-Denominator: **15,291 uncovered lines** (59,997 total − 44,706 covered).
+Denominator: **15,291 uncovered lines** (59,997 total − 44,706 covered) — the analysis-time baseline, as above.
 
 **`core` + `app` + `llm-providers` = 57.6% of all uncovered lines.** One third of the entire remaining gap is
 `core` alone. The `onboarding` measurement fix has already been banked — it moved the reactor from 70.83% to
 **74.51%** without a single test being written, and `onboarding` no longer appears as a gap at all.
+
+> **The shape of this table has since changed, and the shares above are baseline-scoped.** The denominator is now
+> **9,872** uncovered lines, down from 15,291. `llm-providers` has left the list entirely (1,388 → **86** missed),
+> and `core` is now **4,207** missed — **42.6%** of the remaining gap, up from 33.5%, not because `core` regressed
+> but because every other row shrank faster than it did. The current top ten by missed lines are: `core` 4,207,
+> `app` 1,404, `local-ml-onnx` 627, `mcp` 520, `tools-builtin` 511, `onboarding` 475, `classifier-api` 287,
+> `self-evolve` 244, `llm-provider-api` 213, `persistence-api` 194. Regenerate with
+> `python3 scripts/analyze_jacoco_coverage.py --modules`.
 
 ### A note on what "untested class" does and does not mean
 
@@ -3010,10 +3053,13 @@ Added `NativeReflectionCompletenessTest` under `app` (`app.config`), asserting t
    from `0.70` → `0.74` → **`0.82`** (82.00%). The latest recorded repository coverage is **84.17%**
    (52,507 / 62,379 lines), leaving measurable headroom so incidental churn does
    not trip the gate while locking in the 82% floor.
-3. **Per-module floor.** Add `--module`-level minimums (start at 60%) so `persistence-fs` at 99.43% cannot
+3. **Per-module floor.** Add per-module minimums (start at 60%) so `persistence-fs` at 99.43% cannot
    subsidise `tool-api` at 35.83%. The original example here — `classifier-api` at 100% subsidising
    `persistence-postgres` at 66% — has expired at both ends: `classifier-api` is now **79.08%** and
-   `persistence-postgres` **99.49%**.
+   `persistence-postgres` **99.49%**. The *measurement* half is now in place: `--modules` prints every
+   module's line and branch totals plus a reactor `TOTAL`, so the subsidisation is directly observable and
+   the per-module floor can be set from data rather than guesswork. What remains is *enforcement* — a
+   per-module minimum in the build, which is still a single reactor-wide number today.
 4. **Add a branch gate.** Line coverage is **84.17%** while branch is **68.21%** (24,636 / 36,118) — still a
    ~16-point gap that a line-only gate cannot see. Gate branch separately (start at 68%, target 72%). This
    remains the largest hole in the enforcement story.

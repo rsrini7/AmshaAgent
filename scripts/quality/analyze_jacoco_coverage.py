@@ -18,14 +18,51 @@ class CoverageGap:
     class_name: str
     missed_lines: int
     covered_lines: int
+    missed_branches: int = 0
+    covered_branches: int = 0
 
     @property
     def total_lines(self) -> int:
         return self.missed_lines + self.covered_lines
 
     @property
+    def total_branches(self) -> int:
+        return self.missed_branches + self.covered_branches
+
+    @property
     def coverage(self) -> float:
         return self.covered_lines / self.total_lines if self.total_lines else 1.0
+
+
+@dataclass(frozen=True)
+class ModuleCoverage:
+    """Line and branch totals for one Maven module.
+
+    Aggregated per module rather than per class because a per-module floor is the enforcement
+    gap this report exists to expose: one highly covered module can otherwise subsidise a
+    weakly covered one inside the reactor-wide number.
+    """
+
+    module: str
+    covered_lines: int
+    total_lines: int
+    covered_branches: int
+    total_branches: int
+
+    @property
+    def missed_lines(self) -> int:
+        return self.total_lines - self.covered_lines
+
+    @property
+    def line_coverage(self) -> float:
+        # A module with no instrumented lines is reported as 0%, never 100%: "nothing measured"
+        # must not read as "nothing to fix".
+        return self.covered_lines / self.total_lines if self.total_lines else 0.0
+
+    @property
+    def branch_coverage(self) -> float | None:
+        """None when the module has no branch instructions, so the ratio is undefined."""
+        return self.covered_branches / self.total_branches if self.total_branches else None
 
 
 def reactor_modules(root: Path) -> list[Path]:
@@ -77,9 +114,41 @@ def read_gaps(root: Path) -> tuple[list[CoverageGap], list[str]]:
                         class_name=row["CLASS"],
                         missed_lines=int(row["LINE_MISSED"]),
                         covered_lines=int(row["LINE_COVERED"]),
+                        # Branch columns are supplementary: tolerate a trimmed CSV rather than
+                        # failing the whole analysis over the optional half of the report.
+                        missed_branches=int(row.get("BRANCH_MISSED") or 0),
+                        covered_branches=int(row.get("BRANCH_COVERED") or 0),
                     )
                 )
     return gaps, missing_reports
+
+
+def module_summaries(gaps: list[CoverageGap]) -> list[ModuleCoverage]:
+    """Aggregate class gaps into per-module totals, weakest line coverage first.
+
+    Ascending order matches how the roadmap in docs/TEST_COVERAGE_ANALYSIS.md reads, and keeps
+    the module that most needs work at the top instead of burying it in alphabetical noise.
+    """
+    totals: dict[str, list[int]] = {}
+    for gap in gaps:
+        acc = totals.setdefault(gap.module, [0, 0, 0, 0])
+        acc[0] += gap.covered_lines
+        acc[1] += gap.total_lines
+        acc[2] += gap.covered_branches
+        acc[3] += gap.total_branches
+
+    summaries = [
+        ModuleCoverage(
+            module=module,
+            covered_lines=covered,
+            total_lines=total,
+            covered_branches=covered_branches,
+            total_branches=total_branches,
+        )
+        for module, (covered, total, covered_branches, total_branches) in totals.items()
+    ]
+    summaries.sort(key=lambda item: (item.line_coverage, item.module))
+    return summaries
 
 
 def additional_lines(covered: int, total: int, target: float) -> int:
@@ -137,6 +206,16 @@ def main() -> int:
     parser.add_argument("--badge", action="store_true", help="emit shields.io Markdown badge")
     parser.add_argument("--summary", action="store_true", help="emit single-line coverage summary")
     parser.add_argument(
+        "--modules",
+        action="store_true",
+        help=(
+            "report per-module line and branch coverage totals instead of ranking classes. "
+            "Weakest line coverage first, with a reactor TOTAL row. Combine with --module to "
+            "summarise a single module. This is the view that shows whether one module is "
+            "subsidising another inside the reactor-wide number."
+        ),
+    )
+    parser.add_argument(
         "--lines",
         action="store_true",
         help=(
@@ -170,6 +249,8 @@ def main() -> int:
 
     covered = sum(gap.covered_lines for gap in gaps)
     total = sum(gap.total_lines for gap in gaps)
+    branches_covered = sum(gap.covered_branches for gap in gaps)
+    branches_total = sum(gap.total_branches for gap in gaps)
     needed = additional_lines(covered, total, args.target)
     pct = covered / total if total else 0.0
 
@@ -187,6 +268,57 @@ def main() -> int:
 
     if args.summary:
         print(f"Reactor coverage: {pct:.2%} ({covered:,}/{total:,} lines)")
+        return 0
+
+    if args.modules:
+        summaries = module_summaries(gaps)
+        if args.module:
+            summaries = [item for item in summaries if item.module == args.module]
+            if not summaries:
+                print(f"No coverage data found for module {args.module!r}.", file=sys.stderr)
+                return 1
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "covered_lines": covered,
+                        "total_lines": total,
+                        "coverage": pct,
+                        "covered_branches": branches_covered,
+                        "total_branches": branches_total,
+                        "coverage_branches": (
+                            branches_covered / branches_total if branches_total else None
+                        ),
+                        "modules": [
+                            asdict(item)
+                            | {
+                                "missed_lines": item.missed_lines,
+                                "line_coverage": item.line_coverage,
+                                "branch_coverage": item.branch_coverage,
+                            }
+                            for item in summaries
+                        ],
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+        reactor_branch = (
+            f"{branches_covered / branches_total:.2%}" if branches_total else "—"
+        )
+        print(f"{'MODULE':<26} {'LINE%':>7} {'COVERED':>8} {'TOTAL':>8} {'MISSED':>7} {'BRANCH%':>8}")
+        for item in summaries:
+            branch = f"{item.branch_coverage:.2%}" if item.branch_coverage is not None else "—"
+            print(
+                f"{item.module:<26} {item.line_coverage:7.2%} {item.covered_lines:8,} "
+                f"{item.total_lines:8,} {item.missed_lines:7,} {branch:>8}"
+            )
+        if not args.module:
+            print(
+                f"{'TOTAL':<26} {pct:7.2%} {covered:8,} {total:8,} {total - covered:7,} "
+                f"{reactor_branch:>8}"
+            )
         return 0
 
     ranked = [gap for gap in gaps if gap.missed_lines and (not args.module or gap.module == args.module)]
@@ -210,6 +342,20 @@ def main() -> int:
                     "coverage": pct,
                     "target": args.target,
                     "additional_covered_lines_needed": needed,
+                    "covered_branches": branches_covered,
+                    "total_branches": branches_total,
+                    "coverage_branches": (
+                        branches_covered / branches_total if branches_total else None
+                    ),
+                    "modules": [
+                        asdict(item)
+                        | {
+                            "missed_lines": item.missed_lines,
+                            "line_coverage": item.line_coverage,
+                            "branch_coverage": item.branch_coverage,
+                        }
+                        for item in module_summaries(gaps)
+                    ],
                     "gaps": [
                         asdict(gap)
                         | {

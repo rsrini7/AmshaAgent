@@ -123,6 +123,9 @@ Use this workflow to measure test coverage or enforce the JaCoCo line coverage g
 # Summarize overall coverage
 python3 ./scripts/analyze_jacoco_coverage.py --summary
 
+# Per-module line + branch totals, weakest first, with a reactor TOTAL row
+python3 ./scripts/analyze_jacoco_coverage.py --modules
+
 # Enforce coverage floor (read from pom.xml <jacoco.minimum.line.coverage>)
 python3 ./scripts/quality/verify_jacoco_coverage.py --minimum 0.82
 
@@ -135,6 +138,14 @@ python3 ./scripts/quality/verify_jacoco_coverage.py --minimum 0.82
   ```bash
   python3 ./scripts/jacoco_lines.py --root . <fully.qualified.ClassName>
   ```
+- **Per-module totals**: use `--modules` (line *and* branch, weakest first, plus a `TOTAL` row; add
+  `--module <mod>` for one module, or `--json` for machine-readable). Do **not** confuse it with
+  `--module <mod>` alone, which only *filters the class gap ranking* and yields no per-module totals.
+  The `TOTAL` row must reproduce the reactor figure exactly — that equality is the honest-aggregation check.
+- **Mise wrappers exist for all of the above** (they read existing reports and never build):
+  `mise run quality:coverage` (summary + per-module totals), `mise run quality:coverage-gaps` (top gaps with
+  missed line numbers), `mise run quality:coverage-gate` (the gate alone — seconds instead of an ~11 min
+  reactor build), `mise run quality:py-tests` (Python contract suites, including two `ci.yml` omits).
 - **Always re-measure after `clean`**: JaCoCo maps current source line numbers onto compiled bytecode in `target/classes`. Running against stale classes yields corrupted line data.
 - **Historical Analysis & Gap Registry**: Detailed module-by-module analysis, class rosters, and gap tracking are maintained in [`docs/TEST_COVERAGE_ANALYSIS.md`](../../../docs/TEST_COVERAGE_ANALYSIS.md). Consult that document when planning coverage enhancements.
 
