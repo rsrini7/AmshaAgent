@@ -10,8 +10,8 @@
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   ![Java Tests](https://img.shields.io/badge/Tests-8530_passing-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-84.17%25-brightgreen.svg?style=flat)
-  ![UI Tests](https://img.shields.io/badge/UI_Tests-172_passing-brightgreen.svg?style=flat)
-  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-58.67%25-yellow.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-195_passing-brightgreen.svg?style=flat)
+  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-59.26%25-yellow.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -292,4 +292,4 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-29; UI 2026-09-12): 8,530 Java tests at 84.17% line coverage and 172 UI tests at 58.67% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-29; UI 2026-09-30): 8,530 Java tests at 84.17% line coverage and 195 UI tests at 59.26% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.

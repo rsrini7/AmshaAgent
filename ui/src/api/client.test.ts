@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ArcApiError,
   ArcClient,
   clearPersistedOwnerApiKey,
   persistOwnerApiKey,
@@ -151,6 +152,69 @@ describe('bounded HITL requests', () => {
     await vi.advanceTimersByTimeAsync(10_001);
 
     expect(requestSignal?.aborted).toBe(true);
+  });
+});
+
+describe('classifier runtime status client', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', new MemoryStorage());
+    vi.stubGlobal('sessionStorage', new MemoryStorage());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reads the read-only classifier endpoint without caching', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          classifiers: [
+            {
+              classifier: 'intent',
+              startupEnabled: false,
+              requestedEnabled: false,
+              implementationAvailable: false,
+              effectiveEnabled: false,
+              acceptingRequests: false,
+              draining: false,
+              inFlight: 0,
+              revision: 1,
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await new ArcClient('/api/v1', 'real-owner-key').getClassifierRuntimeStatus();
+
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/v1/admin/local-ml/onnx/classifiers');
+    expect(request.method ?? 'GET').toBe('GET');
+    expect(request.cache).toBe('no-store');
+    expect(request.credentials).toBe('include');
+    expect(result.classifiers).toHaveLength(1);
+    expect(result.classifiers[0].implementationAvailable).toBe(false);
+  });
+
+  it('propagates the internal-role 403 so the panel can name the cause', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Only internal API keys can control ONNX classifiers' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const failure = await new ArcClient('/api/v1')
+      .getClassifierRuntimeStatus()
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ArcApiError);
+    expect((failure as ArcApiError).status).toBe(403);
+    expect((failure as ArcApiError).message).toContain('internal');
   });
 });
 

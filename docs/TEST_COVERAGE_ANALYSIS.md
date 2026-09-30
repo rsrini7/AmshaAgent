@@ -3,7 +3,7 @@
 > **Status**: **Original coverage-plan checkpoint closed** (2026-09-16); later branch follow-ups are recorded below.
 > **Recorded outcome (2026-09-16, at closure)**: The full-reactor snapshot recorded **8,301 passing Java/JUnit tests** and **84.28% reactor line coverage**, surpassing the 82.00% JaCoCo build floor.
 > **Latest measurement (2026-09-29)**: **8,530 passing tests** (8,500 Surefire + 30 Failsafe) at **84.17%** (52,507 / 62,379 lines). Re-run a clean full-reactor build before treating either figure as current evidence.
-> **UI companion snapshot (2026-09-12)**: Vitest recorded **172 passing tests**, 0 failures and 0 errors, with **58.67% line coverage** (4,665/7,951 lines). UI and Java percentages have different denominators and are measured by separate pipelines.
+> **UI companion snapshot (2026-09-30)**: Vitest recorded **195 passing tests**, 0 failures and 0 errors, with **59.26% line coverage** (4,838/8,163 lines). UI and Java percentages have different denominators and are measured by separate pipelines.
 > **Gate Ratchet**: Root `pom.xml` `<jacoco.minimum.line.coverage>` permanently locked at **`0.82`** (82.00%).  
 > **Test Suite (2026-09-16)**: **8,301 passing Java tests** recorded across 28 child modules with 0 failures and 0 errors.
 > **Scope**: Multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator, JDK 25, Quarkus 3.39.3).  
@@ -3005,6 +3005,20 @@ only module that moved *down*, because it absorbed 32 new contract types. Residu
 **84.17%** line / **68.21%** branch (52,507 / 62,379 lines; 8,500 Surefire + 30 Failsafe = **8,530** tests),
 still clear of the `0.82` floor. `StateProjectionPolicy` is the only outright dark class in the module and is
 the obvious next target here.
+
+**Cockpit surface added (read-only).** The branch previously changed no UI code, which left the
+decision plane's only operator surface — `GET /api/v1/admin/local-ml/onnx/classifiers` — invisible to
+operators. It now ships a read-only view at `#/classifiers` (`ui/src/components/arc-classifier-panel.ts`)
+plus 23 Vitest cases: 21 for the panel and 2 for the new `ArcClient.getClassifierRuntimeStatus()`.
+The panel derives its state from `effectiveEnabled` rather than `requestedEnabled`, renders an explicit
+*internal role required* notice for a `403` instead of an empty slot list, keeps that distinct from `401`
+and from a CSRF `403`, and treats a `200` that omits any of the three slots as a malformed contract. It
+carries **no** enable/disable control and **no** activation-gate claim, and a test pins both: the phrase
+"activation gate" must appear exactly once (inside the mandatory scope notice) and the panel must render
+exactly one `<button>`. The new component measures **81.77% line / 79.41% branch**, above the UI average.
+UI suite: **195 passing** at **59.26%** line coverage (was 172 at 58.67%). The UI contract path is
+unchanged — hand-written `ArcClient` and `ui/src/api/types.ts`; see
+[ARCHITECTURE](./ARCHITECTURE.md) §"Cockpit API contract ownership".
 
 #### Phase 5 — remaining work (2026-09-29)
 

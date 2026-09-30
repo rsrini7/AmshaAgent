@@ -2,6 +2,8 @@ import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
 import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto, NetworkProfilePolicyDto, ProviderCatalogModel } from './types';
 import { ExecutionRunSummaryDto, ExecutionTraceDto } from '../types/trace';
+import type { ClassifierRuntimeResponse } from './types';
+export type { ClassifierRuntimeResponse, ClassifierSnapshot } from './types';
 
 /**
  * Status snapshot returned by GET /sessions/{id}/status/{role}.
@@ -714,6 +716,23 @@ export class ArcClient {
 
   async getCockpitHealth(): Promise<CockpitHealthResponse> {
     return this.request<CockpitHealthResponse>('/admin/cockpit/health');
+  }
+
+  /**
+   * Read-only, payload-free switch state for the three ONNX shadow classifier slots.
+   *
+   * Guarded server-side by the `internal` role, so a caller without it receives 403. Callers must
+   * surface that explicitly; rendering an empty slot list instead would misreport a permission
+   * problem as a configuration state.
+   *
+   * This is the only decision-plane surface exposed to the cockpit. It deliberately reports nothing
+   * about the intent router's activation gate, candidate evidence, or cost approvals — none of those
+   * are present in the response and none may be inferred from it.
+   */
+  async getClassifierRuntimeStatus(): Promise<ClassifierRuntimeResponse> {
+    return this.request<ClassifierRuntimeResponse>('/admin/local-ml/onnx/classifiers', {
+      cache: 'no-store',
+    });
   }
 }
 

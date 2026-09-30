@@ -251,7 +251,9 @@ Two behaviours are worth calling out because both are fail-closed:
 Classifier *runtime* control (`/api/v1/admin/local-ml/onnx/classifiers*`) is a separate admin
 surface with its own requested-versus-effective semantics; see
 [In-Process Local ML (ONNX Runtime)](#in-process-local-ml-onnx-runtime) and
-[Architecture Invariants](./Architecture_Invariants.md) §7.13.4.
+[Architecture Invariants](./Architecture_Invariants.md) §7.13.4. The cockpit mirrors only the
+read-only half at `#/classifiers`, which requires the `internal` role and reports no
+activation-gate, evidence, cost-approval, or rollout-owner state.
 
 ## Agent Loop
 

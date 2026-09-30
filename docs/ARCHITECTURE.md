@@ -1179,6 +1179,7 @@ Lifecycle: `@PostConstruct` registers a ready implementation (`effective=request
 | `arc-health-dashboard` | System health & diagnostics: memory, storage, database latency, provider status (`#/health`) |
 | `arc-db-console` | Operator read-only SQL console with AST validation and schema explorer (`#/db-console`) |
 | `arc-model-arena` | Comparative LLM benchmarking, categorical slots, cost estimation, and token bounding (`#/arena`) |
+| `arc-classifier-panel` | Read-only ONNX shadow classifier slot status; no controls, no activation-gate claims (`#/classifiers`) |
 | `arc-settings` | LLM provider switch, API key update, system prompt edit (`#/settings`) |
 | `arc-onboarding` | Durable draft/saga onboarding UI; posts to `/api/v1/onboarding/drafts*` (`#/onboarding`) |
 | `arc-agent-status` | Live agent status via REST poll + SSE |
@@ -1188,6 +1189,8 @@ Lifecycle: `@PostConstruct` registers a ready implementation (`effective=request
 | `arc-skills-panel` | Skill management (`#/skills`) |
 
 **WebSocket protocol:** `{"type":"message","text":"..."}` (client→server), `{"type":"message","role":"assistant","text":"..."}` (server→client).
+
+**Cockpit API contract ownership (decided).** The UI contract is owned by the hand-written client — `ui/src/api/client.ts` together with the DTOs it re-exports from `ui/src/api/types.ts` — not by generated code. `ui/src/api/generated/` is inert: `app/pom.xml`'s `ensure-openapi-yaml` execution writes a 72-byte `paths: {}` document, the `ts-dto` profile's generator manifest lists only `index.ts` and `runtime.ts`, and nothing under `ui/src` imports it. Repairing or retiring that pipeline is **tracked as separate work**; until that decision lands, a new backend surface must be added by hand to `ArcClient` and the DTO types — exactly as `getClassifierRuntimeStatus()` was — and `ui/src/api/generated/` must not be extended. This matches the existing "API/UI contract" verification row in [ADR-MCP-Management-UI-and-Channel-Control](./adr/domain/ADR-MCP-Management-UI-and-Channel-Control.md), which accepts "OpenAPI generation **or equivalent** client/type updates and `ArcClient` methods".
 
 ---
 
@@ -1240,6 +1243,12 @@ The cockpit exposes trace data through the following routes:
 ### 5. Safe Allowlisted Symbolication (`GET /api/v1/cockpit/symbolicate`)
 - **Allowlisted Metadata Only**: Rejects arbitrary class loading and raw source code streaming. Strictly allows symbolication for 9 core architectural classes (`AgentLoop`, `MessagePipeline`, `ToolInvocationGuard`, `CheckpointResumeCoordinator`, `ReflexRegistry`, `ApprovalStateMachine`, `AgentCronScheduler`, `GovernedTransportService`, `TraceSymbolicationService`).
 - **Access Control**: Enforces `isInternal()` authorization and strict multi-tenant session ownership checks; unauthorized or cross-tenant requests return 404 non-disclosure.
+
+### 6. Read-Only ONNX Classifier Runtime Status (`GET /api/v1/admin/local-ml/onnx/classifiers`, `#/classifiers`)
+- **What it shows**: the three ONNX classifier runtime slots (`intent`, `tool-risk`, `answer-quality`) with the nine payload-free fields of `OnnxClassifierRuntimeControl.Snapshot` — `classifier`, `startupEnabled`, `requestedEnabled`, `implementationAvailable`, `effectiveEnabled`, `acceptingRequests`, `draining`, `inFlight`, and `revision`. The panel derives its state from `effectiveEnabled`, never from `requestedEnabled`, so a switch that is on while no ready implementation has registered reads as *requested — not in effect* rather than as serving.
+- **Access control and the missing-role path**: the endpoint is guarded by `isInternal()` only and never by `onnxEnabled`, which is what makes it the one part of the local-ML stack validatable with no model bundle. A caller without the `internal` role receives `403`, and the panel renders an explicit *internal role required* notice rather than an empty slot list. That case is kept distinct from `401` (expired session) and from a `403` that is actually a CSRF rejection. A `200` that does not carry all three slots is reported as a malformed contract, not as "nothing configured".
+- **Deliberate scope boundary**: this view reports the classifier slots and nothing else. It makes no claim about the intent router's activation gate, candidate evidence, cost approvals, or rollout ownership, because none of those appear in the response. Reporting them accurately would require a separate read-only API returning safe facts such as `directRoutingPermitted` and `rolloutOwnerConfigured` — and never the rollout owner's name.
+- **No controls**: enable/disable is deliberately absent while the plane is Deferred and no `DecisionEngine` bean exists, since every enable would be rejected with `409 MISSING_READY_IMPLEMENTATION`. See [Jev Decision Plane (Deferred)](#jev-decision-plane-deferred).
 
 ---
 

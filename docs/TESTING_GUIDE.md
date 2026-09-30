@@ -49,7 +49,7 @@ current.
 | Suite | Recorded result | Line coverage | Evidence date |
 |---|---:|---:|---|
 | Java/JUnit, full Maven reactor | **8,530 passing**; 0 failures, 0 errors (8,500 Surefire + 30 Failsafe) | **84.17%** (52,507/62,379 lines) | 2026-09-29 |
-| UI/Vitest | **172 passing**; 0 failures, 0 errors | **58.67%** (4,665/7,951 lines) | 2026-09-12 |
+| UI/Vitest | **195 passing**; 0 failures, 0 errors | **59.26%** (4,838/8,163 lines) | 2026-09-30 |
 
 Run `./mvnw --batch-mode clean verify` followed by `mise run test:summary` for
 Java/JUnit and `mise run test:ui` followed by `mise run test:ui:summary` for the UI.
@@ -2597,4 +2597,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · recorded snapshot: 8,530 passing Java/JUnit tests (8,500 Surefire + 30 Failsafe) at 84.17% line coverage and 172 passing UI/Vitest tests at 58.67% line coverage · 28 Maven modules · 21 tools · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider) · Tiered Memory · Answer Quality Guard.*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · recorded snapshot: 8,530 passing Java/JUnit tests (8,500 Surefire + 30 Failsafe) at 84.17% line coverage and 195 passing UI/Vitest tests at 59.26% line coverage · 28 Maven modules · 21 tools · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider) · Tiered Memory · Answer Quality Guard.*
