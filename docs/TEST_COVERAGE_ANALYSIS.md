@@ -857,6 +857,12 @@ Solid in `core` (78%) and the API modules. Weakest in `llm-providers` (65.8%), `
 `channel-web` have **zero** `@QuarkusTest` classes — everything is plain-JUnit or Mockito-based, so CDI wiring,
 bean resolution, and startup ordering for those modules are never exercised end-to-end.
 
+> **These counts are static because coverage cannot answer this question.** Surefire and Failsafe share one
+> `jacoco.exec` per module, so the report cannot say which lines the `*IT` suite alone covers (§11). The table is
+> a count of `@QuarkusTest` annotations in test sources, not a measurement. The reactor has **9 `*IT` classes**
+> (`core` 4, `app` 3, `local-ml-onnx` 2) contributing **30 Failsafe tests** — note that one of them,
+> `DecisionShadowEvaluationIT`, is a plain JUnit class despite the `*IT` name, so it is not a CDI-boot test.
+
 | Module | Test files | `@QuarkusTest` | Mockito |
 |---|---:|---:|---:|
 | core | 361 | 41 | 201 |
@@ -3101,6 +3107,21 @@ mise run test:summary
   tests. Cross-module coverage (e.g. `core` code exercised from `app`'s `@QuarkusTest`) is attributed to the
   module where the class lives, but only when that module's own tests run it. This understates coverage for
   modules that are primarily consumed by `app`.
+- **Unit and integration coverage are merged, and cannot be separated.** Both Surefire (`*Test`) and Failsafe
+  (`*IT`) forks receive the JaCoCo agent via `@{argLine}` (`pom.xml:444, 464`), and both append to the **same**
+  `target/jacoco.exec` — there is no `destFile` override or per-phase exec file anywhere in the 29 poms. The
+  reported figure is therefore a union, and "what do the integration tests alone cover?" is **not answerable**
+  from these reports. This is why §7's integration table counts `@QuarkusTest` annotations statically instead of
+  reading coverage. To isolate the IT contribution you must do it by hand: `rm -f <mod>/target/jacoco.exec`,
+  run only the Failsafe phase, then `jacoco:report` — `jacoco.exec` is appended to, never replaced, so a stale
+  file silently merges the two phases.
+- **Out-of-JVM integration testing is invisible to every tool here.** The black-box layer — `scripts/distribution/`
+  (which drives `rest-http/scripts/run_all_validations.sh`, including the JEV decision-plane checks) and CI's
+  `jvm-validation` job (`clean package -DskipTests`, then HTTP against the running JAR) — exercises a packaged
+  server with **no `-javaagent`**. Neither directory contains a single `jacoco` or `javaagent` reference, so that
+  execution contributes **zero** lines to any `jacoco.exec`. Gaps that only a black-box test would expose cannot
+  be found by `--modules`, `--gaps`, or the gate. `--strict-instrumentation` is not a substitute: it detects a
+  module whose agent never attached, not an integration gap.
 - ~~**`app` and `onboarding` required separate runs.**~~ **No longer true.** Both were consequences of the defects
   fixed in §1.2 — the full-reactor run hung on `BootstrapOrchestratorTest` (0.3) and `verify` died before the gate
   (0.8). A single `clean verify` now runs the whole reactor green.
