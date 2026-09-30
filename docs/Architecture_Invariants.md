@@ -81,6 +81,14 @@ Modules are split into an **API tier** (pure contract jars) and an **impl tier**
   via `TieredBackendLiteral`.
 - Reflection registration follows the per-module `*ReflectionConfig` convention; moved types appear exactly
   once, in their owning module's config.
+- **The canonical governed HTTP client and policy service are owned by `amsha-core`.**
+  `GovernedHttpClient`, `GovernedHttpDnsPinning`, `OutboundHttpException`, and
+  `OutboundHttpPolicyService` live in `com.amsha.core.security*` because core's remote decision engine must
+  use the governed path and core → security-impl is forbidden (Rule 17). `amsha-security` MUST retain only
+  delegating compatibility wrappers for the named HTTP client classes; its `GovernedTransportService`
+  orchestration and `ApprovalReceiptIssuer` remain implementation-tier services. New core code MUST target
+  the core types; adding a second canonical HTTP client implementation in `amsha-security` would restore
+  the duplicate transport path this relocation removed.
 
 ---
 
@@ -2262,3 +2270,68 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 ### 26.5 Dynamic Provider Discovery Invariant (§26.5 INVARIANT)
 - **No Hardcoded Static Provider Sets**: `ModelArenaHelper` and health resources MUST NOT hardcode static sets of allowed providers or base URL maps in application source code.
 - **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`, `requiresCustomBaseUrl()`, `probeUrlForProvider()`, `authHeadersForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
+
+## 27. Decision Plane Invariants
+
+The Jev decision plane is a typed judgment seam (`DecisionEngine`, `DecisionRequest`,
+`DecisionResult` in `amsha-classifier-api`). It ships **Deferred** and is not activated; see
+[ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md). These invariants describe the
+*seam*. The classifier runtime-control contract — requested versus effective state, shadow
+registration, fail-closed enable, drain-on-disable, and internal-only audited mutation — is §7.13.4
+and is deliberately not restated here.
+
+### 27.1 Deferred means inert, and inert must fail closed (§27.1 INVARIANT)
+
+While the ADR stands at `Status: Deferred`, no production `DecisionEngine` bean, producer, or
+alternative MUST be registered. Consumers MUST distinguish a disabled feature from an enabled feature
+whose engine is missing:
+
+- The three shadow classifiers (`DecisionIntentShadowClassifier`, `DecisionToolRiskShadowClassifier`,
+  `DecisionAnswerQualityShadowClassifier`) MUST return `DISABLED` when their switch is off and
+  `NoOpinion(MISSING_MODEL)` when enabled without a resolvable engine. They MUST NOT alter routing, tool
+  authorization, HITL decisions, or retry budgets.
+- With no engine, `IntentDecisionRouter.isEnabled()` MUST be false and `evaluateIntent()` MUST return an
+  `IntentPolicyResolution` fallback with reason `DISABLED`. With a resolvable engine but an unapproved
+  activation gate, an enabled router MUST return the `ACTIVATION_GATE_NOT_SATISFIED` fallback for a
+  non-blank message.
+- Enabling any `amsha.decision.shadow.*` or `amsha.routing.intent-decision-router.*` switch MUST NOT
+  create an engine, fabricate an opinion, or bypass the deterministic path.
+
+Adding a production `DecisionEngine` bean is an architectural change that requires moving the ADR off
+`Deferred`; it MUST NOT arrive as a side effect of an unrelated change.
+
+### 27.2 Inertness is announced exactly once (§27.2 INVARIANT)
+
+Because the plane is otherwise silent when inert, `DecisionPlaneReadiness` (`@Startup` + `@PostConstruct`) MUST
+log exactly one `WARN` at startup when any of the four decision switches is enabled **and** no
+`DecisionEngine` is resolvable. It MUST log nothing under the default configuration, and MUST NOT
+enable, wire, produce, or reroute anything. This is the dedicated startup diagnostic for enabled-but-inert
+configuration; classifier runtime status separately exposes requested and effective state. Its absence is a
+defect rather than a harmless no-op. The message MUST
+be payload-free — no model IDs, inputs, outputs, scores, labels, goals, answers, or tool parameters.
+
+### 27.3 The intent decision router is gated, twice (§27.3 INVARIANT)
+
+`IntentDecisionRouter` MUST NOT produce a routing action unless the activation gate is approved. Three
+predicates exist and MUST remain distinct:
+
+- `isEnabled()` — `amsha.routing.intent-decision-router.enabled` is true *and* an engine is resolvable.
+- `isActivationGateApproved()` — candidate evidence approved, cost ceiling approved, **and** a
+  non-blank rollout owner. The gate is a conjunction; a partial approval MUST NOT count.
+- `isDirectRoutingPermitted()` — `isEnabled() && isActivationGateApproved()`.
+
+`evaluateIntent()` MUST return an `ACTIVATION_GATE_NOT_SATISFIED` fallback when the gate is
+unapproved, and MUST additionally suppress a `DIRECT_ROUTE` action as defence in depth. Direct routing
+to a specialist role is the highest-consequence outcome of the seam, so it requires both predicates
+rather than either one alone.
+
+### 27.4 Placement and transaction boundaries (§27.4 INVARIANT)
+
+- `ProviderPlacementValidator.validateClassifierSpiPlacement()` MUST reject any candidate that
+  implements `RemoteDecisionProvider` or `SelfHostedDecisionProvider`, and MUST require a
+  `DecisionEngine` candidate to implement `InProcessDecisionEngine` and declare
+  `ProviderCategory.IN_PROCESS`. Violations raise `SecurityException`; they MUST NOT be downgraded to
+  a warning.
+- Decision evaluation and provider calls MUST NOT execute inside an active JTA write transaction
+  (§5.9). `DecisionTransactionGuard` MUST fail closed when the transaction status cannot be
+  determined — an unverifiable status MUST be treated as active rather than assumed idle.

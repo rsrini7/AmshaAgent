@@ -61,6 +61,14 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   never register as active implementations. Enable without a ready implementation fails
   closed; disable rejects new leases and drains accepted work. Mutations require internal
   authorization and mandatory audit-before-mutation.
+- The Jev decision plane is **Deferred**: no production `DecisionEngine` bean may be
+  registered. Enabled shadow classifiers without a resolvable engine return
+  `NoOpinion(MISSING_MODEL)`; disabled classifiers return `DISABLED`. With no engine,
+  `IntentDecisionRouter.isEnabled()` is false and `evaluateIntent()` returns a `DISABLED`
+  fallback. Enabling a decision switch without a resolvable engine must stay inert and log
+  exactly one `DecisionPlaneReadiness` WARN.
+  Moving the ADR off `Deferred` is a deliberate architectural change, never a side effect
+  of an unrelated edit (`docs/Architecture_Invariants.md` §27).
 - After a successful tool result, the coordinator must emit `FINISH`; no subsequent
   tool call may follow in that turn. Keep full and compact prompts aligned.
 - `NETWORK_OUTBOUND` and `EXECUTE_SHELL` always require HITL. Trusted roles only

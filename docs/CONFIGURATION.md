@@ -213,6 +213,46 @@ when all slots are exhausted.
 
 For non-Groq providers, mirror the pattern with `AMSHA_CLASSIFIER_{PROVIDER}_{KEY}`.
 
+## Decision Plane & Classifier Runtime Control
+
+The Jev decision plane is a typed judgment seam (`DecisionEngine`). It is **Deferred**: no production
+`DecisionEngine` bean is registered, so enabled shadow classifiers return `NoOpinion(MISSING_MODEL)` and
+disabled classifiers return `DISABLED`. The shadow switches below request *observational* evaluation — they never change
+routing, tool authorization, HITL decisions, or retry budgets. See
+[ADR-jev-decision-plane](./adr/architecture/ADR-jev-decision-plane.md).
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_DECISION_SHADOW_INTENT_ENABLED` | `false` | Enable observational shadow intent classification through `DecisionEngine` |
+| `AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED` | `false` | Enable observational shadow tool-risk evaluation through `DecisionEngine` |
+| `AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED` | `false` | Enable observational shadow answer-quality evaluation through `DecisionEngine` |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED` | `false` | Enable the low-risk typed intent decision pilot router |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW` | `0.50` | Lower review-band threshold; below it a judgment falls back to the deterministic default |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH` | `0.85` | Upper review-band threshold; at or above it direct routing may apply |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS` | `500` | Per-evaluation deadline for the intent decision router |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED` | `false` | Activation gate: candidate calibration on live traffic formally approved |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED` | `false` | Activation gate: cost ceiling and latency budget formally approved |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | *(unset)* | Activation gate: accountable rollout and rollback owner |
+
+Two behaviours are worth calling out because both are fail-closed:
+
+- **Enabling a switch without a resolvable `DecisionEngine` activates no decision behavior.** The plane stays
+  inert and `DecisionPlaneReadiness` logs a single `WARN` at startup naming the enabled switches and the
+  fallback posture. Classifier runtime status also exposes requested and effective state; the warning is the
+  dedicated startup diagnostic for this configuration, so a deployment that enables these switches should
+  treat its absence as a defect.
+- **The intent decision router does not take effect while the activation gate is unapproved.**
+  `isEnabled()` requires `enabled=true` *and* an available engine, but direct routing is permitted
+  only when `isActivationGateApproved()` also holds (candidate evidence approved, cost ceiling
+  approved, and a non-blank rollout owner). With an available engine and the gate unapproved, `evaluateIntent()` returns an
+  `ACTIVATION_GATE_NOT_SATISFIED` fallback for non-blank messages and any `DIRECT_ROUTE` is suppressed — so setting
+  `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op.
+
+Classifier *runtime* control (`/api/v1/admin/local-ml/onnx/classifiers*`) is a separate admin
+surface with its own requested-versus-effective semantics; see
+[In-Process Local ML (ONNX Runtime)](#in-process-local-ml-onnx-runtime) and
+[Architecture Invariants](./Architecture_Invariants.md) §7.13.4.
+
 ## Agent Loop
 
 | Variable | Default | Description |

@@ -70,7 +70,7 @@
     <!-- amsha-classifier-api -->
     <rect x="260" y="290" width="380" height="34" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>
     <text x="450" y="304" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#d3d1c7">amsha-classifier-api</text>
-    <text x="450" y="317" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#b4b2a9">Shadow-classifier SPIs (pre-policy risk, answer quality)</text>
+    <text x="450" y="317" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#b4b2a9">Shadow-classifier SPIs · Jev decision-plane seam (Deferred)</text>
 
     <!-- amsha-channel-api -->
     <rect x="260" y="330" width="380" height="34" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>
@@ -203,6 +203,6 @@
     <text x="90" y="636" fill="#c2c0b6">compile dependency</text>
     <line x1="250" y1="632" x2="290" y2="632" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
     <text x="300" y="636" fill="#c2c0b6">optional / build-time / CDI-discovered</text>
-    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.38.3 · Governed LLM Transport · Health Cockpit · Read-Only DB · Model Arena</text>
+    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.39.3 · Governed LLM Transport · Health Cockpit · Read-Only DB · Model Arena</text>
   </g>
 </svg>

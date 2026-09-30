@@ -7,6 +7,12 @@ Date: 2026-09-22
 **Role:** Compare Jev/System One with Amsha's existing decision and classifier
 control plane; identify a safe evaluation seam.
 
+> **Superseded in part (2026-09-27).** The architecture this scout recommends was accepted as
+> [ADR-jev-decision-plane](../adr/architecture/ADR-jev-decision-plane.md) with **`Status: Deferred`**: the
+> seam, adapters, policies and validators are implemented, but no production `DecisionEngine` bean is
+> registered, so the plane is inert. This document remains the *research basis*; where the two disagree, the
+> ADR and `docs/Architecture_Invariants.md` §27 govern.
+
 ## Executive recommendation
 
 Adopt the useful part of the Jev approach as an Amsha **decision plane**, but do

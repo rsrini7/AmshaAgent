@@ -215,6 +215,13 @@ Outbound HTTP connections to external LLM providers (reasoning models and Model 
 
 ## Governed HTTP Transport & DNS Pinning (`GovernedHttpClient` & `GovernedHttpDnsPinning`)
 
+> **Module note.** These classes are implemented in **`amsha-core`** (`com.amsha.core.security.http`), having
+> moved down from `amsha-security` because `amsha-core` MUST NOT depend on an impl-tier module
+> (`docs/Architecture_Invariants.md` §1.8, Rule 17) and core's remote decision engine needs the governed
+> transport. `com.amsha.security.http` retains thin delegating wrappers for the HTTP client types.
+> `OutboundHttpPolicyService` is in `amsha-core`; `GovernedTransportService` orchestration and approval
+> receipts remain in `amsha-security`.
+
 All outbound HTTP connections (LLM provider API calls, Model Arena comparisons, remote MCP handshakes, and media downloads) are mediated by `GovernedHttpClient` and `GovernedTransportService` under a typed `OutboundPurpose`:
 
 * **SSRF Defense & IP Safety**: Destination and proxy hostnames are resolved and validated via `GovernedHttpDnsPinning.validateAddressSafety()`. The resolver rejects loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`, `fe80::/10`), site-local/private LAN (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), multicast (`224.0.0.0/4`), and cloud instance metadata endpoints (`169.254.169.254`).

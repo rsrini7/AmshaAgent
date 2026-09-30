@@ -17,7 +17,7 @@ docs/
 ├── SEARCH_AND_DIAGNOSTICS_CHEATSHEET.md ← Ripgrep and Maven test diagnostics cheatsheet
 ├── ...                                  ← Operational, testing, and setup guides
 │
-├── adr/                                 ← Decisions (Accepted, Implemented, Proposed)
+├── adr/                                 ← Decisions (Accepted, Approved, Implemented, Proposed, Deferred)
 ├── research/                            ← Evaluated options & negative knowledge (Evaluated, Closed, Rejected)
 ├── proposals/                           ← Active RFCs & living implementation plans
 ├── roadmap/                             ← Backlog & forward-looking technical debt
@@ -51,7 +51,7 @@ Research evaluations (`docs/research/`) and active proposals (`docs/proposals/`)
 
 | Document | Scope & Purpose |
 |---|---|
-| [Architecture Invariants](Architecture_Invariants.md) | Mandatory cross-cutting architectural invariants (§1–§24). The supreme architectural authority for human and agent developers. |
+| [Architecture Invariants](Architecture_Invariants.md) | Mandatory cross-cutting architectural invariants (§1–§27). The supreme architectural authority for human and agent developers. |
 | [System Architecture](ARCHITECTURE.md) | High-level system architecture, module boundaries, CDI/Vert.x virtualization, and component layout. |
 | [Security Architecture](SECURITY.md) | Two-tier secret model, Vault Pepper bootstrap paradox, HMAC audit chains, and execution isolation. |
 | [Configuration Reference](CONFIGURATION.md) | Comprehensive configuration property directory, precedence order, and environment variable mappings. |
@@ -87,7 +87,7 @@ Decisions that define the system structure and operational boundaries:
 - [ADR-Quarkus-Upgrade-Strategy](adr/architecture/ADR-Quarkus-Upgrade-Strategy.md) — Quarkus platform upgrade strategy and verification matrix (Status: Accepted).
 - [ADR-approval-lease-for-parallel-batches](adr/architecture/ADR-approval-lease-for-parallel-batches.md) — Approval lease semantics for concurrent batch operations (Status: Accepted).
 - [ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries](adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md) — Capability adoption boundaries for LangChain4j (Status: Accepted).
-- [ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md) — Proposed typed decision seam for Jev-compatible judgments and Amsha-owned policy (Status: Deferred).
+- [ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md) — Typed decision seam for Jev-compatible judgments and Amsha-owned policy (Status: Deferred).
 - [ADR-onboarding-route-assignments](adr/architecture/ADR-onboarding-route-assignments.md) — Onboarding route assignments and model profile mapping (Status: Accepted).
 - [ADR-schedule-task-hitl-under-supervised](adr/architecture/ADR-schedule-task-hitl-under-supervised.md) — Scheduled task HITL governance under supervised autonomy (Status: Accepted).
 
@@ -155,7 +155,7 @@ Evaluations of alternatives and boundaries that document why specific approaches
   - [Quarkus 3.38 Upgrade Research](research/explorations/Quarkus-Upgrade-Research.md)
 
 - **Agent Decision-Plane Research**:
-  - [Jev/System One Decision Plane Scout](research/Jev-Amsha-Decision-Plane-Scout-2026.md) — Proposed comparison and safe integration seam for typed Jev judgments.
+  - [Jev/System One Decision Plane Scout](research/Jev-Amsha-Decision-Plane-Scout-2026.md) — research basis for the typed Jev judgment seam; the resulting decision is [ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md) (Status: Deferred), which governs where the two disagree.
 
 ---
 

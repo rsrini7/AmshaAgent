@@ -234,9 +234,19 @@ Amsha provides zero-payload-leakage observability for LLM invocations with stric
 |---|---|---|---|
 | `amsha.observability.chat-listener.mode` | `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | Mode for LangChain4j `ChatModelListener` pilot (`off`, `shadow`, `active`) |
 
-## Decision Plane Shadow Classifiers (Issue 04)
+## Decision Plane Shadow Classifiers (Issues 04 & 07)
 
 Observational-only shadow evaluation for intent routing, tool risk, and answer quality. Shadow evaluation operates in parallel to authoritative components without mutating live routing, tool authorization, HITL decisions, or retry budgets. Disabled by default.
+
+> **Deferred — enabling a switch does not activate the plane.** No production `DecisionEngine` bean is
+> registered in this build, so enabled shadow classifiers return `NoOpinion(MISSING_MODEL)` and disabled
+> classifiers return `DISABLED`. The shadow switches below request *observation only*, and `DecisionPlaneReadiness` logs exactly one `WARN` at
+> startup naming the enabled switches — its absence on an enabled deployment is a defect, not a no-op. The
+> intent decision router is gated twice: `isEnabled()` additionally requires an available engine, and a policy
+> action requires `isActivationGateApproved()`, so setting
+> `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op. See
+> [ADR-jev-decision-plane](../docs/adr/architecture/ADR-jev-decision-plane.md) and
+> [Architecture Invariants](../docs/Architecture_Invariants.md) §27.
 
 | Property | Env Var | Default | Description |
 |---|---|---|---|

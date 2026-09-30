@@ -3,7 +3,7 @@
 - **Status**: Deferred
 - **Date**: 2026-09-22
 - **Decision Owners**: Amsha Architecture Committee
-- **Related Invariants**: `docs/Architecture_Invariants.md` §4.12, §7 parallel tool execution, §7.13.2–7.13.4; `AGENTS.md` §1.18, §8
+- **Related Invariants**: `docs/Architecture_Invariants.md` §27 (decision plane seam), §1.8 (module boundaries — governed transport ownership), §4.12, §5.9 (transaction-free zone), §7 parallel tool execution, §7.13.2–7.13.4; `AGENTS.md` §1.18, §8
 - **Feature Slug**: `jev-decision-plane`
 - **Issue Tracker**: `.scratch/jev-decision-plane/`
 - **Research Basis**: `docs/research/Jev-Amsha-Decision-Plane-Scout-2026.md`

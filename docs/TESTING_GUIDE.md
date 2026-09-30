@@ -48,7 +48,7 @@ current.
 
 | Suite | Recorded result | Line coverage | Evidence date |
 |---|---:|---:|---|
-| Java/JUnit, full Maven reactor | **8,301 passing**; 0 failures, 0 errors | **84.28%** | 2026-09-16 |
+| Java/JUnit, full Maven reactor | **8,530 passing**; 0 failures, 0 errors (8,500 Surefire + 30 Failsafe) | **84.17%** (52,507/62,379 lines) | 2026-09-29 |
 | UI/Vitest | **172 passing**; 0 failures, 0 errors | **58.67%** (4,665/7,951 lines) | 2026-09-12 |
 
 Run `./mvnw --batch-mode clean verify` followed by `mise run test:summary` for
@@ -57,15 +57,16 @@ The Java total is aggregated from Surefire XML and the UI total from Vitest JUni
 XML; a clean run matters because stale or partial report files can produce a
 misleading count.
 
-My interpretation of this snapshot: Java is 2.28 percentage points above the
+My interpretation of this snapshot: Java is 2.17 percentage points above the
 current 82.00% JaCoCo build floor, which is useful headroom but not a reason to
 stop adding tests. The UI line figure is 8.67 points above the analyzer's 50.00%
 target, but UI coverage has no equivalent Maven build gate. The two percentages
 use different codebases and denominators, so they should be tracked separately;
 neither percentage replaces behavioral, integration, native, or REST validation.
 
-The earlier 2026-09-14 measurement is retained below as historical analysis:
-6,528 tests in 905 suites, 0 failures, 0 errors, 7 skipped, reactor line coverage 76.10%.
+Earlier measurements are retained as historical analysis. The 2026-09-16 snapshot
+recorded **8,301 tests at 84.28%**, and the 2026-09-14 snapshot recorded 6,528 tests
+in 905 suites, 0 failures, 0 errors, 7 skipped, at 76.10% reactor line coverage.
 Derive a fresh exact count with `mise run test:summary`
 (see [§1.6](#16-target-0-failures-0-errors-no-drop-in-test-count)).
 
@@ -2491,6 +2492,34 @@ bash rest-http/scripts/run_all_validations.sh --onnx
 The current Phase 3A assembly must report all three active implementations unavailable,
 return `409 MISSING_READY_IMPLEMENTATION` for enable, and reject non-internal mutation.
 
+#### 23.6.1 Zero-token decision-plane validation (`--decision-plane`)
+
+The classifier control plane's HTTP contract is reachable **without a model bundle, LLM, or provider token**;
+the validator uses the normal internal API credential to authenticate admin requests:
+`classifierRuntimeStatus()` and `updateClassifier()` check only `isInternal()`, never
+`onnxEnabled`. `rest-http/scripts/validate_decision_plane.sh` therefore asserts the
+decision-plane contract with no ONNX runtime, no LLM, and no provider tokens, and it runs in the
+`--fast` set and can also be run standalone with `--decision-plane`:
+
+```bash
+bash rest-http/scripts/run_all_validations.sh --decision-plane
+```
+
+It runs 16 checks (`JEV-1`..`JEV-12`): the authorization matrix (unauthenticated `401`,
+non-internal `403`, mutation requires an internal key), the exact nine-field snapshot shape with
+no extra fields, snapshot coherence
+(`effectiveEnabled == acceptingRequests == (requestedEnabled && implementationAvailable)`, and
+`draining == (!accepting && inFlight > 0)`), the Deferred posture, fail-closed enable with
+revision stability, disable without an implementation, `400 unknown_classifier`, and
+`startupEnabled ⇒ requestedEnabled`. When `AMSHA_VALIDATION_LOG_FILE` is set — the
+`run_dist_*` wrappers export it — it also asserts the `DecisionPlaneReadiness` startup
+diagnostic fired exactly once. Setting `AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true`
+requires that diagnostic and `=false` forbids it; the distribution wrapper derives the value
+from the switches the run actually loads.
+
+`JEV-5`..`JEV-7` overlap `ONNX-5`..`ONNX-7` **deliberately**: the same invariant must hold both
+with and without the local ONNX bundle loaded, so do not delete either copy.
+
 ## 24. Testing Identity, OIDC, Web Sessions, and Multi-Admin
 
 To verify the complete identity subsystem, browser authentication, and multi-admin scopes in real-time, follow these manual test scenarios.
@@ -2568,4 +2597,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · recorded snapshot: 8,301 passing Java/JUnit tests at 84.28% line coverage and 172 passing UI/Vitest tests at 58.67% line coverage · 28 Maven modules · 21 tools · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider) · Tiered Memory · Answer Quality Guard.*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · recorded snapshot: 8,530 passing Java/JUnit tests (8,500 Surefire + 30 Failsafe) at 84.17% line coverage and 172 passing UI/Vitest tests at 58.67% line coverage · 28 Maven modules · 21 tools · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider) · Tiered Memory · Answer Quality Guard.*

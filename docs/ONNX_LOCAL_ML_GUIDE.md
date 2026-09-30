@@ -22,6 +22,8 @@ The implementation follows [ADR-ONNX-In-Process-Local-ML-Inference.md](./adr/dom
 
 Current evidence (2026-07-29): the pinned Python-reference corpus passes with minimum cosine `0.999999998` against the FP32 `0.9999` threshold, 100% for every declared partition, and stable nearest-neighbour rankings. The macOS arm64 record passes three fresh native lifecycles, 100 inference probes per lifecycle, graceful shutdown, and maximum RSS growth of `22,816 KiB` against the `64 MiB` limit. Multi-backend vector parity also passes. The release harness still fails closed when either Linux target or signed artifacts are missing.
 
+Phase 3A's control-plane contract is additionally verifiable **without a model bundle, LLM, or provider token** and without an ONNX runtime — see "Validating the classifier control plane without a model bundle" in Section 7. The validator still uses the normal internal API credential for its authenticated admin requests.
+
 ---
 
 ## 3. Security & Zero-Network Mandates
@@ -261,6 +263,34 @@ The macOS arm64 build/start/readiness, numeric corpus, and lifecycle/RSS procedu
 on 2026-07-29, but that record predates session-admission and per-run cooperative
 cancellation changes. Regenerate it for the final candidate. Linux x86-64, Linux arm64,
 and signed SBOM/provenance remain required gates.
+
+### Validating the classifier control plane without a model bundle
+
+The Phase 3A classifier control plane is the one part of this guide that needs **no ONNX runtime, no model
+bundle, no LLM or provider token**. The validator still authenticates admin requests with the normal internal
+API credential. `OnnxAdminResource.classifierRuntimeStatus()` and `updateClassifier()` check
+only `isInternal()`, never `onnxEnabled`, so the entire HTTP contract is reachable on an application started
+with `AMSHA_ONNX_ENABLED=false`:
+
+```bash
+bash rest-http/scripts/run_all_validations.sh --decision-plane
+```
+
+That runs `rest-http/scripts/validate_decision_plane.sh` — 16 assertions (`JEV-1`..`JEV-12`) covering the
+authorization matrix, the exact nine-field snapshot shape, snapshot coherence, the Deferred posture,
+fail-closed enable with revision stability, disable without an implementation, `400 unknown_classifier`, and
+`startupEnabled ⇒ requestedEnabled`. It belongs to the `--fast` set, so the distribution wrappers
+(`scripts/run_dist_{fs,sqlite,pg}.sh --fast`) run it as well.
+
+`JEV-5`..`JEV-7` deliberately overlap `ONNX-5`..`ONNX-7`: the same invariants must hold with *and* without the
+bundle loaded. The distinction is the point — `ONNX-5`..`ONNX-7` prove the contracts on a bundle-bearing
+instance, `JEV-5`..`JEV-7` on a bare one — so neither copy is redundant and neither should be deleted.
+
+When `AMSHA_VALIDATION_LOG_FILE` is set (the `run_dist_*` wrappers export it), the validator additionally
+asserts that the `DecisionPlaneReadiness` startup diagnostic fired **exactly once**. That assertion is opt-in
+by design: an unset expectation would read as "all switches disabled" and pass vacuously, so the distribution
+wrapper derives `AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING` from the switches the run actually loads and
+passes it through.
 
 ### Reusable local runtime smoke runner
 

@@ -13,10 +13,10 @@
 | `amsha-llm-provider-api` | LLM contracts & SPIs — provider-neutral model config, OAuth token extractors (zero-core) |
 | `amsha-llm-providers` | LangChain4j provider adapters implementing the LLM SPIs |
 | `amsha-security-api` | Security contracts — `RiskLevel`, `ToolOperation`, `SecretVault` port, outbound policy decisions (zero-core) |
-| `amsha-security` | Impl: secret vault (AES-GCM-SIV + Argon2id), governed outbound transport, autonomy policy, bootstrap credentials |
+| `amsha-security` | Impl: secret vault (AES-GCM-SIV + Argon2id), autonomy policy, bootstrap credentials, outbound transport orchestration (`GovernedTransportService`), and approval receipts. The canonical `OutboundHttpPolicyService` and `GovernedHttpClient` / `GovernedHttpDnsPinning` / `OutboundHttpException` live in `amsha-core` (`com.amsha.core.security*`) — core cannot depend on this impl module — and security retains thin compatibility wrappers for the named HTTP client types |
 | `amsha-tool-api` | Tool contracts — `AgentTool` SPI, capability/metadata/context/response types (zero-core) |
 | `amsha-tools-builtin` | Built-in `AgentTools` (16 incl. Playwright CLI) + Lucene-backed search |
-| `amsha-classifier-api` | Shadow-classifier SPIs — tool-risk, answer-quality, intent (zero-core; impls in `amsha-local-ml-onnx`) |
+| `amsha-classifier-api` | Shadow-classifier SPIs — tool-risk, answer-quality, intent — **plus the Jev decision-plane seam** (zero-core; classifier impls in `amsha-local-ml-onnx`, and no `DecisionEngine` bean by design — status Deferred) |
 | `amsha-sandbox` | Podman rootless container execution, namespace isolation, image resolution |
 | `amsha-skills` | Skill loading and providers (built-in skills + dynamic SkillsJars) |
 | `amsha-memory` | Tiered memory implementation (Core/Recall/Archival) over `amsha-persistence-api` (strict zero-core) |
@@ -282,6 +282,34 @@ closed, and the interceptors preserve the deterministic guard path. Disable bloc
 new leases immediately while accepted leases retain their result path and drain.
 Internal admin mutations write a mandatory payload-free audit record before changing
 state; audit failure leaves the switch unchanged.
+
+### Jev Decision Plane (Deferred)
+
+`amsha-classifier-api` also carries a provider-neutral typed decision seam: a one-method
+`DecisionEngine.evaluate(DecisionRequest) -> DecisionResult`, a sealed answer vocabulary (`Choice`,
+`Score`, `Noul`), registered `DecisionDefinition`s, deterministic Amsha-owned policies
+(`IntentDecisionPolicy`, `ToolRiskDecisionPolicy`), a payload decoder that fails closed to
+`INFERENCE_ERROR`, a transaction-boundary guard, and a placement validator that forbids remote or
+self-hosted engines at the network-free classifier SPIs. See
+[ADR-jev-decision-plane](./adr/architecture/ADR-jev-decision-plane.md).
+
+![Jev Decision Plane](./assets/amsha_decision_plane.svg)
+
+**The plane is Deferred, and that is enforced in code rather than merely documented.** No production
+`DecisionEngine` bean exists. Enabled shadow classifiers return `NoOpinion(MISSING_MODEL)`; disabled
+classifiers return `DISABLED`. `IntentDecisionRouter.isEnabled()` is false and its evaluation returns a
+`DISABLED` fallback while no engine resolves. Setting
+`AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op: with a resolvable
+engine, direct routing additionally requires `isActivationGateApproved()` — approved candidate evidence, an
+approved cost ceiling, and a non-blank rollout owner. `DecisionPlaneReadiness` (`@Startup`) logs exactly one WARN when a switch is
+enabled with no resolvable engine, so a misconfiguration is visible rather than silent. Do **not** add a
+production `DecisionEngine` bean without reopening the ADR.
+
+The plane's only REST surface today is the classifier control plane
+(`/api/v1/admin/local-ml/onnx/classifiers*`, `OnnxAdminResource`) — which is also the one part of the
+local-ML stack validatable with **no model bundle**, because those endpoints check `isInternal()` only and
+never `onnxEnabled`. See [Architecture_Invariants](./Architecture_Invariants.md) §27,
+[CONFIGURATION](./CONFIGURATION.md), and [ONNX_LOCAL_ML_GUIDE](./ONNX_LOCAL_ML_GUIDE.md) §7.
 
 ### Parallel Tool Execution
 
@@ -1218,6 +1246,15 @@ The cockpit exposes trace data through the following routes:
 ## Governed Outbound HTTP Transport for LLMs & Arena
 
 All outbound model requests from the agent reasoning loop and Model Arena are intercepted at the byte level to prevent SSRF, data exfiltration, and credential leakage:
+
+> **Canonical transport location.** `GovernedHttpClient`, `GovernedHttpDnsPinning` and `OutboundHttpException`
+> live in **`amsha-core`** (`com.amsha.core.security.http`) — they moved down from `amsha-security` because
+> `amsha-core` MUST NOT depend on an impl-tier module (§1.8, Rule 17) and the remote decision engine in core
+> needs the governed transport. `amsha-security` keeps thin backwards-compatible wrappers in
+> `com.amsha.security.http` so existing callers (`llm-providers`, `mcp`, `tools-builtin`, `onboarding`, `app`)
+> compile unchanged; new code SHOULD target the core types. `OutboundHttpPolicyService` also lives in core;
+> `amsha-security` retains transport orchestration (`GovernedTransportService`) and approval receipts
+> (`ApprovalReceiptIssuer`).
 
 ![Governed Outbound Transport for LLMs & Arena](./assets/amsha_governed_transport.svg)
 

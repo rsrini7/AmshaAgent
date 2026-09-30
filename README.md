@@ -99,6 +99,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Non-authoritative classifier shadow path** — disabled-by-default intent, tool-risk, and answer-quality adapters emit bounded payload-free comparisons without changing routing, authorization, retry, or answer behavior; reproducible review/training/export tooling is present, while human-approved datasets and promoted models remain pending
 - **classifier safety gate** — core now provides ordered post-policy tool-risk and answer-quality SPIs with monotonic risk upgrades, existing HITL preservation, and one pre-tool retry budget; no active ONNX implementation is wired, so model evidence remains required before behavioral activation
 - **Non-activating classifier controls** — internal-only, mandatory-audited per-classifier runtime switches distinguish requested from effective state, reject enablement without a ready active implementation, and drain accepted work after disable; no ONNX classifier is behaviorally active
+- **Deferred typed decision plane** — one typed judgment seam (`DecisionEngine` → `Choice`/`Score`/`Noul` plus confidence, or `NoOpinion`) with in-process, self-hosted, and remote provider boundaries behind a placement validator. No production engine is registered: enabled shadow classifiers return `NoOpinion(MISSING_MODEL)`, while the intent router remains disabled and returns a `DISABLED` fallback. If an engine is later registered, direct routing still requires the evidence, cost, and owner approvals. `DecisionPlaneReadiness` announces enabled-but-inert switches once at startup (see [ADR-jev-decision-plane](./docs/adr/architecture/ADR-jev-decision-plane.md))
 - **Reusable local ML verification** — one secret-safe mise workflow checks authenticated OMLX through `generic-openai`, bundle digests, ONNX health/index descriptors, real inference metric movement, and isolated native startup/shutdown without selecting Ollama
 - **Document ingestion** — add knowledge to the RAG store for retrieval in future agent turns via `IngestDocumentTool` (guard/PII/audit-gated); native two-tier hybrid RAG (FTS5 + vector + RRF + optional rerank) retained after safety-gated LangChain4j Easy RAG evaluation (P6 `P6-EASYRAG-01` — 6× Amsha superior on retrieval/governance/native/tenancy/descriptor/rerank, 1× Easy RAG superior on onboarding simplicity, see `rag/README.md` matrix)
 - **Extensible Skills system** — YAML/Markdown custom roles from database, classpath, or SkillsJars with hot reload and optional adaptive execution
@@ -172,7 +173,7 @@ channel-api/          ← Channel SPI: sealed interfaces and plugin contracts
 llm-provider-api/     ← LLM SPIs: ChatModelCreationPort, exception taxonomy
 security-api/         ← Security vocabulary: SecretVault, ToolOperation/RiskLevel
 tool-api/             ← AgentTool contract surface (ToolResponse, execution context)
-classifier-api/       ← Shadow-classifier contracts
+classifier-api/       ← Shadow-classifier contracts + typed decision-plane seam
 persistence-api/      ← Hexagonal port interfaces (stores, tiered memory ports)
 │
 security/             ← Vault, Argon2id + AES-GCM-SIV crypto, governed HTTP
@@ -286,4 +287,4 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-16; UI 2026-09-12): 8,301 Java tests at 84.28% line coverage and 172 UI tests at 58.67% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-29; UI 2026-09-12): 8,530 Java tests at 84.17% line coverage and 172 UI tests at 58.67% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.
