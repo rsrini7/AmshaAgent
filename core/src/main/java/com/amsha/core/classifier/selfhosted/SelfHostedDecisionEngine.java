@@ -8,7 +8,6 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -18,7 +17,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.classifier.api.DecisionEngine;
 import com.amsha.classifier.api.DecisionPayloadDecoder;
-import com.amsha.classifier.api.DecisionQuestion;
 import com.amsha.classifier.api.DecisionRequest;
 import com.amsha.classifier.api.DecisionResult;
 import com.amsha.classifier.api.DecisionTransactionGuard;
@@ -26,6 +24,7 @@ import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.classifier.api.RedactionPolicy;
 import com.amsha.classifier.api.SelfHostedDecisionProvider;
 import com.amsha.classifier.api.StateProjectionPolicy;
+import com.amsha.core.classifier.wire.SystemOneWireMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -181,17 +180,21 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
                     request.decisionId(), request.schemaVersion(), null, "State projection or redaction failed");
         }
 
-        // 6. Serialize Wire Request Payload
-        String requestBody;
-        try {
-            requestBody = buildWireRequestBody(request, projectedStateJson);
-        } catch (JsonProcessingException _) {
-            return DecisionResult.NoOpinion.ofMalformedResponse(
-                    request.decisionId(), request.schemaVersion(), null, "Failed to serialize wire request payload");
-        }
+        // 6. Map onto the System One wire contract. An unrepresentable question fails closed rather
+        //    than emitting a request the provider would reject with 422. The profile comes from the
+        //    endpoint's own configuration: the route and question vocabulary are shared, but `state`
+        //    is JSON for Laya/Kev and prose for CLM, and sending the wrong one degrades answers
+        //    silently rather than failing loudly.
+        SystemOneWireMapper.Outcome mapped =
+                SystemOneWireMapper.map(mapper, request, projectedStateJson, config.modelId(), config.wireProfile());
 
         // 7. Execute Outbound Loopback HTTP Call
-        return executeHttpCall(request, requestBody);
+        return switch (mapped) {
+            case SystemOneWireMapper.Outcome.Ready ready -> executeHttpCall(request, ready.body());
+            case SystemOneWireMapper.Outcome.Unrepresentable unrepresentable ->
+                DecisionResult.NoOpinion.ofMalformedResponse(
+                        request.decisionId(), request.schemaVersion(), null, unrepresentable.reason());
+        };
     }
 
     private StateProjectionPolicy resolveProjectionPolicy(DecisionRequest request) {
@@ -218,33 +221,6 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
         Set<String> masked = new HashSet<>(p1.maskedFields());
         masked.addAll(p2.maskedFields());
         return new RedactionPolicy(redactSecrets, redactPii, Set.copyOf(masked));
-    }
-
-    private String buildWireRequestBody(DecisionRequest request, String projectedStateJson)
-            throws JsonProcessingException {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("decisionId", request.decisionId());
-        payload.put("schemaVersion", request.schemaVersion());
-        payload.put("state", projectedStateJson);
-
-        Map<String, Object> questionsMap = new LinkedHashMap<>();
-        for (Map.Entry<String, DecisionQuestion<?>> entry : request.questions().entrySet()) {
-            DecisionQuestion<?> q = entry.getValue();
-            Map<String, Object> qData = new LinkedHashMap<>();
-            qData.put("primitive", q.key().primitive().name());
-            qData.put("criteria", q.criteria());
-            if (!q.options().isEmpty()) {
-                qData.put("options", q.options());
-            }
-            if (!q.rubricLevels().isEmpty()) {
-                qData.put("rubricLevels", q.rubricLevels());
-            }
-            questionsMap.put(entry.getKey(), qData);
-        }
-        payload.put("questions", questionsMap);
-        payload.put("timeoutMs", request.timeout().toMillis());
-
-        return mapper.writeValueAsString(payload);
     }
 
     private DecisionResult executeHttpCall(DecisionRequest request, String requestBody) {
@@ -312,7 +288,8 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
                         request.decisionId(), request.schemaVersion(), null, "Failed to parse provider response JSON");
             }
         }
-        if (status == 503 || status == 429) {
+        // 529 is the System One overload signal; 503 and 429 are the conventional equivalents.
+        if (status == 503 || status == 429 || status == 529) {
             return new DecisionResult.NoOpinion(
                     request.decisionId(),
                     request.schemaVersion(),

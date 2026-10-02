@@ -302,7 +302,9 @@ classifiers return `DISABLED`. `IntentDecisionRouter.isEnabled()` is false and i
 `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op: with a resolvable
 engine, direct routing additionally requires `isActivationGateApproved()` — approved candidate evidence, an
 approved cost ceiling, and a non-blank rollout owner. `DecisionPlaneReadiness` (`@Startup`) logs exactly one WARN when a switch is
-enabled with no resolvable engine, so a misconfiguration is visible rather than silent. Do **not** add a
+enabled with no resolvable engine, so a misconfiguration is visible rather than silent. A non-blank but
+placeholder rollout owner — which satisfies the gate while naming nobody — is announced once at startup by
+`ActivationGateReadiness`, advisory only: it never rejects the value or closes the gate. Do **not** add a
 production `DecisionEngine` bean without reopening the ADR.
 
 The plane's only REST surface today is the classifier control plane

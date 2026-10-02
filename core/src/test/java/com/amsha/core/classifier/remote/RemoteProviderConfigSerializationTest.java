@@ -23,8 +23,10 @@ class RemoteProviderConfigSerializationTest {
 
     private static RemoteProviderConfig configWithApiKey() {
         // Only the builder defaults are relied on, so endpoint validation cannot make this test flaky.
+        // The model is explicit because the record deliberately has no default for it.
         return RemoteProviderConfig.builder()
                 .enabled(true)
+                .modelId("jev-1.13.0")
                 .apiKey(SECRET)
                 .tenantIsolation(true)
                 .build();

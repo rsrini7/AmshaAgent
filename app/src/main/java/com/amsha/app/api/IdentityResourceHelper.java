@@ -49,6 +49,23 @@ final class IdentityResourceHelper {
         return role != null && ALLOWED_ROLES.contains(role.toUpperCase(Locale.ROOT));
     }
 
+    /**
+     * Validates that {@code callerRole} may grant {@code requestedRole} by invitation.
+     *
+     * <p><b>Precondition:</b> {@code callerRole} must already be restricted to {@code OWNER} or {@code ADMIN} by
+     * the caller. The only call site enforces this ({@code IdentityResource.createInvitation} rejects any other
+     * active membership role before calling here), so this method is <em>not</em> self-defending — a caller role
+     * outside that set is not rejected by it.
+     *
+     * <p>The third check below is unreachable for any input that passes the first two: the accepted roles are a
+     * closed set of three, and the {@code OWNER} case is already handled above it. It is retained rather than
+     * deleted, but it enforces nothing today. Making this method self-defending is a deliberate change, not a
+     * refactor; see the finding recorded in {@code docs/TEST_COVERAGE_ANALYSIS.md}.
+     *
+     * @param callerRole the inviting member's role, expected to be {@code OWNER} or {@code ADMIN}
+     * @param requestedRole the role to grant, or null
+     * @return a 403 response if the invitation is not permitted, or null if it is
+     */
     static Response validateInvitationRole(String callerRole, String requestedRole) {
         if (requestedRole == null || !isValidRole(requestedRole)) {
             return Response.status(Response.Status.FORBIDDEN)

@@ -20,13 +20,13 @@ import com.amsha.classifier.api.RedactionPolicy;
 import com.amsha.classifier.api.RemoteDecisionProvider;
 import com.amsha.classifier.api.StateProjectionPolicy;
 import com.amsha.core.classifier.selfhosted.StateProjectionRedactor;
+import com.amsha.core.classifier.wire.SystemOneWireMapper;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.security.http.GovernedHttpClient;
 import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.vertx.core.Context;
@@ -250,17 +250,18 @@ public final class RemoteDecisionEngine implements DecisionEngine, RemoteDecisio
                     request.decisionId(), request.schemaVersion(), null, "State projection or redaction failed");
         }
 
-        // 7. Serialize Wire Request Payload
-        String requestBody;
-        try {
-            requestBody = RemoteDecisionWireCodec.buildWireRequestBody(mapper, request, projectedStateJson);
-        } catch (JsonProcessingException _) {
-            return DecisionResult.NoOpinion.ofMalformedResponse(
-                    request.decisionId(), request.schemaVersion(), null, "Failed to serialize wire request payload");
-        }
+        // 7. Map onto the System One wire contract. An unrepresentable question fails closed rather
+        //    than emitting a request the provider would reject with 422.
+        SystemOneWireMapper.Outcome mapped =
+                RemoteDecisionWireCodec.buildWireRequestBody(mapper, request, projectedStateJson, config.modelId());
 
         // 8. Execute Outbound Remote HTTP Call via GovernedHttpClient (single-shot, no retries)
-        return executeHttpCall(request, requestBody);
+        return switch (mapped) {
+            case SystemOneWireMapper.Outcome.Ready ready -> executeHttpCall(request, ready.body());
+            case SystemOneWireMapper.Outcome.Unrepresentable unrepresentable ->
+                DecisionResult.NoOpinion.ofMalformedResponse(
+                        request.decisionId(), request.schemaVersion(), null, unrepresentable.reason());
+        };
     }
 
     private StateProjectionPolicy resolveProjectionPolicy(DecisionRequest request) {

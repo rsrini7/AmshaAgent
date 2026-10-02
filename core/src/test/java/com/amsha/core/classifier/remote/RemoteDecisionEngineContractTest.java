@@ -87,7 +87,7 @@ class RemoteDecisionEngineContractTest {
         try {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             port = server.getAddress().getPort();
-            server.createContext("/v1/evaluate", new HttpHandler() {
+            server.createContext("/v1/systemone", new HttpHandler() {
                 @Override
                 public void handle(HttpExchange exchange) throws IOException {
                     requestCount.incrementAndGet();
@@ -130,23 +130,30 @@ class RemoteDecisionEngineContractTest {
     @Test
     void verifiesChoiceWireCompatibility() {
         responseStatus = 200;
+        // The documented answer shape, plus two Amsha envelope fields ("ruleId", "latencyMs") that the
+        // documented TypeSafe response does not contain — kept deliberately so this case also exercises
+        // the decoder's tolerance of extra envelope keys. Do not read it as a vendor-verbatim body.
         responseBody = """
                 {
+                  "model": "jev-1.13.0",
                   "answers": {
                     "risk": {
+                      "type": "choice",
                       "choice": "LOW_RISK",
                       "confidence": 0.95,
                       "probabilities": { "LOW_RISK": 0.95, "BLOCK": 0.05 }
                     }
                   },
                   "ruleId": "remote-risk-rule-01",
-                  "latencyMs": 42.0
+                  "latencyMs": 42.0,
+                  "usage": { "input_tokens": 318, "output_tokens": 34 }
                 }
                 """;
 
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("tool_name", "risk"), RedactionPolicy.DEFAULT))
                 .build();
@@ -167,19 +174,27 @@ class RemoteDecisionEngineContractTest {
             assertTrue(choice.confidence().isPresent());
             assertEquals(0.95, choice.confidence().getAsDouble(), 1e-4);
             assertEquals("remote-risk-rule-01", opinion.ruleId());
+            // The top-level "model" is attributed and the nested "usage" token counts are read.
+            assertEquals("jev-1.13.0", opinion.metadata().modelId());
+            assertEquals(318L, opinion.metadata().inputTokens());
+            assertEquals(34L, opinion.metadata().outputTokens());
         }
     }
 
     @Test
     void verifiesScoreWireCompatibility() {
         responseStatus = 200;
+        // Verbatim shape: Score "legend" and "probabilities" are objects keyed by level index, not arrays.
         responseBody = """
                 {
+                  "model": "jev-1.13.0",
                   "answers": {
                     "quality": {
+                      "type": "score",
                       "score": 3.0,
                       "confidence": 0.91,
-                      "legend": ["poor", "fair", "good", "excellent"]
+                      "legend": { "0": "poor", "1": "fair", "2": "good", "3": "excellent" },
+                      "probabilities": { "0": 0.0, "1": 0.05, "2": 0.1, "3": 0.85 }
                     }
                   },
                   "ruleId": "remote-score-rule-02"
@@ -188,7 +203,8 @@ class RemoteDecisionEngineContractTest {
 
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("answer", "quality"), RedactionPolicy.DEFAULT))
                 .build();
@@ -205,17 +221,24 @@ class RemoteDecisionEngineContractTest {
             Score score = opinion.get(scoreKey);
             assertEquals(3.0, score.score(), 1e-4);
             assertEquals("remote-score-rule-02", opinion.ruleId());
+            // Index-keyed objects are normalized into positional lists in level order.
+            assertEquals(List.of("poor", "fair", "good", "excellent"), score.legend());
+            assertEquals(4, score.probabilities().size());
+            assertEquals(3, score.mostLikelyLevel().orElse(-1));
         }
     }
 
     @Test
     void verifiesNoulWireCompatibility() {
         responseStatus = 200;
+        // Verbatim shape: the Noul answer carries a top-level "noul" key.
         responseBody = """
                 {
+                  "model": "jev-1.13.0",
                   "answers": {
                     "is_safe": {
-                      "probability": 0.98
+                      "type": "noul",
+                      "noul": 0.98
                     }
                   }
                 }
@@ -223,7 +246,8 @@ class RemoteDecisionEngineContractTest {
 
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(
                         StateProjectionPolicy.of(Set.of("content", "is_safe"), RedactionPolicy.DEFAULT))
@@ -246,7 +270,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesMalformedAndPartialResponsesFailClosed() {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q1", "q2"), RedactionPolicy.DEFAULT))
                 .build();
@@ -285,7 +310,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesAuthFailures401And403() {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -318,7 +344,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesModelNotFound404() {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -341,7 +368,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesOverloadTimeoutAndProcessFailure() {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofMillis(100))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -393,7 +421,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesDisabledProviderReturnsNoOpinionDisabled() {
         var config = RemoteProviderConfig.builder()
                 .enabled(false) // explicitly disabled by default
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .build();
 
         try (var engine = new RemoteDecisionEngine(config, httpClient, mapper, outboundPolicyService)) {
@@ -433,7 +462,8 @@ class RemoteDecisionEngineContractTest {
 
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .apiKey("auth-" + "bearer-token-777")
                 .defaultProjectionPolicy(projectionPolicy)
@@ -474,7 +504,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesMissingProjectionPolicyFailsClosedWithoutInventingAllowList() {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(null)
                 .build();
@@ -501,7 +532,8 @@ class RemoteDecisionEngineContractTest {
 
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("param"), RedactionPolicy.DEFAULT))
                 .build();
@@ -534,7 +566,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesProviderPlacementSecurityInvariant() {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .build();
 
         try (var engine = new RemoteDecisionEngine(config, httpClient, mapper, outboundPolicyService)) {
@@ -549,7 +582,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesDefensiveTransactionGuardFailsClosed() {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .build();
 
         DecisionTransactionGuard activeTxGuard = DecisionTransactionGuard.ofStatusSupplier(() -> 0);
@@ -570,7 +604,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesOutboundPolicyAndHitlSelfAuthorizationInvariant() {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
 
@@ -624,7 +659,8 @@ class RemoteDecisionEngineContractTest {
     void verifiesEventLoopThreadGuardFailsFast() throws Exception {
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
 
@@ -664,7 +700,8 @@ class RemoteDecisionEngineContractTest {
                 """;
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .networkProfileJson(netProfileWithProxy)
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -703,7 +740,8 @@ class RemoteDecisionEngineContractTest {
         String netProfileDenyAll = "{\"egressMode\": \"DENY_ALL\"}";
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .networkProfileJson(netProfileDenyAll)
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -737,7 +775,8 @@ class RemoteDecisionEngineContractTest {
                 """;
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .networkProfileJson(netProfileWithProxyCreds)
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -805,7 +844,8 @@ class RemoteDecisionEngineContractTest {
                 """;
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .networkProfileJson(netProfileCustomCa)
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -861,7 +901,8 @@ class RemoteDecisionEngineContractTest {
         assumeServerAvailable();
         var config = RemoteProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -900,6 +941,109 @@ class RemoteDecisionEngineContractTest {
             assertInstanceOf(DecisionResult.NoOpinion.class, res500);
             assertEquals(NoOpinionReason.INFERENCE_ERROR, ((DecisionResult.NoOpinion) res500).reason());
             assertEquals(1, requestCount.get(), "500 must be single-shot: zero retries");
+        }
+    }
+
+    @Test
+    void verifiesRequestMatchesTheDocumentedSystemOneContract() throws IOException {
+        responseStatus = 200;
+        responseBody = "{\"answers\":{\"department\":\"billing\"}}";
+
+        var config = RemoteProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("ticket"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new RemoteDecisionEngine(config, httpClient, mapper, outboundPolicyService)) {
+            var reqBuilder = DecisionRequest.builder("dec.contract", 1, "{\"ticket\":\"charged twice\"}");
+            reqBuilder.registerChoice("department", "Which team should handle this?", List.of("billing", "technical"));
+            engine.evaluate(reqBuilder.build());
+
+            String body = lastReceivedRequestBody.get();
+            assertNotNull(body, "Server must have received HTTP request body");
+            // Assert the emitted *structure*, not substrings: the defect this guards against was a
+            // field in the wrong slot, or an extra field, neither of which a `contains` check sees.
+            var sent = mapper.readTree(body);
+            assertEquals(3, sent.size(), body);
+            assertEquals("jev-1.13.0", sent.get("model").asText(), body);
+
+            var projectedState = mapper.readTree(sent.get("state").asText());
+            assertEquals(1, projectedState.size(), body);
+            assertEquals("charged twice", projectedState.get("ticket").asText(), body);
+
+            var questions = sent.get("questions");
+            assertEquals(1, questions.size(), body);
+            var question = questions.get("department");
+            assertEquals(3, question.size(), body);
+            assertEquals("choice", question.get("type").asText(), body);
+            assertEquals(
+                    "Which team should handle this?",
+                    question.get("instructions").asText(),
+                    body);
+
+            var criteria = question.get("criteria");
+            assertEquals(2, criteria.size(), body);
+            assertTrue(criteria.get("billing").isNull(), body);
+            assertTrue(criteria.get("technical").isNull(), body);
+
+            // Amsha-internal fields are not part of the contract and must not be emitted at all.
+            assertFalse(sent.has("decisionId"), body);
+            assertFalse(sent.has("schemaVersion"), body);
+            assertFalse(sent.has("timeoutMs"), body);
+            assertFalse(sent.has("primitive"), body);
+        }
+    }
+
+    @Test
+    void verifies529OverloadIsMappedToOverloadRejected() {
+        var config = RemoteProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new RemoteDecisionEngine(config, httpClient, mapper, outboundPolicyService)) {
+            var reqBuilder = DecisionRequest.builder("dec.529", 1, "{}");
+            reqBuilder.registerChoice("q", "question", List.of("A", "B"));
+
+            // 529 is the System One overload signal; there is no documented 503.
+            responseStatus = 529;
+            responseBody = "overloaded";
+            DecisionResult result = engine.evaluate(reqBuilder.build());
+
+            assertInstanceOf(DecisionResult.NoOpinion.class, result);
+            assertEquals(NoOpinionReason.OVERLOAD_REJECTED, ((DecisionResult.NoOpinion) result).reason());
+        }
+    }
+
+    @Test
+    void verifiesUnrepresentableQuestionFailsClosedWithoutEgress() {
+        var config = RemoteProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("jev-1.13.0")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new RemoteDecisionEngine(config, httpClient, mapper, outboundPolicyService)) {
+            var reqBuilder = DecisionRequest.builder("dec.unrepresentable", 1, "{}");
+            // A Score with no rubric levels has no valid System One representation.
+            reqBuilder.registerScore("q", "rate", List.of());
+            requestCount.set(0);
+
+            DecisionResult result = engine.evaluate(reqBuilder.build());
+
+            assertInstanceOf(DecisionResult.NoOpinion.class, result);
+            var noOpinion = (DecisionResult.NoOpinion) result;
+            assertEquals(NoOpinionReason.INFERENCE_ERROR, noOpinion.reason());
+            assertTrue(noOpinion.detail().contains("q"), noOpinion.detail());
+            assertEquals(0, requestCount.get(), "No HTTP call may be made for an unrepresentable request");
         }
     }
 }

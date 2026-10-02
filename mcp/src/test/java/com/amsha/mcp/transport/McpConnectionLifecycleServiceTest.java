@@ -21,6 +21,7 @@ import com.amsha.persistence.api.McpConnectionCleanupFailureDto;
 import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
+import com.amsha.persistence.api.McpConnectionToolPolicyDto;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -308,6 +309,199 @@ class McpConnectionLifecycleServiceTest {
 
         assertDoesNotThrow(service::runStartupReconciliation);
         verifyNoInteractions(stores, store, secretVault, auditService, mcpClientService);
+    }
+
+    // --- store() delegation: reads, writes and the no-store fallbacks ---
+
+    @Test
+    void readDelegatesFallBackToEmptyWhenNoStoreIsWired() {
+        when(stores.stream()).thenAnswer(invocation -> Stream.empty());
+
+        assertEquals(List.of(), service.listByUserId("user-1"));
+        assertTrue(service.findByNameAndUserId("docs", "user-1").isEmpty());
+        assertEquals(List.of(), service.listToolPolicies("mcp-1", "user-1"));
+        assertEquals(List.of(), service.headerSecretRefs("mcp-1", "user-1"));
+        assertEquals(0, service.setToolEnabled("mcp-1", "user-1", "search", true));
+        assertTrue(service.updateState("mcp-1", "user-1", "CONNECTED", true, null, null)
+                .isEmpty());
+        assertFalse(service.deleteByNameAndUserId("docs", "user-1"));
+        assertFalse(service.deleteByIdAndUserId("mcp-1", "user-1"));
+        assertEquals(0, service.deleteAllByUserId("user-1"));
+    }
+
+    @Test
+    void persistenceFallsBackToAnEmptyResultWhenNoStoreIsWired() {
+        when(stores.stream()).thenAnswer(invocation -> Stream.empty());
+
+        var created = service.persistSuccessfulHttp(
+                "docs", "https://example.com/mcp", ToolCategory.NETWORK, "user-1", Map.of("x-token", "value"));
+        assertNull(created.connection());
+        assertTrue(created.headerSecretRefs().isEmpty());
+
+        var kept = service.persistSuccessfulHttpKeepingHeaders(
+                "docs", "https://example.com/mcp", ToolCategory.NETWORK, "user-1");
+        assertNull(kept.connection());
+        assertTrue(kept.headerSecretRefs().isEmpty());
+    }
+
+    @Test
+    void listToolPoliciesDelegatesToTheStore() {
+        McpConnectionToolPolicyDto policy = toolPolicy("pol-1", "mcp-1", "user-1", "search");
+        when(store.listToolPolicies("mcp-1", "user-1")).thenReturn(List.of(policy));
+
+        assertEquals(List.of(policy), service.listToolPolicies("mcp-1", "user-1"));
+        verify(store).listToolPolicies("mcp-1", "user-1");
+    }
+
+    @Test
+    void headerSecretRefsDelegatesToTheStore() {
+        McpConnectionHeaderSecretRefDto ref = headerRef("ref-1", "mcp-1", "user-1", "authorization", "vault-a");
+        when(store.listHeaderSecretRefs("mcp-1", "user-1")).thenReturn(List.of(ref));
+
+        assertEquals(List.of(ref), service.headerSecretRefs("mcp-1", "user-1"));
+        verify(store).listHeaderSecretRefs("mcp-1", "user-1");
+    }
+
+    @Test
+    void findByNameAndUserIdReturnsTheStoredConnectionOrEmpty() {
+        McpConnectionDto connection = connection("mcp-1", "user-1", "docs", McpTransportType.HTTP_SSE.name(), true);
+        when(store.findByNameAndUserId("docs", "user-1")).thenReturn(Optional.of(connection));
+        when(store.findByNameAndUserId("missing", "user-1")).thenReturn(Optional.empty());
+
+        assertEquals(Optional.of(connection), service.findByNameAndUserId("docs", "user-1"));
+        assertTrue(service.findByNameAndUserId("missing", "user-1").isEmpty());
+    }
+
+    @Test
+    void replaceToolPoliciesWritesThroughTheStoreAndIsANoOpWithoutOne() {
+        McpConnectionToolPolicyDto policy = toolPolicy("pol-1", "mcp-1", "user-1", "search");
+
+        service.replaceToolPolicies("mcp-1", "user-1", List.of(policy));
+
+        when(stores.stream()).thenAnswer(invocation -> Stream.empty());
+        service.replaceToolPolicies("mcp-1", "user-1", List.of(policy));
+
+        // The second call must not reach the store: a missing port is a silent no-op, not a second write.
+        verify(store, times(1)).replaceToolPolicies("mcp-1", "user-1", List.of(policy));
+    }
+
+    @Test
+    void setToolEnabledReturnsTheStoreCount() {
+        when(store.setToolEnabled("mcp-1", "user-1", "search", false)).thenReturn(1);
+
+        assertEquals(1, service.setToolEnabled("mcp-1", "user-1", "search", false));
+    }
+
+    @Test
+    void updateStateBumpsTheRevisionOnlyWhenTheCompareAndSetSucceeds() {
+        McpConnectionDto current = connection("mcp-1", "user-1", "docs", McpTransportType.HTTP_SSE.name(), true);
+        when(store.findByIdAndUserId("mcp-1", "user-1")).thenReturn(Optional.of(current));
+        when(store.updateStateIfRevision(any(McpConnectionDto.class), eq(current.revision())))
+                .thenReturn(true);
+
+        Optional<McpConnectionDto> updated = service.updateState("mcp-1", "user-1", "CONNECTED", true, "task-9", null);
+
+        McpConnectionDto value = updated.orElseThrow();
+        assertEquals("CONNECTED", value.state());
+        assertEquals("task-9", value.approvalTaskId());
+        assertEquals(current.revision() + 1, value.revision());
+        assertEquals(current.createdAt(), value.createdAt());
+    }
+
+    @Test
+    void updateStateReturnsEmptyWhenTheCompareAndSetLosesTheRace() {
+        McpConnectionDto current = connection("mcp-1", "user-1", "docs", McpTransportType.HTTP_SSE.name(), true);
+        when(store.findByIdAndUserId("mcp-1", "user-1")).thenReturn(Optional.of(current));
+        when(store.updateStateIfRevision(any(McpConnectionDto.class), eq(current.revision())))
+                .thenReturn(false);
+
+        assertTrue(service.updateState("mcp-1", "user-1", "CONNECTED", true, null, null)
+                .isEmpty());
+    }
+
+    @Test
+    void updateStateReturnsEmptyWhenTheConnectionIsAbsent() {
+        when(store.findByIdAndUserId("missing", "user-1")).thenReturn(Optional.empty());
+
+        assertTrue(service.updateState("missing", "user-1", "CONNECTED", true, null, null)
+                .isEmpty());
+    }
+
+    @Test
+    void deleteConnectionReturnsFalseWhenTheStoreDeletesNothing() {
+        McpConnectionDto connection = connection("mcp-1", "user-1", "docs", McpTransportType.HTTP_SSE.name(), true);
+        when(store.findByNameAndUserId("docs", "user-1")).thenReturn(Optional.of(connection));
+        when(store.listHeaderSecretRefs(connection.id(), "user-1")).thenReturn(List.of());
+        when(store.deleteByIdAndUserId(connection.id(), "user-1")).thenReturn(0);
+
+        assertFalse(service.deleteByNameAndUserId("docs", "user-1"));
+        verify(mcpClientService, never()).clearHttpConnectionState(anyString(), anyString());
+    }
+
+    @Test
+    void deleteAllByUserIdSkipsConnectionsThatFailToDelete() {
+        McpConnectionDto kept = connection("mcp-1", "user-1", "docs", McpTransportType.HTTP_SSE.name(), true);
+        when(store.listByUserId("user-1")).thenReturn(List.of(kept));
+        when(store.listHeaderSecretRefs(kept.id(), "user-1")).thenReturn(List.of());
+        when(store.deleteByIdAndUserId(kept.id(), "user-1")).thenReturn(0);
+
+        assertEquals(0, service.deleteAllByUserId("user-1"));
+    }
+
+    @Test
+    void persistSuccessfulHttpWithoutHeadersKeepsNoSecretRefs() {
+        McpConnectionDto existing = connection("mcp-1", "user-1", "docs", McpTransportType.HTTP_SSE.name(), true);
+        when(store.findByNameAndUserId("docs", "user-1")).thenReturn(Optional.of(existing));
+        when(store.listHeaderSecretRefs("mcp-1", "user-1")).thenReturn(List.of());
+
+        var persisted =
+                service.persistSuccessfulHttp("docs", "https://example.com/mcp", ToolCategory.NETWORK, "user-1");
+
+        assertTrue(persisted.headerSecretRefs().isEmpty());
+        verifyNoInteractions(secretVault);
+    }
+
+    @Test
+    void persistSuccessfulHttpRotatesAnExistingHeaderSecretInsteadOfConfiguringIt() {
+        McpConnectionDto existing = connection("mcp-1", "user-1", "docs", McpTransportType.HTTP_SSE.name(), true);
+        // Same normalised name, and the vault key is deterministic, so this is the same slot being rotated.
+        McpConnectionHeaderSecretRefDto oldRef =
+                headerRef("ref-old", "mcp-1", "user-1", "x-token", "mcp:mcp-1:header:x-token");
+        when(store.findByNameAndUserId("docs", "user-1")).thenReturn(Optional.of(existing));
+        when(store.listHeaderSecretRefs("mcp-1", "user-1")).thenReturn(List.of(oldRef));
+
+        var persisted = service.persistSuccessfulHttp(
+                "docs", "https://example.com/mcp", ToolCategory.NETWORK, "user-1", Map.of("X-Token", "new-value"));
+
+        assertEquals(1, persisted.headerSecretRefs().size());
+        assertEquals("x-token", persisted.headerSecretRefs().get(0).headerName());
+        verify(auditService)
+                .recordMandatory(
+                        anyString(),
+                        eq("user-1"),
+                        anyString(),
+                        eq(SecurityEventType.MCP_CREDENTIAL_ROTATED),
+                        eq("connectionId=mcp-1 header=x-token"));
+        // The rotated ref keeps the same vault key, so the old ref is not torn down again.
+        verify(secretVault, never()).remove(anyString(), anyString());
+    }
+
+    @Test
+    void validateHttpRegistrationFallsThroughWhenOutboundPolicyAllowsTheEndpoint() {
+        service.outboundHttpPolicyService = mock(OutboundHttpPolicyService.class);
+        when(service.outboundHttpPolicyService.evaluate(
+                        eq("https://example.com/mcp"), eq(OutboundPurpose.MCP_TOOL_CALL), isNull(), isNull()))
+                .thenReturn(OutboundPolicyDecision.allow(OutboundPurpose.MCP_TOOL_CALL, "system"));
+
+        assertDoesNotThrow(
+                () -> service.validateHttpRegistration("https://example.com/mcp", Map.of("x-token", "value")));
+    }
+
+    private static McpConnectionToolPolicyDto toolPolicy(
+            String id, String connectionId, String userId, String toolName) {
+        Instant now = Instant.now();
+        return new McpConnectionToolPolicyDto(
+                id, connectionId, userId, toolName, true, true, "description", "{}", "hash", now, 0L, now);
     }
 
     private static McpConnectionDto connection(

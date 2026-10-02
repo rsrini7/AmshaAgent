@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Rank JaCoCo coverage gaps and estimate the work needed for a target."""
 
+from __future__ import annotations
+
 import argparse
 import csv
 import json

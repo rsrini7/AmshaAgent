@@ -2,22 +2,24 @@ package com.amsha.core.classifier.remote;
 
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.classifier.api.DecisionPayloadDecoder;
-import com.amsha.classifier.api.DecisionQuestion;
 import com.amsha.classifier.api.DecisionRequest;
 import com.amsha.classifier.api.DecisionResult;
+import com.amsha.core.classifier.wire.SystemOneWireMapper;
 import com.amsha.core.security.http.OutboundHttpException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Encapsulates TypeSafe-compatible wire request serialization, response decoding,
- * and outbound error mapping for {@link RemoteDecisionEngine}.
+ * Encapsulates System One ({@code POST /v1/systemone}) wire request mapping, response decoding, and
+ * outbound error mapping for {@link RemoteDecisionEngine}.
+ *
+ * <p>Request mapping is delegated to {@link SystemOneWireMapper} so the remote and self-hosted lanes
+ * cannot drift apart; this class owns only the HTTP-status and transport-exception translation.
  */
 final class RemoteDecisionWireCodec {
 
@@ -25,31 +27,18 @@ final class RemoteDecisionWireCodec {
 
     private RemoteDecisionWireCodec() {}
 
-    static String buildWireRequestBody(ObjectMapper mapper, DecisionRequest request, String projectedStateJson)
-            throws JsonProcessingException {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("decisionId", request.decisionId());
-        payload.put("schemaVersion", request.schemaVersion());
-        payload.put("state", projectedStateJson);
-
-        Map<String, Object> questionsMap = new LinkedHashMap<>();
-        for (Map.Entry<String, DecisionQuestion<?>> entry : request.questions().entrySet()) {
-            DecisionQuestion<?> q = entry.getValue();
-            Map<String, Object> qData = new LinkedHashMap<>();
-            qData.put("primitive", q.key().primitive().name());
-            qData.put("criteria", q.criteria());
-            if (!q.options().isEmpty()) {
-                qData.put("options", q.options());
-            }
-            if (!q.rubricLevels().isEmpty()) {
-                qData.put("rubricLevels", q.rubricLevels());
-            }
-            questionsMap.put(entry.getKey(), qData);
-        }
-        payload.put("questions", questionsMap);
-        payload.put("timeoutMs", request.timeout().toMillis());
-
-        return mapper.writeValueAsString(payload);
+    /**
+     * Maps a decision request onto the System One wire contract.
+     *
+     * @param mapper Jackson mapper
+     * @param request decision request
+     * @param projectedStateJson allow-listed, redacted state projection
+     * @param modelId provider model identifier for the {@code model} field
+     * @return a ready request body, or an unrepresentable outcome the caller must fail closed on
+     */
+    static SystemOneWireMapper.Outcome buildWireRequestBody(
+            ObjectMapper mapper, DecisionRequest request, String projectedStateJson, String modelId) {
+        return SystemOneWireMapper.map(mapper, request, projectedStateJson, modelId);
     }
 
     static DecisionResult handleHttpResponse(
@@ -93,7 +82,8 @@ final class RemoteDecisionWireCodec {
                     null,
                     "Remote provider returned timeout status 408");
         }
-        if (status == 503 || status == 429) {
+        // 529 is the System One overload signal; 503 and 429 are the conventional equivalents.
+        if (status == 503 || status == 429 || status == 529) {
             return new DecisionResult.NoOpinion(
                     request.decisionId(),
                     request.schemaVersion(),

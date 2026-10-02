@@ -380,6 +380,40 @@ class DecisionPlaneEvaluationTest {
     }
 
     @Test
+    void scoreBetweenRubricLevelsDecodesAsFractional() {
+        // Documented contract: `score` is the probability-weighted answer across the rubric, so it may
+        // land *between* levels (1.05) rather than on an integer index. decodeScore accepts any finite
+        // double, but every fixture used whole numbers, so the fractional case was unexercised.
+        var builder = DecisionRequest.builder("dec.fractional", 1, "state");
+        QuestionKey<Score> scoreKey = builder.addScore("s", "rate", List.of("low", "medium", "high"));
+        DecisionRequest request = builder.build();
+
+        // Documented wire shape: legend and probabilities are objects keyed by level index, not arrays.
+        Map<String, Object> raw = Map.of(
+                "answers",
+                Map.of(
+                        "s",
+                        Map.of(
+                                "score",
+                                1.05,
+                                "confidence",
+                                0.95,
+                                "legend",
+                                Map.of("0", "low", "1", "medium", "2", "high"),
+                                "probabilities",
+                                Map.of("0", 0.0, "1", 0.95, "2", 0.05))));
+
+        DecisionResult result = DecisionPayloadDecoder.decode(request, raw);
+
+        assertTrue(result.isOpinion(), () -> String.valueOf(result));
+        Score score = result.asOpinion().get(scoreKey);
+        assertEquals(1.05, score.score(), 1e-9, "a fractional score must survive decoding verbatim");
+        assertEquals(List.of("low", "medium", "high"), score.legend());
+        assertEquals(3, score.probabilities().size());
+        assertEquals(1, score.mostLikelyLevel().orElse(-1));
+    }
+
+    @Test
     void legacyBridgeDoesNotInventCertainty() {
         var choiceKey = QuestionKey.choice("role");
 

@@ -501,6 +501,97 @@ amsha:
         enabled: ${AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED:false}
       answer-quality:
         enabled: ${AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED:false}
+    # -------------------------------------------------------------------------
+    # Decision provider selection (Jev / System One).
+    #
+    # INERT BY DESIGN: nothing consumes this into a DecisionEngine. It is the
+    # configuration surface only — the ADR keeps the plane Deferred, so a value
+    # here changes no behaviour yet. See
+    # docs/research/Jev-Provider-Integration-Plan-2026.md §8.
+    #
+    # Mirrors the LLM convention above — `selected` picks one provider, and each
+    # provider names its own `model`. Those are the same two axes as
+    # AMSHA_LLM_PROVIDER + amsha.llm.<provider>.model.
+    #
+    # A provider is the System One ENDPOINT that receives POST /v1/systemone,
+    # exactly as an LLM provider is the endpoint that receives
+    # /v1/chat/completions. An id may therefore name a specific decision server
+    # (laya, kev, clm), a generic local runtime host that serves whichever
+    # decision model is loaded into it (omlx), or a hosted API (typesafe).
+    # `model` is a SEPARATE axis naming the checkpoint served at that endpoint —
+    # which is why `omlx` (a runtime) and `laya` (a model) are both valid ids.
+    # It is required for a REMOTE slot (the hosted contract makes it mandatory)
+    # and optional for a SELF-HOSTED one, where omitting it means "the server's
+    # own checkpoint" and the request leaves the field out entirely.
+    #
+    # `selected` must name one of the slots below. An undeclared id resolves to
+    # nothing (fail closed) rather than being turned into an endpoint.
+    #
+    # The lane is derived from the endpoint host, not declared: the literal
+    # 127.0.0.1 selects the self-hosted lane, anything else the remote lane.
+    # `localhost`, `::1`, and other 127.x hosts are rejected as ambiguous.
+    #
+    # `api-key-ref` is a SecretVault reference, never a literal key. The selector
+    # refuses a credentialed remote provider (typesafe) that declares none, but
+    # it never resolves the reference — that wiring does not exist yet.
+    # `wire-profile` belongs to the MODEL, not the endpoint: a CLM model must
+    # declare PROSE, and the selector refuses the contradiction.
+    # -------------------------------------------------------------------------
+    providers:
+      selected: "${AMSHA_DECISION_PROVIDER:}"
+      slots:
+        # TypeSafe Jev — closed hosted reference implementation (remote lane).
+        typesafe:
+          enabled: ${AMSHA_DECISION_TYPESAFE_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_TYPESAFE_ENDPOINT:https://api.typesafe.ai/v1/systemone}"
+          model: "${AMSHA_DECISION_TYPESAFE_MODEL:jev-latest}"
+          api-key-ref: "${AMSHA_DECISION_TYPESAFE_API_KEY_REF:}"
+          timeout: ${AMSHA_DECISION_TYPESAFE_TIMEOUT:PT5S}
+          wire-profile: ${AMSHA_DECISION_TYPESAFE_WIRE_PROFILE:JSON_OBJECT}
+        # CLM — contrastive System One model (a MODEL id, not a runtime). Its
+        # heads were trained on prose, so a JSON `state` degrades answers
+        # silently rather than failing loudly — hence PROSE below.
+        clm:
+          enabled: ${AMSHA_DECISION_CLM_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_CLM_ENDPOINT:http://127.0.0.1:8700/v1/systemone}"
+          model: "${AMSHA_DECISION_CLM_MODEL:clm-latest}"
+          api-key-ref: "${AMSHA_DECISION_CLM_API_KEY_REF:}"
+          timeout: ${AMSHA_DECISION_CLM_TIMEOUT:PT5S}
+          wire-profile: ${AMSHA_DECISION_CLM_WIRE_PROFILE:PROSE}
+        # Laya — Apache-2.0 Jev-wire-compatible server. Bind it to 127.0.0.1:
+        # laya-serve defaults to 0.0.0.0, which exposes it to the LAN.
+        laya:
+          enabled: ${AMSHA_DECISION_LAYA_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_LAYA_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
+          model: "${AMSHA_DECISION_LAYA_MODEL:laya-multilingual}"
+          api-key-ref: "${AMSHA_DECISION_LAYA_API_KEY_REF:}"
+          timeout: ${AMSHA_DECISION_LAYA_TIMEOUT:PT5S}
+          wire-profile: ${AMSHA_DECISION_LAYA_WIRE_PROFILE:JSON_OBJECT}
+        # Kev — Apache-2.0, LLM-backed rather than a dedicated decision head.
+        # `model` is blank on purpose: it names whichever checkpoint this server
+        # wraps, which is deployment-specific. A self-hosted slot may omit it —
+        # the request then leaves the field out and the server picks its own.
+        kev:
+          enabled: ${AMSHA_DECISION_KEV_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_KEV_ENDPOINT:http://127.0.0.1:3000/v1/systemone}"
+          model: "${AMSHA_DECISION_KEV_MODEL:}"
+          api-key-ref: "${AMSHA_DECISION_KEV_API_KEY_REF:}"
+          timeout: ${AMSHA_DECISION_KEV_TIMEOUT:PT5S}
+          wire-profile: ${AMSHA_DECISION_KEV_WIRE_PROFILE:JSON_OBJECT}
+        # omlx / LM Studio host — a local RUNTIME, not a model: `model` names
+        # whichever decision checkpoint is loaded into it (blank by default,
+        # exactly like AMSHA_OMLX_MODEL above). These runtimes serve
+        # /v1/chat/completions, NOT /v1/systemone, so this slot only becomes
+        # usable once something on this port actually exposes the System One
+        # route (e.g. a wrapper around a decision model). Leave it disabled
+        # until then.
+        omlx:
+          enabled: ${AMSHA_DECISION_OMLX_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
+          model: "${AMSHA_DECISION_OMLX_MODEL:}"
+          api-key-ref: "${AMSHA_DECISION_OMLX_API_KEY_REF:}"
+          timeout: ${AMSHA_DECISION_OMLX_TIMEOUT:PT5S}
+          wire-profile: ${AMSHA_DECISION_OMLX_WIRE_PROFILE:JSON_OBJECT}
   fs:
     data-dir: "${AMSHA_FS_DATA_DIR:./data/fs}"
     lock-timeout-seconds: 30

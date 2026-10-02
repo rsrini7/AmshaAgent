@@ -3,6 +3,7 @@
 > **Status**: **Original coverage-plan checkpoint closed** (2026-09-16); later branch follow-ups are recorded below.
 > **Recorded outcome (2026-09-16, at closure)**: The full-reactor snapshot recorded **8,301 passing Java/JUnit tests** and **84.28% reactor line coverage**, surpassing the 82.00% JaCoCo build floor.
 > **Latest measurement (2026-09-29)**: **8,530 passing tests** (8,500 Surefire + 30 Failsafe) at **84.17%** (52,507 / 62,379 lines). Re-run a clean full-reactor build before treating either figure as current evidence.
+> **Latest measurement (2026-10-02)**: **9,446 tests** (9,416 Surefire + 30 Failsafe; 0 failures, 0 errors, 7 skipped) at **86.76%** (54,319 / 62,607 lines), 29/29 modules, `./mvnw -o clean verify` in 10:55. The figure reconciles exactly with the on-disk reports, so it is the number the README badges carry. The reactor denominator **grows** as tests are added — a percentage can fall while covered lines rise, so compare covered/total, not the percentage alone. The covered count is **not bit-stable**: successive runs of near-identical trees have measured 54,146, 54,152, 54,215, 54,261 and 54,319 lines, so treat a single-digit spread as noise rather than drift. Read per-class figures from `target/site/jacoco/jacoco.csv` only — the sibling `target/jacoco-report/` tree is not the source the gate consumes and can be wrong.
 > **UI companion snapshot (2026-09-30)**: Vitest recorded **195 passing tests**, 0 failures and 0 errors, with **59.26% line coverage** (4,838/8,163 lines). UI and Java percentages have different denominators and are measured by separate pipelines.
 > **Gate Ratchet**: Root `pom.xml` `<jacoco.minimum.line.coverage>` permanently locked at **`0.82`** (82.00%).  
 > **Test Suite (2026-09-16)**: **8,301 passing Java tests** recorded across 28 child modules with 0 failures and 0 errors.
@@ -2562,19 +2563,33 @@ Module movement: **2,306 → 2,153 missed, 69.17% → 71.21% (+2.04 pp), 153 lin
 102 → 99. Six new plain-JUnit test files, **106 new tests**; the module suite is **933 tests, 0 failures, 0 errors,
 2 skipped**.
 
-**Finding — a dead privilege-escalation guard, i.e. a real authorisation hole.** In
+**Finding — a dead privilege-escalation guard: redundant today, a latent trap for reuse.** In
 `IdentityResourceHelper.validateInvitationRole`, the third guard requires `!"OWNER".equals(callerRole)` **and** a
 normalized role outside `{ADMIN, MEMBER}`. `isValidRole` has already narrowed the role to `{OWNER, ADMIN, MEMBER}`, so
 "outside `{ADMIN, MEMBER}`" means `OWNER` — and any `OWNER` request from a non-owner already returned at the second
-guard. The third guard can therefore **never fire**, and a `MEMBER` really can invite an `ADMIN`:
+guard. The third guard can therefore **never fire**, and the helper in isolation allows:
 
 ```java
 IdentityResourceHelper.validateInvitationRole("MEMBER", "ADMIN")   // returns null (allowed)
 ```
 
-This is the "guard on a closed set that an earlier guard already exhausted" shape. Reported, not "fixed" — the test
-pins the actual behaviour and names the finding, so a future change is noticed. **This one is worth a human decision
-rather than a coverage-driven edit.**
+**Corrected 2026-10-01 — this is not a live authorisation hole.** The helper has exactly one caller,
+`IdentityResource.createInvitation`, and that method rejects any caller whose *active membership role* is not
+`OWNER` or `ADMIN` **before** it calls the helper (`IdentityResource.java:123`). So `callerRole` is `OWNER` or
+`ADMIN` in production, and the `MEMBER` case above cannot be reached through the API. For that reachable caller set
+the third guard is fully redundant: an `OWNER` has no higher role to grant, and an `ADMIN`'s only higher role is
+`OWNER`, which the second guard already blocks. `IdentityResource` exposes no role-update endpoint at all — roles are
+assigned only by invitation creation (gated) and ownership transfer (gated to `OWNER`) — so there is no second path
+in. The earlier wording here ("i.e. a real authorisation hole", "a `MEMBER` really can invite an `ADMIN`") described
+the helper in isolation and overstated its production impact.
+
+The residual risk is therefore *future*, not present: the helper reads as though it defends itself, but its safety
+property actually lives in a different file. Reusing it from a new call site, or relaxing the caller gate, would
+silently permit the escalation the third guard appears to prevent. This is the "guard on a closed set that an
+earlier guard already exhausted" shape. Reported, not "fixed" — the test pins the actual behaviour and names the
+finding, so a future change is noticed. **Worth a human decision rather than a coverage-driven edit:** either make
+the helper self-defending (reject a caller role outside `{OWNER, ADMIN}`, and compare roles by rank) or delete the
+dead guard so the contract is honest.
 
 **Finding — `DbQueryAstScanner.visit(ParenthesedSelect)` is unreachable under JSqlParser 4.9.** The override looks
 live and is even exercised by every nested-subquery test, but the dispatch never lands on it. `Select` implements
@@ -2588,6 +2603,22 @@ live and is even exercised by every nested-subquery test, but the dispatch never
 and static overload resolution — compiled inside `Select`, where `this` is `Select` — always selects `visit(Select)`.
 The behaviour is still correct (`visit(Select)` → `visitSelect` handles `ParenthesedSelect` at lines 100–105), so this
 is redundancy, not a bug. `visit(ParenthesedSelect)` is nonetheless dead and cannot be reached without reflection.
+
+**Independently verified 2026-10-01 — and the protection is stronger than this finding implies.** The scanner feeds a
+security control, not just a report: `DbQueryValidator.checkSchemaColumns` rejects any scanned column that is not on
+the metadata allowlist, so *completeness of the traversal* is what stops `sql` (the full DDL) being smuggled out of
+`sqlite_master`. "Redundancy, not a bug" therefore deserved checking rather than assuming. It holds — `visitSelect`
+handles `ParenthesedSelect` at 100–105, and `scanBody` covers parenthesized subqueries in `fromItem` (115), in joins
+(135), and in expression positions via `accept`, which routes a `ParenthesedSelect` through `visit(Select)`.
+
+The more useful conclusion is that scanner completeness is **not** the only protection. `validateTablesAndSchemaColumns`
+independently requires a referenced metadata table to be the *direct root FROM* table, with no joins **and no CTEs**
+(`select.getWithItemsList()` must be empty), and `TablesNamesFinder` supplies the table list separately. So a CTE such
+as `WITH x AS (SELECT sql FROM sqlite_master) SELECT name FROM x` is rejected by that coarser guard before column
+scanning is ever reached, and a future scanner regression — a subquery carrier that `scanBody` fails to descend into —
+would not by itself open a DDL-exfiltration path. Scanner completeness is defence in depth here, not the sole control.
+Both suites are green: `DbQueryAstScannerTest` 16, `DbQueryValidatorTest` 21, including the
+`WITH v AS (SELECT * FROM session_history_view) SELECT * FROM v` and `IN (SELECT sql FROM sqlite_master)` cases.
 
 **Finding — `DbQueryAstScanner.scanBody`'s null guard is dead.** The only caller is `visitSelect`, inside an
 `instanceof PlainSelect plainSelect` branch, so the parameter can never be null.

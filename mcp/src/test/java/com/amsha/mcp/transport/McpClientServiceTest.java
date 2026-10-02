@@ -11,6 +11,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import jakarta.enterprise.inject.Instance;
@@ -34,6 +36,7 @@ import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.ApprovalReceiptIssuer;
 import com.amsha.security.http.OutboundApprovalReceipt;
 import com.amsha.tool.api.ToolCategory;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 
@@ -41,6 +44,7 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -292,7 +296,10 @@ class McpClientServiceTest {
         assertNotNull(tools);
         assertEquals(1, tools.size());
         assertEquals("external_search", tools.get(0).name());
-        assertFalse(registry.isRegistered("external_search"));
+        // Read the owner's scope, not the ambient one: registration is scoped to the owning user, while the
+        // scope-less accessor resolves to "unknown" outside a workspace. Asserting against the ambient scope would
+        // pass no matter what discovery did.
+        assertTrue(registry.find("user-d", "external_search").isEmpty());
     }
 
     @Test
@@ -314,7 +321,9 @@ class McpClientServiceTest {
                 "receipt-filter",
                 Set.of("non_matching_tool"));
         assertNotNull(tools);
-        assertFalse(registry.isRegistered("external_search"));
+        assertTrue(
+                registry.find("user-f", "external_search").isEmpty(),
+                "the tool was excluded by the enabled-tool selection, so it must be absent from the owner's scope");
     }
 
     @Test
@@ -375,6 +384,340 @@ class McpClientServiceTest {
         assertTrue(ex.getMessage().contains("rejected: POLICY_DENIED"));
         assertNotNull(ex.getCause());
         assertInstanceOf(OutboundHttpException.class, ex.getCause());
+    }
+
+    // ---- approval lifecycle --------------------------------------------------
+
+    @Test
+    void discoverForUserWithoutAReceiptReturnsToolsWithoutRegisteringThemOrConsultingTheIssuer() {
+        stubFullConnect("session-unapproved");
+
+        var tools = service.discoverForUser(
+                "unapproved-server", "user-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of());
+
+        assertEquals(1, tools.size());
+        assertEquals("external_search", tools.get(0).name());
+        assertTrue(
+                registry.find("user-1", "external_search").isEmpty(),
+                "discovery is an unapproved handshake and must not register executable tools");
+        verify(service.approvalReceiptIssuer, never()).verifyAndConsume(anyString(), any(), anyString());
+    }
+
+    @Test
+    void connectForUserWithEnabledToolsTreatsABlankTokenAsUnapprovedAndStillConnects() {
+        stubFullConnect("session-blank-token");
+
+        var tools = service.connectForUserWithEnabledTools(
+                "blank-token-server",
+                "user-1",
+                wireMock.baseUrl(),
+                ToolCategory.NETWORK,
+                Map.of(),
+                "   ",
+                Set.of("external_search"));
+
+        assertEquals(1, tools.size());
+        assertTrue(
+                registry.find("user-1", "external_search").isPresent(),
+                "a blank token is treated as absent, so the unapproved handshake still registers the enabled tool");
+        verify(service.approvalReceiptIssuer, never()).verifyAndConsume(anyString(), any(), anyString());
+    }
+
+    @Test
+    void connectForUserWithEnabledToolsStaysUnapprovedWhenNoReceiptIssuerIsWired() {
+        service.approvalReceiptIssuer = null;
+        stubFullConnect("session-no-issuer");
+
+        var tools = service.connectForUserWithEnabledTools(
+                "no-issuer-server",
+                "user-1",
+                wireMock.baseUrl(),
+                ToolCategory.NETWORK,
+                Map.of(),
+                "some-token",
+                Set.of());
+
+        assertEquals(1, tools.size(), "a service without an issuer must degrade to the unapproved handshake");
+        assertTrue(registry.find("user-1", "external_search").isEmpty());
+    }
+
+    @Test
+    void connectForUserWithEnabledToolsWithAPurposeConsumesAReceiptScopedToThatPurpose() {
+        stubFullConnect("session-purpose");
+        when(service.approvalReceiptIssuer.verifyAndConsume(
+                        eq("enable-tok"), eq(OutboundPurpose.MCP_TOOL_ENABLE), eq("localhost")))
+                .thenReturn(
+                        new OutboundApprovalReceipt("user-1", "sess-1", OutboundPurpose.MCP_TOOL_ENABLE, "localhost"));
+
+        var tools = service.connectForUserWithEnabledTools(
+                "purpose-server",
+                "user-1",
+                wireMock.baseUrl(),
+                ToolCategory.NETWORK,
+                Map.of(),
+                "enable-tok",
+                OutboundPurpose.MCP_TOOL_ENABLE,
+                Set.of("external_search"));
+
+        assertEquals(1, tools.size());
+        assertTrue(
+                registry.find("user-1", "external_search").isPresent(),
+                "the receipt cleared MCP_TOOL_ENABLE, so the requested tool must be registered");
+        verify(service.approvalReceiptIssuer)
+                .verifyAndConsume("enable-tok", OutboundPurpose.MCP_TOOL_ENABLE, "localhost");
+    }
+
+    @Test
+    void connectForUserWithEnabledToolsTreatsANullSelectionAsEmpty() {
+        stubFullConnect("session-null-selection");
+
+        var tools = service.connectForUserWithEnabledTools(
+                "null-selection-server", "user-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), (Set<String>)
+                        null);
+
+        assertEquals(1, tools.size(), "discovery still reports what the server offered");
+        assertTrue(registry.find("user-1", "external_search").isEmpty(), "a null selection must register nothing");
+    }
+
+    @Test
+    void reconnectDurableForUserRestoresTheConnectionWithoutConsultingTheIssuer() {
+        stubFullConnect("session-durable");
+
+        var tools = service.reconnectDurableForUser(
+                "durable-server",
+                "user-1",
+                wireMock.baseUrl(),
+                ToolCategory.NETWORK,
+                Map.of(),
+                Set.of("external_search"));
+
+        assertEquals(1, tools.size());
+        assertTrue(
+                registry.find("user-1", "external_search").isPresent(),
+                "a durable reconnect restores the connection's enabled tools");
+        verify(service.approvalReceiptIssuer, never()).verifyAndConsume(anyString(), any(), anyString());
+    }
+
+    @Test
+    void reconnectDurableForUserTreatsANullSelectionAsRegisteringNothing() {
+        stubFullConnect("session-durable-null");
+
+        var tools = service.reconnectDurableForUser(
+                "durable-null-server", "user-1", wireMock.baseUrl(), ToolCategory.NETWORK, Map.of(), null);
+
+        assertEquals(1, tools.size(), "discovery still reports what the server offered");
+        assertTrue(registry.find("user-1", "external_search").isEmpty());
+    }
+
+    @Test
+    void reconnectDurableForUserReplaysTheConnectionAsPreApproved() {
+        // preApproved only reaches the wire through the governed client, so the policy service is the single place it
+        // is observable. Denying there keeps this offline: the assertion needs no server at all.
+        OutboundHttpPolicyService policyService = mock(OutboundHttpPolicyService.class);
+        ArgumentCaptor<Boolean> preApproved = ArgumentCaptor.forClass(Boolean.class);
+        when(policyService.evaluate(anyString(), any(), any(), anyString(), preApproved.capture()))
+                .thenReturn(OutboundPolicyDecision.deny("blocked", OutboundPurpose.MCP_CONNECT, "system"));
+        service.outboundPolicyService = policyService;
+        service.init();
+
+        assertThrows(
+                McpConnectionException.class,
+                () -> service.reconnectDurableForUser(
+                        "durable-server",
+                        "user-1",
+                        "https://mcp.example.com/mcp",
+                        ToolCategory.NETWORK,
+                        Map.of(),
+                        Set.of()));
+
+        assertTrue(preApproved.getValue(), "a durable reconnect must be replayed with preApproved = true");
+    }
+
+    @Test
+    void connectReplaysAsNotPreApproved() {
+        OutboundHttpPolicyService policyService = mock(OutboundHttpPolicyService.class);
+        ArgumentCaptor<Boolean> preApproved = ArgumentCaptor.forClass(Boolean.class);
+        when(policyService.evaluate(anyString(), any(), any(), anyString(), preApproved.capture()))
+                .thenReturn(OutboundPolicyDecision.deny("blocked", OutboundPurpose.MCP_CONNECT, "system"));
+        service.outboundPolicyService = policyService;
+        service.init();
+
+        assertThrows(
+                McpConnectionException.class, () -> service.connect("fresh-server", "https://mcp.example.com/mcp"));
+
+        assertFalse(
+                preApproved.getValue(),
+                "an interactive connect has not cleared HITL and must not claim to be pre-approved");
+    }
+
+    @Test
+    void verifyApprovalRejectsAReceiptIssuedForADifferentUser() {
+        // A well-formed, in-date receipt for the right purpose is still not enough: it must have been issued to the
+        // user who is asking, or one user's approval would authorise another user's connection.
+        when(service.approvalReceiptIssuer.verifyAndConsume(eq("other-user-tok"), any(), anyString()))
+                .thenReturn(new OutboundApprovalReceipt(
+                        "someone-else", "sess-1", OutboundPurpose.MCP_CONNECT, "127.0.0.1"));
+
+        McpConnectionException thrown = assertThrows(
+                McpConnectionException.class,
+                () -> service.connectForUserWithEnabledTools(
+                        "cross-user-server",
+                        "user-1",
+                        wireMock.baseUrl(),
+                        ToolCategory.NETWORK,
+                        Map.of(),
+                        "other-user-tok",
+                        Set.of()));
+
+        assertTrue(thrown.getMessage().contains("requires approval for requesting user"), thrown.getMessage());
+    }
+
+    @Test
+    void connectForUserWithEnabledToolsWithAPurposeTreatsANullSelectionAsEmpty() {
+        stubFullConnect("session-purpose-null");
+        when(service.approvalReceiptIssuer.verifyAndConsume(
+                        eq("enable-tok"), eq(OutboundPurpose.MCP_TOOL_ENABLE), anyString()))
+                .thenReturn(
+                        new OutboundApprovalReceipt("user-1", "sess-1", OutboundPurpose.MCP_TOOL_ENABLE, "localhost"));
+
+        var tools = service.connectForUserWithEnabledTools(
+                "purpose-null-server",
+                "user-1",
+                wireMock.baseUrl(),
+                ToolCategory.NETWORK,
+                Map.of(),
+                "enable-tok",
+                OutboundPurpose.MCP_TOOL_ENABLE,
+                null);
+
+        assertEquals(1, tools.size(), "discovery still reports what the server offered");
+        assertTrue(
+                registry.find("user-1", "external_search").isEmpty(),
+                "a null selection must register nothing on the purpose-scoped path too");
+    }
+
+    @Test
+    void invokeWrapsACheckedTransportFailureAndTagsTheMetricWithItsType() {
+        stubFullConnect("session-malformed-call");
+        wireMock.stubFor(post(urlEqualTo("/"))
+                .withRequestBody(containing("\"tools/call\""))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{not valid json")));
+
+        service.connect("malformed-server", wireMock.baseUrl());
+
+        // extractTextResult declares a checked exception and the HTTP transport does not wrap it, so a malformed
+        // 200 body arrives here as a checked failure rather than as a RuntimeException.
+        RuntimeException thrown =
+                assertThrows(RuntimeException.class, () -> service.invoke("malformed-server", "external_search", "{}"));
+
+        assertTrue(thrown.getMessage().contains("Failed to invoke tool 'external_search'"), thrown.getMessage());
+        assertNotNull(thrown.getCause());
+        assertFalse(thrown.getCause() instanceof RuntimeException, "the cause must be the checked parse failure");
+        assertEquals(
+                1.0,
+                service.meterRegistry
+                        .get("amsha.mcp.tool.invocation")
+                        .tag("server", "malformed-server")
+                        .tag("tool", "external_search")
+                        .tag("exception", thrown.getCause().getClass().getSimpleName())
+                        .timer()
+                        .count(),
+                "the invocation timer must be tagged with the failure's type, not 'none'");
+    }
+
+    // ---- registerTools -------------------------------------------------------
+
+    @Test
+    void registerToolsReturnsNothingWhenTheResultCarriesNoToolsArray() {
+        assertTrue(service.registerTools(
+                        "srv", json("{}"), McpTransportType.HTTP_SSE, ToolCategory.NETWORK, "user-1", false, null)
+                .isEmpty());
+        assertTrue(service.registerTools(
+                        "srv",
+                        json("{\"tools\":\"not-an-array\"}"),
+                        McpTransportType.HTTP_SSE,
+                        ToolCategory.NETWORK,
+                        "user-1",
+                        false,
+                        null)
+                .isEmpty());
+    }
+
+    @Test
+    void registerToolsSkipsToolsWithABlankName() {
+        var discovered = service.registerTools(
+                "srv",
+                json("{\"tools\":[{\"name\":\"\"},{\"name\":\"   \"},{\"name\":\"real\"}]}"),
+                McpTransportType.HTTP_SSE,
+                ToolCategory.NETWORK,
+                "user-1",
+                false,
+                null);
+
+        assertEquals(
+                List.of("real"),
+                discovered.stream().map(McpClientService.DiscoveredTool::name).toList());
+        assertEquals(
+                1,
+                registry.getAll("user-1").size(),
+                "a nameless tool must not reach the registry, and the survivor lands in the owner's scope");
+    }
+
+    @Test
+    void registerToolsDropsNamesThatCollideWithInternalToolsOnlyWhenAsked() {
+        DynamicToolCapabilityRegistry mockedRegistry = mock(DynamicToolCapabilityRegistry.class);
+        when(mockedRegistry.isInternalToolName("read_file")).thenReturn(true);
+        service.registry = mockedRegistry;
+        JsonNode tools = json("{\"tools\":[{\"name\":\"read_file\"}]}");
+
+        var filtered =
+                service.registerTools("srv", tools, McpTransportType.STDIO, ToolCategory.NETWORK, "user-1", true, null);
+
+        assertTrue(
+                filtered.isEmpty(),
+                "an internal-name collision is dropped before the tool is reported, so nothing is even offered");
+        verify(mockedRegistry, never()).registerForUser(anyString(), any());
+
+        // The guard is opt-in: with it off the same name is reported and handed to the registry, which is what
+        // makes the filtered case above a real assertion rather than a tautology.
+        var unfiltered = service.registerTools(
+                "srv", tools, McpTransportType.STDIO, ToolCategory.NETWORK, "user-1", false, null);
+
+        assertEquals(
+                List.of("read_file"),
+                unfiltered.stream().map(McpClientService.DiscoveredTool::name).toList(),
+                "without the guard the name is reported and handed to the registry");
+        verify(mockedRegistry).registerForUser(eq("user-1"), any());
+    }
+
+    @Test
+    void registerToolsDefaultsAMissingSchemaToAnEmptyObjectAndAMissingDescriptionToEmpty() {
+        var discovered = service.registerTools(
+                "srv",
+                json("{\"tools\":["
+                        + "{\"name\":\"with_schema\",\"description\":\"d\",\"inputSchema\":{\"type\":\"object\"}},"
+                        + "{\"name\":\"without_schema\"}]}"),
+                McpTransportType.HTTP_SSE,
+                ToolCategory.NETWORK,
+                "user-1",
+                false,
+                null);
+
+        assertEquals("{\"type\":\"object\"}", discovered.get(0).inputSchema());
+        assertEquals("d", discovered.get(0).description());
+        assertEquals("{}", discovered.get(1).inputSchema());
+        assertEquals("", discovered.get(1).description());
+    }
+
+    private JsonNode json(String raw) {
+        try {
+            return service.objectMapper.readTree(raw);
+        } catch (Exception e) {
+            throw new AssertionError("test fixture is not valid JSON: " + raw, e);
+        }
     }
 
     private static McpConnectionHeaderSecretRefDto headerRef(

@@ -115,10 +115,34 @@ class RemoteEndpointValidatorTest {
     }
 
     @Test
+    void configRequiresAnExplicitModelIdRatherThanInventingOne() {
+        // The System One contract requires `model`, and DecisionProviderSelector refuses an enabled
+        // remote slot that omits it. The record must not hold a second, contradictory rule by
+        // resolving a blank model to a floating vendor alias: that would silently substitute an
+        // unpinned model for the versioned id the operator meant to pin, and the alias can resolve to
+        // a different model between two calls, defeating the provenance the decoder reports back.
+        var noModel = RemoteProviderConfig.builder().endpoint("https://decision.internal.example.com/v1/systemone");
+        assertThrows(IllegalArgumentException.class, noModel::build, "a missing model must not be defaulted");
+
+        var blankModel = RemoteProviderConfig.builder()
+                .endpoint("https://decision.internal.example.com/v1/systemone")
+                .modelId("   ");
+        assertThrows(IllegalArgumentException.class, blankModel::build, "a blank model must be rejected");
+
+        // The positive control: an explicit id builds, and is trimmed rather than stored verbatim.
+        var pinned = RemoteProviderConfig.builder()
+                .endpoint("https://decision.internal.example.com/v1/systemone")
+                .modelId("  jev-1.13.0  ")
+                .build();
+        assertEquals("jev-1.13.0", pinned.modelId());
+    }
+
+    @Test
     void configToStringRedactsApiKey() {
         String testToken = "remote-" + "api-secret-key-12345";
         var config = RemoteProviderConfig.builder()
                 .endpoint("https://decision.internal.example.com/evaluate")
+                .modelId("jev-1.13.0")
                 .timeout(Duration.ofSeconds(3))
                 .apiKey(testToken)
                 .build();

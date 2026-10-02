@@ -232,7 +232,7 @@ routing, tool authorization, HITL decisions, or retry budgets. See
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS` | `500` | Per-evaluation deadline for the intent decision router |
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED` | `false` | Activation gate: candidate calibration on live traffic formally approved |
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED` | `false` | Activation gate: cost ceiling and latency budget formally approved |
-| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | *(unset)* | Activation gate: accountable rollout and rollback owner |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | *(unset)* | Activation gate: accountable rollout **and rollback** owner (a person or team, not a status). **No closed set of values** — the only rule enforced is non-blank (`IntentDecisionRouter.isActivationGateApproved()`), so any placeholder opens the gate; leave unset when no owner is assigned. When both approval booleans are true and this value looks like a placeholder, `ActivationGateReadiness` logs one advisory `WARN` at startup — it never rejects or normalises the value |
 
 Two behaviours are worth calling out because both are fail-closed:
 
@@ -247,6 +247,35 @@ Two behaviours are worth calling out because both are fail-closed:
   approved, and a non-blank rollout owner). With an available engine and the gate unapproved, `evaluateIntent()` returns an
   `ACTIVATION_GATE_NOT_SATISFIED` fallback for non-blank messages and any `DIRECT_ROUTE` is suppressed — so setting
   `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op.
+
+### Decision provider selection (Jev / System One)
+
+Selects which provider answers decision requests, mirroring the LLM provider convention (`AMSHA_LLM_PROVIDER`
+plus `amsha.llm.<provider>.model`). **Inert:** this is the configuration surface only — nothing consumes it into
+a `DecisionEngine`, so setting these changes no behaviour, and selecting a provider is not activating the plane.
+
+Two axes: a provider id names the System One **endpoint** that receives `POST /v1/systemone` (as an LLM provider
+id names the endpoint receiving `/v1/chat/completions`), and `AMSHA_DECISION_{PROVIDER}_MODEL` names the
+checkpoint served there. An id may be a specific decision server (`laya`, `kev`, `clm`), a generic local runtime
+host (`omlx`), or a hosted API (`typesafe`).
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_DECISION_PROVIDER` | *(unset)* | Provider id to use; must match a declared slot. Blank keeps the plane inert |
+| `AMSHA_DECISION_{PROVIDER}_ENABLED` | `false` | Whether the slot may be selected |
+| `AMSHA_DECISION_{PROVIDER}_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint; the lane is derived from its host |
+| `AMSHA_DECISION_{PROVIDER}_MODEL` | *(per slot)* | Decision model to request — **required for a remote provider, optional for a self-hosted one** (blank = the server picks its own checkpoint and the field is omitted) |
+| `AMSHA_DECISION_{PROVIDER}_API_KEY_REF` | *(unset)* | A `SecretVault` reference, never a literal key. Carried and checked for presence only — no wiring resolves it onto either engine's credentials yet |
+| `AMSHA_DECISION_{PROVIDER}_TIMEOUT` | `PT5S` | Request execution timeout |
+| `AMSHA_DECISION_{PROVIDER}_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered; belongs to the model — CLM requires `PROSE` |
+
+Declared providers: `typesafe`, `clm`, `laya`, `kev`, `omlx`.
+
+The lane is derived from the endpoint host, not declared: the literal `127.0.0.1` selects the self-hosted lane,
+anything else the remote lane. `localhost`, `::1`, and other `127.x` hosts are refused as ambiguous. A **remote**
+slot with no `model` is refused (a self-hosted one may omit it), as is a credentialed remote provider
+(`typesafe`) with no `api-key-ref`, a non-positive `timeout`, and a CLM model declared without
+`WIRE_PROFILE=PROSE`.
 
 Classifier *runtime* control (`/api/v1/admin/local-ml/onnx/classifiers*`) is a separate admin
 surface with its own requested-versus-effective semantics; see

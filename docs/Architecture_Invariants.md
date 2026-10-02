@@ -2335,3 +2335,25 @@ rather than either one alone.
 - Decision evaluation and provider calls MUST NOT execute inside an active JTA write transaction
   (§5.9). `DecisionTransactionGuard` MUST fail closed when the transaction status cannot be
   determined — an unverifiable status MUST be treated as active rather than assumed idle.
+
+### 27.5 A placeholder rollout owner is announced, never validated (§27.5 INVARIANT)
+
+The activation gate's `rollout-owner` is free text, and the only rule §27.3 enforces on it is
+non-blank. A placeholder (`TBD`, `x`, `true`) therefore satisfies the gate exactly as a real owner
+does, silently converting "not yet approved" into "formally approved". `ActivationGateReadiness`
+(`@Startup` + `@PostConstruct`) MUST log one `WARN` at startup when **both** approval booleans are true
+and the owner is non-blank but looks like a placeholder. It MUST log nothing under the default
+configuration, and nothing when the owner is blank — blank leaves the gate closed, which is the correct
+Deferred posture and MUST NOT be reported as a problem.
+
+It is advisory by contract: it MUST NOT validate, reject, normalise, or block anything, and it MUST NOT
+change `isActivationGateApproved()`. Rejecting placeholder values would change activation-gate
+semantics — configuration that currently opens the gate would begin failing — which is an ADR-level
+change and MUST NOT arrive as a side effect of a diagnostic. It warns whether or not the router switch
+is enabled, because the hazard is that the gate is already open when the switch is later flipped. Like
+§27.2 it MUST be payload-free.
+
+It MUST log under its own logger name, never `DecisionPlaneReadiness`: §27.2's "exactly one `WARN`"
+contract is asserted by counting log lines containing that name (JEV-12 in
+`rest-http/scripts/validate_decision_plane.sh`), so a second warning emitted from it would make the
+count two and read as non-idempotent `@Startup` initialization.

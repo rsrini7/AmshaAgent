@@ -14,6 +14,7 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +31,7 @@ import com.amsha.classifier.api.QuestionKey;
 import com.amsha.classifier.api.RedactionPolicy;
 import com.amsha.classifier.api.Score;
 import com.amsha.classifier.api.StateProjectionPolicy;
+import com.amsha.core.classifier.wire.WireProfile;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -57,7 +59,7 @@ class SelfHostedDecisionEngineContractTest {
     void setUp() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         port = server.getAddress().getPort();
-        server.createContext("/v1/evaluate", new HttpHandler() {
+        server.createContext("/v1/systemone", new HttpHandler() {
             @Override
             public void handle(HttpExchange exchange) throws IOException {
                 byte[] requestBytes = exchange.getRequestBody().readAllBytes();
@@ -92,23 +94,27 @@ class SelfHostedDecisionEngineContractTest {
     @Test
     void verifiesChoiceWireCompatibility() {
         responseStatus = 200;
+        // Verbatim shape from the documented System One response body.
         responseBody = """
                 {
+                  "model": "laya-multilingual",
                   "answers": {
                     "risk": {
+                      "type": "choice",
                       "choice": "LOW_RISK",
                       "confidence": 0.94,
                       "probabilities": { "LOW_RISK": 0.94, "BLOCK": 0.06 }
                     }
                   },
                   "ruleId": "laya-rule-01",
-                  "latencyMs": 18.5
+                  "latencyMs": 18.5,
+                  "usage": { "input_tokens": 296, "output_tokens": 20 }
                 }
                 """;
 
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("tool_name", "risk"), RedactionPolicy.DEFAULT))
                 .build();
@@ -127,14 +133,65 @@ class SelfHostedDecisionEngineContractTest {
             assertTrue(choice.confidence().isPresent());
             assertEquals(0.94, choice.confidence().getAsDouble(), 1e-4);
             assertEquals("laya-rule-01", opinion.ruleId());
+            // The top-level "model" is attributed and the nested "usage" token counts are read.
+            assertEquals("laya-multilingual", opinion.metadata().modelId());
+            assertEquals(296L, opinion.metadata().inputTokens());
+            assertEquals(20L, opinion.metadata().outputTokens());
         }
+    }
+
+    @Test
+    void sendsTheStateDialectItsEndpointIsConfiguredFor() throws Exception {
+        // ProseStateRenderingTest proves the mapper renders the two dialects differently, but it calls
+        // the mapper directly. This proves the *engine* passes its own endpoint's configured profile
+        // through: if the call site hardcoded JSON_OBJECT, every mapper-level test would still pass
+        // while a CLM endpoint silently received bytes its heads were not trained on.
+        responseStatus = 200;
+        responseBody = """
+                {
+                  "answers": {
+                    "department": { "type": "choice", "choice": "billing", "confidence": 0.9 }
+                  }
+                }
+                """;
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> asJson = mapper.readValue(emittedBody(WireProfile.JSON_OBJECT), Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> asProse = mapper.readValue(emittedBody(WireProfile.PROSE), Map.class);
+
+        // The JSON dialect emits a JSON string, so the state reads back as a map...
+        assertEquals(
+                Map.of("ticket", "charged twice"),
+                mapper.readValue((String) asJson.get("state"), Map.class),
+                "the JSON dialect must emit a JSON state");
+        // ...while the prose dialect emits text a JSON parser cannot accept.
+        assertEquals("ticket: charged twice", asProse.get("state"));
+    }
+
+    /** Evaluates one request under the given dialect and returns the request body the engine emitted. */
+    private String emittedBody(WireProfile wireProfile) {
+        var config = SelfHostedProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .wireProfile(wireProfile)
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("ticket"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
+            var reqBuilder = DecisionRequest.builder("dec.dialect." + wireProfile, 1, "{\"ticket\":\"charged twice\"}");
+            reqBuilder.registerChoice("department", "Which team should handle this?", List.of("billing", "technical"));
+            engine.evaluate(reqBuilder.build());
+        }
+        return lastReceivedRequestBody.get();
     }
 
     @Test
     void verifiesEventLoopThreadGuardFailsFast() throws Exception {
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("risk"), RedactionPolicy.DEFAULT))
                 .build();
@@ -167,13 +224,17 @@ class SelfHostedDecisionEngineContractTest {
     @Test
     void verifiesScoreWireCompatibility() {
         responseStatus = 200;
+        // Verbatim shape: Score "legend" and "probabilities" are objects keyed by level index, not arrays.
         responseBody = """
                 {
+                  "model": "qwen3.5:9b",
                   "answers": {
                     "quality": {
+                      "type": "score",
                       "score": 2.5,
                       "confidence": 0.89,
-                      "legend": ["poor", "fair", "good", "excellent"]
+                      "legend": { "0": "poor", "1": "fair", "2": "good", "3": "excellent" },
+                      "probabilities": { "0": 0.05, "1": 0.1, "2": 0.75, "3": 0.1 }
                     }
                   },
                   "ruleId": "kev-score-01"
@@ -182,7 +243,7 @@ class SelfHostedDecisionEngineContractTest {
 
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("answer", "quality"), RedactionPolicy.DEFAULT))
                 .build();
@@ -199,17 +260,23 @@ class SelfHostedDecisionEngineContractTest {
             Score score = opinion.get(scoreKey);
             assertEquals(2.5, score.score(), 1e-4);
             assertEquals("kev-score-01", opinion.ruleId());
+            // Index-keyed objects are normalized into positional lists in level order.
+            assertEquals(List.of("poor", "fair", "good", "excellent"), score.legend());
+            assertEquals(2, score.mostLikelyLevel().orElse(-1));
         }
     }
 
     @Test
     void verifiesNoulWireCompatibility() {
         responseStatus = 200;
+        // Verbatim shape: the Noul answer carries a top-level "noul" key.
         responseBody = """
                 {
+                  "model": "laya",
                   "answers": {
                     "is_safe": {
-                      "probability": 0.96
+                      "type": "noul",
+                      "noul": 0.96
                     }
                   }
                 }
@@ -217,7 +284,7 @@ class SelfHostedDecisionEngineContractTest {
 
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(
                         StateProjectionPolicy.of(Set.of("content", "is_safe"), RedactionPolicy.DEFAULT))
@@ -240,7 +307,7 @@ class SelfHostedDecisionEngineContractTest {
     void verifiesMalformedAndPartialResponsesFailClosed() {
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q1", "q2"), RedactionPolicy.DEFAULT))
                 .build();
@@ -279,7 +346,7 @@ class SelfHostedDecisionEngineContractTest {
     void verifiesOverloadTimeoutAndProcessFailure() {
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofMillis(100))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
                 .build();
@@ -317,7 +384,7 @@ class SelfHostedDecisionEngineContractTest {
     void verifiesDisabledProviderReturnsNoOpinionDisabled() {
         var config = SelfHostedProviderConfig.builder()
                 .enabled(false) // explicitly disabled
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .build();
 
         try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
@@ -358,7 +425,7 @@ class SelfHostedDecisionEngineContractTest {
 
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .loopbackToken("loopback-auth-secret")
                 .defaultProjectionPolicy(projectionPolicy)
@@ -401,7 +468,7 @@ class SelfHostedDecisionEngineContractTest {
         // the engine must fail closed rather than deriving allow-list from question IDs.
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(null)
                 .build();
@@ -428,7 +495,7 @@ class SelfHostedDecisionEngineContractTest {
 
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("param"), RedactionPolicy.DEFAULT))
                 .build();
@@ -479,7 +546,7 @@ class SelfHostedDecisionEngineContractTest {
 
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .timeout(Duration.ofSeconds(2))
                 .defaultProjectionPolicy(projectionPolicy)
                 .build();
@@ -502,7 +569,7 @@ class SelfHostedDecisionEngineContractTest {
     void verifiesProviderPlacementSecurityInvariant() {
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .build();
 
         try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
@@ -517,7 +584,7 @@ class SelfHostedDecisionEngineContractTest {
     void verifiesDefensiveTransactionGuardFailsClosed() {
         var config = SelfHostedProviderConfig.builder()
                 .enabled(true)
-                .endpoint("http://127.0.0.1:" + port + "/v1/evaluate")
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
                 .build();
 
         // Transaction guard reporting active JTA transaction
@@ -534,6 +601,110 @@ class SelfHostedDecisionEngineContractTest {
 
             // Server must NOT have received any HTTP request
             assertEquals(null, lastReceivedRequestBody.get(), "No HTTP call may occur inside active transaction");
+        }
+    }
+
+    @Test
+    void verifiesRequestMatchesTheDocumentedSystemOneContract() throws IOException {
+        responseStatus = 200;
+        responseBody = "{\"answers\":{\"department\":\"billing\"}}";
+
+        var config = SelfHostedProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .modelId("laya-multilingual")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("ticket"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
+            var reqBuilder = DecisionRequest.builder("dec.contract", 1, "{\"ticket\":\"charged twice\"}");
+            reqBuilder.registerChoice("department", "Which team should handle this?", List.of("billing", "technical"));
+            engine.evaluate(reqBuilder.build());
+
+            String body = lastReceivedRequestBody.get();
+            assertNotNull(body, "Server must have received HTTP request body");
+            // Assert the emitted *structure*, not substrings: the defect this guards against was a
+            // field in the wrong slot, or an extra field, neither of which a `contains` check sees.
+            var sent = mapper.readTree(body);
+            assertEquals(3, sent.size(), body);
+            assertEquals("laya-multilingual", sent.get("model").asText(), body);
+
+            var projectedState = mapper.readTree(sent.get("state").asText());
+            assertEquals(1, projectedState.size(), body);
+            assertEquals("charged twice", projectedState.get("ticket").asText(), body);
+
+            var questions = sent.get("questions");
+            assertEquals(1, questions.size(), body);
+            var question = questions.get("department");
+            assertEquals(3, question.size(), body);
+            assertEquals("choice", question.get("type").asText(), body);
+            assertEquals(
+                    "Which team should handle this?",
+                    question.get("instructions").asText(),
+                    body);
+
+            var criteria = question.get("criteria");
+            assertEquals(2, criteria.size(), body);
+            assertTrue(criteria.get("billing").isNull(), body);
+            assertTrue(criteria.get("technical").isNull(), body);
+
+            // Amsha-internal fields are not part of the contract and must not be emitted at all.
+            assertFalse(sent.has("decisionId"), body);
+            assertFalse(sent.has("schemaVersion"), body);
+            assertFalse(sent.has("timeoutMs"), body);
+            assertFalse(sent.has("primitive"), body);
+        }
+    }
+
+    @Test
+    void omitsModelWhenNoSelfHostedModelIsPinned() throws IOException {
+        responseStatus = 200;
+        responseBody = "{\"answers\":{\"q\":\"A\"}}";
+
+        var config = SelfHostedProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
+            var reqBuilder = DecisionRequest.builder("dec.nomodel", 1, "{}");
+            reqBuilder.registerChoice("q", "prompt", List.of("A", "B"));
+            engine.evaluate(reqBuilder.build());
+
+            String body = lastReceivedRequestBody.get();
+            assertNotNull(body);
+            // A self-hosted server selects its own checkpoint; a hosted vendor's alias must not be
+            // sent. Asserting the exact key set is stronger than an absence check: it also proves no
+            // other field crept into the envelope.
+            var sent = mapper.readTree(body);
+            assertEquals(2, sent.size(), body);
+            assertFalse(sent.has("model"), body);
+        }
+    }
+
+    @Test
+    void verifies529OverloadIsMappedToOverloadRejected() {
+        var config = SelfHostedProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("q"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
+            var reqBuilder = DecisionRequest.builder("dec.529", 1, "{}");
+            reqBuilder.registerChoice("q", "prompt", List.of("A", "B"));
+
+            // 529 is the System One overload signal; there is no documented 503.
+            responseStatus = 529;
+            responseBody = "overloaded";
+            DecisionResult result = engine.evaluate(reqBuilder.build());
+
+            assertInstanceOf(DecisionResult.NoOpinion.class, result);
+            assertEquals(NoOpinionReason.OVERLOAD_REJECTED, ((DecisionResult.NoOpinion) result).reason());
         }
     }
 }

@@ -126,17 +126,23 @@ class IdentityResourceHelperTest {
     }
 
     @Test
-    @DisplayName("a member inviting an admin is ALLOWED — the escalation guard is unreachable")
+    @DisplayName("a member inviting an admin is allowed at the helper level — the third guard is unreachable")
     void memberEscalationGuardIsUnreachable() {
         // FINDING (reported, not "fixed"): the third guard in validateInvitationRole requires
         // !"OWNER".equals(callerRole) AND a normalized role outside {ADMIN, MEMBER}. isValidRole has already
         // narrowed the role to {OWNER, ADMIN, MEMBER}, so "outside {ADMIN, MEMBER}" means OWNER — and any
         // OWNER request from a non-owner already returned at the second guard. The third guard therefore can
-        // never fire, and a MEMBER really can invite an ADMIN. This test pins the actual behaviour so a
-        // future change to the guard is noticed.
+        // never fire, so at the helper level a MEMBER is allowed to invite an ADMIN. This test pins that
+        // helper-level behaviour so a future change to the guard is noticed.
+        //
+        // Scope matters: this is NOT a live authorisation hole. The helper's only caller,
+        // IdentityResource.createInvitation, rejects any caller whose active membership role is not OWNER or
+        // ADMIN *before* calling it (IdentityResource.java:123), so the case below is unreachable through the
+        // API, and the guard is merely redundant for the caller set that does reach it. The residual risk is
+        // that the helper reads as self-defending when its safety property actually lives in another file.
         assertNull(
                 IdentityResourceHelper.validateInvitationRole("MEMBER", "ADMIN"),
-                "the escalation guard is dead; a MEMBER is currently allowed to invite an ADMIN");
+                "the escalation guard is dead; at the helper level a MEMBER is allowed to invite an ADMIN");
     }
 
     @Test

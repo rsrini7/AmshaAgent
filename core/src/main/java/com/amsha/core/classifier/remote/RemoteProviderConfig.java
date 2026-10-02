@@ -19,6 +19,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *
  * @param enabled whether the provider is enabled (defaults to false; disabled by default)
  * @param endpoint HTTPS endpoint URI (strictly validated against non-TLS and SSRF addresses)
+ * @param modelId model identifier sent in the System One {@code model} field. Required and
+ *     deliberately without a default: the contract makes {@code model} mandatory, and inventing one
+ *     here would silently substitute a floating vendor alias for the versioned id an operator meant
+ *     to pin, defeating the provenance {@code DecisionMetadata} reports back. Never serialize a
+ *     hosted vendor's alias to a self-hosted server: that lane has its own configuration and omits
+ *     the field instead.
  * @param apiKey optional API key or bearer token for remote authentication; bindable from configuration
  *     but never serialized
  * @param timeout request execution timeout
@@ -31,6 +37,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record RemoteProviderConfig(
         boolean enabled,
         URI endpoint,
+
+        String modelId,
 
         @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
         String apiKey,
@@ -64,6 +72,21 @@ public record RemoteProviderConfig(
             throw new IllegalArgumentException("Tenant isolation must be true for remote decision evaluation");
         }
         Objects.requireNonNull(connection, "connection");
+        // Checked last on purpose: the governance rejections above must keep precedence, so a config
+        // that violates both a governance rule and this one still reports the governance problem.
+        //
+        // This is the only rule for "no model" on the remote lane, and it fails closed. It matches
+        // DecisionProviderSelector, which refuses an enabled remote slot with no model rather than
+        // defaulting one, and DecisionProviderConfig.Slot#model(), which documents that requirement.
+        // A default here would be a second, contradictory rule: the alias it would invent tracks
+        // whatever release the vendor currently designates, so two calls a month apart could report
+        // different models from one configuration.
+        if (modelId == null || modelId.isBlank()) {
+            throw new IllegalArgumentException("modelId must not be blank; the remote System One contract"
+                    + " requires a 'model' field, and a floating alias is not a substitute for the"
+                    + " versioned id the deployment meant to pin");
+        }
+        modelId = modelId.trim();
     }
 
     public static Builder builder() {
@@ -100,6 +123,7 @@ public record RemoteProviderConfig(
     public String toString() {
         return "RemoteProviderConfig[enabled=" + enabled
                 + ", endpoint=" + endpoint
+                + ", modelId=" + modelId
                 + ", hasApiKey=" + (apiKey != null && !apiKey.isBlank())
                 + ", timeout=" + timeout
                 + ", defaultProjectionPolicy=" + defaultProjectionPolicy
@@ -111,7 +135,13 @@ public record RemoteProviderConfig(
 
     public static final class Builder {
         private boolean enabled = false;
-        private URI endpoint = URI.create("https://decision-plane.amsha.internal/v1/evaluate");
+        // The System One route. The host remains a placeholder — a caller must supply a real endpoint —
+        // but the path must match the contract the mapper emits, or the default silently posts a
+        // System One payload to the old /v1/evaluate route.
+        private URI endpoint = URI.create("https://decision-plane.amsha.internal/v1/systemone");
+        // No default: the record rejects a blank model, so a caller that forgets it gets a clear
+        // failure instead of a silent, floating vendor alias.
+        private String modelId = null;
         private String apiKey = null;
         private Duration timeout = DEFAULT_TIMEOUT;
         private StateProjectionPolicy defaultProjectionPolicy = null;
@@ -134,6 +164,11 @@ public record RemoteProviderConfig(
         public Builder endpoint(String endpointUri) {
             Objects.requireNonNull(endpointUri, "endpointUri");
             this.endpoint = URI.create(endpointUri);
+            return this;
+        }
+
+        public Builder modelId(String modelId) {
+            this.modelId = modelId;
             return this;
         }
 
@@ -185,6 +220,7 @@ public record RemoteProviderConfig(
             return new RemoteProviderConfig(
                     enabled,
                     endpoint,
+                    modelId,
                     apiKey,
                     timeout,
                     defaultProjectionPolicy,

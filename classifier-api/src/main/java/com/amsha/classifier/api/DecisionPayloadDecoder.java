@@ -1,7 +1,6 @@
 package com.amsha.classifier.api;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +25,23 @@ import java.util.Set;
  */
 public final class DecisionPayloadDecoder {
 
-    private static final Set<String> KNOWN_ENVELOPE_KEYS =
-            Set.of("answers", "ruleId", "providerId", "modelId", "latencyMs", "inputTokens", "outputTokens");
+    private static final Set<String> KNOWN_ENVELOPE_KEYS = Set.of(
+            "answers", "ruleId", "providerId", "modelId", "model", "latencyMs", "inputTokens", "outputTokens", "usage");
+
+    /**
+     * Accepted names for the token counts inside a provider's {@code usage} object, in precedence
+     * order. The {@code input_tokens}/{@code output_tokens} pair is the System One spelling; the
+     * {@code prompt_tokens}/{@code completion_tokens} pair is the OpenAI-compatible spelling that
+     * local runtimes (LM Studio, Ollama, and the {@code omlx} slot) return.
+     *
+     * <p>Both are listed because a provider that reported usage in the second shape used to be read as
+     * having reported <em>no</em> token data: {@code isTokenReported} said false, nothing failed, and
+     * {@link DecisionMetadata} carried nulls. Losing cost telemetry silently is the same class of
+     * defect as inventing it, so the shapes are read rather than dropped.
+     */
+    private static final List<String> INPUT_USAGE_KEYS = List.of("input_tokens", "prompt_tokens");
+
+    private static final List<String> OUTPUT_USAGE_KEYS = List.of("output_tokens", "completion_tokens");
 
     private DecisionPayloadDecoder() {}
 
@@ -320,31 +334,16 @@ public final class DecisionPayloadDecoder {
                 confidence = OptionalDouble.of(c);
             }
             if (map.containsKey("probabilities")) {
-                Object probObj = map.get("probabilities");
-                if (!(probObj instanceof List<?> list)) {
+                List<Double> parsed = ProviderPayloadParser.parseProbabilities(map.get("probabilities"));
+                if (parsed == null) {
                     return null;
-                }
-                List<Double> parsed = new ArrayList<>(list.size());
-                for (Object item : list) {
-                    Double p = parseDouble(item);
-                    if (p == null || p < 0.0 || p > 1.0) {
-                        return null;
-                    }
-                    parsed.add(p);
                 }
                 probabilities = parsed;
             }
             if (map.containsKey("legend")) {
-                Object legObj = map.get("legend");
-                if (!(legObj instanceof List<?> list)) {
+                List<String> parsed = ProviderPayloadParser.parseLabels(map.get("legend"));
+                if (parsed == null) {
                     return null;
-                }
-                List<String> parsed = new ArrayList<>(list.size());
-                for (Object item : list) {
-                    if (!(item instanceof String s) || s.isBlank()) {
-                        return null;
-                    }
-                    parsed.add(s);
                 }
                 legend = parsed;
             }
@@ -402,10 +401,17 @@ public final class DecisionPayloadDecoder {
             if (map.containsKey("choice") || map.containsKey("score")) {
                 return null;
             }
-            if (!map.containsKey("probability") && !map.containsKey("value")) {
+            // "noul" is the System One wire key; "probability" and "value" are accepted legacy keys.
+            Object pObj = null;
+            if (map.containsKey("noul")) {
+                pObj = map.get("noul");
+            } else if (map.containsKey("probability")) {
+                pObj = map.get("probability");
+            } else if (map.containsKey("value")) {
+                pObj = map.get("value");
+            } else {
                 return null;
             }
-            Object pObj = map.containsKey("probability") ? map.get("probability") : map.get("value");
             prob = parseDouble(pObj);
         }
         if (prob == null || !Double.isFinite(prob) || prob < 0.0 || prob > 1.0) {
@@ -433,6 +439,12 @@ public final class DecisionPayloadDecoder {
             if (model == null) {
                 return null;
             }
+        } else if (raw.containsKey("model")) {
+            // "model" is the System One wire key reporting the versioned model that answered.
+            model = parseString(raw.get("model"));
+            if (model == null) {
+                return null;
+            }
         }
 
         Duration latency = null;
@@ -445,16 +457,16 @@ public final class DecisionPayloadDecoder {
         }
 
         Long inTokens = null;
-        if (raw.containsKey("inputTokens")) {
-            inTokens = parseLong(raw.get("inputTokens"));
+        if (ProviderPayloadParser.isTokenReported(raw, "inputTokens", INPUT_USAGE_KEYS)) {
+            inTokens = parseLong(ProviderPayloadParser.resolveTokenValue(raw, "inputTokens", INPUT_USAGE_KEYS));
             if (inTokens == null || inTokens < 0) {
                 return null;
             }
         }
 
         Long outTokens = null;
-        if (raw.containsKey("outputTokens")) {
-            outTokens = parseLong(raw.get("outputTokens"));
+        if (ProviderPayloadParser.isTokenReported(raw, "outputTokens", OUTPUT_USAGE_KEYS)) {
+            outTokens = parseLong(ProviderPayloadParser.resolveTokenValue(raw, "outputTokens", OUTPUT_USAGE_KEYS));
             if (outTokens == null || outTokens < 0) {
                 return null;
             }
@@ -464,31 +476,14 @@ public final class DecisionPayloadDecoder {
     }
 
     private static String parseString(Object obj) {
-        if (obj instanceof String s && !s.isBlank()) {
-            return s.trim();
-        }
-        return null;
+        return ProviderPayloadParser.parseString(obj);
     }
 
     private static Double parseDouble(Object obj) {
-        if (obj instanceof Number n) {
-            double d = n.doubleValue();
-            return Double.isFinite(d) ? d : null;
-        }
-        return null;
+        return ProviderPayloadParser.parseDouble(obj);
     }
 
     private static Long parseLong(Object obj) {
-        if (obj instanceof Number n) {
-            return n.longValue();
-        }
-        if (obj instanceof String s) {
-            try {
-                return Long.parseLong(s.trim());
-            } catch (NumberFormatException _) {
-                return null;
-            }
-        }
-        return null;
+        return ProviderPayloadParser.parseLong(obj);
     }
 }

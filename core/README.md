@@ -259,7 +259,48 @@ Observational-only shadow evaluation for intent routing, tool risk, and answer q
 | `amsha.routing.intent-decision-router.timeout-ms` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS` | `500` | Per-evaluation deadline in milliseconds for the intent decision router. |
 | `amsha.routing.intent-decision-router.activation-gate.candidate-evidence-approved` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED` | `false` | Activation gate: whether candidate model calibration on live traffic is formally approved. |
 | `amsha.routing.intent-decision-router.activation-gate.cost-ceiling-approved` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED` | `false` | Activation gate: whether target cost ceiling and latency budget are formally approved. |
-| `amsha.routing.intent-decision-router.activation-gate.rollout-owner` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | `""` | Activation gate: designated accountable rollout and rollback owner for the pilot. |
+| `amsha.routing.intent-decision-router.activation-gate.rollout-owner` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | `""` | Activation gate: designated accountable rollout and rollback owner for the pilot. **No closed set of values** — the only rule enforced is non-blank (`isActivationGateApproved()`), so a placeholder silently satisfies the gate; leave blank when no owner is assigned. A placeholder is announced once at startup by `ActivationGateReadiness` (advisory `WARN`; it does not close the gate). |
+
+## Decision Provider Selection (Jev / System One)
+
+Configuration-driven selection of the provider that answers decision (`choice` / `score` / `noul`) requests,
+mirroring the LLM provider convention (`AMSHA_LLM_PROVIDER` plus `amsha.llm.<provider>.model`). **Inert:** this
+is the configuration surface only — nothing consumes it into a `DecisionEngine`, so a value here changes no
+behaviour. Selecting a provider is not activating the plane. See
+[Jev-Provider-Integration-Plan-2026](../docs/research/Jev-Provider-Integration-Plan-2026.md) §8.
+
+**Two axes.** A provider id names the System One **endpoint** that receives `POST /v1/systemone` — exactly as an
+LLM provider id names the endpoint that receives `/v1/chat/completions`. `model` names the checkpoint served
+*there*, the same role `amsha.llm.<provider>.model` plays. An id may therefore be a specific decision server
+(`laya`, `kev`, `clm`), a generic local runtime host serving whichever decision model is loaded into it
+(`omlx`), or a hosted API (`typesafe`) — `omlx` is a *runtime*, `laya` is a *model* it can serve.
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.decision.providers.selected` | `AMSHA_DECISION_PROVIDER` | `""` | Provider id to use; must match a declared slot. Blank keeps the plane inert. |
+| `amsha.decision.providers.slots.<id>.enabled` | `AMSHA_DECISION_<ID>_ENABLED` | `false` | Whether the slot may be selected. |
+| `amsha.decision.providers.slots.<id>.endpoint` | `AMSHA_DECISION_<ID>_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint. The governance lane is derived from its host. |
+| `amsha.decision.providers.slots.<id>.model` | `AMSHA_DECISION_<ID>_MODEL` | *(per slot)* | The decision model to request. **Required for a remote slot; optional for a self-hosted one**, where blank means "the server picks its own checkpoint" and the field is omitted from the request. |
+| `amsha.decision.providers.slots.<id>.api-key-ref` | `AMSHA_DECISION_<ID>_API_KEY_REF` | `""` | A `SecretVault` **reference**, never a literal key. |
+| `amsha.decision.providers.slots.<id>.timeout` | `AMSHA_DECISION_<ID>_TIMEOUT` | `PT5S` | Request execution timeout. |
+| `amsha.decision.providers.slots.<id>.wire-profile` | `AMSHA_DECISION_<ID>_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered. Belongs to the **model**: a CLM model requires `PROSE`. |
+
+Declared slots: `typesafe` (`jev-latest`, remote), `clm` (`clm-latest`, `PROSE`), `laya` (`laya-multilingual`),
+`kev` (blank model — a self-hosted server picks its own), `omlx` (blank model — a local runtime that must serve
+`/v1/systemone`, which omlx/LM Studio do not).
+
+**Fail-closed resolution.** `DecisionProviderSelector` derives the lane from the endpoint host — the literal
+`127.0.0.1` selects the self-hosted lane, anything else the remote lane — and refuses `localhost`, `::1`, and
+other `127.x` hosts as **ambiguous**, because the two lanes carry different governance. It also refuses a
+**remote** slot with no `model` (a self-hosted slot may omit it), a credentialed remote provider (`typesafe`)
+with no `api-key-ref`, a non-positive `timeout`, and a CLM model declared without `WIRE_PROFILE=PROSE`.
+Refusals name the operator configuration at fault and never a credential.
+
+**Not wired yet.** The selector carries `api-key-ref` as a `SecretVault` reference and never resolves it — but
+nothing else resolves it either. The remote lane's governed transport has a vault; the self-hosted lane uses a
+plain HTTP client and sends its own `X-Amsha-Loopback-Token` header instead. So a declared `api-key-ref` is
+intent, not a working credential, and a secured Laya/CLM endpoint that expects `Authorization: Bearer` needs an
+auth mapping that does not exist yet.
 
 ## Multimodal Message Mapping & Capability Resolution
 

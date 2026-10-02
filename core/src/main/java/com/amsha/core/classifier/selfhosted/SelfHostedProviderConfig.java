@@ -6,6 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.amsha.classifier.api.StateProjectionPolicy;
+import com.amsha.core.classifier.wire.WireProfile;
 
 /**
  * Configuration for a self-hosted loopback decision provider (§7.5).
@@ -14,6 +15,13 @@ import com.amsha.classifier.api.StateProjectionPolicy;
  * @param enabled whether the provider is enabled (defaults to false; disabled by default)
  * @param endpoint HTTP/HTTPS endpoint URI (strictly validated to 127.0.0.1)
  * @param loopbackToken optional bearer token or authentication header value for loopback communication
+ * @param modelId optional model identifier for the System One {@code model} field. Blank by default:
+ *     a self-hosted server selects its own checkpoint, and sending a hosted vendor's alias would
+ *     mislead it. Set this only to pin a specific self-hosted model.
+ * @param wireProfile how this endpoint expects the {@code state} field to be rendered. Defaults to
+ *     {@link WireProfile#JSON_OBJECT}, which is what the Jev-wire-compatible self-hosted servers
+ *     (Laya, Kev) accept. Set {@link WireProfile#PROSE} for a CLM endpoint, whose contrastive heads
+ *     were trained on prose and score a JSON blob worse without rejecting it.
  * @param timeout request execution timeout
  * @param defaultProjectionPolicy default state projection and redaction policy if not specified on request
  */
@@ -21,6 +29,8 @@ public record SelfHostedProviderConfig(
         boolean enabled,
         URI endpoint,
         String loopbackToken,
+        String modelId,
+        WireProfile wireProfile,
         Duration timeout,
         StateProjectionPolicy defaultProjectionPolicy) {
 
@@ -32,6 +42,9 @@ public record SelfHostedProviderConfig(
         if (timeout.isNegative() || timeout.isZero()) {
             throw new IllegalArgumentException("timeout must be positive, got: " + timeout);
         }
+        // A null profile would silently fall back to whichever dialect the mapper happened to default
+        // to, so it is resolved here rather than left to the call site.
+        wireProfile = wireProfile == null ? WireProfile.JSON_OBJECT : wireProfile;
         // Unconditional loopback validation: strict 127.0.0.1 requirement cannot be bypassed
         SelfHostedEndpointValidator.validateLoopbackEndpoint(endpoint);
     }
@@ -49,14 +62,20 @@ public record SelfHostedProviderConfig(
         return "SelfHostedProviderConfig[enabled=" + enabled
                 + ", endpoint=" + endpoint
                 + ", hasLoopbackToken=" + (loopbackToken != null && !loopbackToken.isBlank())
+                + ", modelId=" + (modelId != null && !modelId.isBlank() ? modelId : "none")
+                + ", wireProfile=" + wireProfile
                 + ", timeout=" + timeout
                 + ", defaultProjectionPolicy=" + defaultProjectionPolicy + "]";
     }
 
     public static final class Builder {
         private boolean enabled = false;
-        private URI endpoint = URI.create("http://127.0.0.1:8088/v1/evaluate");
+        // The System One route, matching the payload the mapper emits. This port is a placeholder: the
+        // real port is whichever the loopback wrapper binds.
+        private URI endpoint = URI.create("http://127.0.0.1:8088/v1/systemone");
         private String loopbackToken = null;
+        private String modelId = null;
+        private WireProfile wireProfile = WireProfile.JSON_OBJECT;
         private Duration timeout = DEFAULT_TIMEOUT;
         private StateProjectionPolicy defaultProjectionPolicy = null;
 
@@ -81,6 +100,16 @@ public record SelfHostedProviderConfig(
             return this;
         }
 
+        public Builder modelId(String modelId) {
+            this.modelId = modelId;
+            return this;
+        }
+
+        public Builder wireProfile(WireProfile wireProfile) {
+            this.wireProfile = wireProfile;
+            return this;
+        }
+
         public Builder timeout(Duration timeout) {
             this.timeout = Objects.requireNonNull(timeout, "timeout");
             return this;
@@ -92,7 +121,8 @@ public record SelfHostedProviderConfig(
         }
 
         public SelfHostedProviderConfig build() {
-            return new SelfHostedProviderConfig(enabled, endpoint, loopbackToken, timeout, defaultProjectionPolicy);
+            return new SelfHostedProviderConfig(
+                    enabled, endpoint, loopbackToken, modelId, wireProfile, timeout, defaultProjectionPolicy);
         }
     }
 }

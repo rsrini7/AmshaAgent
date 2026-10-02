@@ -47,6 +47,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SelfHostedDecisionProvider.class,
             RemoteDecisionProvider.class,
             DecisionPayloadDecoder.class,
+            ProviderPayloadParser.class,
             ProviderPlacementValidator.class,
             DecisionResult.OpinionBuilder.class,
             InMemoryDecisionEngine.class,

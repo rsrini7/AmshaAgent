@@ -60,6 +60,7 @@ import com.amsha.core.classifier.selfhosted.SelfHostedDecisionEngine;
 import com.amsha.core.classifier.selfhosted.SelfHostedEndpointValidator;
 import com.amsha.core.classifier.selfhosted.SelfHostedProviderConfig;
 import com.amsha.core.classifier.selfhosted.StateProjectionRedactor;
+import com.amsha.core.classifier.wire.WireProfile;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.governance.ApprovalFrame;
@@ -235,6 +236,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SelfHostedEndpointValidator.class,
             SelfHostedProviderConfig.class,
             SelfHostedProviderConfig.Builder.class,
+            // Enum component of SelfHostedProviderConfig, which is serialized: Jackson resolves the
+            // constant by name, so the enum must be reachable reflectively in a native image.
+            WireProfile.class,
             StateProjectionRedactor.class,
             RemoteDecisionEngine.class,
             RemoteEndpointValidator.class,
