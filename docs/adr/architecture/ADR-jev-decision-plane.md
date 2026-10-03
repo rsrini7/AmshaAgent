@@ -388,7 +388,7 @@ being required to decide.
 | Protocol | First-party vendor documentation, re-verified within a review window **once one is in force** (8.5), plus all conformance cases passing | **MET** — contract re-verified against `docs.typesafe.ai` 2026-10-01; codec corrected to the real `POST /v1/systemone` shape. **No review window is currently in force**, so this evidence does not lapse until the cadence is confirmed | Amsha Architecture Committee |
 | Governance | Approved retention, training use, residency, isolation, secrets, egress | **UNMET** — TypeSafe retention/residency undeclared; training-use is refused outright by `RemoteProviderConfig` | Amsha Architecture Committee |
 | Quality | M1 exactly zero and M2 below 1% on a versioned corpus, per lane (8.3) | **UNMET** — no candidate has run through the conformance suite; §7.4 evidence was explicitly `N/A (Synthetic)` | Committee, until a model owner is designated — none exists today |
-| Operations | Latency/cost ceilings, monitoring, kill switch, named owner, rollback rehearsal | **UNMET** — no authorised cost ceiling or p95 SLA; no named owner | Amsha Architecture Committee |
+| Operations | Latency/cost ceilings, monitoring **with drift alerting**, kill switch, named owner, rollback rehearsal | **UNMET** — no authorised cost ceiling or p95 SLA; no named owner; no drift-alerting implementation exists (the only `DecisionTelemetry` counter is payload-free and tagged `action`/`escalated`/`fallback`/`outcome`, so it carries neither a confidence distribution nor model identity and cannot express drift) | Amsha Architecture Committee |
 
 **On fixtures.** §2 of the
 [integration plan](../../research/Jev-Provider-Integration-Plan-2026.md) records why this gate is worded
@@ -457,10 +457,10 @@ step is a precondition for the next:
    rather than argued about.
 2. **Close the Governance gate.** Declare retention, residency, and training-use for the chosen
    lane. This can fail permanently — see 8.6.
-3. **Obtain the Operations approvals.** Everything the Operations row of 8.2 requires — cost
-   ceiling and p95 SLA against 8.3, a named owner, a rehearsed rollback, monitoring with drift
-   alerting, and a verified kill switch. Referenced rather than restated so this step cannot drift
-   away from the gate it is meant to close.
+3. **Obtain the Operations approvals.** Everything the Operations row of 8.2 requires, and
+   nothing beyond it — that row is the single source of these requirements, so it is referenced
+   rather than restated here and cannot drift away from the gate it is meant to close. Drift
+   alerting is part of that row, not a separate clause of this step.
 4. **Only then** set `candidate-evidence-approved`, `cost-ceiling-approved`, and `rollout-owner`.
    Setting them is the *record* that steps 1–3 happened; it is not a substitute for them. Setting
    them without the evidence is precisely the failure `ActivationGateReadiness` exists to announce.
