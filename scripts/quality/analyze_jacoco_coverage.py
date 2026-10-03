@@ -7,10 +7,15 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from verify_jacoco_coverage import TestTotals, modules_missing_test_reports, test_report_totals
 
 
 @dataclass(frozen=True)
@@ -187,6 +192,146 @@ def missed_lines_by_gap(root: Path, selected: list[CoverageGap]) -> dict[Coverag
     return out
 
 
+def tests_badge_message(totals: TestTotals) -> str:
+    """Build the shields.io message for the Java test badge.
+
+    Every count the reports carry is named, because a single number is ambiguous: the same
+    "9,463" figure means "executed" to one reader and "passed" to another, which is exactly how
+    the README badge drifted out of step with the coverage doc twice on this branch. Skipped and
+    failed counts appear only when non-zero, so a clean run reads as `9454 passed of 9463`
+    without padding the row with zeroes.
+
+    Underscores become spaces in a shields.io path segment, and a literal separator must be
+    doubled; the middle dot is percent-encoded because it is not URL-safe. Every space is
+    therefore written as `_` *within* each segment as well as at the joins - a literal space
+    there renders as a gap in the SVG instead of a separator. Spelled out here rather than built
+    by string surgery so the escaping is testable.
+    """
+    parts = [f"{totals.passed}_passed"]
+    if totals.skipped:
+        parts.append(f"{totals.skipped}_skipped")
+    if totals.failures + totals.errors:
+        parts.append(f"{totals.failures + totals.errors}_failed")
+    # The counts are separated by a dot; the total is appended after one, so the badge reads
+    # "9454 passed · 9 skipped of 9463" rather than leaving a dangling separator before "of".
+    separator = "_%C2%B7_"
+    return separator.join(parts) + f"_of_{totals.total}"
+
+
+def tests_badge_color(totals: TestTotals) -> str:
+    """Green only when nothing failed or errored; a skipped test never turns the badge amber."""
+    return "brightgreen" if totals.failures == 0 and totals.errors == 0 else "red"
+
+
+def java_tests_badge(totals: TestTotals) -> str:
+    return (
+        f"![Java Tests](https://img.shields.io/badge/Tests-"
+        f"{tests_badge_message(totals)}-{tests_badge_color(totals)}.svg?style=flat)"
+    )
+
+
+def java_coverage_badge(pct: float, gate: float) -> str:
+    return (
+        f"![Java Coverage](https://img.shields.io/badge/Coverage-"
+        f"{pct * 100:.2f}%25-{badge_color(pct, gate)}.svg?style=flat)"
+    )
+
+
+def read_reactor_test_totals(root: Path) -> TestTotals:
+    """Sum Surefire and Failsafe counts across every reactor module."""
+    parts = [0, 0, 0, 0]
+    for module in reactor_modules(root):
+        totals = test_report_totals(module)
+        parts[0] += totals.total
+        parts[1] += totals.failures
+        parts[2] += totals.errors
+        parts[3] += totals.skipped
+    return TestTotals(*parts)
+
+
+def sync_readme(readme: Path, totals: TestTotals, pct: float, gate: float) -> None:
+    """Rewrite the Java badges in README.md from the reports on disk.
+
+    Fails loudly when either badge is absent. A silent no-op would be the worst outcome
+    available here: it reports success while leaving the one number it was written to correct
+    wrong, and a renamed badge or an edited alt text is exactly how that looks. Mirrors
+    `analyze_ui_coverage.py --sync-readme`, but refuses to pretend it worked.
+    """
+    if not readme.is_file():
+        raise FileNotFoundError(f"{readme} not found")
+
+    replacements = (
+        (r"!\[Java Tests\]\(https://img\.shields\.io/badge/Tests-[^)]+\)", java_tests_badge(totals)),
+        (
+            r"!\[Java Coverage\]\(https://img\.shields\.io/badge/Coverage-[^)]+\)",
+            java_coverage_badge(pct, gate),
+        ),
+    )
+
+    text = readme.read_text(encoding="utf-8")
+    for pattern, replacement in replacements:
+        text, count = re.subn(pattern, replacement, text)
+        if count == 0:
+            raise ValueError(
+                f"No badge matched {pattern!r} in {readme}; the README badge shape changed, so the "
+                "badge can no longer be synced automatically. Fix the regex or the badge by hand."
+            )
+    readme.write_text(text, encoding="utf-8")
+
+
+def recorded_test_total(readme: Path) -> int | None:
+    """The total currently published in the README's Java test badge, if it parses.
+
+    Read from the badge this script itself writes, so the baseline and the output share one
+    format. Scoped to the Tests badge because other shields.io messages also contain `_of_`.
+    """
+    match = re.search(
+        r"!\[Java Tests\]\(https://img\.shields\.io/badge/Tests-[^)]*_of_(\d+)-[^)]+\)",
+        readme.read_text(encoding="utf-8"),
+    )
+    return int(match.group(1)) if match else None
+
+
+def check_badge_preconditions(root: Path, readme: Path, totals: TestTotals, allow_decrease: bool) -> None:
+    """Refuse to publish a total that could only have come from an incomplete run.
+
+    This task overwrites a number that is committed to the repository and displayed as project
+    health, so the failure mode that matters most is a *confident, smaller* number. Three ways
+    to get one, each checked here:
+
+    1. A partial build. `./mvnw -pl core test` leaves 26 of 27 modules without reports. The
+       aggregate looks perfectly ordinary and is 62% lower, which is why completeness is
+       checked structurally against declared test sources rather than trusted from the totals.
+    2. A dropped total from any other cause - deleted reports, a module accidentally excluded,
+       a stale tree. Compared against the published badge and refused, because test counts
+       should only fall when someone intends to remove tests.
+    3. Nothing at all, e.g. pointing the analyzer at an empty reactor.
+
+    Every failure raises rather than warns: a sync that reports success while quietly halving
+    the number is worse than no sync at all.
+    """
+    missing = modules_missing_test_reports(root)
+    if missing:
+        raise ValueError(
+            f"{len(missing)} reactor module(s) declare test sources but reported no tests: "
+            f"{', '.join(missing)}. This is what a partial build looks like - run "
+            "`./mvnw --batch-mode clean verify` for the whole reactor. Refusing to write a "
+            "total built from a subset of modules."
+        )
+
+    if totals.total == 0:
+        raise ValueError("No tests were reported anywhere in the reactor; refusing to publish 0.")
+
+    if not allow_decrease:
+        previous = recorded_test_total(readme)
+        if previous is not None and totals.total < previous:
+            raise ValueError(
+                f"Total tests would fall from {previous} to {totals.total}. A test count should "
+                "only shrink when tests are deliberately removed. Re-run the full reactor to "
+                "confirm, or pass --allow-decrease if the reduction is intended."
+            )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Analyze reactor JaCoCo CSV reports and rank classes with uncovered lines."
@@ -206,6 +351,31 @@ def main() -> int:
     parser.add_argument("--module", help="limit ranked gaps to one Maven module")
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     parser.add_argument("--badge", action="store_true", help="emit shields.io Markdown badge")
+    parser.add_argument(
+        "--badge-tests",
+        action="store_true",
+        help=(
+            "emit the shields.io Markdown badge for the Java test counts, naming every count the "
+            "Surefire/Failsafe reports carry (passed, skipped, failed, total)"
+        ),
+    )
+    parser.add_argument(
+        "--sync-readme",
+        action="store_true",
+        help=(
+            "rewrite the Java test and coverage badges in README.md from the reports on disk. "
+            "Fails if a badge cannot be found rather than silently leaving it stale, and refuses "
+            "a total that could only come from a partial build or a shrink"
+        ),
+    )
+    parser.add_argument(
+        "--allow-decrease",
+        action="store_true",
+        help=(
+            "permit the synced total to be smaller than the one currently published. Only for a "
+            "deliberate test removal; a partial build is still refused"
+        ),
+    )
     parser.add_argument("--summary", action="store_true", help="emit single-line coverage summary")
     parser.add_argument(
         "--modules",
@@ -256,7 +426,7 @@ def main() -> int:
     needed = additional_lines(covered, total, args.target)
     pct = covered / total if total else 0.0
 
-    if args.badge:
+    if args.badge or args.badge_tests or args.sync_readme:
         # Colour bands track the build gate, read from the root pom rather than hardcoded: the badge
         # must not read "green" at a coverage level the build would reject.
         try:
@@ -265,7 +435,30 @@ def main() -> int:
             print(f"Cannot read the coverage gate from pom.xml: {error}", file=sys.stderr)
             return 1
         color = badge_color(pct, gate)
-        print(f"![Coverage](https://img.shields.io/badge/Coverage-{pct * 100:.2f}%25-{color}.svg?style=flat)")
+        if args.sync_readme:
+            readme = root / "README.md"
+            try:
+                reactor_totals = read_reactor_test_totals(root)
+                check_badge_preconditions(root, readme, reactor_totals, args.allow_decrease)
+                sync_readme(readme, reactor_totals, pct, gate)
+            except (OSError, ValueError) as error:
+                print(f"Cannot sync the README badges: {error}", file=sys.stderr)
+                return 1
+        if args.badge_tests:
+            reactor_totals = read_reactor_test_totals(root)
+            # Read-only, so this still prints - but say why the number may be understated, because
+            # this is the value someone is about to paste into a commit message by hand.
+            partial = modules_missing_test_reports(root)
+            if partial:
+                print(
+                    f"WARNING: {len(partial)} module(s) reported no tests ({', '.join(partial)}); "
+                    "this total covers a subset of the reactor and will be refused by "
+                    "--sync-readme.",
+                    file=sys.stderr,
+                )
+            print(java_tests_badge(reactor_totals))
+        if args.badge:
+            print(f"![Coverage](https://img.shields.io/badge/Coverage-{pct * 100:.2f}%25-{color}.svg?style=flat)")
         return 0
 
     if args.summary:

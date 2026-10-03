@@ -156,6 +156,7 @@ Evaluations of alternatives and boundaries that document why specific approaches
 
 - **Agent Decision-Plane Research**:
   - [Jev/System One Decision Plane Scout](research/Jev-Amsha-Decision-Plane-Scout-2026.md) — research basis for the typed Jev judgment seam; the resulting decision is [ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md) (Status: Deferred), which governs where the two disagree.
+  - [Jev Provider Integration Plan](research/Jev-Provider-Integration-Plan-2026.md) — Phase 0 verification evidence (the first-party TypeSafe/System One contract), the wire-conformance findings, and the Laya/Kev/CLM/omlx candidate matrix. Consolidates and supersedes the separate `Jev-Provider-Verification-2026-10-01.md` note; still authorizes no provider activation.
 
 ---
 

@@ -13,13 +13,56 @@ _QUALITY_DIR = Path(__file__).resolve().parent
 if str(_QUALITY_DIR) not in sys.path:
     sys.path.insert(0, str(_QUALITY_DIR))
 
-from verify_jacoco_coverage import executed_test_count, has_production_classes, line_counts
+from verify_jacoco_coverage import (
+    TestTotals,
+    executed_test_count,
+    has_production_classes,
+    line_counts,
+    test_report_totals,
+)
 
 
-def _write_suite(path: Path, tests: int) -> None:
+def _write_suite(path: Path, tests: int, skipped: int = 0, failures: int = 0, errors: int = 0) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    suite = ET.Element("testsuite", name="com.example.Foo", tests=str(tests), failures="0", errors="0")
+    suite = ET.Element(
+        "testsuite",
+        name="com.example.Foo",
+        tests=str(tests),
+        failures=str(failures),
+        errors=str(errors),
+        skipped=str(skipped),
+    )
     ET.ElementTree(suite).write(path, encoding="utf-8", xml_declaration=True)
+
+
+class TestTotalsTest(unittest.TestCase):
+    """The badge reads `passed`, so it must never be able to disagree with the raw counts."""
+
+    def test_passed_subtracts_skipped_as_well_as_failures(self) -> None:
+        totals = TestTotals(total=10, failures=2, errors=1, skipped=3)
+        self.assertEqual(totals.passed, 4)
+
+    def test_passed_is_derived_not_stored(self) -> None:
+        # Frozen dataclass: a caller cannot hand in a `passed` that contradicts the counts.
+        with self.assertRaises(TypeError):
+            TestTotals(total=10, failures=1, errors=0, skipped=1, passed=99)  # type: ignore[call-arg]
+
+    def test_reports_are_the_single_source_for_every_count(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            module = Path(d)
+            _write_suite(module / "target" / "surefire-reports" / "TEST-A.xml", 10, skipped=3)
+            _write_suite(module / "target" / "failsafe-reports" / "TEST-B.xml", 5, skipped=1, failures=2)
+            totals = test_report_totals(module)
+        self.assertEqual(totals, TestTotals(total=15, failures=2, errors=0, skipped=4))
+        self.assertEqual(totals.passed, 9)
+
+    def test_executed_test_count_still_reports_the_total(self) -> None:
+        # The gate's existing contract is the total, so moving it onto the shared reader must not
+        # change what it returns.
+        with tempfile.TemporaryDirectory() as d:
+            module = Path(d)
+            _write_suite(module / "target" / "surefire-reports" / "TEST-A.xml", 4, skipped=1)
+            self.assertEqual(executed_test_count(module), 4)
 
 
 def _write_csv(path: Path, rows: list[tuple[int, int]]) -> None:

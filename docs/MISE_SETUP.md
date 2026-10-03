@@ -329,6 +329,7 @@ mise run help    # or: mise tasks
 | **`mise run quality:coverage`** | Reactor summary **and per-module line/branch totals** (reads existing reports) |
 | `mise run quality:coverage-gaps` | Largest coverage gaps, with the missed line numbers to target |
 | **`mise run quality:coverage-gate`** | The JaCoCo gate alone — seconds instead of a full reactor build |
+| `mise run quality:coverage-sync` | Rewrite the Java test + coverage badges in `README.md` from existing reports |
 | `mise run quality:py-tests` | Python script/harness contract suites (CI parity plus two) |
 | `mise run quality:docs` | Verify Markdown links and anchors across the workspace |
 | `mise run quality:staged` | Review staged changes read-only (never touches the index) |
@@ -395,6 +396,7 @@ already on disk instead. **None of them build** — run `build:test` (or a react
 mise run quality:coverage        # reactor summary + per-module line/branch totals
 mise run quality:coverage-gaps   # largest gaps, with the missed line numbers
 mise run quality:coverage-gate   # the gate itself, with --strict-instrumentation
+mise run quality:coverage-sync   # rewrite the Java README badges from the same reports
 ```
 
 `quality:coverage-gate` mirrors the CI step, including the fatal empty-report
@@ -403,6 +405,34 @@ check that catches a module whose JaCoCo agent never attached.
 reactor total can hide a module at 35% being subsidised by one at 99%.
 `quality:coverage-gaps` reads each module's `jacoco.xml` to attach the actual
 missed line numbers, turning the report into a worklist.
+
+`quality:coverage-sync` rewrites the two Java badges in `README.md` from the
+same Surefire/Failsafe and JaCoCo reports the gate reads, so the badge and
+`docs/TEST_COVERAGE_ANALYSIS.md` cannot disagree about the same tree. The test
+badge names every count — `9454 passed · 9 skipped of 9463` — because a single
+number is ambiguous: the same figure means "executed" to one reader and
+"passed" to another. Run it after `./mvnw verify`; it never builds, so it
+reports the last build rather than the current source, and prints the report
+age for that reason. It **fails** if a badge cannot be found rather than
+silently leaving it stale, and it leaves the UI badges to
+`analyze_ui_coverage.py`.
+
+It also refuses to publish a total that could only have come from an
+incomplete run, because the sync overwrites a committed, publicly displayed
+number and the dangerous outcome is a *confidently smaller* one:
+
+- **Partial build refused.** Any reactor module that declares `src/test` but
+  reported no tests aborts the sync by name. `./mvnw -pl core test` leaves 26
+  of 27 modules empty and aggregates to 3,625 instead of 9,463 — a 62% drop
+  that looks entirely ordinary. A module with no `src/test` at all (`ui`) is
+  fine and does not trip the gate.
+- **Decrease refused.** A total below the one currently published aborts
+  unless you pass `--allow-decrease`, which exists for a deliberate test
+  removal. It does *not* wave through a partial build.
+- **Zero refused.** An empty reactor never publishes `0`.
+
+`--badge-tests` is read-only, so it still prints a number for a partial
+reactor but warns on stderr that the total covers a subset.
 
 ### Native build strategy
 

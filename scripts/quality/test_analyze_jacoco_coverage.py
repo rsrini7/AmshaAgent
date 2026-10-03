@@ -9,6 +9,7 @@ import json
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest import mock
 
@@ -20,7 +21,19 @@ for _path in (_QUALITY_DIR, _SCRIPTS_DIR / "lib"):
 
 import repo_root
 
-from analyze_jacoco_coverage import CoverageGap, badge_color, build_gate, main, module_summaries
+from analyze_jacoco_coverage import (
+    CoverageGap,
+    badge_color,
+    build_gate,
+    check_badge_preconditions,
+    main,
+    module_summaries,
+    recorded_test_total,
+    sync_readme,
+    tests_badge_color,
+    tests_badge_message,
+)
+from verify_jacoco_coverage import TestTotals
 
 REPO_ROOT = _SCRIPTS_DIR.parent
 
@@ -305,6 +318,260 @@ class ModuleReportOutputTest(unittest.TestCase):
         payload = json.loads(output)
         self.assertEqual(sorted(item["module"] for item in payload["modules"]), ["app", "core"])
         self.assertAlmostEqual(payload["coverage_branches"], 22 / 30)
+
+
+def _write_suite(root: Path, module: str, directory: str, tests: int, skipped: int = 0, failures: int = 0) -> None:
+    """Write a Surefire/Failsafe report for ``module`` at the path test_report_totals reads."""
+    report = root / module / "target" / directory / "TEST-Suite.xml"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    suite = ET.Element(
+        "testsuite",
+        name="com.example.Foo",
+        tests=str(tests),
+        failures=str(failures),
+        errors="0",
+        skipped=str(skipped),
+    )
+    ET.ElementTree(suite).write(report, encoding="utf-8", xml_declaration=True)
+
+
+_README_TEMPLATE = """# Title
+
+  ![Java Tests](https://img.shields.io/badge/Tests-1_passed_of_1-brightgreen.svg?style=flat)
+  ![Java Coverage](https://img.shields.io/badge/Coverage-0.00%25-red.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-195_passing-brightgreen.svg?style=flat)
+  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-59.26%25-yellow.svg?style=flat)
+"""
+
+
+class TestBadgeMessageTest(unittest.TestCase):
+    """Every count must be named: a bare number is ambiguous between total and passed."""
+
+    def test_clean_run_names_passed_and_total(self) -> None:
+        self.assertEqual(
+            tests_badge_message(TestTotals(total=9463, skipped=9)),
+            "9454_passed_%C2%B7_9_skipped_of_9463",
+        )
+
+    def test_zero_counts_are_omitted_rather_than_padded(self) -> None:
+        self.assertEqual(tests_badge_message(TestTotals(total=10)), "10_passed_of_10")
+
+    def test_failures_are_named_even_alongside_skips(self) -> None:
+        message = tests_badge_message(TestTotals(total=10, failures=2, skipped=1))
+        self.assertEqual(message, "7_passed_%C2%B7_1_skipped_%C2%B7_2_failed_of_10")
+
+    def test_errors_count_as_failures(self) -> None:
+        self.assertIn("3_failed", tests_badge_message(TestTotals(total=5, failures=1, errors=2)))
+
+    def test_no_literal_spaces_survive_into_the_url(self) -> None:
+        # A space inside a shields.io path segment renders as a gap, not a separator. This is the
+        # bug that shipped in the first draft of this emitter.
+        message = tests_badge_message(TestTotals(total=9463, skipped=9, failures=1))
+        self.assertNotIn(" ", message)
+
+    def test_colour_is_green_only_without_failures_or_errors(self) -> None:
+        self.assertEqual(tests_badge_color(TestTotals(total=5, skipped=5)), "brightgreen")
+        self.assertEqual(tests_badge_color(TestTotals(total=5, failures=1)), "red")
+        self.assertEqual(tests_badge_color(TestTotals(total=5, errors=1)), "red")
+
+
+class SyncReadmeTest(unittest.TestCase):
+    def _readme(self, root: Path) -> Path:
+        path = root / "README.md"
+        path.write_text(_README_TEMPLATE, encoding="utf-8")
+        return path
+
+    def test_rewrites_both_java_badges(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            readme = self._readme(Path(d))
+            sync_readme(readme, TestTotals(total=9463, skipped=9), 0.8694, 0.82)
+            text = readme.read_text(encoding="utf-8")
+        self.assertIn("Tests-9454_passed_%C2%B7_9_skipped_of_9463-brightgreen", text)
+        self.assertIn("Coverage-86.94%25-brightgreen", text)
+
+    def test_leaves_the_ui_badges_untouched(self) -> None:
+        # The UI badges are another script's output; rewriting them here would fight
+        # analyze_ui_coverage.py and silently take ownership of numbers it owns.
+        with tempfile.TemporaryDirectory() as d:
+            readme = self._readme(Path(d))
+            sync_readme(readme, TestTotals(total=10), 0.5, 0.82)
+            text = readme.read_text(encoding="utf-8")
+        self.assertIn("UI_Tests-195_passing-brightgreen", text)
+        self.assertIn("UI_Coverage-59.26%25-yellow", text)
+
+    def test_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            readme = self._readme(Path(d))
+            sync_readme(readme, TestTotals(total=9463, skipped=9), 0.8694, 0.82)
+            once = readme.read_text(encoding="utf-8")
+            sync_readme(readme, TestTotals(total=9463, skipped=9), 0.8694, 0.82)
+            twice = readme.read_text(encoding="utf-8")
+        self.assertEqual(twice, once)
+
+    def test_missing_badge_is_an_error_not_a_silent_no_op(self) -> None:
+        # The whole point of the flag. Reporting success while leaving the number stale is worse
+        # than not having the flag at all.
+        with tempfile.TemporaryDirectory() as d:
+            readme = Path(d) / "README.md"
+            readme.write_text("# Title\n\nNo badges here.\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                sync_readme(readme, TestTotals(total=1), 0.5, 0.82)
+
+    def test_absent_readme_is_an_error(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(FileNotFoundError):
+                sync_readme(Path(d) / "README.md", TestTotals(total=1), 0.5, 0.82)
+
+
+class BadgeTestsEndToEndTest(unittest.TestCase):
+    """--badge-tests and --sync-readme through main(), against a synthetic reactor."""
+
+    def _reactor(self, root: Path) -> None:
+        _write_pom(root, "0.82")
+        _write_report(root, covered=85, missed=15)
+        _write_suite(root, "mod", "surefire-reports", 10, skipped=1)
+        _write_suite(root, "mod", "failsafe-reports", 2)
+
+    def test_badge_tests_emits_the_full_count(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            with _analyzing(root):
+                code, output = _run_main("--badge-tests")
+        self.assertEqual(code, 0)
+        self.assertIn("Tests-11_passed_%C2%B7_1_skipped_of_12-brightgreen", output)
+
+    def test_sync_readme_updates_the_file(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            (root / "README.md").write_text(_README_TEMPLATE, encoding="utf-8")
+            with _analyzing(root):
+                code, _output = _run_main("--sync-readme")
+            text = (root / "README.md").read_text(encoding="utf-8")
+        self.assertEqual(code, 0)
+        self.assertIn("Tests-11_passed_%C2%B7_1_skipped_of_12-brightgreen", text)
+        self.assertIn("Coverage-85.00%25-brightgreen", text)
+
+    def test_sync_readme_fails_when_the_badge_shape_changed(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            (root / "README.md").write_text("# Title\n", encoding="utf-8")
+            with _analyzing(root):
+                code, _output = _run_main("--sync-readme")
+        self.assertEqual(code, 1)
+
+
+class BadgePreconditionTest(unittest.TestCase):
+    """The sync overwrites a committed number, so it must refuse a confidently smaller one."""
+
+    def _reactor(self, root: Path, modules: tuple[str, ...] = ("core", "app")) -> None:
+        _write_pom(root, "0.82", modules=modules)
+        for module in modules:
+            _write_report(root, covered=85, missed=15, module=module)
+            (root / module / "src" / "test").mkdir(parents=True, exist_ok=True)
+
+    def _readme(self, root: Path, total: int) -> Path:
+        path = root / "README.md"
+        path.write_text(
+            "# Title\n\n"
+            f"  ![Java Tests](https://img.shields.io/badge/Tests-1_passed_of_{total}-brightgreen.svg?style=flat)\n"
+            "  ![Java Coverage](https://img.shields.io/badge/Coverage-0.00%25-red.svg?style=flat)\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_refuses_when_a_module_reported_no_tests(self) -> None:
+        # The partial-build case: `app` never ran, so the aggregate would be understated.
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            _write_suite(root, "core", "surefire-reports", 3625)
+            readme = self._readme(root, 9463)
+            with self.assertRaises(ValueError) as caught:
+                check_badge_preconditions(root, readme, TestTotals(total=3625), False)
+        self.assertIn("app", str(caught.exception))
+        self.assertIn("partial build", str(caught.exception))
+
+    def test_module_without_test_sources_is_not_a_failure(self) -> None:
+        # `ui` is a Node project in the reactor; it has no src/test and must not trip the gate.
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root, modules=("core",))
+            _write_suite(root, "core", "surefire-reports", 10)
+            readme = self._readme(root, 10)
+            check_badge_preconditions(root, readme, TestTotals(total=10), False)
+
+    def test_refuses_a_total_smaller_than_the_published_one(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            for module in ("core", "app"):
+                _write_suite(root, module, "surefire-reports", 5)
+            readme = self._readme(root, 9463)
+            with self.assertRaises(ValueError) as caught:
+                check_badge_preconditions(root, readme, TestTotals(total=10), False)
+        self.assertIn("9463", str(caught.exception))
+        self.assertIn("--allow-decrease", str(caught.exception))
+
+    def test_allow_decrease_permits_an_intentional_shrink(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            for module in ("core", "app"):
+                _write_suite(root, module, "surefire-reports", 5)
+            readme = self._readme(root, 9463)
+            check_badge_preconditions(root, readme, TestTotals(total=10), True)
+
+    def test_allow_decrease_does_not_permit_a_partial_build(self) -> None:
+        # The override is for a deliberate test removal, not for "the build only ran some modules".
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            _write_suite(root, "core", "surefire-reports", 3625)
+            readme = self._readme(root, 9463)
+            with self.assertRaises(ValueError):
+                check_badge_preconditions(root, readme, TestTotals(total=3625), True)
+
+    def test_refuses_an_empty_reactor(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root, modules=())
+            readme = self._readme(root, 9463)
+            with self.assertRaises(ValueError):
+                check_badge_preconditions(root, readme, TestTotals(), False)
+
+    def test_a_growing_total_is_always_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            for module in ("core", "app"):
+                _write_suite(root, module, "surefire-reports", 50)
+            readme = self._readme(root, 10)
+            check_badge_preconditions(root, readme, TestTotals(total=100), False)
+
+    def test_an_unparseable_baseline_does_not_block_a_sync(self) -> None:
+        # A brand-new or hand-written README has no parseable total; refusing would make the flag
+        # unusable on first run, and the completeness check still guards the real hazard.
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self._reactor(root)
+            for module in ("core", "app"):
+                _write_suite(root, module, "surefire-reports", 10)
+            readme = root / "README.md"
+            readme.write_text(_README_TEMPLATE, encoding="utf-8")
+            check_badge_preconditions(root, readme, TestTotals(total=20), False)
+
+    def test_recorded_total_is_scoped_to_the_java_tests_badge(self) -> None:
+        # A `_of_N` in another badge must not be mistaken for the baseline.
+        with tempfile.TemporaryDirectory() as d:
+            readme = Path(d) / "README.md"
+            readme.write_text(
+                "  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-59.26_of_9999-yellow.svg?style=flat)\n",
+                encoding="utf-8",
+            )
+            self.assertIsNone(recorded_test_total(readme))
 
 
 if __name__ == "__main__":
