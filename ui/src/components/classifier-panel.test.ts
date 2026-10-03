@@ -174,6 +174,26 @@ describe('classifier panel rendering', () => {
     expect(rendered).toContain(CLASSIFIER_SCOPE_NOTICE);
   });
 
+  it('names every decision-plane namespace it excludes', () => {
+    // The notice works by enumerating exclusions, so it is only useful while it stays exhaustive.
+    // `amsha.decision.providers.*` arrived after the panel shipped; without this assertion a future
+    // namespace could be added without anyone updating the notice, and a user would be free to
+    // assume provider selection is visible in the cockpit when it is environment-only.
+    const rendered = renderPanel({ kind: 'READY', slots: [] }).toLowerCase();
+
+    expect(rendered).toContain('amsha.decision.shadow.*');
+    expect(rendered).toContain('amsha.decision.providers.*');
+  });
+
+  it('states that the decision provider has no cockpit surface', () => {
+    // The single most load-bearing sentence in the notice: this view cannot set or show the
+    // decision provider, so "inert here" must not be mistaken for "selectable elsewhere in the UI".
+    const rendered = renderPanel({ kind: 'READY', slots: [] }).toLowerCase();
+
+    expect(rendered).toContain('environment-only');
+    expect(rendered).toContain('no cockpit surface');
+  });
+
   it('mentions the activation gate only inside the scope notice', () => {
     // Lower-cased on purpose: a case-sensitive count let an injected "Activation gate:" line slip
     // through, which is exactly the claim this guard exists to stop.
