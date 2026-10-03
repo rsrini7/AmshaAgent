@@ -1,6 +1,7 @@
 # ADR: Jev Decision Plane for Typed Agent Judgments
 
 - **Status**: Deferred
+- **Exit criteria**: §8 — Exit Criteria, Promotion Path, and Review. This section is the standing promotion contract; §7.7 records the dated evidence disposition that produced it.
 - **Date**: 2026-09-22
 - **Decision Owners**: Amsha Architecture Committee
 - **Related Invariants**: `docs/Architecture_Invariants.md` §27 (decision plane seam), §1.8 (module boundaries — governed transport ownership), §4.12, §5.9 (transaction-free zone), §7 parallel tool execution, §7.13.2–7.13.4; `AGENTS.md` §1.18, §8
@@ -363,3 +364,162 @@ Issue 07 evaluates activation gates for the low-risk ambiguous intent routing pi
   3. *Accountable Owner*: An accountable rollout and rollback owner must be designated by the Amsha Architecture Committee.
 * **Final ADR Disposition**:
   The ADR status is set to **Deferred**. The foundational interfaces (`DecisionEngine`, `DecisionRequest`, `DecisionResult`), local self-hosted boundary (Issue 05), remote governed boundary (Issue 06), and routing pilot scaffolding (Issue 07) remain preserved in the codebase in dormant/shadow state for future evaluation when candidate model evidence is established.
+
+---
+
+## 8. Exit Criteria, Promotion Path, and Review
+
+### 8.1 Why this section exists
+
+§7.7 recorded *why* activation was refused on 2026-09-27, and it named the evidence that would
+justify re-opening it. That was the right record, but it lived inside a dated issue checkpoint, so
+the promotion conditions travelled with the date rather than with the decision. A reader arriving at
+"Status: Deferred" had no standing statement of what would change it, which makes indefinite
+deferral the path of least resistance — the failure mode this section exists to close.
+
+The contract below is therefore stated independently of any issue. It is not a promise that this
+plane will ship. It is a commitment that it will not stay Deferred indefinitely without somebody
+being required to decide.
+
+### 8.2 Current status: activation remains deferred
+
+| Gate | Required evidence | Status (2026-10-03) | Accountable |
+|---|---|---|---|
+| Protocol | First-party vendor documentation, re-verified within a review window **once one is in force** (8.5), plus all conformance cases passing | **MET** — contract re-verified against `docs.typesafe.ai` 2026-10-01; codec corrected to the real `POST /v1/systemone` shape. **No review window is currently in force**, so this evidence does not lapse until the cadence is confirmed | Amsha Architecture Committee |
+| Governance | Approved retention, training use, residency, isolation, secrets, egress | **UNMET** — TypeSafe retention/residency undeclared; training-use is refused outright by `RemoteProviderConfig` | Amsha Architecture Committee |
+| Quality | M1 exactly zero and M2 below 1% on a versioned corpus, per lane (8.3) | **UNMET** — no candidate has run through the conformance suite; §7.4 evidence was explicitly `N/A (Synthetic)` | Committee, until a model owner is designated — none exists today |
+| Operations | Latency/cost ceilings, monitoring, kill switch, named owner, rollback rehearsal | **UNMET** — no authorised cost ceiling or p95 SLA; no named owner | Amsha Architecture Committee |
+
+**On fixtures.** §2 of the
+[integration plan](../../research/Jev-Provider-Integration-Plan-2026.md) records why this gate is worded
+strictly: the previous adapter was roughly one-third conformant while its fixtures were green, because
+the fixtures encoded the *same* wrong wire shape the codec emitted. Self-consistent fixtures therefore
+cannot establish a contract.
+
+Fixtures remain required — they pin the codec against regression. Whether they may be the *primary*
+contract evidence depends on the lane:
+
+* **A lane whose provider publishes a contract** (TypeSafe, Laya, Kev) must be evidenced by
+  first-party documentation, re-verified within the review window. Fixtures are supplementary and a
+  candidate may not enter the registry on fixture evidence alone.
+* **A lane with no published contract** — an operator's own wrapper, say — has fixtures as its only
+  available evidence. There the fixture corpus becomes the declared contract of record, and must be
+  versioned, reviewable, and re-run whenever the wrapper or its upstream model changes.
+
+Where a mirror or third-party summary conflicts with the provider's own documentation, the provider's
+documentation wins: §1 of the integration plan records a mirror that misstated the rate limits.
+
+### 8.3 Metrics and acceptance rules
+
+§7.7 named a < 1% threshold for *false specialist routing*. That number is a **routing-accuracy**
+budget, not a safety budget, and §8.4 also required a *false-allow* figure. Those measure different
+outcomes and were not reconciled, which left the Quality gate un-actionable: a candidate could meet
+one and fail the other while apparently satisfying "the threshold". They are therefore separated
+below with an explicit acceptance rule for each. The only figures here are ones §6 and §7.7 already
+authored; none is newly invented.
+
+| # | Metric | Definition (numerator / denominator) | Acceptance rule |
+|---|---|---|---|
+| **M1** | False-allow rate | Cases where a model opinion caused a path that should have blocked or escalated to proceed as allowed — a relaxed block, a bypassed HITL, or a pre-policy guard `Allow` that skipped a mandatory check — over all adversarial and security-adjacent corpus cases | **Exactly zero.** Absolute, not a budget. One instance fails the gate |
+| **M2** | Specialist routing error rate | Requests routed to a specialist other than the labelled correct one, over the **ambiguous subset only** (cases where the deterministic baseline is itself non-deterministic) | **< 1%**, and no degradation of coordinator oversight |
+| **M3** | Abstention rate | `NoOpinion` results over all evaluated cases | **Reported and reviewed; no pass threshold.** Abstention routes to `DETERMINISTIC_FALLBACK`, the pre-existing safe path, so over-abstention cannot cause a safety failure — it costs latency and money, which M4/M5 already bound. Setting a threshold is a Committee decision, not an inferred number |
+| **M4** | p95 latency | Per decision, not per batch | **< 50 ms** |
+| **M5** | Cost ceiling | Per 1,000 decisions | Authorised by the Committee, never inferred from a provider price page |
+
+Two rules that make M1 and M2 measurable rather than rhetorical:
+
+* **M2's denominator excludes cases the deterministic baseline already handles confidently.**
+  Measured over the whole corpus, the threshold is satisfied trivially by easy cases and says
+  nothing about the ambiguous prompts the router actually exists to arbitrate.
+* **M1 is a property of the engine composed with the deterministic policy layer, not of the engine
+  alone.** The guarantee comes from §2 — policies may escalate but never downgrade — so M1 must be
+  measured end to end through that policy. An engine in isolation cannot demonstrate it.
+
+Each candidate lane is measured and reported **separately**. A combined figure across lanes is not
+acceptable evidence: a strong self-hosted candidate would otherwise mask a weak hosted one.
+
+Remaining governance items, unchanged from §7.7:
+
+* **A designated accountable rollout *and* rollback owner** — a person or a team, never a status.
+  The activation gate enforces only non-blank, which is why `ActivationGateReadiness` warns on a
+  placeholder value.
+
+### 8.4 The promotion procedure
+
+Promotion is a **recorded human decision**, not a code change. The order is deliberate, and each
+step is a precondition for the next:
+
+1. **Close the Quality gate.** Run Phase 3: both adapters over one versioned decision corpus,
+   reporting **M1, M2 and M3 per lane** as defined in 8.3, with payload-free evidence. The gate
+   closes only when **M1 is exactly zero** and **M2 is below 1%**; M3 is reported and reviewed.
+   M1 must be measured end to end through the deterministic policy layer, not against a bare
+   engine. The corpus is versioned so a later provider, model, or schema change can be re-run
+   rather than argued about.
+2. **Close the Governance gate.** Declare retention, residency, and training-use for the chosen
+   lane. This can fail permanently — see 8.6.
+3. **Obtain the Operations approvals.** Everything the Operations row of 8.2 requires — cost
+   ceiling and p95 SLA against 8.3, a named owner, a rehearsed rollback, monitoring with drift
+   alerting, and a verified kill switch. Referenced rather than restated so this step cannot drift
+   away from the gate it is meant to close.
+4. **Only then** set `candidate-evidence-approved`, `cost-ceiling-approved`, and `rollout-owner`.
+   Setting them is the *record* that steps 1–3 happened; it is not a substitute for them. Setting
+   them without the evidence is precisely the failure `ActivationGateReadiness` exists to announce.
+5. **Only then** register a production `DecisionEngine` bean and flip
+   `amsha.routing.intent-decision-router.enabled`. Both are §27-governed changes and each requires
+   its own review.
+
+Reaching step 5 without steps 1–4 is not a configuration mistake, it is a governance failure, and
+the code is built to make it loud rather than silent.
+
+### 8.5 Review trigger
+
+This section is re-reviewed when **any** of the following occurs, and the review is recorded here
+with a date and a disposition:
+
+* the Quality gate produces or refreshes comparative evidence;
+* any lane's Governance status changes (for example a provider publishes new retention terms);
+* the Operations approvals are granted or withdrawn;
+* **90 days elapse since the last recorded review** — the time-based trigger. **Not currently in
+  force**: the cadence is a proposal awaiting Committee confirmation, so no review window has begun
+  and this trigger is inert. See the open item below.
+
+Last reviewed: **2026-10-03**. Disposition: **remain Deferred** — Protocol MET; Governance, Quality and
+Operations UNMET (8.2).
+
+**Open item — the review cadence is unconfirmed.** The 90-day cadence above is a proposal, not
+policy. Recording that here rather than quietly assuming it removes a circular dependency: §8.2
+refers to "a review window", and a window cannot be derived from a cadence that does not yet exist.
+Two consequences, both stated rather than left implicit:
+
+* **No review window is in force.** §8.2 evidence therefore does not lapse under the window rule.
+  Protocol remains MET on its 2026-10-01 re-verification, and no other gate's status is affected —
+  this is the honest current state, not a renewal of the evidence's validity.
+* **The event-driven triggers above do still apply.** New evidence, a governance change, or an
+  approval moving will prompt a review regardless of the cadence.
+
+**Committee decision required:** confirm or replace the 90-day cadence. Until then the time-based
+staleness check cannot run, and this line is the standing record that it has not been confirmed.
+
+### 8.6 Deferral must terminate in one of two directions
+
+The realistic outcome is not necessarily activation. If the hosted lane's retention, residency, or
+training-use terms prove unacceptable, then the honest resolution is to **abandon the hosted lane**
+and retain the self-hosted seam (`laya` / `kev`, Apache-2.0) as the only supported path — or to
+abandon the decision plane entirely and record that as a closed, negative outcome.
+
+A negative outcome is a legitimate completion. What is not legitimate is a decision that stays
+Deferred because nobody was required to revisit it. If no gate has moved by the next recorded
+review, the required action is an explicit disposition — promote, narrow to self-hosted, or close —
+not another checkpoint.
+
+### 8.7 What promotion does not authorise
+
+Even when every gate is met and the plane activates:
+
+* A decision model may escalate, never downgrade. It must not relax an existing block, bypass HITL,
+  or weaken deterministic policy.
+* Shadow classifiers and the intent router remain separately gated; satisfying one does not enable
+  the other.
+* Credentials are still never resolved from the configuration surface alone, and
+  `api-key-ref` remains a `SecretVault` reference rather than a literal.
+* Rollback remains configuration-only: one flag, no data migration.
