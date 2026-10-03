@@ -313,6 +313,22 @@ local-ML stack validatable with **no model bundle**, because those endpoints che
 never `onnxEnabled`. See [Architecture_Invariants](./Architecture_Invariants.md) §27,
 [CONFIGURATION](./CONFIGURATION.md), and [ONNX_LOCAL_ML_GUIDE](./ONNX_LOCAL_ML_GUIDE.md) §7.
 
+**There is deliberately no onboarding or cockpit surface for the decision provider.** `AMSHA_DECISION_PROVIDER`
+and its `amsha.decision.providers.slots.*` companions are environment-only, and the cockpit's
+classifier panel says so on every render. Two independent reasons, and the second is the binding one:
+
+1. Onboarding persists through `SettingsDto` and `LlmConfigurationProvenance`, which are LLM-scoped;
+   a `@ConfigMapping` is not a writable settings target, so there is no path that could set it at runtime.
+2. Offering a "choose your decision provider" control would imply a working plane. The plane is
+   Deferred with no `DecisionEngine` bean, so the choice would change nothing — and §27 treats
+   advancing it as a deliberate ADR change, never a side effect of adding a UI affordance.
+
+Note also that onboarding's `classifier` concern route is an **LLM** provider choice for
+classifier-shaped work, not this decision plane; the two share a word and nothing else.
+
+Provider selection therefore stays a deployment-time `.env` decision. Wiring the mapping to an engine is
+the ADR step, and it is what would make an onboarding control meaningful.
+
 ### Parallel Tool Execution
 
 The LLM can request multiple tools in one step. Parallel batches:

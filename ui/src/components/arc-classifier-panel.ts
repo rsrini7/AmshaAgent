@@ -13,6 +13,12 @@ import { ArcApiError, ArcClient, ClassifierSnapshot } from '../api/client';
  * activation gate, candidate evidence, cost approvals, or rollout ownership, and it must never
  * imply otherwise — hence {@link CLASSIFIER_SCOPE_NOTICE}, which is rendered unconditionally.
  *
+ * <p>The notice enumerates every decision-plane namespace it excludes, and that list must be
+ * updated whenever a new one appears. `amsha.decision.providers.*` (the decision-provider slots)
+ * was added after the panel shipped, and a notice that named only `amsha.decision.shadow.*` would
+ * have left a user free to assume provider selection was visible here. Enumerated exclusions are
+ * only useful while they stay exhaustive; the panel test pins the namespaces for that reason.
+ *
  * <p>It also offers no enable/disable control: the decision plane is Deferred, no implementation
  * registers, and every enable would be rejected with `MISSING_READY_IMPLEMENTATION`.
  */
@@ -27,7 +33,7 @@ const CLASSIFIER_LABELS: Record<string, string> = {
 };
 
 export const CLASSIFIER_SCOPE_NOTICE =
-  'This view reports the three ONNX classifier runtime slots from GET /admin/local-ml/onnx/classifiers. It does NOT report the amsha.decision.shadow.* settings, decision-engine state, intent-router activation gate, candidate evidence, cost approvals, or rollout ownership — those are not part of this response and are not inferred here.';
+  'This view reports the three ONNX classifier runtime slots from GET /admin/local-ml/onnx/classifiers. It does NOT report the amsha.decision.shadow.* settings, the amsha.decision.providers.* decision-provider slots (which provider, model, wire profile or credential reference is selected), decision-engine state, intent-router activation gate, candidate evidence, cost approvals, or rollout ownership — none of those are part of this response and none are inferred here. The decision provider is environment-only and has no cockpit surface.';
 
 /** A 403 is only a role problem when the server says so; a CSRF rejection is also a 403. */
 const ROLE_FORBIDDEN_PATTERN = /\b(internal|role\s+required|operator\s+role)\b/i;
@@ -345,7 +351,8 @@ export class ArcClassifierPanel extends LitElement {
           <h1>Classifier runtime status</h1>
           <p>
             Read-only switch state for the three ONNX classifier runtime slots. It does not expose
-            the Jev decision-shadow settings or engine state, and cannot change anything.
+            the Jev decision-shadow settings, the decision-provider slots
+            (amsha.decision.providers.*), or engine state, and cannot change anything.
           </p>
         </div>
         <button @click=${this._load} ?disabled=${this._loading}>

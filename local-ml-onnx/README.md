@@ -112,7 +112,7 @@ The web cockpit exposes the read-only runtime-slot view of this surface at `#/cl
 enable/disable control, and states on every render that it does not report the intent router's
 activation gate, candidate evidence, cost approvals, or rollout ownership. Because the endpoint
 requires the `internal` role, the panel names a `403` as a missing role instead of showing an
-empty slot list. See [ARCHITECTURE](../docs/ARCHITECTURE.md) §"Read-Only Classifier Status".
+empty slot list. See [ARCHITECTURE](../docs/ARCHITECTURE.md) §"Classifier Runtime Control".
 
 The [Phase 2 classifier preparation and resumption runbook](classifier-training/README.md)
 documents the current pause point, human-review requirements, Git retention boundary,
