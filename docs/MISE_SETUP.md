@@ -160,6 +160,27 @@ mise run dev              # hot reload on :8080
 | `java` | graalvm-community-25.0.2 | Native image compilation only |
 | `maven` | 3.9 | Build tool |
 | `usage` | latest | `mise run <TAB>` tab completion |
+| `python` | **not pinned** | Every script/harness task invokes bare `python3` — see the note below |
+
+> **Python is the one unpinned runtime.** 18 files under `.mise/tasks/` plus three inline
+> references in `mise.toml` call `python3` directly, so those tasks execute on whatever Python the
+> host happens to provide, while CI pins **3.12** (`actions/setup-python`, four jobs). A macOS host
+> defaults to 3.9, which is old enough to break tooling that CI happily accepts:
+>
+> * `analyze_jacoco_coverage.py` — `float | None` in an annotation needs 3.10+, so the module raised
+>   `TypeError` at import on 3.9.
+> * `check_llm_preflight.py` — an `HTTPError` built with `fp=None` never initialises the
+>   `tempfile._TemporaryFileWrapper` half of `addinfo`'s MRO, so `close()` raises `KeyError('file')`
+>   and a successful reachability probe crashed instead of reporting.
+>
+> Both are fixed, but the class is open: CI stays green on 3.12 while a 3.9 developer sees a failure
+> CI never reproduces — the same failure mode as the `rg` incident in
+> [TEST_COVERAGE_ANALYSIS](TEST_COVERAGE_ANALYSIS.md) §0.7, where a tool absent from `[tools]`
+> silently produced wrong output.
+>
+> **Recommended fix:** add `python = "3.12"` to `[tools]`, so local runs test the same runtime CI
+> does. Not applied, because it changes provisioning for every contributor and a host without
+> network access could not install it.
 
 ### What `mise run setup:profile` does
 

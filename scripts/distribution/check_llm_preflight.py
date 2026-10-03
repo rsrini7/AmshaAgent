@@ -7,6 +7,7 @@ credentials, or print response bodies.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import sys
@@ -113,8 +114,13 @@ def check(environment: dict[str, str] | None = None) -> int:
             with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
                 status = response.status
         except HTTPError as error:
+            # A 401/403 still proves the endpoint is reachable, which is all this probe asserts.
+            # `status` is captured first, so closing the response is pure cleanup and must never
+            # change the outcome: on Python 3.9 `HTTPError.close()` can raise KeyError('file') from
+            # tempfile internals, which turned a successful reachability check into a crash.
             status = error.code
-            error.close()
+            with contextlib.suppress(Exception):
+                error.close()
         except (URLError, TimeoutError, OSError) as error:
             reason = error.reason if isinstance(error, URLError) else error
             reason_name = type(reason).__name__

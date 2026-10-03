@@ -45,7 +45,11 @@ class LlmPreflightTest(unittest.TestCase):
                 result = preflight.check(
                     {"AMSHA_LLM_PREFLIGHT_URL": "https://provider.invalid/models"}
                 )
-        auth_required.close()
+        # No close() here: this is a synthetic HTTPError built with fp=None, so there is no
+        # underlying response to release. On Python 3.9 urllib.response.addbase is
+        # tempfile._TemporaryFileWrapper and the fp=None constructor skips its __init__, so calling
+        # close() raises KeyError('file'). The production close() is guarded by
+        # contextlib.suppress for the same reason - see check_llm_preflight.
 
         self.assertEqual(result, 0)
         self.assertIn("authentication/model access not verified", output.getvalue())
