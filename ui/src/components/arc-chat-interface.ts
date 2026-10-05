@@ -1161,6 +1161,17 @@ export class ArcChatInterface extends LitElement {
       this._activeBackgroundCronSessionId = sessionId;
     }
 
+    this._clearTurnWatchdog();
+    this._isTyping = false;
+    this._awaitingApproval = true;
+    this._turnStalled = false;
+    this._progressPhase = 'Waiting for approval';
+    this._progressDetail = `${frame.toolName || frame.approval?.tool || 'Tool execution'} needs approval to continue`;
+    this._progressTrail = [
+      ...this._progressTrail,
+      { phase: this._progressPhase, detail: this._progressDetail },
+    ].slice(-4);
+
     const tool = frame.toolName || frame.approval?.tool || 'Tool Execution';
     const exists = this._messages.some(
       (message) => message.approvalViaChannel && message.targetSessionId === sessionId,

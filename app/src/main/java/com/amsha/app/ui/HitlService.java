@@ -25,6 +25,7 @@ import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
+import com.amsha.persistence.api.CronStorePort;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -41,6 +42,9 @@ public class HitlService {
 
     @Inject
     CheckpointStorePort checkpointStorePort;
+
+    @Inject
+    CronStorePort cronStorePort;
 
     @Inject
     ObjectMapper objectMapper;
@@ -123,9 +127,18 @@ public class HitlService {
         List<String> visible = new ArrayList<>(heartbeatTracker.getSessionIdsByOwner(userId));
         visible.addAll(heartbeatTracker.getUnownedSessionIds());
         visible.removeIf(HitlService::isCronSession);
+        LinkedHashSet<String> ownedCronIds = new LinkedHashSet<>();
 
         for (CheckpointDto cp : checkpointStorePort.findByStatus(CheckpointStatus.AWAITING_APPROVAL.name())) {
-            if (cp == null || cp.sessionId() == null || isCronSession(cp.sessionId())) {
+            if (cp == null || cp.sessionId() == null) {
+                continue;
+            }
+            if (isCronSession(cp.sessionId())) {
+                String cronId = cronIdFromSession(cp.sessionId());
+                if (isCronOwnedBy(cronId, userId)) {
+                    visible.add(cp.sessionId());
+                    ownedCronIds.add(cronId);
+                }
                 continue;
             }
             String rootId = SessionTree.parentOf(cp.sessionId()).orElse(cp.sessionId());
@@ -146,7 +159,9 @@ public class HitlService {
             }
         }
 
-        return expandWithActiveChildren(visible.stream().distinct().toList());
+        return expandWithActiveChildren(visible.stream().distinct().toList()).stream()
+                .filter(sessionId -> !isCronSession(sessionId) || ownedCronIds.contains(cronIdFromSession(sessionId)))
+                .toList();
     }
 
     private List<String> expandWithActiveChildren(List<String> rootSessionIds) {
@@ -163,6 +178,20 @@ public class HitlService {
             }
         }
         return List.copyOf(allSessionIds);
+    }
+
+    private static String cronIdFromSession(String sessionId) {
+        if (!isCronSession(sessionId)) return null;
+        String suffix = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+        return suffix.length() >= 36 ? suffix.substring(0, 36) : null;
+    }
+
+    private boolean isCronOwnedBy(String cronId, String userId) {
+        if (cronId == null || userId == null || userId.isBlank() || cronStorePort == null) return false;
+        return cronStorePort
+                .findById(cronId)
+                .map(cron -> userId.equals(cron.userId()))
+                .orElse(false);
     }
 
     private static boolean isCronSession(String sessionId) {
@@ -214,7 +243,9 @@ public class HitlService {
 
     private void verifyRequester(AgentCheckpoint cp, String requesterId) {
         if (isCronSession(cp.getSessionId())) {
-            throw new SecurityException("Cron approvals must be resolved through the originating channel");
+            String cronId = cronIdFromSession(cp.getSessionId());
+            if (isCronOwnedBy(cronId, requesterId)) return;
+            throw new SecurityException("Cron approval does not belong to the authenticated user");
         }
         if (requesterId == null || requesterId.isBlank() || "anonymous".equals(requesterId)) {
             throw new SecurityException("Authenticated user identity is required");

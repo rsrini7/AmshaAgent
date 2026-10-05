@@ -203,7 +203,7 @@ public class CronResultHandler {
                 AgentResultFormatter.formatCronHitl(job.getId(), displayGoal, result.toolName(), result.paramsJson());
 
         Runnable notifyTask = () -> {
-            fireCompletionEvent(job, executionId, answer, null, cronSessionId, result.toolName());
+            fireCompletionEvent(job, executionId, answer, null, cronSessionId, result.toolName(), result.paramsJson());
             log.infof(
                     "[CronResultHandler] Session kept alive for cron=%s - AWAITING_APPROVAL. (Notification handled here)",
                     cronSessionId);
@@ -337,6 +337,17 @@ public class CronResultHandler {
             AgentResult.FailureCategory category,
             String cronSessionId,
             String toolName) {
+        fireCompletionEvent(job, executionId, answer, category, cronSessionId, toolName, null);
+    }
+
+    private void fireCompletionEvent(
+            AgentCron job,
+            String executionId,
+            String answer,
+            AgentResult.FailureCategory category,
+            String cronSessionId,
+            String toolName,
+            String displayToolParamsJson) {
         Optional<ChannelType> resolvedType = ChannelType.fromString(job.getChannelType());
         if (resolvedType.isEmpty()) {
             log.warnf(
@@ -376,7 +387,8 @@ public class CronResultHandler {
                     answer,
                     category,
                     cronSessionId,
-                    toolName));
+                    toolName,
+                    displayToolParamsJson));
         } catch (Exception e) {
             log.warnf("CRON-EVENT-FIRE-FAIL cronId=%s:\n%s", job.getId(), LogUtil.trimmedStack(e));
         }

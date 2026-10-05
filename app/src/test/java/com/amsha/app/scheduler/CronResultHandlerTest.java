@@ -175,7 +175,10 @@ class CronResultHandlerTest {
 
         verify(jobCompletedEvent).fire(argThat(event -> {
             String answer = event.renderedAnswer();
-            return answer.contains("brahma") && answer.contains("compute 10!");
+            return answer.contains("brahma")
+                    && answer.contains("compute 10!")
+                    && event.displayToolParamsJson().contains("brahma")
+                    && event.displayToolParamsJson().contains("compute 10!");
         }));
     }
 

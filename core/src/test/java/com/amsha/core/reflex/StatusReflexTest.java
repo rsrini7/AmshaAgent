@@ -17,9 +17,11 @@ import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.state.ActiveWork;
 import com.amsha.core.state.ActivityPhase;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CompactionSummaryDto;
+import com.amsha.persistence.api.CronStorePort;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,9 @@ class StatusReflexTest {
 
     @Mock
     CompactionStorePort compactionStorePort;
+
+    @Mock
+    CronStorePort cronStorePort;
 
     @Mock
     GovernanceStrategy governanceStrategy;
@@ -278,5 +283,47 @@ class StatusReflexTest {
         String response = result.commandResponse().orElseThrow();
         assertTrue(response.contains("COMPLETED"), "stale IN_PROGRESS must not be returned in Priority 4");
         assertFalse(response.contains("IN_PROGRESS"));
+    }
+
+    @Test
+    void statusShowsPendingScheduledRunLinkedToCompletedChatSession() {
+        AgentCheckpoint completed = mock(AgentCheckpoint.class);
+        lenient().when(completed.getId()).thenReturn(1L);
+        lenient().when(completed.getSessionId()).thenReturn("sess-1");
+        when(completed.getStatus()).thenReturn(CheckpointStatus.COMPLETED);
+        when(statefulAgentStore.load(eq("sess-1"), anyString())).thenReturn(Optional.of(completed));
+        when(cronStorePort.findByUserId("user1"))
+                .thenReturn(List.of(new AgentCronDto(
+                        "cron-1",
+                        "sess-1",
+                        "user1",
+                        "chat1",
+                        "WEBSOCKET",
+                        "user1",
+                        "40 14 5 10 *",
+                        "Asia/Kolkata",
+                        false,
+                        "calculate factorial",
+                        Instant.now(),
+                        Instant.now(),
+                        "AWAITING_APPROVAL",
+                        "coder",
+                        null,
+                        "delivery-1",
+                        Instant.now(),
+                        Instant.now())));
+        when(governanceStrategy.getBudgetUsd()).thenReturn(10.0);
+        when(governanceStrategy.getSessionCost("sess-1")).thenReturn(0.0);
+        when(governanceStrategy.getSessionInputTokens("sess-1")).thenReturn(0);
+        when(governanceStrategy.getSessionOutputTokens("sess-1")).thenReturn(0);
+        when(compactionStorePort.findLatestBySessionId("sess-1")).thenReturn(Optional.empty());
+
+        ReflexResult result = reflex.execute("sess-1", "user1", "chat1", "/status", context());
+
+        String response = result.commandResponse().orElseThrow();
+        assertTrue(response.contains("*Status:* COMPLETED"));
+        assertTrue(response.contains("COMPLETED (chat session)"));
+        assertTrue(response.contains("Scheduled run: AWAITING_APPROVAL"));
+        assertTrue(response.contains("Pending Approvals"));
     }
 }

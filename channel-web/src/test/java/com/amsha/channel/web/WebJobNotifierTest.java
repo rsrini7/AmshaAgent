@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import jakarta.json.Json;
+
+import java.io.StringReader;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +15,7 @@ import com.amsha.channel.api.ChannelType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -56,6 +60,28 @@ class WebJobNotifierTest {
         notifier.notifyApprovalRequired("internal", "cron-1", "sandbox_exec", "Approval needed");
 
         verify(conn).sendText(contains("approval_required"));
+    }
+
+    @Test
+    void approvalNotificationCarriesDisplayParametersForUiCard() {
+        when(sessionStore.get("internal")).thenReturn(Optional.empty());
+        when(sessionStore.getConnectionsByOwner("internal")).thenReturn(List.of(conn));
+        when(conn.sendText(anyString())).thenReturn(Uni.createFrom().voidItem());
+
+        notifier.notifyApprovalRequired(
+                "internal",
+                "cron-1",
+                "garuda",
+                "Approval needed for garuda",
+                "{\"agent\":\"brahma\",\"goal\":\"compute 11!\"}");
+
+        ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+        verify(conn).sendText(payload.capture());
+        try (var reader = Json.createReader(new StringReader(payload.getValue()))) {
+            var approval = reader.readObject().getJsonObject("approval");
+            assertEquals("garuda", approval.getString("tool"));
+            assertEquals("{\"agent\":\"brahma\",\"goal\":\"compute 11!\"}", approval.getString("params"));
+        }
     }
 
     @Test

@@ -34,6 +34,15 @@ public interface ChannelJobNotifier {
     void notifyApprovalRequired(String recipient, String cronSessionId, String toolName, String renderedMessage);
 
     /**
+     * Notifies the user with structured, display-safe tool parameters for UI approval controls.
+     * Channels that only render text can keep using the four-argument method.
+     */
+    default void notifyApprovalRequired(
+            String recipient, String cronSessionId, String toolName, String renderedMessage, String displayParamsJson) {
+        notifyApprovalRequired(recipient, cronSessionId, toolName, renderedMessage);
+    }
+
+    /**
      * Notifies the user on this channel that an approval has timed out.
      */
     void notifyApprovalTimeout(String recipient, String sessionId, String pendingToolName, long timeoutMinutes);

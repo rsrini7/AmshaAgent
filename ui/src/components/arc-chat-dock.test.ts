@@ -381,6 +381,9 @@ describe('Chat Dock & HITL Panel integration', () => {
       targetSessionId: 'cron-cron-1-exec-1',
       approvalData: { tool: 'sandbox_exec' },
     });
+    expect((chat as any)._awaitingApproval).toBe(true);
+    expect((chat as any)._isTyping).toBe(false);
+    expect((chat as any)._progressPhase).toBe('Waiting for approval');
   });
 
   it('uses the originating websocket for a background cron approval', () => {

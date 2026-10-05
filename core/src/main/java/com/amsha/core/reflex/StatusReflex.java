@@ -19,6 +19,8 @@ import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CompactionStorePort;
+import com.amsha.persistence.api.CronStatus;
+import com.amsha.persistence.api.CronStorePort;
 import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -35,6 +37,9 @@ public class StatusReflex implements AgentReflex {
 
     @Inject
     CompactionStorePort compactionSummaryRepository;
+
+    @Inject
+    CronStorePort cronStorePort;
 
     @Inject
     GovernanceStrategy governanceStrategy;
@@ -117,8 +122,20 @@ public class StatusReflex implements AgentReflex {
                         ? prov + "/" + modelName.get()
                         : prov;
 
+        String pendingRunStatus = null;
+        if (userId != null && !userId.isBlank()) {
+            pendingRunStatus = cronStorePort.findByUserId(userId).stream()
+                    .filter(cron -> sessionId.equals(cron.sessionId()))
+                    .map(cron -> cron.status())
+                    .filter(cronStatus -> CronStatus.AWAITING_APPROVAL.name().equals(cronStatus)
+                            || CronStatus.AWAITING_RETRY.name().equals(cronStatus))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        String statusDisplay = pendingRunStatus == null ? status : status + " (chat session)";
         String output = UserMessages.statusMessage(
-                status,
+                statusDisplay,
                 modelDisplay,
                 cost,
                 budgetUsd,
@@ -128,6 +145,10 @@ public class StatusReflex implements AgentReflex {
                 totalTokens,
                 memoryLine,
                 shortId);
+
+        if (pendingRunStatus != null) {
+            output += "\n\n📅 *Scheduled run: " + pendingRunStatus + "* — check Pending Approvals to continue.";
+        }
 
         return ReflexResult.respond(output, context);
     }

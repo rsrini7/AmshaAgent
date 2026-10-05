@@ -149,6 +149,8 @@ class ResumeCronNotificationDispatcherTest {
         boolean dispatched = dispatcher.dispatch(CRON_SESSION_ID, result);
         assertTrue(dispatched);
 
-        verify(notifier).notifyApprovalRequired(eq("cli"), eq(CRON_SESSION_ID), eq("sandbox_exec"), anyString());
+        verify(notifier)
+                .notifyApprovalRequired(
+                        eq("cli"), eq(CRON_SESSION_ID), eq("sandbox_exec"), anyString(), eq("{\"n\":10}"));
     }
 }
