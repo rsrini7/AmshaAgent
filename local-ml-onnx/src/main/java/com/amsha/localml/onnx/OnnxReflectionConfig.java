@@ -24,7 +24,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             LocalOnnxAudioTranscriptionAdapter.class,
             LeaseBackedWhisperRunner.class,
             LocalAudioTranscoder.class,
-            AudioTranscodingException.class
+            AudioTranscodingException.class,
+            OnnxModelRootResolver.class
         },
         classNames = {
             "com.amsha.localml.onnx.OnnxTextInputSpec",

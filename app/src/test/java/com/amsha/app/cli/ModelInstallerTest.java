@@ -2,7 +2,6 @@ package com.amsha.app.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -266,15 +265,16 @@ class ModelInstallerTest {
 
     @Test
     @EnabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
-    @DisplayName("an exported AMSHA_ONNX_MODEL_ROOT outranks the model-root system property")
-    void environmentVariableOutranksTheModelRootProperty() {
-        // FINDING (reported, not "fixed"): resolveModelRoot() reads the ENVIRONMENT first and the property
-        // second, while its very next lookup (AMSHA_DATA_DIR) is property-first. The precedence is therefore
-        // inconsistent within one method, and an exported variable makes the property unreachable.
-        Path fromProperty = modelRoot.resolve("ignored-because-the-environment-wins");
+    @DisplayName("the model-root system property now outranks AMSHA_ONNX_MODEL_ROOT")
+    void modelRootPropertyOutranksTheEnvironmentVariable() {
+        // FIXED: resolveModelRoot() used to read the ENVIRONMENT first and the property second for the
+        // model root, while reading AMSHA_DATA_DIR property-first — one method disagreeing with itself,
+        // and with the runtime registry. Both sides now delegate to OnnxModelRootResolver, whose
+        // precedence is property-before-environment, matching Quarkus/MicroProfile ordinals.
+        Path fromProperty = modelRoot.resolve("wins-over-the-environment");
         System.setProperty(MODEL_ROOT_PROPERTY, fromProperty.toString());
 
-        assertNotEquals(fromProperty.toAbsolutePath().normalize(), ModelInstaller.resolveModelRoot());
+        assertEquals(fromProperty.toAbsolutePath().normalize(), ModelInstaller.resolveModelRoot());
     }
 
     // ---------- status ----------

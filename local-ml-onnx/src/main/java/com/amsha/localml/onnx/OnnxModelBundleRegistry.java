@@ -30,7 +30,7 @@ public class OnnxModelBundleRegistry {
             @ConfigProperty(name = "amsha.onnx.model-root", defaultValue = "data/models") String modelRoot,
             @ConfigProperty(name = "amsha.onnx.max-model-file-bytes", defaultValue = "1073741824")
                     long maxModelFileBytes) {
-        this(objectMapper, enabled, Path.of(modelRoot), maxModelFileBytes);
+        this(objectMapper, enabled, OnnxModelRootResolver.normalize(modelRoot), maxModelFileBytes);
     }
 
     OnnxModelBundleRegistry(ObjectMapper objectMapper, boolean enabled, Path modelRoot, long maxModelFileBytes) {
