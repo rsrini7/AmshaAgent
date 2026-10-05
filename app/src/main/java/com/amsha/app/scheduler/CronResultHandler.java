@@ -195,7 +195,12 @@ public class CronResultHandler {
                 "cronId=" + job.getId() + " pendingTool=" + result.toolName());
 
         String displayGoal = job.getGoal() != null ? job.getGoal().replaceFirst("^CRON\\s+", "") : "";
-        String answer = AgentResultFormatter.formatCronHitl(job.getId(), displayGoal, result.toolName());
+        // The parameters must reach the approval prompt. The 3-arg overload discards them, so the
+        // operator was asked to approve a call without seeing its arguments — for a delegation that
+        // hides both the target agent and the goal, leaving an uninformed approval. paramsJson() is
+        // already the redacted display projection, so this adds no payload exposure.
+        String answer =
+                AgentResultFormatter.formatCronHitl(job.getId(), displayGoal, result.toolName(), result.paramsJson());
 
         Runnable notifyTask = () -> {
             fireCompletionEvent(job, executionId, answer, null, cronSessionId, result.toolName());
