@@ -31,6 +31,7 @@ import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.AgentGuards;
 import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.AgentSentinels;
@@ -57,12 +58,13 @@ public class CheckpointResumeHandler {
     private final ChannelPluginRegistry channelPluginRegistry;
     private final CliResultBridge cliResultBridge;
     private final CronStorePort cronStore;
+    private final CronRunStorePort cronRunStore;
     private final ObjectMapper objectMapper;
     private final ResumeStrategyDispatcher strategyDispatcher;
     ResumeCronNotificationDispatcher cronNotificationDispatcher;
 
     protected CheckpointResumeHandler() {
-        this(null, null, null, null, null, null, null, null, null, null, null, null, null);
+        this(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public CheckpointResumeHandler(
@@ -73,6 +75,7 @@ public class CheckpointResumeHandler {
             ReasoningEngine reasoningEngine,
             ChannelPluginRegistry channelPluginRegistry,
             CronStorePort cronStore,
+            CronRunStorePort cronRunStore,
             CliResultBridge cliResultBridge,
             ExecutionFailureRecoveryService recoveryService,
             PersonaEscalationService escalationService) {
@@ -84,6 +87,7 @@ public class CheckpointResumeHandler {
                 reasoningEngine,
                 channelPluginRegistry,
                 cronStore,
+                cronRunStore,
                 cliResultBridge,
                 recoveryService,
                 escalationService,
@@ -101,6 +105,7 @@ public class CheckpointResumeHandler {
             ReasoningEngine reasoningEngine,
             ChannelPluginRegistry channelPluginRegistry,
             CronStorePort cronStore,
+            CronRunStorePort cronRunStore,
             CliResultBridge cliResultBridge,
             ExecutionFailureRecoveryService recoveryService,
             PersonaEscalationService escalationService,
@@ -113,6 +118,7 @@ public class CheckpointResumeHandler {
         this.channelPluginRegistry = channelPluginRegistry;
         this.cliResultBridge = cliResultBridge;
         this.cronStore = cronStore;
+        this.cronRunStore = cronRunStore;
         this.objectMapper = objectMapper;
         this.cronNotificationDispatcher = cronNotificationDispatcher != null
                 ? cronNotificationDispatcher
@@ -228,7 +234,8 @@ public class CheckpointResumeHandler {
                             "Resume executor rejected the session",
                             AgentResult.FailureCategory.SYSTEM_ERROR,
                             List.of()),
-                    cronStore);
+                    cronStore,
+                    cronRunStore);
             releaseResumeClaimSafely(sessionId, agentRole);
             log.warnf("resumeAfterBatchDecision: executor rejected session %s: %s", sessionId, LogUtil.rootMessage(e));
             return false;
@@ -339,7 +346,7 @@ public class CheckpointResumeHandler {
             ChannelUser user,
             String sessionId,
             String toolInfo) {
-        if (!CronSessionStatusSync.syncTerminal(sessionId, result, cronStore)) {
+        if (!CronSessionStatusSync.syncTerminal(sessionId, result, cronStore, cronRunStore)) {
             log.warnf("Skipping resume notification for session %s because cron ownership was lost", sessionId);
             return;
         }
@@ -425,7 +432,7 @@ public class CheckpointResumeHandler {
     }
 
     boolean syncCronTerminalStatus(String sessionId, AgentResult result) {
-        return CronSessionStatusSync.syncTerminal(sessionId, result, cronStore);
+        return CronSessionStatusSync.syncTerminal(sessionId, result, cronStore, cronRunStore);
     }
 
     @ActivateRequestContext

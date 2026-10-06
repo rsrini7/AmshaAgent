@@ -20,6 +20,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.AgentSentinels;
@@ -80,6 +81,9 @@ class CheckpointResumeHandlerBranchTest {
     CronStorePort cronStore;
 
     @Mock
+    CronRunStorePort cronRunStore;
+
+    @Mock
     CliResultBridge cliResultBridge;
 
     @Mock
@@ -118,6 +122,7 @@ class CheckpointResumeHandlerBranchTest {
                 reasoningEngine,
                 channelPluginRegistry,
                 cronStore,
+                cronRunStore,
                 cliResultBridge,
                 recoveryService,
                 escalationService);

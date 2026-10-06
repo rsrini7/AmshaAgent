@@ -1,6 +1,7 @@
 package com.amsha.core.agent.loop;
 
 import java.time.Instant;
+import java.util.Objects;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.result.AgentResult;
@@ -8,6 +9,7 @@ import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.util.CronScheduleUtil;
+import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.tool.api.AgentSentinels;
 
@@ -56,7 +58,8 @@ public final class CronSessionStatusSync {
         return true;
     }
 
-    public static boolean syncTerminal(String sessionId, AgentResult result, CronStorePort cronStore) {
+    public static boolean syncTerminal(
+            String sessionId, AgentResult result, CronStorePort cronStore, CronRunStorePort cronRunStore) {
         if (sessionId != null && sessionId.startsWith(AgentSentinels.CRON_SESSION_PREFIX)) {
             String sub = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
             if (sub.length() < 36) {
@@ -71,6 +74,7 @@ public final class CronSessionStatusSync {
                 WorkspaceManager.haltSession(sessionId);
                 return false;
             }
+            Objects.requireNonNull(cronRunStore, "cronRunStore");
             try {
                 boolean transitioned = markTerminal(jobId, executionId, result, cronStore);
                 if (!transitioned) {
@@ -78,6 +82,8 @@ public final class CronSessionStatusSync {
                             "Failed to transition cron %s terminal state (deliveryId=%s) - lease lost",
                             jobId, executionId);
                     WorkspaceManager.haltSession(sessionId);
+                } else {
+                    updateRun(executionId, result, cronRunStore);
                 }
                 return transitioned;
             } catch (Exception e) {
@@ -87,6 +93,19 @@ public final class CronSessionStatusSync {
             }
         }
         return true;
+    }
+
+    private static void updateRun(String executionId, AgentResult result, CronRunStorePort cronRunStore) {
+        if (result == null) {
+            return;
+        }
+        try {
+            cronRunStore
+                    .findById(executionId)
+                    .ifPresent(run -> cronRunStore.save(CronRunResultMapper.fromResult(run, result)));
+        } catch (RuntimeException e) {
+            log.warnf("Failed sync cron run status execution %s: %s", executionId, LogUtil.rootMessage(e));
+        }
     }
 
     public static boolean markTerminal(String id, String deliveryId, AgentResult result, CronStorePort cronStore) {

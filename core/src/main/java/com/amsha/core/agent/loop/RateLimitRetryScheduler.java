@@ -19,6 +19,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.DatabaseSafetyGuard;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -45,6 +46,9 @@ public class RateLimitRetryScheduler {
 
     @Inject
     CronStorePort cronStore;
+
+    @Inject
+    CronRunStorePort cronRunStore;
 
     @Inject
     MeterRegistry meterRegistry;
@@ -125,7 +129,8 @@ public class RateLimitRetryScheduler {
 
                             AgentResult result =
                                     agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
-                            if (!CronSessionStatusSync.syncTerminal(cp.getSessionId(), result, cronStore)) {
+                            if (!CronSessionStatusSync.syncTerminal(
+                                    cp.getSessionId(), result, cronStore, cronRunStore)) {
                                 agentStore.markFailed(cp.getId(), "Cron lease lost during retry resume");
                             }
                         } catch (Exception e) {
@@ -138,7 +143,8 @@ public class RateLimitRetryScheduler {
                                             "Background retry failed: " + LogUtil.rootMessage(e),
                                             AgentResult.FailureCategory.SYSTEM_ERROR,
                                             List.of()),
-                                    cronStore);
+                                    cronStore,
+                                    cronRunStore);
                             agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
                         }
                     } else {

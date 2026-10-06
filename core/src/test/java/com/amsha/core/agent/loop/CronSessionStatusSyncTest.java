@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -11,6 +12,8 @@ import java.util.Optional;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCronRecord;
 import com.amsha.persistence.api.AgentCronDto;
+import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 
 import org.junit.jupiter.api.Assertions;
@@ -41,9 +44,10 @@ class CronSessionStatusSyncTest {
     @Test
     void rejectsLegacyTerminalTransitionWithoutOwnerToken() {
         CronStorePort store = mock(CronStorePort.class);
+        CronRunStorePort runStore = mock(CronRunStorePort.class);
 
-        assertFalse(
-                CronSessionStatusSync.syncTerminal("cron-" + JOB_ID, AgentResult.finished("done", List.of()), store));
+        assertFalse(CronSessionStatusSync.syncTerminal(
+                "cron-" + JOB_ID, AgentResult.finished("done", List.of()), store, runStore));
         verifyNoInteractions(store);
     }
 
@@ -74,6 +78,7 @@ class CronSessionStatusSyncTest {
     @Test
     void syncTerminalExtractsOwnerTokenFromDelegatedSessionId() {
         CronStorePort store = mock(CronStorePort.class);
+        CronRunStorePort runStore = mock(CronRunStorePort.class);
         String deliveryId = "4612feff-431b-4939-a91e-af7ac7d5156c";
         var cronDto = new AgentCronDto(
                 JOB_ID,
@@ -102,13 +107,124 @@ class CronSessionStatusSyncTest {
                         ArgumentMatchers.any(Instant.class)))
                 .thenReturn(true);
 
-        Assertions.assertTrue(
-                CronSessionStatusSync.syncTerminal(delegatedSessionId, AgentResult.finished("done", List.of()), store));
+        Assertions.assertTrue(CronSessionStatusSync.syncTerminal(
+                delegatedSessionId, AgentResult.finished("done", List.of()), store, runStore));
         Mockito.verify(store)
                 .markCompletedIfOwner(
                         ArgumentMatchers.eq(JOB_ID),
                         ArgumentMatchers.eq(deliveryId),
                         ArgumentMatchers.any(Instant.class));
+    }
+
+    @Test
+    void syncTerminalCompletesCronRunAfterApprovalResume() {
+        CronStorePort cronStore = mock(CronStorePort.class);
+        CronRunStorePort runStore = mock(CronRunStorePort.class);
+        var cronDto = new AgentCronDto(
+                JOB_ID,
+                "cron-" + JOB_ID,
+                "user-1",
+                "chat-1",
+                "CLI",
+                "chat-1",
+                null,
+                "UTC",
+                true,
+                "Factorial",
+                null,
+                null,
+                "RUNNING",
+                "coordinator",
+                DELIVERY_ID,
+                null,
+                null,
+                null);
+        var run = new CronRunDto(
+                DELIVERY_ID,
+                JOB_ID,
+                "cron-" + JOB_ID + "-" + DELIVERY_ID,
+                "AWAITING_APPROVAL",
+                Instant.parse("2026-10-06T08:00:00Z"),
+                null,
+                null,
+                2,
+                0,
+                0,
+                BigDecimal.ZERO,
+                Instant.parse("2026-10-06T08:00:00Z"));
+        Mockito.when(cronStore.findById(JOB_ID)).thenReturn(Optional.of(cronDto));
+        Mockito.when(cronStore.markCompletedIfOwner(
+                        ArgumentMatchers.eq(JOB_ID),
+                        ArgumentMatchers.eq(DELIVERY_ID),
+                        ArgumentMatchers.any(Instant.class)))
+                .thenReturn(true);
+        Mockito.when(runStore.findById(DELIVERY_ID)).thenReturn(Optional.of(run));
+
+        Assertions.assertTrue(CronSessionStatusSync.syncTerminal(
+                run.sessionId(), new AgentResult.Finished("done", List.of(), 4, 3), cronStore, runStore));
+
+        Mockito.verify(runStore)
+                .save(ArgumentMatchers.argThat(updated -> "COMPLETED".equals(updated.status())
+                        && updated.finishedAt() != null
+                        && updated.iterationsUsed() == 2
+                        && updated.inputTokens() == 4
+                        && updated.outputTokens() == 3));
+    }
+
+    @Test
+    void doesNotUpdateCronRunWhenOwnershipIsLost() {
+        CronStorePort cronStore = mock(CronStorePort.class);
+        CronRunStorePort runStore = mock(CronRunStorePort.class);
+        Mockito.when(cronStore.findById(JOB_ID)).thenReturn(Optional.of(runningCronDto()));
+        Mockito.when(cronStore.markCompletedIfOwner(
+                        ArgumentMatchers.eq(JOB_ID),
+                        ArgumentMatchers.eq(DELIVERY_ID),
+                        ArgumentMatchers.any(Instant.class)))
+                .thenReturn(false);
+
+        Assertions.assertFalse(CronSessionStatusSync.syncTerminal(
+                "cron-" + JOB_ID + "-" + DELIVERY_ID, AgentResult.finished("done", List.of()), cronStore, runStore));
+
+        Mockito.verifyNoInteractions(runStore);
+    }
+
+    @Test
+    void requiresRunStoreForTerminalSync() {
+        Assertions.assertThrows(
+                NullPointerException.class,
+                () -> CronSessionStatusSync.syncTerminal(
+                        "cron-" + JOB_ID + "-" + DELIVERY_ID,
+                        AgentResult.finished("done", List.of()),
+                        mock(CronStorePort.class),
+                        null));
+    }
+
+    @Test
+    void nonCronTerminalSyncDoesNotNeedRunStore() {
+        Assertions.assertTrue(CronSessionStatusSync.syncTerminal(
+                "interactive-session", AgentResult.finished("done", List.of()), mock(CronStorePort.class), null));
+    }
+
+    private static AgentCronDto runningCronDto() {
+        return new AgentCronDto(
+                JOB_ID,
+                "cron-" + JOB_ID,
+                "user-1",
+                "chat-1",
+                "CLI",
+                "chat-1",
+                null,
+                "UTC",
+                true,
+                "Factorial",
+                null,
+                null,
+                "RUNNING",
+                "coordinator",
+                DELIVERY_ID,
+                null,
+                null,
+                null);
     }
 
     private static AgentCronRecord cron(boolean runOnce, String cronExpression, String timezone) {
@@ -145,10 +261,11 @@ class CronSessionStatusSyncTest {
     @Test
     void syncTerminalCatchesStoreException() {
         CronStorePort store = mock(CronStorePort.class);
+        CronRunStorePort runStore = mock(CronRunStorePort.class);
         Mockito.when(store.findById(JOB_ID)).thenThrow(new RuntimeException("boom"));
 
         Assertions.assertFalse(CronSessionStatusSync.syncTerminal(
-                "cron-" + JOB_ID + "-" + DELIVERY_ID, AgentResult.finished("done", List.of()), store));
+                "cron-" + JOB_ID + "-" + DELIVERY_ID, AgentResult.finished("done", List.of()), store, runStore));
     }
 
     @Test

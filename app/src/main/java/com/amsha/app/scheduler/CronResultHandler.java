@@ -14,6 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.loop.CronRunResultMapper;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
@@ -83,10 +84,14 @@ public class CronResultHandler {
             boolean marked = cronStore.markAwaitingRetryIfOwner(job.getId(), executionId);
             if (!marked) {
                 log.warnf("CronResultHandler: Failed to mark cron %s as AWAITING_RETRY - lease lost", job.getId());
-                updateRunStatus(executionId, "LOST", "Lease lost before transitioning to retry backoff", result);
+                updateRunStatus(
+                        executionId,
+                        CronRunResultMapper.STATUS_LOST,
+                        "Lease lost before transitioning to retry backoff",
+                        result);
                 workspaceManager.terminateSession(cronSessionId);
             } else {
-                updateRunStatus(executionId, "AWAITING_RETRY", null, result);
+                updateRunStatus(executionId, CronRunResultMapper.STATUS_AWAITING_RETRY, null, result);
                 log.infof(
                         "CronResultHandler: Session kept alive for cron=%s AWAITING_RETRY (rate limit).",
                         cronSessionId);
@@ -98,25 +103,7 @@ public class CronResultHandler {
 
     private void updateRunStatus(String executionId, String status, String errorReason, AgentResult result) {
         cronRunStore.findById(executionId).ifPresent(existing -> {
-            int inputTokens = 0;
-            int outputTokens = 0;
-            if (result != null) {
-                inputTokens = result.totalInputTokens();
-                outputTokens = result.totalOutputTokens();
-            }
-            CronRunDto updated = new CronRunDto(
-                    existing.id(),
-                    existing.cronId(),
-                    existing.sessionId(),
-                    status,
-                    existing.startedAt(),
-                    Instant.now(),
-                    errorReason,
-                    existing.iterationsUsed(),
-                    inputTokens,
-                    outputTokens,
-                    existing.usdCost(),
-                    existing.createdAt());
+            CronRunDto updated = CronRunResultMapper.withStatus(existing, status, errorReason, result);
             cronRunStore.save(updated);
         });
     }
@@ -128,7 +115,8 @@ public class CronResultHandler {
             log.warnf(
                     "CRON-LEASE-LOST cronId=%s deliveryId=%s lease lost or stolen during completion - skipping notification",
                     job.getId(), executionId);
-            updateRunStatus(executionId, "LOST", "Lease lost or stolen by another execution", result);
+            updateRunStatus(
+                    executionId, CronRunResultMapper.STATUS_LOST, "Lease lost or stolen by another execution", result);
             workspaceManager.terminateSession(cronSessionId);
             return;
         }
@@ -139,9 +127,9 @@ public class CronResultHandler {
                 : answer;
 
         if (result instanceof AgentResult.Finished || result instanceof AgentResult.StructuredFinished) {
-            updateRunStatus(executionId, "COMPLETED", null, result);
+            updateRunStatus(executionId, CronRunResultMapper.STATUS_COMPLETED, null, result);
         } else {
-            updateRunStatus(executionId, "FAILED", answer, result);
+            updateRunStatus(executionId, CronRunResultMapper.STATUS_FAILED, answer, result);
         }
 
         fireCompletionEvent(job, executionId, finalAnswer, null, cronSessionId, null);
@@ -179,12 +167,13 @@ public class CronResultHandler {
             log.warnf(
                     "CRON-LEASE-LOST cronId=%s deliveryId=%s lease lost or stolen during approval pause - aborting",
                     job.getId(), executionId);
-            updateRunStatus(executionId, "LOST", "Lease lost or stolen before approval pause", null);
+            updateRunStatus(
+                    executionId, CronRunResultMapper.STATUS_LOST, "Lease lost or stolen before approval pause", null);
             workspaceManager.terminateSession(cronSessionId);
             return;
         }
 
-        updateRunStatus(executionId, "AWAITING_APPROVAL", null, null);
+        updateRunStatus(executionId, CronRunResultMapper.STATUS_AWAITING_APPROVAL, null, null);
         log.infof("CRON-HITL cronId=%s awaiting user approval of tool=%s", job.getId(), result.toolName());
 
         auditService.record(
@@ -229,12 +218,13 @@ public class CronResultHandler {
             log.warnf(
                     "CRON-LEASE-LOST cronId=%s deliveryId=%s lease lost or stolen during failure handling - aborting",
                     job.getId(), executionId);
-            updateRunStatus(executionId, "LOST", "Lease lost or stolen before failure handling", null);
+            updateRunStatus(
+                    executionId, CronRunResultMapper.STATUS_LOST, "Lease lost or stolen before failure handling", null);
             workspaceManager.terminateSession(cronSessionId);
             return;
         }
 
-        updateRunStatus(executionId, "FAILED", t.getMessage(), null);
+        updateRunStatus(executionId, CronRunResultMapper.STATUS_FAILED, t.getMessage(), null);
 
         auditService.record(
                 cronSessionId,
