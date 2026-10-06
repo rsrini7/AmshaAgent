@@ -44,4 +44,4 @@ The following wrappers forward to `scripts/autotest/run.sh`:
 ## Remarks
 
 - For PostgreSQL, the Podman container is auto-started by `mise run jar:pg:chat` if not already running.
-- Log files: `amsha-cli.log` (SQLite), `amsha-pg.log` (PostgreSQL), `amsha-fs.log` (Filesystem)
+- Log files: `amsha-cli-sqlite.log` (SQLite), `amsha-postgresql-postgres.log` (PostgreSQL), `amsha-filesystem-fs.log` (Filesystem)

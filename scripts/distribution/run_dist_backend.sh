@@ -538,8 +538,8 @@ if [[ "$VALIDATE_MODE" == true ]]; then
       break
     fi
     if ! kill -0 "$server_pid" 2>/dev/null; then
-      if [[ "$BACKEND" == postgres ]] && [[ -f "$PROJECT_ROOT/amsha-pg.log" ]] \
-        && grep -q "FlywayValidateException" "$PROJECT_ROOT/amsha-pg.log" 2>/dev/null; then
+      if [[ "$BACKEND" == postgres ]] && [[ -f "$PROJECT_ROOT/amsha-postgresql-postgres.log" ]] \
+        && grep -q "FlywayValidateException" "$PROJECT_ROOT/amsha-postgresql-postgres.log" 2>/dev/null; then
         printf '⚠️  PostgreSQL Flyway validation failed due to schema checksum mismatch.\n' >&2
         printf '💡 Pass --clean to reset the database, or run: mise run db:pg:reset\n' >&2
       fi

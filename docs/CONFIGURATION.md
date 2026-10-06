@@ -632,6 +632,13 @@ the request before authentication or resource handling.
 
 ## Observability
 
+Application logs are written to a profile/backend-specific file in the process
+working directory. SQLite filenames follow `amsha-<profile>-sqlite.log`
+(for example, `amsha-prod-sqlite.log` and `amsha-dev-sqlite.log`). The
+PostgreSQL and filesystem profiles use `amsha-postgresql-postgres.log` and
+`amsha-filesystem-fs.log`. Set `AMSHA_LOG_CONSOLE_ENABLED=true` to also print
+application logs in the terminal; it defaults to `false`.
+
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | LangChain4j `ChatModelListener` pilot mode (`off` = no-op, `shadow` = shadow metrics/timers with zero payload, `active` = `amsha.llm.listener_call` spans + active metrics for calls not already manually instrumented). `ChatModelListenerRuntimeControl` fail-closed: enables to `shadow`/`active` only when a ready `AmshaChatModelListener` CDI implementation is registered; disabling drains in-flight leases. |

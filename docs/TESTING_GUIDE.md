@@ -1837,7 +1837,7 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION_OTHER/run" \
 ### 17.1 Check vector search status
 
 ```bash
-grep -i "vector search" logs/amsha.log | tail -3
+grep -i "vector search" amsha-prod-sqlite.log | tail -3
 ```
 
 **Expect:** `vector search enabled (vec0 loaded)` **OR** `vector search disabled - vec0 extension not loaded`
