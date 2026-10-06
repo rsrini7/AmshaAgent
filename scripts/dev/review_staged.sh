@@ -166,6 +166,19 @@ NATIVE_SENSITIVE=0
 MAVEN_MODULES=""
 TEST_CLASSES=""
 
+# Reactor modules come from the root pom, not a hardcoded list. A hardcoded list drifts: it
+# previously named `rest-http`, which is not a reactor module, so a staged path under
+# rest-http/ — a README, say — made `-pl <modules>` fail to select a project and aborted the
+# whole --full run. `ui` is excluded here because it has its own build path below.
+REACTOR_MODULES=""
+if [[ -f "$REPO_ROOT/pom.xml" ]]; then
+    REACTOR_MODULES="$(
+        sed -n 's/.*<module>[[:space:]]*\([^<[:space:]]*\)[[:space:]]*<\/module>.*/|\1|/p' "$REPO_ROOT/pom.xml" \
+            | grep -vx '|ui|' \
+            | tr -d '\n' || true
+    )"
+fi
+
 while IFS= read -r path; do
     case "$path" in
         *.java)
@@ -184,8 +197,8 @@ while IFS= read -r path; do
             ;;
     esac
     module="${path%%/*}"
-    case "$module" in
-        app|core|common|channel-api|channel-telegram|channel-web|classifier-api|llm-provider-api|llm-providers|memory|mcp|onboarding|persistence-api|persistence-common|persistence-fs|persistence-postgres|persistence-sqlite|rag|rest-http|sandbox|security|security-api|tool-api|tools-builtin|local-ml-onnx)
+    case "$REACTOR_MODULES" in
+        *"|$module|"*)
             case ",$MAVEN_MODULES," in
                 *",$module,"*) ;;
                 *) MAVEN_MODULES="${MAVEN_MODULES:+$MAVEN_MODULES,}$module" ;;
