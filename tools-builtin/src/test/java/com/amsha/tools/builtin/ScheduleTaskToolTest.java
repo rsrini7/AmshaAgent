@@ -449,6 +449,18 @@ class ScheduleTaskToolTest {
         verify(cronStore).save(argThat(dto -> "researcher".equals(((AgentCronDto) dto).executionRole())));
     }
 
+    @Test
+    void unknownExecutionRoleFallsBackToDefaultRole() throws Exception {
+        ScheduleTaskTool tool = createTool();
+        ToolExecutionContext ctx = context("remind me in 1 minute list gists", null, null, null);
+
+        ToolResponse result =
+                tool.execute(ctx, Map.of("goal", "List gists", "runOnce", true, "executionRole", "code-writer"));
+
+        assertTrue(result.success(), result.output());
+        verify(cronStore).save(argThat(dto -> "researcher".equals(((AgentCronDto) dto).executionRole())));
+    }
+
     /**
      * A cron supplied directly in params (rather than via {@code ctx.suggestedCron()}) must be
      * honoured verbatim - this is the non-blank arm of {@code resolveCronOrDefault}.

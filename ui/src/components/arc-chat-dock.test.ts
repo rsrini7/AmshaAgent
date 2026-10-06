@@ -377,7 +377,7 @@ describe('Chat Dock & HITL Panel integration', () => {
     expect((chat as any)._messages).toHaveLength(1);
     expect((chat as any)._messages[0]).toMatchObject({
       isApprovalPrompt: true,
-      approvalViaChannel: true,
+      approvalViaChannel: false,
       targetSessionId: 'cron-cron-1-exec-1',
       approvalData: { tool: 'sandbox_exec' },
     });
@@ -386,28 +386,145 @@ describe('Chat Dock & HITL Panel integration', () => {
     expect((chat as any)._progressPhase).toBe('Waiting for approval');
   });
 
-  it('uses the originating websocket for a background cron approval', () => {
+  it('replaces an earlier cron approval with the next tool approval in the same session', () => {
+    const chat = new ArcChatInterface();
+    const sessionId = 'cron-cron-1-exec-1';
+
+    (chat as any)._handleFrame({
+      type: 'approval_required',
+      role: 'assistant',
+      text: 'Approval required for garuda',
+      sessionId,
+      toolName: 'garuda',
+      params: { agent: 'brahma' },
+    });
+    const oldMessageId = (chat as any)._messages[0].id;
+    (chat as any)._messages[0].approvalActionPending = 'approved';
+
+    (chat as any)._handleFrame({
+      type: 'approval_required',
+      role: 'assistant',
+      text: 'Approval required for sandbox_exec',
+      sessionId,
+      toolName: 'sandbox_exec',
+      approval: {
+        tool: 'sandbox_exec',
+        params: { code: 'import math\nprint(math.factorial(11))', language: 'python' },
+      },
+    });
+
+    expect((chat as any)._messages).toHaveLength(1);
+    expect((chat as any)._messages[0]).toMatchObject({
+      id: oldMessageId,
+      text: 'Approval required for sandbox_exec',
+      approvalViaChannel: false,
+      approvalActionPending: undefined,
+      targetSessionId: sessionId,
+      approvalData: {
+        tool: 'sandbox_exec',
+        params: { code: 'import math\nprint(math.factorial(11))', language: 'python' },
+      },
+    });
+    expect((chat as any)._awaitingApproval).toBe(true);
+  });
+
+  it('keeps earlier interactive approval prompts in chat history', () => {
+    const chat = new ArcChatInterface();
+    const sessionId = 'interactive-session-1';
+
+    (chat as any)._handleFrame({
+      type: 'approval_required',
+      role: 'assistant',
+      text: 'Approval required for first_tool',
+      sessionId,
+      toolName: 'first_tool',
+      params: { value: 'first' },
+    });
+    const firstMessageId = (chat as any)._messages[0].id;
+
+    (chat as any)._handleFrame({
+      type: 'approval_required',
+      role: 'assistant',
+      text: 'Approval required for second_tool',
+      sessionId,
+      toolName: 'second_tool',
+      params: { value: 'second' },
+    });
+
+    expect((chat as any)._messages).toHaveLength(2);
+    expect((chat as any)._messages[0]).toMatchObject({
+      id: firstMessageId,
+      text: 'Approval required for first_tool',
+      approvalData: { tool: 'first_tool', params: { value: 'first' } },
+    });
+    expect((chat as any)._messages[1]).toMatchObject({
+      text: 'Approval required for second_tool',
+      approvalData: { tool: 'second_tool', params: { value: 'second' } },
+    });
+  });
+
+  it('keeps a cron approval card rendered after an unrelated assistant message', async () => {
+    const chat = new ArcChatInterface();
+    const cronSessionId = 'cron-cron-1-exec-1';
+    (chat as any)._handleFrame({
+      type: 'approval_required', role: 'assistant', sessionId: cronSessionId,
+      toolName: 'sandbox_exec', params: { code: 'print(1)' },
+    });
+    (chat as any)._handleFrame({
+      type: 'message', role: 'assistant', sessionId: 'interactive-session-1', text: 'Unrelated response',
+    });
+    expect((chat as any)._awaitingApproval).toBe(false);
+    expect((chat as any)._messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ isApprovalPrompt: true, targetSessionId: cronSessionId }),
+    ]));
+
+    const hasHitlPanel = (value: unknown): boolean => {
+      if (Array.isArray(value)) return value.some(hasHitlPanel);
+      if (!value || typeof value !== 'object') return false;
+      const template = value as { strings?: readonly string[]; values?: unknown[] };
+      if (template.strings?.join('').includes('arc-hitl-panel')) return true;
+      return template.values?.some(hasHitlPanel) ?? false;
+    };
+    vi.spyOn(chat as any, '_renderMarkdown').mockReturnValue('');
+    expect(hasHitlPanel((chat as any).render())).toBe(true);
+  });
+
+  it('does not route a cron HITL approval through the chat websocket', () => {
     const chat = new ArcChatInterface();
     const send = vi.fn();
     (chat as any)._wsStatus = 'open';
     (chat as any)._ws = { send };
-    (chat as any)._awaitingApproval = true;
-    const armWatchdogSpy = vi.spyOn(chat as any, '_armTurnWatchdog').mockImplementation(() => {});
+    (chat as any)._activeBackgroundCronSessionId = 'cron-cron-1-exec-1';
+    vi.spyOn(chat as any, '_armTurnWatchdog').mockImplementation(() => {});
 
-    (chat as any)._sendApprove({
-      targetSessionId: 'cron-cron-1-exec-1',
-      approvalViaChannel: true,
-    });
+    const approval = {
+      id: 'approval-1', role: 'assistant', text: 'Approval required', timestamp: Date.now(),
+      isApprovalPrompt: true, targetSessionId: 'cron-cron-1-exec-1', approvalViaChannel: false,
+    };
+    (chat as any)._messages = [approval];
+    (chat as any)._sendApprove(approval);
 
-    expect(send).toHaveBeenCalledWith({
-      type: 'message',
-      text: '/approve cron-cron-1-exec-1',
-    });
+    expect(send).not.toHaveBeenCalled();
+    expect((chat as any)._messages).toHaveLength(1);
+    expect((chat as any)._messages[0].approvalActionPending).toBe('approved');
     expect((chat as any)._awaitingApproval).toBe(false);
     expect((chat as any)._isTyping).toBe(true);
     expect((chat as any)._progressPhase).toBe('Executing tool');
     expect((chat as any)._activeBackgroundCronSessionId).toBe('cron-cron-1-exec-1');
-    expect(armWatchdogSpy).toHaveBeenCalled();
+  });
+
+  it('records cron denial on the approval card without a fake chat command', () => {
+    const chat = new ArcChatInterface();
+    const approval = {
+      id: 'approval-2', role: 'assistant', text: 'Approval required', timestamp: Date.now(),
+      isApprovalPrompt: true, targetSessionId: 'cron-cron-1-exec-1', approvalViaChannel: false,
+    };
+    (chat as any)._messages = [approval];
+    (chat as any)._showDenyReason = true;
+    (chat as any)._denyReason = 'Not needed';
+    (chat as any)._sendDeny(approval);
+    expect((chat as any)._messages).toHaveLength(1);
+    expect((chat as any)._messages[0].approvalActionPending).toBe('rejected');
   });
 
   it('checks backend status without sending another chat message', async () => {

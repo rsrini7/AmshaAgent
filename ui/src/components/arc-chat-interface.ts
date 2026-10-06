@@ -1173,29 +1173,34 @@ export class ArcChatInterface extends LitElement {
     ].slice(-4);
 
     const tool = frame.toolName || frame.approval?.tool || 'Tool Execution';
-    const exists = this._messages.some(
-      (message) => message.approvalViaChannel && message.targetSessionId === sessionId,
-    );
-    if (exists) {
-      return;
-    }
-
-    this._messages = [
-      ...this._messages,
-      {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        text: frame.text || `Approval required for ${tool}.`,
-        timestamp: frame.timestamp || Date.now(),
-        isApprovalPrompt: true,
-        approvalViaChannel: true,
-        approvalData: {
-          tool,
-          params: frame.params || frame.approval?.params || {},
-        },
-        targetSessionId: sessionId,
+    const isCronSession = sessionId.startsWith('cron-');
+    const existing = isCronSession
+      ? this._messages.find((message) => message.isApprovalPrompt && message.targetSessionId === sessionId)
+      : undefined;
+    const approvalMessage: ChatMessage = {
+      id: existing?.id || crypto.randomUUID(),
+      role: 'assistant',
+      text: frame.text || `Approval required for ${tool}.`,
+      timestamp: frame.timestamp || Date.now(),
+      isApprovalPrompt: true,
+      // Cron approvals use the shared HITL REST endpoint; chat-command routing
+      // is reserved for interactive channel approvals.
+      approvalViaChannel: !isCronSession,
+      approvalActionPending: undefined,
+      approvalActionError: undefined,
+      approvalData: {
+        tool,
+        params: frame.params || frame.approval?.params || {},
       },
-    ];
+      targetSessionId: sessionId,
+    };
+    if (existing) {
+      this._messages = this._messages.map((message) =>
+        message.id === existing.id ? approvalMessage : message,
+      );
+    } else {
+      this._messages = [...this._messages, approvalMessage];
+    }
     this._scrollToBottom();
   }
 
@@ -1260,7 +1265,7 @@ export class ArcChatInterface extends LitElement {
         const completesTrackedCron = frame.sessionId === this._activeBackgroundCronSessionId;
         this._messages = [
           ...this._messages.filter(
-            (message) => !(message.approvalViaChannel && message.targetSessionId === frame.sessionId),
+            (message) => !(message.isApprovalPrompt && message.targetSessionId === frame.sessionId),
           ),
           {
             id: crypto.randomUUID(),
@@ -1747,9 +1752,6 @@ export class ArcChatInterface extends LitElement {
         return;
       }
       this._ws.send({ type: 'message', text: cmd });
-      if (msg.targetSessionId?.startsWith('cron-')) {
-        this._activeBackgroundCronSessionId = msg.targetSessionId;
-      }
       this._markToolExecutionStarted();
       this._messages = this._messages.map((message) => message.id === msg.id
         ? { ...message, approvalActionPending: 'approved', approvalActionError: undefined }
@@ -1762,10 +1764,9 @@ export class ArcChatInterface extends LitElement {
     // Do not send /approve over the WebSocket to avoid triggering a duplicate command
     // that returns "No pending tool executions require approval."
     this._markToolExecutionStarted();
-    this._messages = [
-      ...this._messages,
-      { id: crypto.randomUUID(), role: 'user', text: cmd, timestamp: Date.now() },
-    ];
+    this._messages = this._messages.map((message) => message.id === msg.id
+      ? { ...message, approvalActionPending: 'approved', approvalActionError: undefined }
+      : message);
     this._scrollToBottom();
   }
 
@@ -1808,10 +1809,9 @@ export class ArcChatInterface extends LitElement {
     this._clearTurnWatchdog();
     this._isTyping = false;
     this._turnStalled = false;
-    this._messages = [
-      ...this._messages,
-      { id: crypto.randomUUID(), role: 'user', text: cmd, timestamp: Date.now() },
-    ];
+    this._messages = this._messages.map((message) => message.id === msg.id
+      ? { ...message, approvalActionPending: 'rejected', approvalActionError: undefined }
+      : message);
     this._scrollToBottom();
   }
 
@@ -2029,7 +2029,7 @@ export class ArcChatInterface extends LitElement {
                             `
                           : nothing}
                       `}
-                  ${m.isApprovalPrompt && (this._awaitingApproval || m.approvalViaChannel)
+                  ${m.isApprovalPrompt && (this._awaitingApproval || m.approvalViaChannel || m.targetSessionId?.startsWith('cron-'))
                     ? html`
                         <div class="approval-card-wrapper" role="region" aria-label="Action Approval">
                           <arc-hitl-panel

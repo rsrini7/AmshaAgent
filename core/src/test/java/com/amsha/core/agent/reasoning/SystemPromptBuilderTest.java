@@ -11,6 +11,7 @@ import jakarta.enterprise.inject.Instance;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -473,5 +474,15 @@ class SystemPromptBuilderTest {
         assertFalse(result.contains("CRITICAL: You MUST respond ONLY in required JSON schema"));
         assertFalse(result.contains("CRITICAL: You MUST respond ONLY in the required JSON schema"));
         assertFalse(result.contains("Never respond in prose"));
+    }
+
+    @Test
+    void compactSchedulingRulesExposeSupportedRoleAndTimezoneParameters() {
+        String rules = instructionLibrary.buildCompactToolPriorityRules(List.of("schedule_task", "sandbox_exec"));
+
+        assertTrue(rules.contains("executionRole"));
+        assertTrue(rules.contains("timezone"));
+        assertTrue(rules.contains("coder"));
+        assertFalse(rules.contains("EXACTLY THREE parameters"));
     }
 }

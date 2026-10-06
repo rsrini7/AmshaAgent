@@ -366,7 +366,14 @@ public class ScheduleTaskTool implements AgentTool {
         if (executionRole != null && executionRole.isBlank()) {
             executionRole = null;
         }
-        return executionRole != null ? executionRole : DEFAULT_EXECUTION_ROLE;
+        if (executionRole == null) {
+            return DEFAULT_EXECUTION_ROLE;
+        }
+        try {
+            return AgentRoleEnum.fromString(executionRole).toScopedName();
+        } catch (IllegalArgumentException _) {
+            return DEFAULT_EXECUTION_ROLE;
+        }
     }
 
     private String resolveCron(Map<String, Object> params) {

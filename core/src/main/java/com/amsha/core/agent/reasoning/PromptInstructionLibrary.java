@@ -446,6 +446,14 @@ public class PromptInstructionLibrary {
         sb.append(
                 "4. If the user gives a future time request (after/in/tomorrow/at HH:MM/every): call `schedule_task` only (e.g. \"every minute\" -> \"*/1 * * * *\"). You MUST invoke `schedule_task` and receive its observation before sending any confirmation. Do NOT execute the goal's tool action yourself - store it as the goal text for the cron runner.\n");
         sb.append(
+                "4a. `schedule_task` requires `goal` and optionally accepts `runOnce`, `cronExpression`, `timezone`, and `executionRole`; do not invent parameters. `runOnce` is a JSON boolean. For one-time relative requests, set it to `true` and omit `cronExpression`; Java resolves the fire time from the original request. For recurring requests, set it to `false` and provide a valid five-field `cronExpression`; when `SUGGESTED_CRON` is present, use its UTC expression and omit `timezone`.\n");
+        sb.append(
+                " If `SUGGESTED_CRON` is present for an absolute scheduled time, use the UTC suggestion and omit `timezone`; for one-time relative requests, ignore it and omit `cronExpression`.\n");
+        sb.append(
+                " If `SUGGESTED_CRON` is absent and the user names a timezone, pass its IANA name in `timezone`; the cron expression is interpreted there. Otherwise omit `timezone` and use the tool default.\n");
+        sb.append(
+                " Set `executionRole` to `coder` for code tasks, `researcher` for research, or `coordinator` only when managing schedules; an omitted role defaults to `researcher`. Keep relative time out of `goal`; include only the final action and explicit context, without pronouns.\n");
+        sb.append(
                 "4b. For scheduling requests, NEVER batch `schedule_task` with `garuda` or any other tool in the same turn.\n");
         sb.append(
                 "4c. ANTI-PARALLEL STORAGE: NEVER call `ingest_document` more than once per turn. If the user provides\n");
