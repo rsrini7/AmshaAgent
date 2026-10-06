@@ -46,11 +46,24 @@ public final class OnnxModelRootResolver {
      * @return an absolute, normalized model root; never {@code null}
      */
     public static Path resolve() {
-        String configured = firstNonBlank(System.getProperty(MODEL_ROOT_PROPERTY), System.getenv(MODEL_ROOT_ENV));
+        return resolve(
+                System.getProperty(MODEL_ROOT_PROPERTY),
+                System.getenv(MODEL_ROOT_ENV),
+                System.getProperty(DATA_DIR_NAME),
+                System.getenv(DATA_DIR_NAME));
+    }
+
+    /** Resolves from a configuration snapshot so precedence can be tested without mutating process state. */
+    static Path resolve(
+            String modelRootProperty,
+            String modelRootEnvironment,
+            String dataDirectoryProperty,
+            String dataDirectoryEnvironment) {
+        String configured = firstNonBlank(modelRootProperty, modelRootEnvironment);
         if (configured != null) {
             return normalize(configured);
         }
-        String dataDir = firstNonBlank(System.getProperty(DATA_DIR_NAME), System.getenv(DATA_DIR_NAME));
+        String dataDir = firstNonBlank(dataDirectoryProperty, dataDirectoryEnvironment);
         if (dataDir != null) {
             return normalize(Path.of(dataDir.trim()).resolve("models").toString());
         }

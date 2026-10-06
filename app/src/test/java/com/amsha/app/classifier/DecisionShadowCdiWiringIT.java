@@ -24,12 +24,15 @@ import com.amsha.security.api.AutonomyLevel;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 
 /**
  * Real CDI discovery and injection integration test for shadow decision classifiers in Quarkus container.
  * Verifies real Arc resolution without mocks.
  */
 @QuarkusTest
+@TestProfile(DecisionShadowCdiWiringIT.DisabledShadowClassifiersProfile.class)
 class DecisionShadowCdiWiringIT {
 
     @Inject
@@ -42,7 +45,7 @@ class DecisionShadowCdiWiringIT {
     Instance<DecisionAnswerQualityShadowClassifier> answerQualityClassifierInstance;
 
     @Test
-    void verifiesRealCdiDiscoveryAndDefaultDisabledResolution() {
+    void verifiesRealCdiDiscoveryAndDisabledResolution() {
         // Assert all 3 shadow classifiers are discoverable in CDI without mocks
         assertTrue(intentClassifierInstance.isResolvable(), "Intent shadow classifier bean must be resolvable via CDI");
         assertTrue(
@@ -54,7 +57,7 @@ class DecisionShadowCdiWiringIT {
 
         DecisionIntentShadowClassifier intentClassifier = intentClassifierInstance.get();
         assertNotNull(intentClassifier);
-        // By default, amsha.decision.shadow.intent.enabled is false -> fails closed to DISABLED
+        // The test profile explicitly disables this classifier, so it fails closed to DISABLED.
         ClassifierResult<String> intentResult = intentClassifier.classify("Implement a feature in Java");
         assertInstanceOf(ClassifierResult.NoOpinion.class, intentResult);
         assertEquals(NoOpinionReason.DISABLED, ((ClassifierResult.NoOpinion<String>) intentResult).reason());
@@ -76,5 +79,16 @@ class DecisionShadowCdiWiringIT {
         assertEquals(
                 NoOpinionReason.DISABLED,
                 ((ClassifierResult.NoOpinion<AnswerQualityPrediction>) qualityResult).reason());
+    }
+
+    /** Pins disabled behavior regardless of developer environment configuration. */
+    public static class DisabledShadowClassifiersProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                    "amsha.decision.shadow.intent.enabled", "false",
+                    "amsha.decision.shadow.tool-risk.enabled", "false",
+                    "amsha.decision.shadow.answer-quality.enabled", "false");
+        }
     }
 }

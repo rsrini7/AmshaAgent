@@ -86,13 +86,11 @@ class OnnxModelRootResolverTest {
     @DisplayName("the model root property outranks the environment variable")
     void propertyOutranksEnvironment(@TempDir Path tmp) throws IOException {
         Path fromProperty = Files.createDirectories(tmp.resolve("from-property"));
-        String previous = System.getProperty(OnnxModelRootResolver.MODEL_ROOT_PROPERTY);
-        System.setProperty(OnnxModelRootResolver.MODEL_ROOT_PROPERTY, fromProperty.toString());
-        try {
-            assertEquals(fromProperty.toAbsolutePath().normalize(), OnnxModelRootResolver.resolve());
-        } finally {
-            restore(OnnxModelRootResolver.MODEL_ROOT_PROPERTY, previous);
-        }
+        Path fromEnvironment = tmp.resolve("from-environment");
+
+        assertEquals(
+                fromProperty.toAbsolutePath().normalize(),
+                OnnxModelRootResolver.resolve(fromProperty.toString(), fromEnvironment.toString(), null, null));
     }
 
     @Test
@@ -100,26 +98,10 @@ class OnnxModelRootResolverTest {
     void dataDirIsTheLastResort(@TempDir Path tmp) throws IOException {
         Path models = Files.createDirectories(tmp.resolve("models"));
         Path explicit = Files.createDirectories(tmp.resolve("explicit"));
-        String previousRoot = System.getProperty(OnnxModelRootResolver.MODEL_ROOT_PROPERTY);
-        String previousData = System.getProperty(OnnxModelRootResolver.DATA_DIR_NAME);
-        System.clearProperty(OnnxModelRootResolver.MODEL_ROOT_PROPERTY);
-        System.setProperty(OnnxModelRootResolver.DATA_DIR_NAME, tmp.toString());
-        try {
-            assertEquals(models.toAbsolutePath().normalize(), OnnxModelRootResolver.resolve());
-
-            System.setProperty(OnnxModelRootResolver.MODEL_ROOT_PROPERTY, explicit.toString());
-            assertEquals(explicit.toAbsolutePath().normalize(), OnnxModelRootResolver.resolve());
-        } finally {
-            restore(OnnxModelRootResolver.MODEL_ROOT_PROPERTY, previousRoot);
-            restore(OnnxModelRootResolver.DATA_DIR_NAME, previousData);
-        }
-    }
-
-    private static void restore(String key, String previous) {
-        if (previous == null) {
-            System.clearProperty(key);
-        } else {
-            System.setProperty(key, previous);
-        }
+        assertEquals(
+                models.toAbsolutePath().normalize(), OnnxModelRootResolver.resolve(null, null, tmp.toString(), null));
+        assertEquals(
+                explicit.toAbsolutePath().normalize(),
+                OnnxModelRootResolver.resolve(explicit.toString(), null, tmp.toString(), null));
     }
 }

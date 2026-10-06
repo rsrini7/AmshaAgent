@@ -83,19 +83,19 @@ class InfiniteLoopCompactionProviderBranchTest {
 
         InfiniteLoopChatModel loop = withProperties(
                 Map.of(
-                        "amsha.compaction.groq.base-url", CLOUDFLARE_TEMPLATE,
-                        "amsha.compaction.groq.model", "llama-3.3-70b",
-                        "amsha.compaction.groq.max-retries", "5",
-                        "AMSHA_GROQ_API_KEY", "sk-groq",
-                        "AMSHA_GROQ_ACCOUNT_ID", "acc-9"),
-                () -> provider("groq", factory).compactionModel());
+                        "amsha.compaction.synthetic-ladder.base-url", CLOUDFLARE_TEMPLATE,
+                        "amsha.compaction.synthetic-ladder.model", "llama-3.3-70b",
+                        "amsha.compaction.synthetic-ladder.max-retries", "5",
+                        "AMSHA_SYNTHETIC_LADDER_API_KEY", "sk-groq",
+                        "AMSHA_SYNTHETIC_LADDER_ACCOUNT_ID", "acc-9"),
+                () -> provider("synthetic-ladder", factory).compactionModel());
 
         assertNotNull(loop);
         // The system-property fallbacks must be honoured, and the account id must be substituted
         // into the templated base URL before it reaches the factory.
         verify(factory)
                 .createModel(
-                        eq("groq"),
+                        eq("synthetic-ladder"),
                         eq(CLOUDFLARE_RESOLVED),
                         eq("sk-groq"),
                         eq("llama-3.3-70b"),
@@ -194,10 +194,10 @@ class InfiniteLoopCompactionProviderBranchTest {
 
         InfiniteLoopChatModel[] calls = withProperties(
                 Map.of(
-                        "amsha.compaction.groq.base-url", "https://api.groq.com/openai/v1",
-                        "amsha.compaction.groq.model", "llama-3.3-70b"),
+                        "amsha.compaction.fixture-provider.base-url", "https://api.groq.com/openai/v1",
+                        "amsha.compaction.fixture-provider.model", "llama-3.3-70b"),
                 () -> {
-                    InfiniteLoopCompactionChatModelProvider provider = provider("groq", factory);
+                    InfiniteLoopCompactionChatModelProvider provider = provider("fixture-provider", factory);
                     return new InfiniteLoopChatModel[] {provider.compactionModel(), provider.compactionModel()};
                 });
 
@@ -228,16 +228,16 @@ class InfiniteLoopCompactionProviderBranchTest {
 
         withProperties(
                 Map.of(
-                        "amsha.compaction.groq.base-url", "https://api.groq.com/openai/v1",
-                        "amsha.compaction.groq.model", "llama-3.3-70b",
-                        "amsha.compaction.groq.api-key", "sk-explicit",
-                        "amsha.compaction.groq.account-id", "acc-explicit"),
-                () -> provider("groq", factory).compactionModel());
+                        "amsha.compaction.fixture-provider.base-url", "https://api.groq.com/openai/v1",
+                        "amsha.compaction.fixture-provider.model", "llama-3.3-70b",
+                        "amsha.compaction.fixture-provider.api-key", "sk-explicit",
+                        "amsha.compaction.fixture-provider.account-id", "acc-explicit"),
+                () -> provider("fixture-provider", factory).compactionModel());
 
         // An explicitly configured value must win outright, without consulting the AMSHA_* fallbacks.
         verify(factory)
                 .createModel(
-                        eq("groq"),
+                        eq("fixture-provider"),
                         eq("https://api.groq.com/openai/v1"),
                         eq("sk-explicit"),
                         eq("llama-3.3-70b"),
@@ -297,10 +297,10 @@ class InfiniteLoopCompactionProviderBranchTest {
 
         withProperties(
                 Map.of(
-                        "amsha.compaction.groq.base-url", "https://api.groq.com/openai/v1",
-                        "amsha.compaction.groq.model", "llama-3.3-70b"),
+                        "amsha.compaction.fixture-provider.base-url", "https://api.groq.com/openai/v1",
+                        "amsha.compaction.fixture-provider.model", "llama-3.3-70b"),
                 () -> {
-                    InfiniteLoopCompactionChatModelProvider provider = provider("groq", factory);
+                    InfiniteLoopCompactionChatModelProvider provider = provider("fixture-provider", factory);
                     InfiniteLoopChatModel[] results = new InfiniteLoopChatModel[2];
 
                     Thread first = new Thread(() -> results[0] = provider.compactionModel(), "compaction-first");

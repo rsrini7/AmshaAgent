@@ -20,7 +20,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
@@ -31,13 +30,9 @@ import org.mockito.MockedStatic;
  * and the property therefore wins for the STT / ONNX / ffmpeg flags — so the properties set below are the
  * single source of truth for those, and the assertions are deterministic rather than machine-dependent.
  *
- * <p><strong>The model root is the exception.</strong> It is not read here at all: it comes from
- * {@link com.amsha.app.cli.ModelInstaller#resolveModelRoot()}, which consults
- * {@code System.getenv("AMSHA_ONNX_MODEL_ROOT")} <em>before</em> the {@code amsha.onnx.model-root} property. On a
- * machine where that variable is exported, resolution ignores the temp root pinned in {@link #captureStderr()}
- * and lands on the repository's real {@code data/models} — where the whisper and mpnet bundles genuinely exist,
- * which silently suppresses the very banners these tests assert. Those cases are
- * {@linkplain DisabledIfEnvironmentVariable skipped} rather than left to pass or fail for the wrong reason.
+ * <p>Environment-backed settings receive explicit system-property values in {@link #captureStderr()} so each
+ * test controls only the feature it is exercising. The model-root property is pinned to the
+ * temporary directory and takes precedence over {@code AMSHA_ONNX_MODEL_ROOT}.
  *
  * <p>{@code os.name} is likewise a property, which makes the macOS / Windows / Linux branches of the ffmpeg
  * banner all reachable from one host instead of leaving two of them permanently dark.
@@ -52,9 +47,6 @@ class LocalModelValidatorTest {
     private static final String EMBEDDING_MODEL = "amsha.embedding.onnx.model";
     private static final String MODEL_ROOT = "amsha.onnx.model-root";
     private static final String OS_NAME = "os.name";
-
-    /** Read by {@code ModelInstaller.resolveModelRoot()} ahead of {@link #MODEL_ROOT}; not settable from Java. */
-    private static final String MODEL_ROOT_ENV = "AMSHA_ONNX_MODEL_ROOT";
 
     private static final String MPNET = "all-mpnet-base-v2-e8c3b32";
     private static final String WHISPER = "whisper-tiny-en-v1";
@@ -84,6 +76,10 @@ class LocalModelValidatorTest {
         System.setErr(new PrintStream(capturedErr, true, StandardCharsets.UTF_8));
         // Pin the model root at the temp dir so resolution never depends on the developer's machine.
         System.setProperty(MODEL_ROOT, modelRoot.toString());
+        System.setProperty(STT_ENABLED, "false");
+        System.setProperty(FFMPEG_PATH, "");
+        System.setProperty(ONNX_ENABLED, "false");
+        System.setProperty(EMBEDDING_MODEL, "");
     }
 
     @AfterEach
@@ -144,7 +140,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("an unrelated first argument still runs the checks")
     void unrelatedFirstArgumentStillValidates() {
         enableStt();
@@ -153,7 +148,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("null and empty argument arrays still run the checks")
     void nullAndEmptyArgsStillValidate() {
         enableStt();
@@ -166,7 +160,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("whisper banner appears when STT is enabled and the bundle is missing")
     void whisperBannerAppearsWhenBundleMissing() {
         enableStt();
@@ -180,7 +173,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("whisper banner is suppressed when the manifest exists")
     void whisperBannerSuppressedWhenManifestPresent() throws Exception {
         enableStt();
@@ -202,7 +194,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("ffmpeg banner appears when STT is enabled and ffmpeg is not runnable")
     void ffmpegBannerAppearsWhenFfmpegUnavailable() throws Exception {
         enableStt();
@@ -270,7 +261,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("embedding banner appears when ONNX is enabled with a model name and the bundle is missing")
     void embeddingBannerAppearsWhenBundleMissing() {
         enableEmbedding();
@@ -283,7 +273,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("embedding banner is suppressed when the manifest exists")
     void embeddingBannerSuppressedWhenManifestPresent() throws Exception {
         enableEmbedding();
@@ -323,7 +312,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("both banners can appear together when both subsystems are enabled")
     void bothBannersAppearTogether() {
         enableStt();
@@ -337,7 +325,6 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisabledIfEnvironmentVariable(named = MODEL_ROOT_ENV, matches = ".+")
     @DisplayName("the binaryDir argument does not influence resolution")
     void binaryDirArgumentIsIgnored() {
         // Documents a real property of the signature: the first parameter is never read by the body.
