@@ -4,7 +4,7 @@
 - **Date**: 2026-10-07
 - **Decision Owners**: Amsha Architecture Committee
 - **Feature Slug**: `jev-decision-plane`
-- **Related Invariants**: `docs/Architecture_Invariants.md` §27 (decision plane seam), §27.1 (deferred means inert), §5.9 (transaction-free zone), §1.8 (governed transport ownership); `AGENTS.md`
+- **Related Invariants**: `docs/Architecture_Invariants.md` §27 (decision plane seam), §27.1 (deferred means inert), §5.9 (transaction-free zone), §1.8 (module boundaries), §26.3 (governed transport ownership); `AGENTS.md`
 - **Parent decision**: `ADR-jev-decision-plane.md` (Status: **Deferred**) — this ADR does not change that status
 - **Plan**: `docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md`
 
@@ -78,6 +78,11 @@ both, which is what lets the evaluation path treat an engine as a transient, sco
    any future production producer MUST both use it; a second construction path is forbidden. Governance
    completeness is validated by one pure rule (`DecisionProviderGovernance.problem`) that both the
    selector and the factory consult, so the two can never disagree about what "complete" means.
+   The factory re-validates the **whole** selection the same way — the selector's non-governance rules
+   (`DecisionProviderSelector.selectionProblem`) and the requirement that a credentialed provider be given
+   non-empty credential material (`DecisionProviderSelector.requiresCredentialMaterial`) — so a hand-built
+   `Selection.Selected` cannot be built into an engine the selector would have refused.
+
 2. **No CDI engine bean.** The evaluation path constructs the engine **transiently** and closes it
    (both engines are `AutoCloseable`). It MUST NOT register, produce, or expose a `DecisionEngine`
    bean. `Instance<DecisionEngine>` MUST remain unresolvable while the parent ADR is Deferred.

@@ -4,7 +4,7 @@
 - **Exit criteria**: §8 — Exit Criteria, Promotion Path, and Review. This section is the standing promotion contract; §7.7 records the dated evidence disposition that produced it.
 - **Date**: 2026-09-22
 - **Decision Owners**: Amsha Architecture Committee
-- **Related Invariants**: `docs/Architecture_Invariants.md` §27 (decision plane seam), §27.6–27.7 (evaluation path; production-bean gating), §1.8 (module boundaries — governed transport ownership), §4.12, §5.9 (transaction-free zone), §7 parallel tool execution, §7.13.2–7.13.4; `AGENTS.md` §1.18, §8
+- **Related Invariants**: `docs/Architecture_Invariants.md` §27 (decision plane seam), §27.6–27.7 (evaluation path; production-bean gating), §1.8 (module boundaries), §26.3 (governed transport ownership), §4.12, §5.9 (transaction-free zone), §7 parallel tool execution, §7.13.2–7.13.4; `AGENTS.md` §1.18, §8
 - **Feature Slug**: `jev-decision-plane`
 - **Issue Tracker**: `.scratch/jev-decision-plane/`
 - **Research Basis**: `docs/research/Jev-Amsha-Decision-Plane-Scout-2026.md`; Phase 0 provider verification evidence in `docs/research/Jev-Provider-Integration-Plan-2026.md` (2026-10-01, added after this ADR was written)

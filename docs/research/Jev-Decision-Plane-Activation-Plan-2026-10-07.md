@@ -558,8 +558,10 @@ PR-5's deliberate last act. The shape below is what is on disk.
 | `AMSHA_DECISION_<ID>_CREDENTIAL_REF` | _(blank)_ | Self-hosted bearer (W3c) |
 | `AMSHA_DECISION_PRODUCTION_ENGINE_ENABLED` | `false` | W7 **build-time** registration gate (a rebuild enables it; it is not a runtime toggle — see W7) |
 
-Add all of these to the **root `.env.example`** and to `app/src/main/resources/application.yaml`.
-Never edit `app/src/main/resources/env-example` (generated).
+Each key is added to the **root `.env.example`** and to `app/src/main/resources/application.yaml` **with
+the PR that first reads it** — the evaluation key with W4, the production-engine key with W7 — not up
+front, because an env var with no reader is dead configuration (see D5 and W7). Never edit
+`app/src/main/resources/env-example` (generated).
 
 ---
 
