@@ -525,10 +525,13 @@ amsha:
     # -------------------------------------------------------------------------
     # Decision provider selection (Jev / System One).
     #
-    # INERT BY DESIGN: nothing consumes this into a DecisionEngine. It is the
-    # configuration surface only — the ADR keeps the plane Deferred, so a value
-    # here changes no behaviour yet. See
-    # docs/research/Jev-Provider-Integration-Plan-2026.md §8.
+    # NOT A PRODUCTION BEAN: this mapping is never consumed into a registered
+    # DecisionEngine — the parent ADR keeps the plane Deferred. It is consumed
+    # only by the opt-in evaluation path (amsha.decision.evaluation.enabled,
+    # default false), which constructs an engine for a single evaluation without
+    # registering one, so Instance<DecisionEngine> stays unsatisfiable and no
+    # activation switch opens. With that switch off, a value here changes no
+    # behaviour. See docs/research/Jev-Provider-Integration-Plan-2026.md §8.
     #
     # Mirrors the LLM convention above — `selected` picks one provider, and each
     # provider names its own `model`. Those are the same two axes as
@@ -553,8 +556,10 @@ amsha:
     # `localhost`, `::1`, and other 127.x hosts are rejected as ambiguous.
     #
     # `api-key-ref` is a SecretVault reference, never a literal key. The selector
-    # refuses a credentialed remote provider (typesafe) that declares none, but
-    # it never resolves the reference — that wiring does not exist yet.
+    # refuses a credentialed remote provider (typesafe) that declares none, and
+    # the evaluation path resolves the reference to credential material from the
+    # vault (as a system key) before egress — failing closed if it cannot — then
+    # zeroes the bytes once the engine has consumed them.
     # `wire-profile` belongs to the MODEL, not the endpoint: a CLM model must
     # declare PROSE, and the selector refuses the contradiction.
     #
