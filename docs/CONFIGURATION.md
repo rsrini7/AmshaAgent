@@ -221,6 +221,13 @@ disabled classifiers return `DISABLED`. The shadow switches below request *obser
 routing, tool authorization, HITL decisions, or retry budgets. See
 [ADR-jev-decision-plane](./adr/architecture/ADR-jev-decision-plane.md).
 
+> **Proposed, not implemented.** An explicit, opt-in evaluation path is specified in
+> [ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+> (Status: Proposed) and the
+> [activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md). It would allow a real
+> credentialed provider call while still registering no `DecisionEngine` bean. **No variable, class, or
+> endpoint from it exists yet**, and nothing below changes until that ADR is accepted.
+
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_DECISION_SHADOW_INTENT_ENABLED` | `false` | Enable observational shadow intent classification through `DecisionEngine` |
@@ -253,6 +260,8 @@ Two behaviours are worth calling out because both are fail-closed:
 Selects which provider answers decision requests, mirroring the LLM provider convention (`AMSHA_LLM_PROVIDER`
 plus `amsha.llm.<provider>.model`). **Inert:** this is the configuration surface only — nothing consumes it into
 a `DecisionEngine`, so setting these changes no behaviour, and selecting a provider is not activating the plane.
+The [activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md) specifies the wiring that
+would consume it, and the governance keys that wiring would require; none of that is implemented.
 
 Two axes: a provider id names the System One **endpoint** that receives `POST /v1/systemone` (as an LLM provider
 id names the endpoint receiving `/v1/chat/completions`), and `AMSHA_DECISION_{PROVIDER}_MODEL` names the

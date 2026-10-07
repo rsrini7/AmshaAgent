@@ -10,6 +10,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 import com.amsha.classifier.api.DecisionEngine;
@@ -40,6 +41,13 @@ import io.quarkus.test.junit.TestProfile;
  * <p>{@link #bindsTheModelIndependentlyOfTheProviderId()} pins the two axes at the boundary: the provider
  * id names the endpoint and the {@code model} field names what is served there, exactly as
  * {@code amsha.llm.<provider>.model} does on the LLM side.
+ *
+ * <p>{@link #bindsTheGovernanceGroupAndItsDefaults()} pins the nested {@code governance} group. That
+ * group is a group <em>inside</em> a mapped value type, which is the least obvious binding in the
+ * mapping: if SmallRye declined to resolve it, every selector unit test would stay green against a
+ * hand-written double while the real configuration bound {@code null} — and the selector would then
+ * refuse every enabled slot. The comma-separated {@code projection-allow-list} is asserted as a list
+ * for the same reason.
  */
 @QuarkusTest
 @TestProfile(DecisionProviderConfigBindingTest.ConfiguredProviderProfile.class)
@@ -85,6 +93,27 @@ class DecisionProviderConfigBindingTest {
     }
 
     @Test
+    void bindsTheGovernanceGroupAndItsDefaults() {
+        DecisionProviderConfig.Slot.Governance clm = config.slots().get("clm").governance();
+
+        assertNotNull(clm, "the nested governance group must bind, not resolve to null");
+        assertEquals("SELF_HOSTED_LOCAL", clm.dataLocation().orElseThrow());
+        assertEquals(Duration.ZERO, clm.retentionWindow(), "PT0S must convert to a Duration, not survive as text");
+        assertEquals(
+                List.of("goal", "state"),
+                clm.projectionAllowList().orElseThrow(),
+                "the allow-list must bind as a comma-separated list");
+        assertFalse(clm.allowTrainingUse(), "training use must default to false");
+        assertTrue(clm.tenantIsolation(), "tenant isolation must default to true");
+        assertTrue(clm.costCeilingPerThousand().isEmpty(), "no cost ceiling is declared in this profile");
+
+        // The group is per slot: the remote slot carries its own residency, not the loopback slot's.
+        assertEquals(
+                "US_EAST",
+                config.slots().get("typesafe").governance().dataLocation().orElseThrow());
+    }
+
+    @Test
     void resolvesTheConfiguredProviderToItsLaneAndDialect() {
         var selection = DecisionProviderSelector.select(config);
 
@@ -107,7 +136,7 @@ class DecisionProviderConfigBindingTest {
     public static class ConfiguredProviderProfile implements QuarkusTestProfile {
         @Override
         public Map<String, String> getConfigOverrides() {
-            // Map.of caps at ten pairs and this profile needs eleven, so ofEntries is required here.
+            // Map.of caps at ten pairs, so ofEntries is required here.
             return Map.ofEntries(
                     Map.entry("amsha.decision.providers.selected", "clm"),
                     Map.entry("amsha.decision.providers.slots.clm.enabled", "true"),
@@ -116,11 +145,18 @@ class DecisionProviderConfigBindingTest {
                     Map.entry("amsha.decision.providers.slots.clm.api-key-ref", "vault://decision/clm"),
                     Map.entry("amsha.decision.providers.slots.clm.timeout", "PT7S"),
                     Map.entry("amsha.decision.providers.slots.clm.wire-profile", "PROSE"),
+                    // A projection allow-list is required on both lanes; without it the selector refuses
+                    // the slot, so the selection assertions below depend on these two lines.
+                    Map.entry("amsha.decision.providers.slots.clm.governance.data-location", "SELF_HOSTED_LOCAL"),
+                    Map.entry("amsha.decision.providers.slots.clm.governance.retention-window", "PT0S"),
+                    Map.entry("amsha.decision.providers.slots.clm.governance.projection-allow-list", "goal,state"),
                     Map.entry("amsha.decision.providers.slots.typesafe.enabled", "true"),
                     Map.entry(
                             "amsha.decision.providers.slots.typesafe.endpoint", "https://api.typesafe.ai/v1/systemone"),
                     Map.entry("amsha.decision.providers.slots.typesafe.model", "jev-latest"),
-                    Map.entry("amsha.decision.providers.slots.typesafe.api-key-ref", "vault://decision/typesafe"));
+                    Map.entry("amsha.decision.providers.slots.typesafe.api-key-ref", "vault://decision/typesafe"),
+                    Map.entry("amsha.decision.providers.slots.typesafe.governance.data-location", "US_EAST"),
+                    Map.entry("amsha.decision.providers.slots.typesafe.governance.projection-allow-list", "goal"));
         }
     }
 }

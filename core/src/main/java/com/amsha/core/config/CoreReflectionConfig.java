@@ -53,6 +53,7 @@ import com.amsha.core.classifier.DecisionAnswerQualityShadowClassifier;
 import com.amsha.core.classifier.DecisionIntentShadowClassifier;
 import com.amsha.core.classifier.DecisionTelemetry;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
+import com.amsha.core.classifier.provider.DecisionProviderUnavailableException;
 import com.amsha.core.classifier.remote.RemoteDecisionEngine;
 import com.amsha.core.classifier.remote.RemoteEndpointValidator;
 import com.amsha.core.classifier.remote.RemoteProviderConfig;
@@ -232,6 +233,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             DecisionIntentShadowClassifier.class,
             DecisionToolRiskShadowClassifier.class,
             DecisionAnswerQualityShadowClassifier.class,
+            // Decision provider wiring: the validated governance record may cross a serialization
+            // boundary once evidence/telemetry lands, and the refusal exception is part of the
+            // payload-free contract those surfaces report. Registered here rather than with a
+            // type-level annotation, per AGENTS.md §8.
+            DecisionProviderGovernance.class,
+            DecisionProviderUnavailableException.class,
             SelfHostedDecisionEngine.class,
             SelfHostedEndpointValidator.class,
             SelfHostedProviderConfig.class,

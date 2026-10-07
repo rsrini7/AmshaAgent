@@ -307,6 +307,16 @@ placeholder rollout owner — which satisfies the gate while naming nobody — i
 `ActivationGateReadiness`, advisory only: it never rejects the value or closes the gate. Do **not** add a
 production `DecisionEngine` bean without reopening the ADR.
 
+**An explicit evaluation path is proposed to close the evidence gap, and is not implemented.** The
+Deferred posture above is correct but leaves no sanctioned way to make a credentialed provider call —
+which is why the Quality gate cannot be measured. A separate ADR,
+[ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+(Status: **Proposed**), specifies an opt-in, internal-only, non-routing path that builds the configured
+engine **transiently** and never registers a bean, so `Instance<DecisionEngine>` stays unresolvable. Its
+workstreams are in the
+[activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md). Nothing exists in code
+yet, and production activation still requires the Deferred ADR's promotion procedure.
+
 The plane's only REST surface today is the classifier control plane
 (`/api/v1/admin/local-ml/onnx/classifiers*`, `OnnxAdminResource`) — which is also the one part of the
 local-ML stack validatable with **no model bundle**, because those endpoints check `isInternal()` only and

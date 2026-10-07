@@ -2300,6 +2300,15 @@ whose engine is missing:
 Adding a production `DecisionEngine` bean is an architectural change that requires moving the ADR off
 `Deferred`; it MUST NOT arrive as a side effect of an unrelated change.
 
+**Exception — the explicit evaluation path.** The explicit evaluation path defined by
+`ADR-jev-decision-plane-evaluation-path.md` MAY construct a `DecisionEngine` **transiently** without
+registering a CDI bean, and only when all of the following hold: it is disabled by default
+(`amsha.decision.evaluation.enabled=false`); it is reachable only to internal callers; it routes
+nothing and grants no routing authority; it serializes only allow-listed, redacted state; and it
+closes the engine when done. It MUST NOT make `Instance<DecisionEngine>` resolvable, and it MUST NOT
+be implemented before that ADR is accepted. This exception does not relax the rule above: a
+*production* bean still requires the ADR to leave `Deferred`.
+
 ### 27.2 Inertness is announced exactly once (§27.2 INVARIANT)
 
 Because the plane is otherwise silent when inert, `DecisionPlaneReadiness` (`@Startup` + `@PostConstruct`) MUST
@@ -2357,3 +2366,36 @@ It MUST log under its own logger name, never `DecisionPlaneReadiness`: §27.2's 
 contract is asserted by counting log lines containing that name (JEV-12 in
 `rest-http/scripts/validate_decision_plane.sh`), so a second warning emitted from it would make the
 count two and read as non-idempotent `@Startup` initialization.
+
+### 27.6 The evaluation path is opt-in, non-routing, and never behind a classifier SPI (§27.6 INVARIANT)
+
+The explicit evaluation path (`ADR-jev-decision-plane-evaluation-path.md`) is the only sanctioned way
+to make a real provider call while the plane is Deferred. It MUST satisfy all of:
+
+- **Off by default.** `amsha.decision.evaluation.enabled` defaults to `false`; when false it performs
+  no network egress and returns a payload-free refusal.
+- **Internal-only, reads included.** Every evaluation endpoint is guarded by `isInternal()`, including
+  the provider-status `GET`; a non-internal caller is rejected before any provider resolution or egress.
+  This is a recorded exception to the convention that admin reads remain public: the read discloses
+  provider identity, lane, host, model, and credential presence, so the surface is operational rather
+  than a data read. See `ADR-jev-decision-plane-evaluation-path.md` §2.2 rule 4.
+- **Allow-listed and redacted.** State is projected through an explicit `StateProjectionPolicy`
+  allow-list plus a `RedactionPolicy` before serialization. A missing, empty, or invalid allow-list
+  fails closed; the path MUST NOT invent an allow-list from question IDs. Excluded fields and secrets
+  MUST NOT appear in the request body, logs, or evidence.
+- **Non-routing.** It consumes a result; it never selects a route, relaxes a block, or bypasses HITL.
+  A decision may escalate, never downgrade.
+- **Separate seam.** It MUST NOT be used to place a `RemoteDecisionProvider` or
+  `SelfHostedDecisionProvider` behind a classifier SPI; §27.4's placement rules remain authoritative.
+- **Thread and transaction safe.** It MUST NOT run on a Vert.x event-loop thread and MUST NOT execute
+  inside an active JTA write transaction (§5.9).
+- **Audited and payload-free.** Each evaluation records an audit event; no state, prompt, label,
+  secret, or provider body is logged.
+
+### 27.7 A production engine bean still requires the promotion procedure (§27.7 INVARIANT)
+
+Registering a production `DecisionEngine` bean and enabling the router remain gated by
+`ADR-jev-decision-plane.md` §8.4 steps 1–5. §27.6's evaluation path does not satisfy them and MUST NOT
+be presented as doing so. Until those steps are recorded, no production engine bean MUST exist and the
+router's activation gate MUST remain unapproved. This is the boundary that keeps a structural
+guarantee from degrading into a configurational one.

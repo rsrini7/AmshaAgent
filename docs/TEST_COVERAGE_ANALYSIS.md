@@ -3052,6 +3052,26 @@ UI suite: **195 passing** at **59.26%** line coverage (was 172 at 58.67%). The U
 unchanged — hand-written `ArcClient` and `ui/src/api/types.ts`; see
 [ARCHITECTURE](./ARCHITECTURE.md) §"Cockpit API contract ownership".
 
+#### Phase 5 — decision-plane evaluation path (2026-10-07): **proposed, no code yet**
+
+Nothing in this section moves a coverage number, because nothing has been implemented. It is recorded
+here so the next coverage cycle does not read the evaluation path as unplanned work.
+
+A production-grade design for the deferred plane's missing capability — an explicit, opt-in,
+non-routing **evaluation path** that can make a real credentialed provider call without registering a
+`DecisionEngine` bean — is specified in
+[ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+(Status: **Proposed**) and the
+[activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md). Its test matrix
+(plan Appendix C.4) is ~10 new unit/IT classes across `core` and `app`, plus four new
+`validate_decision_plane.sh` checks (`JEV-13`..`JEV-16`).
+
+Expected coverage effect when it lands: `core` gains a factory, a governance validator, a credential
+resolver, an evaluation service, an evidence runner and a drift monitor — all new, all unit-testable,
+which should lift `core` rather than dilute it. `app` gains one internal-only admin resource whose
+authorization matrix is asserted in-container. The `0.82` reactor floor is unaffected by the design
+itself; per-class figures must be read from `jacoco.xml` after the fact, as always.
+
 #### Phase 5 — remaining work (2026-09-29)
 
 Measured against the target list at the top of this phase:

@@ -4,10 +4,11 @@
 - **Exit criteria**: §8 — Exit Criteria, Promotion Path, and Review. This section is the standing promotion contract; §7.7 records the dated evidence disposition that produced it.
 - **Date**: 2026-09-22
 - **Decision Owners**: Amsha Architecture Committee
-- **Related Invariants**: `docs/Architecture_Invariants.md` §27 (decision plane seam), §1.8 (module boundaries — governed transport ownership), §4.12, §5.9 (transaction-free zone), §7 parallel tool execution, §7.13.2–7.13.4; `AGENTS.md` §1.18, §8
+- **Related Invariants**: `docs/Architecture_Invariants.md` §27 (decision plane seam), §27.6–27.7 (evaluation path; production-bean gating), §1.8 (module boundaries — governed transport ownership), §4.12, §5.9 (transaction-free zone), §7 parallel tool execution, §7.13.2–7.13.4; `AGENTS.md` §1.18, §8
 - **Feature Slug**: `jev-decision-plane`
 - **Issue Tracker**: `.scratch/jev-decision-plane/`
 - **Research Basis**: `docs/research/Jev-Amsha-Decision-Plane-Scout-2026.md`; Phase 0 provider verification evidence in `docs/research/Jev-Provider-Integration-Plan-2026.md` (2026-10-01, added after this ADR was written)
+- **Related ADR**: `ADR-jev-decision-plane-evaluation-path.md` (**Proposed**, 2026-10-07) — would authorise the explicit, opt-in, non-routing evaluation path only. It does **not** change this ADR's `Status: Deferred` and does not satisfy §8.4 steps 1–5.
 
 ---
 
@@ -360,10 +361,35 @@ Issue 07 evaluates activation gates for the low-risk ambiguous intent routing pi
   * No database migration, session flush, or restart-dependent state cleanup is required.
 * **Unresolved Risks & Required Next Evidence**:
   1. *Model Drift & Hallucinated Routing*: Candidate models must demonstrate < 1% false specialist routing on ambiguous prompts without degrading coordinator oversight.
-  2. *Cost & Token Budgets*: Committee-approved cost ceilings per 1,000 decisions and measurable latency p95 < 50ms must be established before re-opening the pilot.
+  2. *Cost & Token Budgets*: Committee-approved cost ceilings per 1,000 decisions and measurable latency p95 < 50ms must be established before re-opening the pilot. (The latency figure is the local-pilot one; §8.3 supersedes it with a per-lane budget — p95 < 50 ms local/self-hosted, < 500 ms remote — and the cost ceiling remains unset.)
   3. *Accountable Owner*: An accountable rollout and rollback owner must be designated by the Amsha Architecture Committee.
 * **Final ADR Disposition**:
   The ADR status is set to **Deferred**. The foundational interfaces (`DecisionEngine`, `DecisionRequest`, `DecisionResult`), local self-hosted boundary (Issue 05), remote governed boundary (Issue 06), and routing pilot scaffolding (Issue 07) remain preserved in the codebase in dormant/shadow state for future evaluation when candidate model evidence is established.
+
+### 7.8 Explicit Evaluation Path authorised (2026-10-07)
+
+§7.7 refused activation and named the evidence that would justify re-opening it, but left one gap
+unaddressed: **there was no sanctioned way to produce that evidence.** The Quality gate is UNMET
+because no candidate has ever been evaluated, and the plane could not evaluate one — no runtime caller
+consumed `DecisionProviderSelector`, `api-key-ref` was resolved by nobody, and the shadow classifier
+SPIs are network-free by construction, so a remote engine cannot travel them
+(`ProviderPlacementValidator`).
+
+A separate ADR, `ADR-jev-decision-plane-evaluation-path.md`, is **Proposed** to close that gap. Once
+accepted it authorises an explicit, opt-in, internal-only, **non-routing** evaluation path: a shared
+`DecisionEngineFactory` builds the configured engine transiently, the evaluation path sends only
+allow-listed and redacted data, and the engine is closed without ever registering a CDI bean. The path
+MUST NOT land before that ADR is accepted.
+
+What this checkpoint does **not** do:
+
+* It does **not** change this ADR's status. It remains **Deferred**.
+* It does **not** satisfy §8.4 steps 1–5, and it authorises no production `DecisionEngine` bean and no
+  router switch.
+* It grants no routing authority. The evaluation path consumes a result; it never chooses a route.
+
+It is the instrument by which the Quality gate (§8.2) can be closed. Activation remains a recorded
+human decision under §8.4.
 
 ---
 
@@ -389,6 +415,13 @@ being required to decide.
 | Governance | Approved retention, training use, residency, isolation, secrets, egress | **UNMET** — TypeSafe retention/residency undeclared; training-use is refused outright by `RemoteProviderConfig` | Amsha Architecture Committee |
 | Quality | M1 exactly zero and M2 below 1% on a versioned corpus, per lane (8.3) | **UNMET** — no candidate has run through the conformance suite; §7.4 evidence was explicitly `N/A (Synthetic)` | Committee, until a model owner is designated — none exists today |
 | Operations | Latency/cost ceilings, monitoring **with drift alerting**, kill switch, named owner, rollback rehearsal | **UNMET** — no authorised cost ceiling or p95 SLA; no named owner; no drift-alerting implementation exists (the only `DecisionTelemetry` counter is payload-free and tagged `action`/`escalated`/`fallback`/`outcome`, so it carries neither a confidence distribution nor model identity and cannot express drift) | Amsha Architecture Committee |
+
+**The Quality gate now has a proposed instrument.** As of 2026-10-07 the explicit evaluation path is
+proposed (§7.8, `ADR-jev-decision-plane-evaluation-path.md`), so a credentialed candidate call can be
+made and Phase 3 evidence gathered once that ADR is accepted. This does not move any gate's status:
+Quality remains UNMET until M1 and M2 are actually measured and reviewed, Governance remains UNMET
+until retention and residency are declared, and Operations remains UNMET until ceilings, drift
+alerting, and a named owner exist. The gate table above is the current state, not a projection.
 
 **On fixtures.** §2 of the
 [integration plan](../../research/Jev-Provider-Integration-Plan-2026.md) records why this gate is worded
@@ -423,7 +456,7 @@ authored; none is newly invented.
 | **M1** | False-allow rate | Cases where a model opinion caused a path that should have blocked or escalated to proceed as allowed — a relaxed block, a bypassed HITL, or a pre-policy guard `Allow` that skipped a mandatory check — over all adversarial and security-adjacent corpus cases | **Exactly zero.** Absolute, not a budget. One instance fails the gate |
 | **M2** | Specialist routing error rate | Requests routed to a specialist other than the labelled correct one, over the **ambiguous subset only** (cases where the deterministic baseline is itself non-deterministic) | **< 1%**, and no degradation of coordinator oversight |
 | **M3** | Abstention rate | `NoOpinion` results over all evaluated cases | **Reported and reviewed; no pass threshold.** Abstention routes to `DETERMINISTIC_FALLBACK`, the pre-existing safe path, so over-abstention cannot cause a safety failure — it costs latency and money, which M4/M5 already bound. Setting a threshold is a Committee decision, not an inferred number |
-| **M4** | p95 latency | Per decision, not per batch | **< 50 ms** |
+| **M4** | p95 latency | Per decision, not per batch | **< 50 ms for an in-process/self-hosted local lane; < 500 ms for a remote hosted lane.** The single "< 50 ms" figure above was written for the local intent pilot and is unreachable for a hosted provider; the two-lane budget reconciles it with the feature spec's provisional remote target. Measured per lane, never combined |
 | **M5** | Cost ceiling | Per 1,000 decisions | Authorised by the Committee, never inferred from a provider price page |
 
 Two rules that make M1 and M2 measurable rather than rhetorical:

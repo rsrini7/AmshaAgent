@@ -1,6 +1,8 @@
 package com.amsha.core.config;
 
+import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -58,7 +60,9 @@ public interface DecisionProviderConfig {
      * One provider's settings — the endpoint, and what to ask of it.
      *
      * <p>Everything except {@link #enabled()} and {@link #timeout()} is optional in the mapping, but
-     * the selector refuses an enabled slot that has no {@link #endpoint()} or no {@link #model()}.
+     * the selector refuses an enabled slot that has no {@link #endpoint()}, and one that has no
+     * {@link #model()} on the <em>remote</em> lane — a self-hosted slot may omit the model, because
+     * those servers select their own checkpoint.
      */
     interface Slot {
 
@@ -88,9 +92,11 @@ public interface DecisionProviderConfig {
          *
          * <p>This is a separate axis from the provider id, which is why it exists at all: the same
          * runtime endpoint can serve different decision models, and a specific decision server
-         * ({@code laya-serve}) still needs the checkpoint named explicitly. Required whenever the slot
-         * is enabled — the System One contract makes {@code model} mandatory, so an enabled slot
-         * without one is refused rather than silently defaulted.
+         * ({@code laya-serve}) still needs the checkpoint named explicitly. Required on the
+         * <em>remote</em> lane — the hosted System One contract makes {@code model} mandatory, so a
+         * remote slot without one is refused rather than silently defaulted. The self-hosted lane may
+         * omit it: those servers select their own checkpoint, and the mapper omits the field rather
+         * than inventing one.
          */
         Optional<String> model();
 
@@ -115,5 +121,69 @@ public interface DecisionProviderConfig {
          */
         @WithDefault("JSON_OBJECT")
         WireProfile wireProfile();
+
+        /**
+         * The data-governance declaration for this provider.
+         *
+         * <p>Every member is optional or defaulted, so an undeclared group binds to an empty
+         * declaration rather than failing the whole mapping. Completeness is a <em>lane-dependent</em>
+         * rule enforced when an engine is actually built — see {@code DecisionProviderGovernance} —
+         * not at binding time: a self-hosted loopback slot needs no residency declaration, whereas a
+         * remote slot that egresses state must declare one. Requiring it here would refuse the
+         * self-hosted lane for a rule that does not apply to it.
+         */
+        Governance governance();
+
+        /**
+         * Data-governance controls for one provider slot.
+         *
+         * <p>These are the declarations the parent ADR's Governance gate requires before state may
+         * leave the process. Declaring them here records an operator decision; it does not by itself
+         * activate anything.
+         */
+        interface Governance {
+
+            /**
+             * Declared geographic or cloud location of the provider (for example {@code US_EAST},
+             * {@code EU_WEST}, {@code SELF_HOSTED_LOCAL}). Required for a remote slot.
+             */
+            Optional<String> dataLocation();
+
+            /**
+             * Maximum duration the provider may retain submitted state. {@code PT0S} — the default —
+             * declares zero retention, which is a positive statement, not an absence of one.
+             */
+            @WithDefault("PT0S")
+            Duration retentionWindow();
+
+            /**
+             * Whether the provider may train on submitted state. Must remain {@code false}; a
+             * {@code true} value is refused rather than sent.
+             */
+            @WithDefault("false")
+            boolean allowTrainingUse();
+
+            /**
+             * Whether the provider enforces tenant isolation. Must remain {@code true}; a
+             * {@code false} value is refused.
+             */
+            @WithDefault("true")
+            boolean tenantIsolation();
+
+            /**
+             * The top-level state field names permitted to leave the process, comma-separated.
+             *
+             * <p>This is the allow-list the projection redactor applies before serialization. It is
+             * deliberately explicit: the projection fails closed rather than inventing an allow-list
+             * from question handles, so an enabled slot that egresses state without one is refused.
+             */
+            Optional<List<String>> projectionAllowList();
+
+            /**
+             * The authorised cost ceiling per 1,000 decisions, if one has been approved. Required
+             * before production activation; not required to gather evaluation evidence.
+             */
+            Optional<BigDecimal> costCeilingPerThousand();
+        }
     }
 }

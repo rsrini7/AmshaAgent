@@ -2520,6 +2520,15 @@ from the switches the run actually loads.
 `JEV-5`..`JEV-7` overlap `ONNX-5`..`ONNX-7` **deliberately**: the same invariant must hold both
 with and without the local ONNX bundle loaded, so do not delete either copy.
 
+> **Planned, not implemented.** If the proposed explicit evaluation path is accepted
+> ([ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md),
+> Status: Proposed), this validator gains four checks — **JEV-13** (a decision-admin authorization
+> matrix: unauthenticated `401`, non-internal `403`), **JEV-14** (the provider-status payload is
+> payload-free: an exact key set, no state, no secret), **JEV-15** (evaluation is refused with **no
+> egress** while `amsha.decision.evaluation.enabled=false`), and **JEV-16** (no `DecisionEngine` bean
+> is resolvable while the plane is Deferred, extending `JEV-5`). No such endpoint exists yet, so the
+> current count stays at `JEV-1`..`JEV-12`.
+
 ## 24. Testing Identity, OIDC, Web Sessions, and Multi-Admin
 
 To verify the complete identity subsystem, browser authentication, and multi-admin scopes in real-time, follow these manual test scenarios.

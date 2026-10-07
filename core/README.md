@@ -247,6 +247,12 @@ Observational-only shadow evaluation for intent routing, tool risk, and answer q
 > `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op. See
 > [ADR-jev-decision-plane](../docs/adr/architecture/ADR-jev-decision-plane.md) and
 > [Architecture Invariants](../docs/Architecture_Invariants.md) §27.
+>
+> **Proposed, not implemented:** an explicit evaluation path would let a configured provider be called
+> for evidence gathering without registering a bean — see
+> [ADR-jev-decision-plane-evaluation-path](../docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+> and the [activation plan](../docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md). No such
+> service, factory, or resource exists in this module yet.
 
 | Property | Env Var | Default | Description |
 |---|---|---|---|

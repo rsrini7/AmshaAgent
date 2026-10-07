@@ -76,6 +76,11 @@ return `NoOpinion(MISSING_MODEL)`; disabled classifiers return `DISABLED`, and t
   shadow classifiers return `NoOpinion(MISSING_MODEL)`, while disabled classifiers return `DISABLED`.
   `IntentDecisionRouter.isEnabled()` is false and its evaluation returns a `DISABLED` fallback. Do not add a
   production `DecisionEngine` bean without reopening the ADR.
+- **An explicit evaluation path is proposed, not implemented.** It would build the configured engine
+  transiently and never register a bean, so the rule above still holds. See
+  [ADR-jev-decision-plane-evaluation-path](../docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+  (Status: Proposed). Placement rules here are unchanged: a remote or self-hosted provider is still
+  forbidden from a classifier SPI.
 - **Escalate, never downgrade.** A higher-risk opinion may escalate a decision
   (`BLOCK > REQUIRE_APPROVAL > ALLOW`) but may never relax an existing block or bypass HITL approval.
 - **No transaction coupling.** Evaluation and provider transport never run inside a `@Transactional`

@@ -744,6 +744,33 @@ lane already binds credentials.
 Nothing here authorizes enabling the router flags, fabricating candidate evidence, recording cost
 approval, or naming a rollout owner. Those remain unmet, and the ADR remains **Deferred**.
 
+## 11. Status update (2026-10-07) — the evaluation path is now specified
+
+The §10 boundary — "no credentialed call has been made, and retention/residency remain undeclared" —
+is unchanged in the code. What is new is the *design* that closes it, and it is deliberately a
+documentation-only step: no engine, producer, resource, or configuration has been added.
+
+- **`docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md`** specifies a production-grade,
+  two-capability design: an **explicit evaluation path** (a shared `DecisionEngineFactory`, an
+  opt-in internal-only `DecisionEvaluationService`, and an internal admin resource) that makes a real
+  credentialed provider call while registering **no** CDI `DecisionEngine` bean, followed by a gated
+  **production routing** activation that remains behind the ADR §8.4 promotion steps.
+- **`ADR-jev-decision-plane-evaluation-path.md`** (**Proposed**) would authorize that evaluation path
+  and nothing more. It does not move the parent ADR off `Deferred` and does not satisfy §8.4 steps 1–5.
+- Two specific gaps §10 does not name are recorded there: **`api-key-ref` is consumed by nobody**
+  (so a credentialed call is currently impossible, not merely unapproved), and the **self-hosted lane
+  has no bearer** (it sends only `X-Amsha-Loopback-Token`, so a secured Laya/CLM is unreachable).
+- The Operations gate's drift requirement is also scoped: `DecisionMetadata` already carries
+  `providerId`/`modelId`/`latency`/`inputTokens`/`outputTokens`, but `DecisionTelemetry` does not
+  consume it, so no confidence distribution or model identity — and therefore no drift signal — exists.
+- **M4 is reconciled** in the parent ADR §8.3 as a lane-specific budget: p95 < 50 ms for an
+  in-process/self-hosted local lane, p95 < 500 ms for a remote hosted lane. The earlier single
+  "< 50 ms" figure was written for the local intent pilot and is unreachable for a hosted provider.
+
+Nothing in this update changes any gate's status. Quality remains UNMET until M1/M2 are measured;
+Governance remains UNMET until retention and residency are declared; Operations remains UNMET until
+ceilings, drift alerting, and a named owner exist.
+
 ## Sources
 
 First-party TypeSafe documentation, retrieved 2026-10-01:
@@ -783,6 +810,10 @@ Repository artifacts:
   comparison, self-hosted-provider constraints, and its first-party-source links.
 - [ADR: Jev Decision Plane](../adr/architecture/ADR-jev-decision-plane.md), especially §§3–4 and
   §§7.5–7.7.
+- [ADR: Jev Decision Plane — Explicit Evaluation Path](../adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+  (**Proposed**) — the opt-in, non-routing evaluation path (§11).
+- [Jev Decision Plane — Production Activation Plan](Jev-Decision-Plane-Activation-Plan-2026-10-07.md) —
+  the workstream-level implementation brief (§11).
 - [`RemoteDecisionEngine`](../../core/src/main/java/com/amsha/core/classifier/remote/RemoteDecisionEngine.java),
   [`RemoteDecisionWireCodec`](../../core/src/main/java/com/amsha/core/classifier/remote/RemoteDecisionWireCodec.java),
   [`RemoteProviderConfig`](../../core/src/main/java/com/amsha/core/classifier/remote/RemoteProviderConfig.java)
