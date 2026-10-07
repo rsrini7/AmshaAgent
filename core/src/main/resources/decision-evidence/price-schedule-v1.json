@@ -1,0 +1,5 @@
+{
+  "scheduleVersion": 1,
+  "description": "Decision-provider inference prices for M5. Entries stay empty until the Amsha Architecture Committee approves a per-(providerId, modelId) rate carrying a published source and an effective date. An unpriced provider/model is reported as unpriced, never as zero cost, and the scope is provider inference charges only - it excludes the cost of running local compute for a self-hosted lane.",
+  "entries": []
+}

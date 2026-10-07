@@ -52,8 +52,8 @@ class DecisionShadowEvaluationIT {
 
     @BeforeEach
     void setUp() throws Exception {
-        try (InputStream stream = getClass().getResourceAsStream("/shadow-evaluation/shadow_evaluation_corpus.json")) {
-            assertNotNull(stream, "shadow_evaluation_corpus.json must be present on classpath");
+        try (InputStream stream = getClass().getResourceAsStream("/decision-evidence/corpus-v1.json")) {
+            assertNotNull(stream, "decision-evidence/corpus-v1.json must be present on classpath");
             harness = new DecisionShadowComparisonHarness(stream);
         }
     }

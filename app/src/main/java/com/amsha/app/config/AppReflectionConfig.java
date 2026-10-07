@@ -6,6 +6,7 @@ import com.amsha.app.api.AuditResource;
 import com.amsha.app.api.AuthResource;
 import com.amsha.app.api.CoreMemoryAdminResource;
 import com.amsha.app.api.DbConsoleResource;
+import com.amsha.app.api.DecisionAdminResource;
 import com.amsha.app.api.IdentityResource;
 import com.amsha.app.api.ModelArenaResource;
 import com.amsha.app.api.OnnxAdminResource;
@@ -116,6 +117,12 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CockpitHealthResource.class,
             DbConsoleResource.class,
             ModelArenaResource.class,
+            // W4 decision evaluation surface: the operator DTOs cross the JSON boundary, so they must
+            // be reachable reflectively in a native image. Registered centrally, per AGENTS.md §8.
+            DecisionAdminResource.class,
+            DecisionAdminResource.ProviderStatusResponse.class,
+            DecisionAdminResource.EvaluateRequest.class,
+            DecisionAdminResource.EvaluateResponse.class,
             DbQueryRequest.class,
             DbQueryResponse.class,
             ArenaCompareRequest.class,

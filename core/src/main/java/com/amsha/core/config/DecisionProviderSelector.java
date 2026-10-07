@@ -111,7 +111,8 @@ public final class DecisionProviderSelector {
      */
     public static Selection select(DecisionProviderConfig config) {
         Objects.requireNonNull(config, "config");
-        String providerId = trimToEmpty(config.selected());
+        String providerId =
+                config.selected().map(DecisionProviderSelector::trimToEmpty).orElse("");
         if (providerId.isEmpty()) {
             return new Selection.Unavailable("No decision provider is selected"
                     + " (amsha.decision.providers.selected is blank), so the decision plane stays inert");

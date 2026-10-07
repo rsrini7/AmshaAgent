@@ -755,8 +755,8 @@ documentation-only step: no engine, producer, resource, or configuration has bee
   opt-in internal-only `DecisionEvaluationService`, and an internal admin resource) that makes a real
   credentialed provider call while registering **no** CDI `DecisionEngine` bean, followed by a gated
   **production routing** activation that remains behind the ADR §8.4 promotion steps.
-- **`ADR-jev-decision-plane-evaluation-path.md`** (**Proposed**) would authorize that evaluation path
-  and nothing more. It does not move the parent ADR off `Deferred` and does not satisfy §8.4 steps 1–5.
+- **`ADR-jev-decision-plane-evaluation-path.md`** (**Accepted**, 2026-10-07) authorizes that evaluation
+  path and nothing more. It does not move the parent ADR off `Deferred` and does not satisfy §8.4 steps 1–5.
 - Two specific gaps §10 does not name are recorded there: **`api-key-ref` is consumed by nobody**
   (so a credentialed call is currently impossible, not merely unapproved), and the **self-hosted lane
   has no bearer** (it sends only `X-Amsha-Loopback-Token`, so a secured Laya/CLM is unreachable).
@@ -811,7 +811,7 @@ Repository artifacts:
 - [ADR: Jev Decision Plane](../adr/architecture/ADR-jev-decision-plane.md), especially §§3–4 and
   §§7.5–7.7.
 - [ADR: Jev Decision Plane — Explicit Evaluation Path](../adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
-  (**Proposed**) — the opt-in, non-routing evaluation path (§11).
+  (**Accepted**, 2026-10-07) — the opt-in, non-routing evaluation path (§11).
 - [Jev Decision Plane — Production Activation Plan](Jev-Decision-Plane-Activation-Plan-2026-10-07.md) —
   the workstream-level implementation brief (§11).
 - [`RemoteDecisionEngine`](../../core/src/main/java/com/amsha/core/classifier/remote/RemoteDecisionEngine.java),

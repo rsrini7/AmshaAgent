@@ -19,6 +19,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.message.VideoContent;
 import dev.langchain4j.data.pdf.PdfFile;
 
+import com.amsha.classifier.api.DecisionMetadata;
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
@@ -53,6 +54,15 @@ import com.amsha.core.classifier.DecisionAnswerQualityShadowClassifier;
 import com.amsha.core.classifier.DecisionIntentShadowClassifier;
 import com.amsha.core.classifier.DecisionTelemetry;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
+import com.amsha.core.classifier.evaluation.DecisionEvaluationOutcome;
+import com.amsha.core.classifier.evaluation.DecisionEvaluationRefusedException;
+import com.amsha.core.classifier.evaluation.DecisionEvaluationRequest;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceCase;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceCaseResult;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceCorpus;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceSummary;
+import com.amsha.core.classifier.evaluation.DecisionPriceSchedule;
+import com.amsha.core.classifier.evaluation.DecisionRefusalReason;
 import com.amsha.core.classifier.provider.DecisionProviderUnavailableException;
 import com.amsha.core.classifier.remote.RemoteDecisionEngine;
 import com.amsha.core.classifier.remote.RemoteEndpointValidator;
@@ -239,6 +249,31 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             // type-level annotation, per AGENTS.md §8.
             DecisionProviderGovernance.class,
             DecisionProviderUnavailableException.class,
+            // W4 evaluation path: the request and outcome records may cross the evidence and telemetry
+            // serialization boundaries, and the refusal type and its reason enum are part of the
+            // payload-free contract those surfaces report. Registered centrally, per AGENTS.md §8.
+            DecisionEvaluationRequest.class,
+            DecisionEvaluationOutcome.class,
+            DecisionEvaluationRefusedException.class,
+            DecisionRefusalReason.class,
+            DecisionMetadata.class,
+            // W5 evidence corpus: the versioned corpus is deserialized from a classpath resource at
+            // runtime, so its records (and the nested redaction attestation) need reflection entries in
+            // a native image. Registered centrally, per AGENTS.md §8.
+            DecisionEvidenceCase.class,
+            DecisionEvidenceCorpus.class,
+            DecisionEvidenceCorpus.Baseline.class,
+            DecisionEvidenceCorpus.RedactionReview.class,
+            // W5 evidence run result: the summary (and its nested metric records) is serialized as the
+            // /evidence/run response and the per-case results carry the gate maths. Registered centrally,
+            // per AGENTS.md §8.
+            DecisionEvidenceCaseResult.class,
+            DecisionEvidenceSummary.class,
+            DecisionEvidenceSummary.MetricResult.class,
+            DecisionEvidenceSummary.LaneLatency.class,
+            DecisionEvidenceSummary.LaneCost.class,
+            DecisionPriceSchedule.class,
+            DecisionPriceSchedule.PriceEntry.class,
             SelfHostedDecisionEngine.class,
             SelfHostedEndpointValidator.class,
             SelfHostedProviderConfig.class,

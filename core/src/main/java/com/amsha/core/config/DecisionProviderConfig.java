@@ -44,10 +44,9 @@ public interface DecisionProviderConfig {
 
     /**
      * The provider id to use for decision evaluation, matching a key under {@link #slots()}.
-     * Blank — the default — selects nothing, which is the shipped Deferred posture.
+     * Empty means no provider is selected, keeping the shipped Deferred posture.
      */
-    @WithDefault("")
-    String selected();
+    Optional<String> selected();
 
     /**
      * Declared provider slots, keyed by provider id.

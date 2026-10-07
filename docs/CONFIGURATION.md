@@ -221,12 +221,12 @@ disabled classifiers return `DISABLED`. The shadow switches below request *obser
 routing, tool authorization, HITL decisions, or retry budgets. See
 [ADR-jev-decision-plane](./adr/architecture/ADR-jev-decision-plane.md).
 
-> **Proposed, not implemented.** An explicit, opt-in evaluation path is specified in
+> **Accepted and implemented, default-off.** `AMSHA_DECISION_EVALUATION_ENABLED=false` gates the
+> internal-only, non-routing provider evaluation endpoints. The versioned corpus runner is available at
+> `POST /api/v1/admin/decision/evidence/run`. This path registers no `DecisionEngine` bean; the parent
+> decision-plane ADR remains Deferred. See
 > [ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
-> (Status: Proposed) and the
-> [activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md). It would allow a real
-> credentialed provider call while still registering no `DecisionEngine` bean. **No variable, class, or
-> endpoint from it exists yet**, and nothing below changes until that ADR is accepted.
+> and the [activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md).
 
 | Variable | Default | Description |
 |---|---|---|

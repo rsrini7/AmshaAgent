@@ -1,6 +1,6 @@
 # ADR: Jev Decision Plane — Explicit Evaluation Path
 
-- **Status**: Proposed — awaiting Amsha Architecture Committee acceptance. Authorises the evaluation path only; production routing remains Deferred under `ADR-jev-decision-plane` §8
+- **Status**: **Accepted** (2026-10-07) — Amsha Architecture Committee. Authorises the evaluation path only; production routing remains Deferred under `ADR-jev-decision-plane` §8
 - **Date**: 2026-10-07
 - **Decision Owners**: Amsha Architecture Committee
 - **Feature Slug**: `jev-decision-plane`

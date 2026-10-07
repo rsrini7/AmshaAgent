@@ -573,11 +573,12 @@ validator also asserts the `DecisionPlaneReadiness` startup diagnostic fired exa
 set `AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true` to require it, or `=false` to forbid
 it when the shadow switches are disabled.
 
-> **Planned, not implemented:** if the proposed explicit evaluation path is accepted
-> ([ADR-jev-decision-plane-evaluation-path](../docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md)),
-> this validator gains JEV-13..16: an authorization matrix for a decision admin surface, a
-> payload-free provider-status shape, a no-egress-when-disabled assertion, and a no-resolvable-engine
-> assertion. None of those endpoints exist yet.
+> **Implemented:** the evaluation path is Accepted and default-off. `validate_decision_plane.sh`
+> currently checks provider-status authorization (JEV-13), disabled evaluation refusal (JEV-14),
+> and unknown decision refusal (JEV-15). `DecisionEvaluationPathIT` checks that CDI still cannot
+> resolve a `DecisionEngine`; `DecisionEvidenceIT` exercises the versioned evidence endpoint with
+> a loopback provider fixture. Exact provider-status payload shape is not yet asserted by the shell
+> validator.
 
 ### New P109 config flags (also in `.env.example`)
 

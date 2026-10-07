@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.classifier.api.DecisionEngine;
 import com.amsha.core.classifier.wire.WireProfile;
@@ -61,7 +62,7 @@ class DecisionProviderConfigBindingTest {
 
     @Test
     void bindsTheSelectedProviderAndItsDeclaredSlot() {
-        assertEquals("clm", config.selected());
+        assertEquals(Optional.of("clm"), config.selected());
 
         DecisionProviderConfig.Slot clm = config.slots().get("clm");
         assertNotNull(clm, "the clm slot must be declared");

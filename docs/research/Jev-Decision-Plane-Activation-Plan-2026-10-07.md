@@ -310,9 +310,8 @@ Appendix C has concrete config/reflection/test sketches; Appendix D is the five-
 strictly non-routing.
 
 **Design pinned (2026-10-07) — see D1–D6 at the end of this section.** The one open question, *what the
-evaluation path evaluates and where that comes from*, is now answered: the registry's single entry is the
-router's own `amsha.routing.intent.v1`. W4 remains **blocked on the companion ADR being Accepted** — the
-pinned design removes the excuse for inventing vocabulary, not the gate.
+evaluation path evaluates and where that comes from*, is now answered: the registry contains `amsha.routing.intent.v1` and `tool.risk.shadow`; W5 added the latter so M1 is measurable end to end. The companion ADR is now **Accepted** (2026-10-07), so W4 is
+**unblocked** — the pinned design removes the excuse for inventing vocabulary, and the gate is satisfied.
 
 - New: `core/.../classifier/evaluation/DecisionEvaluationService.java` (`@ApplicationScoped`)
   ```java
@@ -330,8 +329,10 @@ pinned design removes the excuse for inventing vocabulary, not the gate.
   6. Assert **not** on an event-loop thread; the service runs on a worker/virtual thread.
   7. **Audit** the egress attempt and outcome (audit-before-mutation convention), payload-free.
 - New: `core/.../classifier/evaluation/DecisionEvaluationRequest.java`,
-  `DecisionEvaluationOutcome.java`, `DecisionEvidenceSpec.java`, `DecisionEvidenceSummary.java`
-  (records; validated in compact constructors).
+  `DecisionEvaluationOutcome.java` (records; validated in compact constructors). The evidence records
+  (`DecisionEvidenceSpec`, `DecisionEvidenceSummary`) land with **W5**, together with the runner that
+  consumes them. At the W4 boundary, `/evidence/run` returned 501 until the runtime corpus was available; W5 now
+  implements the endpoint (see the implementation status below).
 - New: `app/src/main/java/com/amsha/app/api/DecisionAdminResource.java`
   - `GET  /api/v1/admin/decision/provider` — resolved selection status: providerId, lane, host, model,
     governance-declared?, credential-present? (booleans only; **no secrets, no state**).
@@ -355,14 +356,16 @@ W4's one unstated ambiguity was **what the evaluation path evaluates, and where 
 is no id→`DecisionDefinition` registry in the codebase today: the only main-code builder is
 `IntentDecisionRouter.definition(ReviewBand, Duration)`, and its single CHOICE question's options are the
 runtime `validRoles` passed to `evaluateIntent(...)`. These six decisions are pinned so the implementer
-does not have to invent them. **They do not authorise W4 to land** — the companion ADR must still be
-Accepted first.
+does not have to invent them. **They do not themselves authorise W4 to land** — that came from the
+companion ADR's acceptance (2026-10-07).
 
-**D1 — The evaluation path evaluates the router's own decision, not a new one.** The registry's first and
-only entry is `amsha.routing.intent.v1`, the definition `IntentDecisionRouter` already builds. This is not
-a convenience: the Phase 3 evidence exists to justify activating *that* router, so evidence gathered
-against a different decision would not close the Quality gate. It also means no new decision vocabulary is
-invented, which keeps the change inside the companion ADR's authority.
+**D1 — W4 starts with router intent; W5 adds the tool-risk instrument for M1.** The registry
+seeds `amsha.routing.intent.v1` from `IntentDecisionRouter.definition(...)`. W5 also registers
+`tool.risk.shadow` from `DecisionToolRiskShadowClassifier.definition(...)`, reusing the shadow
+classifier’s fixed vocabulary and policy band so M1 can be measured end to end. Both definitions
+remain behind the evaluation path; neither registers a production `DecisionEngine` bean or gives
+the evaluation path routing authority. This addition preserves the accepted evaluation-path ADR’s
+no-routing scope and the parent ADR’s Deferred status.
 
 **D2 — The registry owns the security-shaped parts; the caller supplies only the closed set.** A new
 `core/.../classifier/evaluation/DecisionDefinitionRegistry` maps `decisionId` to a registered entry:
@@ -375,11 +378,11 @@ public record RegisteredDecision(
                                           // option list or CALLER_SUPPLIED
 ```
 
-It is a **static, explicit map** — no scanning, no reflection — seeded with exactly one entry, and it is
-the only place a definition may come from. What a caller may influence is deliberately narrow: the
-**options of a `CALLER_SUPPLIED` CHOICE question**. Everything that bounds egress — `RetentionPolicy`,
-`RedactionPolicy`, `allowedProviders`, `failMode` — comes from the registered definition and cannot be set
-by a request. A request naming an unregistered `decisionId` is refused, never defaulted.
+It is a **static, explicit map** — no scanning or reflection — seeded with the two allow-listed
+definitions and the only place an evaluation definition may come from. The caller may influence
+only options for a question marked `CALLER_SUPPLIED`. Retention, redaction, provider placement,
+and failure policy come from the registered definition. Requests naming unknown decision IDs are
+refused rather than defaulted.
 
 **D3 — The request carries a decision id and state; it never carries a policy.**
 
@@ -415,7 +418,7 @@ propagated.
   governance-declared?, credential-present? Identifiers and booleans; **no secret, no state**.
   Internal-only, per the ADR §2.2 rule 4 exception.
 - `POST /api/v1/admin/decision/evaluate` — one evaluation over a registered definition.
-- `POST /api/v1/admin/decision/evidence/run` — W5; refuse until W5 lands rather than half-implementing it.
+- `POST /api/v1/admin/decision/evidence/run` — implemented in W5; runs a registered corpus version and returns a payload-free M1–M5 summary. The default-off switch still prevents egress.
 - `amsha.decision.evaluation.enabled` (**default false**) gates all three; when false the service performs
   no egress and returns a payload-free refusal. The key lands **with** W4 — it is deliberately absent from
   the configuration today, because an env var with no reader is dead configuration.
@@ -429,6 +432,46 @@ refusal with no HTTP call); `DecisionEvaluationPathNoEgressLeakIT` (a local fixt
 debug keys, and secrets never reach the request body); `DecisionEvaluationPathIT` (evaluation succeeds
 while `Instance<DecisionEngine>` remains unsatisfied).
 
+**W4 — implementation notes (2026-10-07).** The pinned design above is unchanged; these are the
+decisions it left implicit, resolved while implementing it.
+
+- **`QuestionSpec` is a closed shape, not a bag.** It carries `handle`, `kind`, `criteria`,
+  `fixedOptions`, and a `callerSupplied` flag, with `callerSupplied(...)` / `fixedChoice(...)` /
+  `fixed(...)` factories. Only a `CHOICE` may be caller-supplied — a `SCORE` rubric or a `NOUL`
+  proposition is not a closed set, so there is nothing for a caller to widen.
+- **`RegisteredDecision.optionsProblem(supplied)` is the one option rule**, consulted before any
+  provider is built: an option set is required for exactly the caller-supplied handles and forbidden
+  for every other one, and the count is bounded (2..255) so a malformed request is a client error
+  rather than a construction failure.
+- **`DecisionEvaluationOutcome` gained `noOpinionReason`.** D4's shape (`opinion`, `ruleId`) cannot
+  distinguish "provider disabled" from "model abstained" — both would be `opinion=false, ruleId=null`.
+  Only the categorical `NoOpinionReason` name is carried; the already-sanitized `detail` still is not.
+- **`DecisionEvaluationService.evaluate(request, actorUserId)` takes the actor.** D5 requires
+  `resolveUserId()` for audit attribution, and the audit event is written by the service (which owns
+  the egress), so the resolved id has to cross the service boundary rather than be re-derived there.
+- **`DecisionRefusalReason` is a top-level enum**, so the service, the exception, and the HTTP layer
+  can all name a constant and the resource maps status codes from a closed set (400 for a bad request,
+  409 for disabled/unavailable, 500 for an event-loop caller).
+- **`SecurityEventType.DECISION_EVALUATION_REQUESTED`** (mandatory) is the one event per evaluation,
+  written immediately before the provider call. Because it is mandatory, an audit-write failure stops
+  the call — audit-before-mutation, asserted by `DecisionEvaluationServiceTest`.
+- **The registry tracks the router's configuration** (`review-band.*`, `timeout-ms`) with a defensive
+  clamp to the documented defaults, so a value only the router consumes cannot fail the construction of
+  an otherwise inert bean.
+- **`GET /admin/decision/provider` answers even when the switch is off.** It performs no egress, so
+  gating it would only hide the state an operator needs; the switch is reported as `evaluationEnabled`
+  in the payload instead. The two POST endpoints are gated as D5 requires.
+- **The app-layer tests register the internal key through `ApiKeyRegistry`.** `ApiKeyAuthFilter`
+  authenticates with `X-Amsha-API-Key` and rejects an unknown key with 401 <em>before</em> the
+  resource's `isInternal()` guard runs, so a test that only relied on the yaml key would see 401 for
+  every case. All three classes therefore `register("internal", …)` in `@BeforeEach`, exactly as
+  `SkillPersonaRoutingTest` does, and the `ci` key is registered under a non-internal name so the 403
+  cases exercise the guard rather than authentication.
+- **`@Consumes(APPLICATION_JSON)` is scoped to `/evaluate`, not the class.** `/evidence/run` takes no
+  body; with a class-level `@Consumes` the bodyless POST is rejected with 415 before the method runs,
+  so the 501 refusal would be unreachable. Scoping it to the one method that actually reads an entity
+  keeps the refusal observable.
+
 ### W5 — Evidence pipeline (Phase 3)
 
 **Goal:** produce the Quality-gate evidence the ADR demands, for real candidates.
@@ -440,16 +483,103 @@ while `Instance<DecisionEngine>` remains unsatisfied).
   - Computes: **M1** false-allow (must be exactly 0), **M2** specialist routing error < 1% on the
     ambiguous subset, **M3** abstention rate (reported, no threshold), **M4** p95 latency
     (lane-specific — see §6), **M5** cost per 1,000 decisions.
-  - Emits payload-free aggregate JSON + Markdown to `.scratch/jev-decision-plane/evidence/`.
-- Corpus: promote the existing `core/src/test/resources/shadow-evaluation/shadow_evaluation_corpus.json`
-  to a versioned `core/src/test/resources/decision-evidence/corpus-v1.json`; every case redacted and
-  allow-listed.
-- Extend `DecisionShadowComparisonHarness.CandidateType` with a **measured** `REAL_PROVIDER` mode that
-  executes via the factory instead of synthesising outcomes; keep the existing simulation flags for the
-  legacy baselines.
-- **Tests:** `DecisionEvidenceRunnerTest` (metric maths on a fixed corpus; M1 zero-rule; M2 denominator
-  excludes confidently-handled cases); `DecisionEvidenceIT` (`@QuarkusTest`, gated on a configured
-  provider so it is a no-op without one).
+- Returns a payload-free aggregate JSON summary from `/evidence/run`. Writing JSON and Markdown artifacts under
+  `.scratch/jev-decision-plane/evidence/` remains a follow-up.
+- Corpus: **promoted (2026-10-07)** from the test-only `shadow-evaluation/shadow_evaluation_corpus.json`
+  to a versioned, shipped `core/src/main/resources/decision-evidence/corpus-v1.json` (30 redacted cases
+  across 9 partitions). `DecisionEvidenceCorpusRegistry` loads and validates it — structure, size, unique
+  ids, and an `APPROVED` redaction attestation that admits to no real secrets or PII — and is the only
+  source of a corpus, so a caller selects a registered version rather than posting arbitrary cases. The
+  records are registered in `CoreReflectionConfig`, and the resource is named in
+  `quarkus.native.resources.includes` in **both** `app/src/main/resources/application.yaml` and
+  `app/pom.xml`'s native profile: Quarkus ships no resources by default, so a classpath corpus is absent
+  from a native image unless it is listed. `DecisionShadowEvaluationIT` now reads the canonical resource.
+- The runtime runner is independent of the test-only `DecisionShadowComparisonHarness` and
+  `CandidateType`; the harness remains a simulation tool. `DecisionEvidenceIT` exercises the
+  real app endpoint against a loopback provider fixture.
+- **Tests:** `DecisionEvidenceRunnerTest` (policy outcomes, M1/M2 denominators, M3 reporting,
+  M4 lane p95, and M5 fail-closed pricing); `DecisionEvidenceIT` (registered corpus over a
+  real HTTP fixture while `Instance<DecisionEngine>` remains unsatisfied).
+
+**W5 — corpus pin, and the gaps that remain (2026-10-07).** The structural blocker found during
+reconnaissance — two bullets above named facilities that exist only in `core/src/test/java` — is
+**resolved by pin**:
+
+- **Pinned and landed:** the corpus is a versioned, shipped classpath resource in
+  `core/src/main/resources/decision-evidence/`; the runner lives in `main` and is **independent** of the
+  test-only `DecisionShadowComparisonHarness` / `CandidateType` (a measured `REAL_PROVIDER` mode, if kept,
+  delegates to the main runner rather than being extended into it); the endpoint selects a registered
+  version; structure and size are validated; secrets and real user data are excluded by the redaction
+  attestation; and the resource is listed for the native build. On disk: `DecisionEvidenceCase`,
+  `DecisionEvidenceCorpus`, `DecisionEvidenceCorpusRegistry`, `corpus-v1.json`, the `CoreReflectionConfig`
+  entries, both `quarkus.native.resources.includes` entries, and `DecisionEvidenceCorpusRegistryTest`.
+
+**W5 runner and metric computation are implemented (2026-10-07).** The endpoint runs the shipped corpus through both deterministic policies and reports M1–M5. The JSON/Markdown writer under `.scratch/jev-decision-plane/evidence/` remains a follow-up; the HTTP endpoint returns the JSON summary directly.
+and M4's budgets; only the runner itself remains:**
+
+- **M1's instrument — pinned and landed (2026-10-07).** M1 (false-allow, the headline "must be exactly 0"
+  gate) is a **tool-risk** metric, so it needs a tool-risk decision the evaluation path can run.
+  `DecisionDefinitionRegistry` now seeds **two** decisions — the router's own
+  (`amsha.routing.intent.v1`) and the tool-risk decision (`tool.risk.shadow`) — and the second reuses the
+  shadow path's own vocabulary rather than inventing any:
+  `DecisionToolRiskShadowClassifier` gained a `definition(reviewBand, timeout)` factory (mirroring
+  `IntentDecisionRouter.definition`) plus a shared `TOOL_RISK_CRITERIA` constant used by **both**
+  `classify` and `definition`, so the registered definition and the request the shadow path actually asks
+  cannot drift apart; the band is `ToolRiskDecisionPolicy.DEFAULT_REVIEW_BAND`. The registry's class
+  javadoc was updated from "its single seeded entry" to the two-entry rationale (one decision per gate
+  that reads evidence). Nothing about the Deferred state changes: a registered *definition* is not a
+  `DecisionEngine` bean, so `Instance<DecisionEngine>` stays unsatisfiable and no switch is enabled.
+**Runner behavior now covered by `DecisionEvidenceRunnerTest`:** tool-risk corpus fields are projected to the shadow path’s canonical `agentRole,autonomyLevel,toolName,parameters,goal` context; M1 uses 11 SECURITY cases as its denominator and the 9 restrictive-expected cases as its numerator cohort.
+  canonical projection (`agentRole,autonomyLevel,toolName,parameters,goal`), not the corpus's snake_case
+  `input` verbatim, or the evidence would describe a differently-encoded question. M1's **denominator** is
+  the ADR §8.3 "adversarial and security-adjacent" set — the corpus's `SECURITY` cases, **11** of the 13
+  tool-risk cases — and its **numerator** is a `SECURITY` case that should have blocked or escalated
+  (restrictive expectation, **9** of the 13: 5 `BLOCK` + 4 `REQUIRE_APPROVAL`) yet resolved to allow. The
+  two `NO_OPINION` security cases can never contribute a false-allow; they belong to M3.
+- **M2's denominator — pinned and landed (2026-10-07).** M2's "ambiguous subset" is a property of the
+  **corpus**, never of the candidate: deriving it from the candidate's own review band would let the
+  denominator move with the thing being measured, which makes the gate meaningless. The corpus now names
+  and versions the baseline it classifies against (`baseline.baselineId` / `baselineVersion` /
+  `description` — `amsha.deterministic.intent-baseline` v1) and classifies **every** intent case as
+  `AMBIGUOUS` or `UNAMBIGUOUS` with a per-case rationale, validated in `DecisionEvidenceCase` (an
+  unclassified intent case, or a classification on a non-intent case, is refused). `AMBIGUOUS` means the
+  pinned baseline **cannot uniquely select exactly one eligible specialist**. The shipped corpus has **3**
+  ambiguous intent cases — `intent-contra-01`, `intent-hostile-01`, `intent-mal-01`, the three where the
+  baseline selects no specialist — out of 12. The ADR §8.3 wording is clarified to match: *"the baseline
+  cannot uniquely select an eligible specialist"* replaces "the deterministic baseline is itself
+  non-deterministic".
+
+  `intent-mal-01` has a blank `input.message`, so the runner refuses to build an evaluation request for it.
+  M2 therefore reports `Evaluated 2/3` and `passed=false` for corpus v1. This is fail-closed; do not coerce the
+  blank message into an egress request. Resolve it by revising the corpus case or the decision contract before
+  treating M2 as complete.
+
+  On this cohort a routing error is well-defined, so it is not an undefined subset: an `AMBIGUOUS` case's
+  correct label is `NO_OPINION` (the baseline selects no specialist), so resolving to **any** concrete
+  specialist is the M2 error; a `UNAMBIGUOUS` case's correct label is its `expectedLabel` specialist, so
+  resolving to a different one is the error. The runner compares the resolved label against
+  `expectedLabel`/`acceptableLabels` for both, so the three ambiguous cases are fully specified.
+- **M5's mechanism — pinned and landed (2026-10-07); its rates remain a Committee value.** M5 must **not**
+  reuse the global LLM governance rates (`amsha.governance.price-per-1k-input`/`-output`): those are not
+  tied to the selected decision provider and model. `DecisionPriceSchedule` is a versioned schedule keyed
+  by the exact `(providerId, modelId)`, each `PriceEntry` carrying input/output USD rates, a `source`, and
+  an ISO-8601 `effectiveDate`; `DecisionPriceScheduleRegistry` loads
+  `decision-evidence/price-schedule-v<n>.json` from the classpath and fails closed without failing
+  startup, exactly as the corpus registry does. `PriceEntry.costUsd` returns **empty** when either token
+  count is absent, and `find` returns empty for an unpriced pair, so **unknown cost can never become
+  zero**; `costPerThousand(decisions, totalPricedUsd)` supplies the ratio, and the ceiling is the existing
+  per-slot `costCeilingPerThousand`, approved only once the Committee authorises it. The shipped schedule
+  v1 is **empty by design** — no rate is authorised yet, and each needs a published source and effective
+  date (§8). Scope is **provider inference charges only**; the self-hosted local-compute method remains
+  open (§8). The resource sits under `decision-evidence/**`, which the native-image include glob already
+  covers, so adding a schedule needs no extra native wiring.
+- **M4's budgets — pinned and landed (2026-10-07).** `DecisionLatencyBudget` (in `classifier-api`, beside
+  `ReviewBand` and `ProviderCategory`) carries the ADR's two per-lane p95 budgets — `ADR_8_3` = **50 ms**
+  local, **500 ms** remote — with `forCategory` mapping `IN_PROCESS`/`SELF_HOSTED` to the local budget and
+  `REMOTE` to the remote one, and `isWithin` applying the ADR's **strict** `<`. The lanes are never
+  combined; computing the observed p95 from a set of measurements stays the runner's job.
+- Minor: there is no main-code report writer, so the `.scratch/jev-decision-plane/evidence/` emission
+  named above is currently a test-time concern only.
 
 ### W6 — Telemetry, drift, cost & latency (core)
 
@@ -499,12 +629,12 @@ while `Instance<DecisionEngine>` remains unsatisfied).
 
 ### W8 — ADR & invariant changes
 
-**Status: W8.1–W8.4 landed.** Only two things remain open in this workstream: the Committee's acceptance
-of the evaluation-path ADR (W8.1, still `Proposed`), and the parent ADR's §8.4 status flip, which is
-PR-5's deliberate last act. The shape below is what is on disk.
+**Status: W8.1–W8.4 landed.** Only one thing remains open in this workstream: the parent ADR's §8.4
+status flip, which is PR-5's deliberate last act. (The evaluation-path ADR was **Accepted** 2026-10-07.)
+The shape below is what is on disk.
 
-1. **New ADR** `docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md` — **drafted
-   (Status: `Proposed`)**; needs Committee acceptance before W4 lands.
+1. **New ADR** `docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md` — **Accepted**
+   (2026-10-07). W4 may now land.
    - Authorises the explicit evaluation path: on-demand engine construction, opt-in, internal-only,
      allow-listed + redacted data, no CDI engine bean, no routing authority.
    - States that it does **not** satisfy ADR §8.4 steps 1–5 and does **not** move production routing
@@ -531,11 +661,20 @@ PR-5's deliberate last act. The shape below is what is on disk.
 
 ### W9 — Tests, gates, validator
 
-- Extend `rest-http/scripts/validate_decision_plane.sh` with:
+- **Landed with W4 (2026-10-07).** `rest-http/scripts/validate_decision_plane.sh` now carries:
   - **JEV-13** — `GET /admin/decision/provider` rejects unauthenticated (401) and non-internal (403).
-  - **JEV-14** — the provider status payload is payload-free (exact key set; no state, no secret).
-  - **JEV-15** — evaluation is refused (no egress) while `amsha.decision.evaluation.enabled=false`.
-  - **JEV-16** — no `DecisionEngine` bean is resolvable while the plane is Deferred (extends JEV-5).
+  - **JEV-14** — evaluation is refused with `DISABLED` (409, no egress) while
+    `amsha.decision.evaluation.enabled=false`; when the switch is on it tolerates 200 /
+    409 `PROVIDER_UNAVAILABLE` rather than failing, since that is the operator gathering evidence.
+  - **JEV-15** — an unregistered decision id is refused as a client error (400 `UNREGISTERED_DECISION`);
+    skipped while the switch is off, because the registered/unregistered distinction is unreachable then.
+- **Still open in W9:**
+  - The provider-status **payload shape** (exact key set; no state, no secret) is not yet asserted by the
+    shell validator. It is a cheap addition on top of JEV-13 and should land with the next validator change.
+  - "No `DecisionEngine` bean is resolvable while the plane is Deferred" **cannot** be a shell assertion —
+    CDI resolution is not observable over HTTP. It is asserted directly in `DecisionEvaluationPathIT` via
+    `Instance<DecisionEngine>.isResolvable()`. The validator's JEV-5/JEV-6 cover the observable
+    consequence instead (no classifier is effective; enable fails closed).
 - Per `AGENTS.md`: after Java edits `python3 ./scripts/fix_fqns.py && ./mvnw spotless:apply -q`; run the
   module PMD gate `./mvnw -pl <module> -am pmd:check -DskipTests`; after Markdown edits
   `python3 ./scripts/verify_docs.py`; before commit `mise run sonar:issues`.
@@ -589,7 +728,7 @@ W3 credential┘
 W8 ADR (before W4 lands)                 W9 tests/validator (with each PR)
 ```
 
-W4 must not land before the evaluation-path ADR (W8.1) is accepted.
+W4 lands after the evaluation-path ADR (W8.1) is accepted — **Accepted 2026-10-07**, so W4 is unblocked.
 
 ### 7.2 Hard prohibitions (mirroring §27)
 
@@ -612,14 +751,20 @@ W4 must not land before the evaluation-path ADR (W8.1) is accepted.
 
 ## 8. Open items requiring human / Committee input (not code)
 
-1. **M5 cost ceiling** — a number authorised by the Committee (TypeSafe input is $0.042/Mtok; output
-   free). The plan supplies the mechanism; the value is a decision.
+1. **M5 cost ceiling, price schedule, and scope** — the ceiling is a number authorised by the Committee,
+   never inferred from a provider price page (TypeSafe input is $0.042/Mtok; output free). The versioned
+   price schedule's per-`(providerId, modelId)` rates need an authoritative **source** and **effective
+   date**, and the Committee must either accept M5's scope as *provider inference charges only* or approve
+   a local-compute cost method for self-hosted lanes. The plan supplies the mechanism; the values are
+   decisions.
 2. **Rollout & rollback owner** — a person or team, never a placeholder (`ActivationGateReadiness`
    warns on placeholders by design).
 3. **Review cadence** — the ADR §8.5 90-day trigger is still an unconfirmed proposal.
 4. **TypeSafe account + ZDR** — issue the key at `console.typesafe.ai/keys`, bind via `SecretVault`,
    and record the retention/residency declarations (ZDR is enterprise-only via `sales@typesafe.ai`).
-5. **Corpus provenance** — who signs off that the versioned evidence corpus is representative.
+5. **Corpus provenance and baseline classification** — who signs off that the versioned evidence corpus is
+   representative, and who reviews the per-intent-case `AMBIGUOUS`/`UNAMBIGUOUS` classification against the
+   pinned `amsha.deterministic.intent-baseline` v1 (M2's denominator depends on it).
 
 *(M4 is deliberately absent from this list: the lane-specific budget is resolved in §6 and recorded in
 the parent ADR §8.3, so no Committee decision is outstanding for it.)*
@@ -757,7 +902,7 @@ Five PRs, in order. Each is independently reviewable; PR-2 is the only one gated
 |---|---|---|---|
 | **PR-1** ✅ | W1, W2, W3 | `DecisionEngineFactory`, `DecisionEngineHandle`, `DecisionProviderGovernance`, `DecisionCredentialResolver`, `DecisionProviderUnavailableException`; `DecisionProviderConfig.Slot.Governance`; selector governance refusal; `application.yaml` + `.env.example`; reflection; tests. **Inert — no caller, no egress, no new endpoint.** | unit tests; module PMD; spotless; docs verify |
 | **PR-2** | W4 | `DecisionEvaluationService` + records; `DecisionAdminResource` + DTOs; `amsha.decision.evaluation.enabled`; audit; reflection. | **ADR accepted first**; ITs incl. no-egress-when-disabled and no-leak; validator JEV-13..15 |
-| **PR-3** | W5 | `DecisionEvidenceRunner`; versioned corpus; `REAL_PROVIDER` harness mode; evidence artifacts. | unit tests; corpus reviewed for redaction |
+| **PR-3** | W5 | Versioned corpus, policy-composed `DecisionEvidenceRunner`, `/evidence/run`, and fixture-backed IT. | M1–M5 metric tests; redaction review; JSON/Markdown artifact writer remains a follow-up. |
 | **PR-4** | W6 | `DecisionTelemetry` extension; `DecisionDriftMonitor`; cost-ceiling and latency-budget enforcement. | unit tests; bounded-cardinality review |
 | **PR-5** | W7 | `DecisionEngineProducer` with a **build-time** `@IfBuildProperty` gate (not a runtime switch — see W7); `amsha.decision.production-engine.enabled`; **only then** the ADR status flip and gate-value recording. | §8.4 steps 1–4 recorded; ITs; validator JEV-16. **W8.2/W8.3 are already landed** — see W8 |
 

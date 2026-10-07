@@ -69,13 +69,17 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   exactly one `DecisionPlaneReadiness` WARN.
   Moving the ADR off `Deferred` is a deliberate architectural change, never a side effect
   of an unrelated edit (`docs/Architecture_Invariants.md` §27).
-- An **explicit evaluation path** is *proposed* (not implemented) to make a real provider call
-  without registering a production bean: see
-  `docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md` and the
-  `docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md` brief. Until that ADR is
-  accepted, nothing from it may be implemented, and the statements above stand unchanged. When
-  it does land, the path must stay off by default, internal-only, allow-listed, non-routing, and
-  must NOT make `Instance<DecisionEngine>` resolvable (§27.6, §27.7).
+- An **explicit evaluation path** exists to make a real provider call without registering a production
+  bean: see `docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md` (status: **Accepted**,
+  2026-10-07) and the `docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md` brief. It is
+  opt-in (`amsha.decision.evaluation.enabled`, default `false`), internal-only, audited-before-egress, and
+  non-routing, and it is the only caller of the `DecisionEngineFactory` construction seam — constructing an
+  engine for one evaluation is not registering one, so `Instance<DecisionEngine>` stays unsatisfiable and no
+  activation switch opens. W4 and W5 have landed: the versioned corpus-backed `/evidence/run` endpoint
+  reports M1–M5 through the deterministic policy layer. The price schedule is intentionally empty until
+  rates are approved, so this work does not close the parent ADR's Quality or Operations gates.
+  The path must stay off by default, internal-only, allow-listed, non-routing, and must NOT make
+  `Instance<DecisionEngine>` resolvable (§27.6, §27.7).
 - After a successful tool result, the coordinator must emit `FINISH`; no subsequent
   tool call may follow in that turn. Keep full and compact prompts aligned.
 - `NETWORK_OUTBOUND` and `EXECUTE_SHELL` always require HITL. Trusted roles only

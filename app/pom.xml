@@ -588,7 +588,8 @@ paths: {}</echo>
           skills/**,
           META-INF/skills/**,
           META-INF/services/**,
-          provider-catalog.json
+          provider-catalog.json,
+          decision-evidence/**
         </quarkus.native.resources.includes>
       </properties>
     </profile>

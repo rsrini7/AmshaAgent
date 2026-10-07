@@ -248,17 +248,19 @@ Observational-only shadow evaluation for intent routing, tool risk, and answer q
 > [ADR-jev-decision-plane](../docs/adr/architecture/ADR-jev-decision-plane.md) and
 > [Architecture Invariants](../docs/Architecture_Invariants.md) §27.
 >
-> **Proposed, not implemented:** an explicit evaluation path would let a configured provider be called
-> for evidence gathering without registering a bean — see
+> **Accepted and implemented evaluation path:** `DecisionEvaluationService` and `DecisionEvidenceRunner`
+> are exposed through the app's internal-only admin resource. The default-off switch gates real provider
+> calls; `/evidence/run` reads a shipped, versioned corpus and returns payload-free M1–M5 metrics. The
+> path registers no `DecisionEngine` bean, and the parent decision-plane ADR remains Deferred. See
 > [ADR-jev-decision-plane-evaluation-path](../docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
-> and the [activation plan](../docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md). No such
-> service, factory, or resource exists in this module yet.
+> and the [activation plan](../docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md).
 
 | Property | Env Var | Default | Description |
 |---|---|---|---|
 | `amsha.decision.shadow.intent.enabled` | `AMSHA_DECISION_SHADOW_INTENT_ENABLED` | `false` | Enables shadow intent classification using `DecisionEngine`. |
 | `amsha.decision.shadow.tool-risk.enabled` | `AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED` | `false` | Enables shadow tool risk evaluation using `DecisionEngine`. |
 | `amsha.decision.shadow.answer-quality.enabled` | `AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED` | `false` | Enables shadow answer quality evaluation using `DecisionEngine`. |
+| `amsha.decision.evaluation.enabled` | `AMSHA_DECISION_EVALUATION_ENABLED` | `false` | Opt-in evaluation path: when `true`, an internal-only operator may run one registered decision against a configured provider for evidence gathering. Off by default; it never registers a `DecisionEngine` bean, so it does not activate the decision plane (§27). |
 | `amsha.routing.intent-decision-router.enabled` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED` | `false` | Enables low-risk typed intent decision pilot router (Issue 07). |
 | `amsha.routing.intent-decision-router.review-band.low` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW` | `0.50` | Lower threshold for intent review band (below which judgment falls back to deterministic default). |
 | `amsha.routing.intent-decision-router.review-band.high` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH` | `0.85` | Upper threshold for intent review band (at or above which direct routing applies). |

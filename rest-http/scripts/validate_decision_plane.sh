@@ -19,6 +19,9 @@
 #   JEV-10     mutation requires an internal key
 #   JEV-11     startupEnabled implies requestedEnabled
 #   JEV-12     the DecisionPlaneReadiness diagnostic fired exactly once and is well-formed
+#   JEV-13     decision evaluation authorization matrix (unauthenticated, non-internal)
+#   JEV-14     evaluation is refused with DISABLED while the opt-in switch is off
+#   JEV-15     an unregistered decision id is refused as a client error
 #
 # Env:
 #   AMSHA_VALIDATION_LOG_FILE                    server log to assert JEV-12 against (skipped when unset)
@@ -66,6 +69,13 @@ fail() { printf "❌ HTTP %s — %s\n" "$CODE" "$(response_shape)"; FAIL=$((FAIL
 mute() { curl -s -m "$CURL_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 
 CLASSIFIERS_URL="$B/api/v1/admin/local-ml/onnx/classifiers"
+DECISION_PROVIDER_URL="$B/api/v1/admin/decision/provider"
+DECISION_EVALUATE_URL="$B/api/v1/admin/decision/evaluate"
+
+# One valid evaluation of the router's own registered decision, and one naming an id that is not in
+# the registry. The state carries only the allow-listed field the fixture's governance permits.
+DECISION_EVAL_BODY='{"decisionId":"amsha.routing.intent.v1","stateJson":"{\"user_message\":\"contract-validator\"}","choiceOptions":{"intent_role_choice":["coder","researcher"]}}'
+DECISION_EVAL_UNKNOWN_BODY='{"decisionId":"amsha.routing.unknown.v9","stateJson":"{\"user_message\":\"contract-validator\"}","choiceOptions":{}}'
 
 # Extracts one TSV row per classifier. Booleans become 1/0 so the invariants below can be
 # evaluated arithmetically. Exits non-zero when the payload shape is not exactly the contract.
@@ -350,6 +360,48 @@ fi
 info "JEV-10: Mutation rejects a non-internal key"
 CODE=$(mute -X POST -H "X-Amsha-API-Key: $CI_KEY" "$CLASSIFIERS_URL/unknown/enable")
 if [ "$CODE" = "403" ]; then ok "$CODE [unknown id — no mutation possible]"; else fail "$CODE"; fi
+
+# ── JEV-13: Decision evaluation authorization matrix ──
+info "JEV-13: Decision provider status rejects unauthenticated callers"
+CODE=$(mute -X GET "$DECISION_PROVIDER_URL")
+if [ "$CODE" = "401" ]; then ok "$CODE"; else fail "$CODE"; fi
+info "JEV-13: Decision provider status rejects non-internal callers"
+CODE=$(mute -X GET -H "X-Amsha-API-Key: $CI_KEY" "$DECISION_PROVIDER_URL")
+if [ "$CODE" = "403" ]; then ok "$CODE"; else fail "$CODE"; fi
+
+# ── JEV-14: Evaluation is refused while the opt-in switch is off ──
+# The shipped posture is disabled, so an evaluation must be refused with DISABLED and must not
+# egress. When the switch IS on (an operator gathering evidence) the request reaches the provider
+# layer instead, and the response is 200 or 409 PROVIDER_UNAVAILABLE — both of which are accepted
+# here, because JEV-15 is the check that then exercises the enabled path.
+EVAL_ENABLED=1
+info "JEV-14: Evaluation is refused with DISABLED while the opt-in switch is off"
+CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
+  -d "$DECISION_EVAL_BODY" "$DECISION_EVALUATE_URL")
+if [ "$CODE" = "409" ] && grep -q '"DISABLED"' "$RESP_FILE"; then
+  ok "$CODE"
+  EVAL_ENABLED=0
+elif [ "$CODE" = "409" ] && grep -q '"PROVIDER_UNAVAILABLE"' "$RESP_FILE"; then
+  ok_detail "switch on, provider unavailable"
+elif [ "$CODE" = "200" ]; then
+  ok_detail "switch on, evaluation succeeded"
+else
+  fail "$CODE"
+fi
+
+# ── JEV-15: An unregistered decision id is refused as a client error ──
+info "JEV-15: Evaluation refuses a decision id that is not registered"
+if [ "$EVAL_ENABLED" = "1" ]; then
+  CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
+    -d "$DECISION_EVAL_UNKNOWN_BODY" "$DECISION_EVALUATE_URL")
+  if [ "$CODE" = "400" ] && grep -q '"UNREGISTERED_DECISION"' "$RESP_FILE"; then
+    ok "$CODE"
+  else
+    fail "$CODE"
+  fi
+else
+  skip "evaluation switch is off; the registered/unregistered distinction is not reachable"
+fi
 
 # ── JEV-12: Startup readiness diagnostic ──
 LOG_FILE="${AMSHA_VALIDATION_LOG_FILE:-}"

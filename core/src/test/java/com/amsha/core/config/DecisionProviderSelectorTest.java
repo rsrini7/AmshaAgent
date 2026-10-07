@@ -131,8 +131,8 @@ class DecisionProviderSelectorTest {
         Map<String, DecisionProviderConfig.Slot> declared = new LinkedHashMap<>(slots);
         return new DecisionProviderConfig() {
             @Override
-            public String selected() {
-                return selected;
+            public Optional<String> selected() {
+                return Optional.ofNullable(selected);
             }
 
             @Override

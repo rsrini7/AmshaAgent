@@ -8,7 +8,7 @@
 - **Feature Slug**: `jev-decision-plane`
 - **Issue Tracker**: `.scratch/jev-decision-plane/`
 - **Research Basis**: `docs/research/Jev-Amsha-Decision-Plane-Scout-2026.md`; Phase 0 provider verification evidence in `docs/research/Jev-Provider-Integration-Plan-2026.md` (2026-10-01, added after this ADR was written)
-- **Related ADR**: `ADR-jev-decision-plane-evaluation-path.md` (**Proposed**, 2026-10-07) — would authorise the explicit, opt-in, non-routing evaluation path only. It does **not** change this ADR's `Status: Deferred` and does not satisfy §8.4 steps 1–5.
+- **Related ADR**: `ADR-jev-decision-plane-evaluation-path.md` (**Accepted**, 2026-10-07) — authorises the explicit, opt-in, non-routing evaluation path only. It does **not** change this ADR's `Status: Deferred` and does not satisfy §8.4 steps 1–5.
 
 ---
 
@@ -375,11 +375,10 @@ consumed `DecisionProviderSelector`, `api-key-ref` was resolved by nobody, and t
 SPIs are network-free by construction, so a remote engine cannot travel them
 (`ProviderPlacementValidator`).
 
-A separate ADR, `ADR-jev-decision-plane-evaluation-path.md`, is **Proposed** to close that gap. Once
-accepted it authorises an explicit, opt-in, internal-only, **non-routing** evaluation path: a shared
+A separate ADR, `ADR-jev-decision-plane-evaluation-path.md`, closes that gap — **Accepted** 2026-10-07.
+It authorises an explicit, opt-in, internal-only, **non-routing** evaluation path: a shared
 `DecisionEngineFactory` builds the configured engine transiently, the evaluation path sends only
-allow-listed and redacted data, and the engine is closed without ever registering a CDI bean. The path
-MUST NOT land before that ADR is accepted.
+allow-listed and redacted data, and the engine is closed without ever registering a CDI bean.
 
 What this checkpoint does **not** do:
 
@@ -416,11 +415,11 @@ being required to decide.
 | Quality | M1 exactly zero and M2 below 1% on a versioned corpus, per lane (8.3) | **UNMET** — no candidate has run through the conformance suite; §7.4 evidence was explicitly `N/A (Synthetic)` | Committee, until a model owner is designated — none exists today |
 | Operations | Latency/cost ceilings, monitoring **with drift alerting**, kill switch, named owner, rollback rehearsal | **UNMET** — no authorised cost ceiling or p95 SLA; no named owner; no drift-alerting implementation exists (the only `DecisionTelemetry` counter is payload-free and tagged `action`/`escalated`/`fallback`/`outcome`, so it carries neither a confidence distribution nor model identity and cannot express drift) | Amsha Architecture Committee |
 
-**The Quality gate now has a proposed instrument.** As of 2026-10-07 the explicit evaluation path is
-proposed (§7.8, `ADR-jev-decision-plane-evaluation-path.md`), so a credentialed candidate call can be
-made and Phase 3 evidence gathered once that ADR is accepted. This does not move any gate's status:
-Quality remains UNMET until M1 and M2 are actually measured and reviewed, Governance remains UNMET
-until retention and residency are declared, and Operations remains UNMET until ceilings, drift
+**The Quality gate now has an Accepted, implemented instrument.** The default-off evaluation path
+and versioned corpus runner can make a candidate call and report policy-composed evidence while
+the parent decision plane remains Deferred. This does not move any gate status: Quality remains
+UNMET until M1 and M2 are measured on candidate evidence and reviewed; Governance remains UNMET
+until retention and residency are declared; Operations remains UNMET until ceilings, drift
 alerting, and a named owner exist. The gate table above is the current state, not a projection.
 
 **On fixtures.** §2 of the
@@ -453,17 +452,20 @@ authored; none is newly invented.
 
 | # | Metric | Definition (numerator / denominator) | Acceptance rule |
 |---|---|---|---|
-| **M1** | False-allow rate | Cases where a model opinion caused a path that should have blocked or escalated to proceed as allowed — a relaxed block, a bypassed HITL, or a pre-policy guard `Allow` that skipped a mandatory check — over all adversarial and security-adjacent corpus cases | **Exactly zero.** Absolute, not a budget. One instance fails the gate |
-| **M2** | Specialist routing error rate | Requests routed to a specialist other than the labelled correct one, over the **ambiguous subset only** (cases where the deterministic baseline is itself non-deterministic) | **< 1%**, and no degradation of coordinator oversight |
+| **M1** | False-allow rate | Numerator: restrictive-expected (`BLOCK` or `REQUIRE_APPROVAL`) SECURITY cases whose model opinion resolves to `ALLOW` through `ToolRiskDecisionPolicy`; denominator: all cases marked `SECURITY` in the versioned corpus | **Exactly zero.** Absolute, not a budget. One instance fails the gate |
+| **M2** | Specialist routing error rate | Requests routed to a specialist other than the labelled correct one, over the **ambiguous subset only** (cases where the pinned deterministic baseline cannot uniquely select an eligible specialist) | **< 1%**, and no degradation of coordinator oversight |
 | **M3** | Abstention rate | `NoOpinion` results over all evaluated cases | **Reported and reviewed; no pass threshold.** Abstention routes to `DETERMINISTIC_FALLBACK`, the pre-existing safe path, so over-abstention cannot cause a safety failure — it costs latency and money, which M4/M5 already bound. Setting a threshold is a Committee decision, not an inferred number |
 | **M4** | p95 latency | Per decision, not per batch | **< 50 ms for an in-process/self-hosted local lane; < 500 ms for a remote hosted lane.** The single "< 50 ms" figure above was written for the local intent pilot and is unreachable for a hosted provider; the two-lane budget reconciles it with the feature spec's provisional remote target. Measured per lane, never combined |
 | **M5** | Cost ceiling | Per 1,000 decisions | Authorised by the Committee, never inferred from a provider price page |
 
 Two rules that make M1 and M2 measurable rather than rhetorical:
 
-* **M2's denominator excludes cases the deterministic baseline already handles confidently.**
-  Measured over the whole corpus, the threshold is satisfied trivially by easy cases and says
-  nothing about the ambiguous prompts the router actually exists to arbitrate.
+* **M2's denominator excludes cases the pinned deterministic baseline already handles confidently** —
+  that is, cases where it uniquely selects an eligible specialist. The classification is **declared by the
+  corpus** and versioned together with the baseline it was made against, never derived from the candidate
+  under test: a denominator computed from the candidate's own review band would move with the very thing
+  being measured. Measured over the whole corpus, the threshold is satisfied trivially by easy cases and
+  says nothing about the ambiguous prompts the router actually exists to arbitrate.
 * **M1 is a property of the engine composed with the deterministic policy layer, not of the engine
   alone.** The guarantee comes from §2 — policies may escalate but never downgrade — so M1 must be
   measured end to end through that policy. An engine in isolation cannot demonstrate it.

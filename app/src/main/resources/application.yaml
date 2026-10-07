@@ -266,6 +266,10 @@ smallrye:
         - "env-example"
         - "native/vec0/**"
         - "provider-catalog.json"
+        # The versioned decision-evidence corpus. Quarkus includes no resources by default, so a
+        # classpath corpus is absent from a native image unless it is named here (and in app/pom.xml's
+        # native profile). See DecisionEvidenceCorpusRegistry.
+        - "decision-evidence/**"
 
   # ---------------------------------------------------------------------------
   # LOGGING
@@ -494,6 +498,23 @@ amsha:
         model: "${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_MODEL:}"
         timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_TIMEOUT_SECONDS:2}
   decision:
+    # -------------------------------------------------------------------------
+    # Opt-in decision evaluation path (W4).
+    #
+    # INERT BY DEFAULT: when false — the shipped value — the internal evaluation
+    # endpoints refuse before any provider is touched, so no egress is possible.
+    # Enabling it lets an operator run the two registered decisions
+    # (`amsha.routing.intent.v1` and `tool.risk.shadow`) and gather evidence.
+    #
+    # It does NOT register a DecisionEngine bean and does not activate routing:
+    # the parent ADR stays Deferred, so `Instance<DecisionEngine>` remains
+    # unsatisfiable and intent routing stays on the deterministic baseline. The
+    # key lands with the workstream that first reads it (W4), rather than ahead
+    # of its reader. See
+    # docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md §W4.
+    # -------------------------------------------------------------------------
+    evaluation:
+      enabled: ${AMSHA_DECISION_EVALUATION_ENABLED:false}
     shadow:
       intent:
         enabled: ${AMSHA_DECISION_SHADOW_INTENT_ENABLED:false}

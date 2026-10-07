@@ -4,19 +4,29 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 
+import com.amsha.classifier.api.CandidateReductionPolicy;
 import com.amsha.classifier.api.Choice;
 import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
+import com.amsha.classifier.api.DecisionDefinition;
 import com.amsha.classifier.api.DecisionEngine;
+import com.amsha.classifier.api.DecisionPrimitive;
 import com.amsha.classifier.api.DecisionRequest;
 import com.amsha.classifier.api.DecisionResult;
+import com.amsha.classifier.api.FailMode;
 import com.amsha.classifier.api.InProcessDecisionEngine;
+import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.classifier.api.ProviderPlacementValidator;
 import com.amsha.classifier.api.QuestionKey;
+import com.amsha.classifier.api.RedactionPolicy;
+import com.amsha.classifier.api.RetentionPolicy;
+import com.amsha.classifier.api.ReviewBand;
 import com.amsha.classifier.api.ToolRiskPrediction;
 import com.amsha.classifier.api.ToolRiskShadowClassifier;
 import com.amsha.classifier.api.ToolRiskShadowContext;
@@ -39,6 +49,16 @@ public class DecisionToolRiskShadowClassifier implements ToolRiskShadowClassifie
     public static final int SCHEMA_VERSION = 1;
     public static final QuestionKey<Choice> TOOL_RISK_KEY = QuestionKey.choice("tool_risk");
     public static final List<String> RISK_OPTIONS = List.of("LOW_RISK", "REQUIRE_APPROVAL", "BLOCK");
+
+    /**
+     * The question criteria the provider receives for the tool-risk decision.
+     *
+     * <p>It is a constant, and the same one is used by {@link #classify} and by {@link #definition}, so the
+     * decision the shadow path actually asks and the decision the evaluation path registers cannot drift
+     * apart. If they did, an M1 measurement over the registered definition would describe a question the
+     * shadow path never asked.
+     */
+    public static final String TOOL_RISK_CRITERIA = "Evaluate the execution risk of this provisional tool invocation";
 
     private final boolean enabled;
     private final Instance<DecisionEngine> engineInstance;
@@ -76,10 +96,8 @@ public class DecisionToolRiskShadowClassifier implements ToolRiskShadowClassifie
             }
             String state = serializeContext(context);
             var reqBuilder = DecisionRequest.builder(DECISION_ID, SCHEMA_VERSION, state);
-            QuestionKey<Choice> boundKey = reqBuilder.registerChoice(
-                    TOOL_RISK_KEY.name(),
-                    "Evaluate the execution risk of this provisional tool invocation",
-                    RISK_OPTIONS);
+            QuestionKey<Choice> boundKey =
+                    reqBuilder.registerChoice(TOOL_RISK_KEY.name(), TOOL_RISK_CRITERIA, RISK_OPTIONS);
             DecisionRequest request = reqBuilder.build();
 
             DecisionResult result = engine.evaluate(request);
@@ -114,5 +132,41 @@ public class DecisionToolRiskShadowClassifier implements ToolRiskShadowClassifie
             case "BLOCK" -> ToolRiskPrediction.BLOCK;
             default -> null;
         };
+    }
+
+    /**
+     * The registered definition for the tool-risk decision, so the evaluation path can evaluate the same
+     * decision the shadow path asks — the instrument M1 (false-allow) is measured with.
+     *
+     * <p>It mirrors {@code IntentDecisionRouter.definition}: the id, schema version, primitive, question
+     * vocabulary and criteria all come from this class's own constants, so registering the definition
+     * invents no new decision vocabulary. The envelope matches the intent decision's — {@code CHOICE},
+     * {@code RedactionPolicy.DEFAULT}, {@code EPHEMERAL_EXPORTABLE} (required because {@code REMOTE} is an
+     * allowed provider), and {@code FAIL_OPEN} because the shadow path is observational and must never
+     * tighten the guard decision it observes.
+     *
+     * @param reviewBand the confidence band the tool-risk policy resolves against
+     * @param timeout the per-evaluation deadline
+     * @return the tool-risk decision definition
+     */
+    public static DecisionDefinition definition(ReviewBand reviewBand, Duration timeout) {
+        Objects.requireNonNull(reviewBand, "reviewBand");
+        Objects.requireNonNull(timeout, "timeout");
+        return new DecisionDefinition(
+                DECISION_ID,
+                SCHEMA_VERSION,
+                DecisionPrimitive.CHOICE,
+                "Evaluate the execution risk of a provisional tool invocation and escalate when warranted",
+                "agentRole,autonomyLevel,toolName,parameters,goal",
+                RedactionPolicy.DEFAULT,
+                // EPHEMERAL_EXPORTABLE, not EPHEMERAL: this definition admits REMOTE in allowedProviders,
+                // and DecisionDefinition rejects a local-only retention policy alongside REMOTE.
+                RetentionPolicy.EPHEMERAL_EXPORTABLE,
+                CandidateReductionPolicy.none(),
+                reviewBand,
+                Set.of(ProviderCategory.IN_PROCESS, ProviderCategory.SELF_HOSTED, ProviderCategory.REMOTE),
+                FailMode.FAIL_OPEN,
+                timeout,
+                true);
     }
 }
