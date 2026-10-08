@@ -36,7 +36,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  *     selects one eligible specialist ({@code AMBIGUOUS}/{@code UNAMBIGUOUS}); null for every other task
  * @param ambiguityRationale why the case carries that classification; required for every intent case
  * @param criteria optional extra instructions the case carries alongside its state
- * @param options optional closed option list the case declares
+ * @param options the closed option list an intent case is routed over; required and non-empty for an
+ *     intent case, and forbidden for every other task
  * @param input the redacted state submitted to the provider
  * @param notes human-readable rationale for the case
  */
@@ -122,6 +123,8 @@ public record DecisionEvidenceCase(
         if (!PARTITIONS.contains(partition)) {
             throw new IllegalArgumentException("unknown partition '" + partition + "' in evidence case " + id);
         }
+        acceptableLabels = acceptableLabels == null ? List.of() : List.copyOf(acceptableLabels);
+        options = options == null ? List.of() : List.copyOf(options);
         // M2's denominator is the AMBIGUOUS subset, so the classification is a property of the corpus, not
         // of the candidate under test. Deriving it from a candidate's own policy band would let the
         // denominator move with the thing being measured, which makes the gate meaningless. Every intent
@@ -135,13 +138,51 @@ public record DecisionEvidenceCase(
                         "unknown baselineAmbiguity '" + baselineAmbiguity + "' in evidence case " + id);
             }
             ambiguityRationale = requireText(ambiguityRationale, "ambiguityRationale");
-        } else if (baselineAmbiguity != null || ambiguityRationale != null) {
-            throw new IllegalArgumentException(
-                    "only an intent case may declare baselineAmbiguity, but case " + id + " is task '" + task + "'");
+            // An intent case must declare the closed shortlist it is routed over. The runner once fell back
+            // to a mirrored default list when a case declared none, so a corpus revision could change the
+            // options a case was judged against without changing the case — a silent divergence between the
+            // reviewed artifact and the harness. Requiring the list here makes the shortlist part of the
+            // case, and every label the case expects must be one it offers, so a stale label is a load-time
+            // refusal rather than a routing error that looks like a model failure.
+            if (options.isEmpty()) {
+                throw new IllegalArgumentException("intent case " + id + " declares no options; every intent case"
+                        + " must declare the closed role shortlist it is routed over");
+            }
+            requireOffered(id, expectedLabel, options);
+            for (String acceptable : acceptableLabels) {
+                requireOffered(id, acceptable, options);
+            }
+        } else {
+            if (baselineAmbiguity != null || ambiguityRationale != null) {
+                throw new IllegalArgumentException("only an intent case may declare baselineAmbiguity, but case " + id
+                        + " is task '" + task + "'");
+            }
+            // Options are the intent shortlist, so a non-intent case carrying them would be a field the runner
+            // silently ignores — the same class of divergence the shortlist requirement exists to prevent.
+            if (!options.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "only an intent case may declare options, but case " + id + " is task '" + task + "'");
+            }
         }
-        acceptableLabels = acceptableLabels == null ? List.of() : List.copyOf(acceptableLabels);
-        options = options == null ? List.of() : List.copyOf(options);
         input = input == null ? Map.of() : Map.copyOf(input);
+    }
+
+    /**
+     * Refuses an expected label the case does not offer as an option.
+     *
+     * <p>{@code NO_OPINION} is exempt: abstention is always an available outcome, so it need not appear in
+     * the shortlist the case routes over. Every concrete specialist the case expects — as the primary label
+     * or as an acceptable alternative — must be one of the options it declares, otherwise the case can never
+     * be answered correctly and the gate would measure the harness rather than the model.
+     */
+    private static void requireOffered(String caseId, String label, List<String> options) {
+        if (label == null || "NO_OPINION".equalsIgnoreCase(label.trim())) {
+            return;
+        }
+        if (!options.contains(label.trim())) {
+            throw new IllegalArgumentException("intent case " + caseId + " expects label '" + label
+                    + "', which is not among its declared options " + options);
+        }
     }
 
     /**

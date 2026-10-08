@@ -96,6 +96,40 @@ class DecisionEvidenceCorpusRegistryTest {
     }
 
     @Test
+    void theShippedCorpusDeclaresItsEvaluatedScopeAndEveryIntentShortlist() {
+        DecisionEvidenceCorpus corpus =
+                new DecisionEvidenceCorpusRegistry(MAPPER).find(1).orElseThrow();
+
+        // The scope is declared, not inferred: answer-quality cases are an explicit exclusion this phase
+        // does not evaluate, so the run reports them rather than skipping them silently.
+        assertEquals(
+                List.of(DecisionEvidenceCase.TASK_INTENT, DecisionEvidenceCase.TASK_TOOL_RISK),
+                corpus.evaluatedTasks(),
+                "corpus v1 is evaluated for intent and tool-risk only");
+        assertFalse(corpus.evaluatesTask(DecisionEvidenceCase.TASK_ANSWER_QUALITY), "answer-quality is out of scope");
+        assertTrue(corpus.evaluatesTask(DecisionEvidenceCase.TASK_INTENT), "intent is in scope");
+        assertTrue(corpus.evaluatesTask(DecisionEvidenceCase.TASK_TOOL_RISK), "tool-risk is in scope");
+
+        // Every intent case owns its shortlist, and every label it expects is one it offers — so the corpus
+        // can be revised without the runner's behaviour drifting underneath it.
+        List<DecisionEvidenceCase> intentCases = corpus.casesForTask(DecisionEvidenceCase.TASK_INTENT);
+        assertTrue(
+                intentCases.stream()
+                        .allMatch(c -> c.options() != null && !c.options().isEmpty()),
+                "every intent case must declare the shortlist it is routed over");
+        for (DecisionEvidenceCase c : intentCases) {
+            assertTrue(
+                    c.options().contains(c.expectedLabel()) || "NO_OPINION".equals(c.expectedLabel()),
+                    c.id() + " expects " + c.expectedLabel() + " but offers " + c.options());
+            for (String acceptable : c.acceptableLabels()) {
+                assertTrue(
+                        c.options().contains(acceptable) || "NO_OPINION".equals(acceptable),
+                        c.id() + " accepts " + acceptable + " but offers " + c.options());
+            }
+        }
+    }
+
+    @Test
     void anUnshippedVersionIsAbsentRatherThanInvented() {
         DecisionEvidenceCorpusRegistry registry = new DecisionEvidenceCorpusRegistry(MAPPER);
 
@@ -221,7 +255,7 @@ class DecisionEvidenceCorpusRegistryTest {
                 DecisionEvidenceCase.BASELINE_UNAMBIGUOUS,
                 "baseline selects one role",
                 null,
-                List.of(),
+                List.of("coder", "researcher"),
                 Map.of("message", "user-secret-marker"),
                 null);
 
@@ -282,6 +316,7 @@ class DecisionEvidenceCorpusRegistryTest {
                         "description",
                         "provenance",
                         null,
+                        List.of(DecisionEvidenceCase.TASK_INTENT),
                         approved(),
                         Map.of(),
                         List.of(validCase("intent-std-01"))));
@@ -292,6 +327,7 @@ class DecisionEvidenceCorpusRegistryTest {
                         "description",
                         "provenance",
                         new DecisionEvidenceCorpus.Baseline("  ", 1, "described"),
+                        List.of(DecisionEvidenceCase.TASK_INTENT),
                         approved(),
                         Map.of(),
                         List.of(validCase("intent-std-01"))));
@@ -302,9 +338,173 @@ class DecisionEvidenceCorpusRegistryTest {
                         "description",
                         "provenance",
                         new DecisionEvidenceCorpus.Baseline("amsha.deterministic.intent-baseline", 0, "described"),
+                        List.of(DecisionEvidenceCase.TASK_INTENT),
                         approved(),
                         Map.of(),
                         List.of(validCase("intent-std-01"))));
+    }
+
+    @Test
+    void refusesACorpusWithNoDeclaredEvaluatedScope() {
+        // The scope of an evidence run is a reviewed property of the corpus, not an assumption in the runner:
+        // without it the runner cannot tell a declared exclusion from an oversight.
+        assertThrows(
+                NullPointerException.class,
+                () -> new DecisionEvidenceCorpus(
+                        1,
+                        "description",
+                        "provenance",
+                        baseline(),
+                        null,
+                        approved(),
+                        Map.of(),
+                        List.of(validCase("x"))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceCorpus(
+                        1,
+                        "description",
+                        "provenance",
+                        baseline(),
+                        List.of(),
+                        approved(),
+                        Map.of(),
+                        List.of(validCase("x"))));
+    }
+
+    @Test
+    void refusesAnUnknownOrDuplicateEvaluatedTask() {
+        IllegalArgumentException unknown = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceCorpus(
+                        1,
+                        "description",
+                        "provenance",
+                        baseline(),
+                        List.of("mystery"),
+                        approved(),
+                        Map.of(),
+                        List.of(validCase("x"))));
+        assertTrue(unknown.getMessage().contains("unknown evaluated task"), unknown.getMessage());
+
+        IllegalArgumentException duplicate = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceCorpus(
+                        1,
+                        "description",
+                        "provenance",
+                        baseline(),
+                        List.of(DecisionEvidenceCase.TASK_INTENT, DecisionEvidenceCase.TASK_INTENT),
+                        approved(),
+                        Map.of(),
+                        List.of(validCase("x"))));
+        assertTrue(duplicate.getMessage().contains("duplicate evaluated task"), duplicate.getMessage());
+    }
+
+    @Test
+    void refusesADeclaredEvaluatedTaskWithNoCases() {
+        // A declared task with no case is a metric over an empty set: the runner would report it as complete
+        // (0/0) and it would read as passing. A scope you cannot measure is not one you may declare.
+        IllegalArgumentException thrown = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceCorpus(
+                        1,
+                        "description",
+                        "provenance",
+                        baseline(),
+                        List.of(DecisionEvidenceCase.TASK_INTENT, DecisionEvidenceCase.TASK_TOOL_RISK),
+                        approved(),
+                        Map.of(),
+                        List.of(validCase("x"))));
+        assertTrue(thrown.getMessage().contains("carries no case for it"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains(DecisionEvidenceCase.TASK_TOOL_RISK), thrown.getMessage());
+    }
+
+    @Test
+    void refusesAnIntentCaseWithNoDeclaredOptions() {
+        // The runner no longer substitutes a default shortlist, so a case without one is unanswerable. The
+        // corpus must fail closed at load rather than let the runner judge the case against an implicit list.
+        IllegalArgumentException thrown = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceCase(
+                        "x",
+                        DecisionEvidenceCase.TASK_INTENT,
+                        "standard",
+                        "coder",
+                        List.of(),
+                        "BENIGN",
+                        DecisionEvidenceCase.BASELINE_UNAMBIGUOUS,
+                        "reason",
+                        null,
+                        List.of(),
+                        Map.of("message", "redacted"),
+                        null));
+        assertTrue(thrown.getMessage().contains("declares no options"), thrown.getMessage());
+    }
+
+    @Test
+    void refusesAnIntentCaseWhoseExpectedLabelIsNotOffered() {
+        // A label the case does not offer can never be produced, so the case would be unanswerable and the
+        // gate would measure the harness rather than the model. Acceptable alternatives are checked too.
+        IllegalArgumentException expectedNotOffered = assertThrows(
+                IllegalArgumentException.class,
+                () -> intentCaseWith("x", "coder", List.of(), List.of("researcher", "architect")));
+        assertTrue(expectedNotOffered.getMessage().contains("expects label 'coder'"), expectedNotOffered.getMessage());
+
+        IllegalArgumentException acceptableNotOffered = assertThrows(
+                IllegalArgumentException.class,
+                () -> intentCaseWith("x", "coder", List.of("debugger"), List.of("coder", "researcher")));
+        assertTrue(
+                acceptableNotOffered.getMessage().contains("expects label 'debugger'"),
+                acceptableNotOffered.getMessage());
+    }
+
+    @Test
+    void acceptsAnIntentCaseThatAbstainsWithoutOfferingNoOpinion() {
+        // NO_OPINION is always an available outcome, so abstention cases need not list it among their options.
+        DecisionEvidenceCase abstaining = intentCaseWith("x", "NO_OPINION", List.of(), List.of("coder", "researcher"));
+
+        assertEquals("NO_OPINION", abstaining.expectedLabel());
+        assertTrue(abstaining.isAbstentionExpected());
+    }
+
+    @Test
+    void refusesOptionsOnANonIntentCase() {
+        // Options are the intent shortlist; a non-intent case carrying them would be a field the runner
+        // silently ignores — the same class of divergence the shortlist requirement exists to prevent.
+        IllegalArgumentException thrown = assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceCase(
+                        "x",
+                        DecisionEvidenceCase.TASK_TOOL_RISK,
+                        "standard",
+                        "LOW_RISK",
+                        List.of(),
+                        "SAFE",
+                        null,
+                        null,
+                        null,
+                        List.of("coder"),
+                        Map.of(),
+                        null));
+        assertTrue(thrown.getMessage().contains("only an intent case may declare options"), thrown.getMessage());
+    }
+
+    private static DecisionEvidenceCase intentCaseWith(
+            String id, String expectedLabel, List<String> acceptable, List<String> options) {
+        return new DecisionEvidenceCase(
+                id,
+                DecisionEvidenceCase.TASK_INTENT,
+                "standard",
+                expectedLabel,
+                acceptable,
+                "BENIGN",
+                DecisionEvidenceCase.BASELINE_UNAMBIGUOUS,
+                "baseline selects one role",
+                null,
+                options,
+                Map.of("message", "redacted"),
+                null);
     }
 
     private static DecisionEvidenceCorpus.RedactionReview approved() {
@@ -331,13 +531,21 @@ class DecisionEvidenceCorpusRegistryTest {
                 ambiguity,
                 rationale,
                 null,
-                List.of(),
+                List.of("coder", "researcher"),
                 Map.of("message", "redacted"),
                 null);
     }
 
     private static DecisionEvidenceCorpus corpusWith(
             DecisionEvidenceCorpus.RedactionReview review, List<DecisionEvidenceCase> cases) {
-        return new DecisionEvidenceCorpus(1, "description", "provenance", baseline(), review, Map.of(), cases);
+        return new DecisionEvidenceCorpus(
+                1,
+                "description",
+                "provenance",
+                baseline(),
+                List.of(DecisionEvidenceCase.TASK_INTENT),
+                review,
+                Map.of(),
+                cases);
     }
 }

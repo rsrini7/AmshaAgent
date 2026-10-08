@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -29,6 +30,7 @@ import com.amsha.core.classifier.evaluation.DecisionEvaluationOutcome;
 import com.amsha.core.classifier.evaluation.DecisionEvaluationRefusedException;
 import com.amsha.core.classifier.evaluation.DecisionEvaluationRequest;
 import com.amsha.core.classifier.evaluation.DecisionEvaluationService;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceReport;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceRunner;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceSummary;
 import com.amsha.core.classifier.evaluation.DecisionRefusalReason;
@@ -55,8 +57,9 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
  *       emits no {@code VAULT_ACCESS} audit event.</li>
  *   <li>{@code POST /admin/decision/evaluate} — one evaluation over a registered decision.</li>
  *   <li>{@code POST /admin/decision/evidence/run} — runs a registered versioned evidence corpus and returns a
- *       payload-free summary with the M1–M5 gate metrics. The version defaults to 1 and is selected from the
- *       corpus registry; an unregistered version is refused.</li>
+ *       payload-free summary with the M1–M5 gate metrics, as JSON or (with {@code format=markdown}) as a
+ *       review-ready report. The version defaults to 1 and is selected from the corpus registry; an
+ *       unregistered version is refused.</li>
  * </ul>
  *
  * <p>Every method runs on a virtual thread ({@link RunOnVirtualThread}), so the provider call can
@@ -226,15 +229,34 @@ public class DecisionAdminResource {
         return timeout.longValue();
     }
 
-    /** Runs the registered evidence corpus and returns a payload-free summary with the M1–M5 metrics. */
+    /**
+     * Runs the registered evidence corpus and returns a payload-free summary with the M1–M5 metrics.
+     *
+     * <p>{@code format=json} (the default) returns the structured summary; {@code format=markdown} returns
+     * the same content rendered for review, so an operator can redirect it straight into an evidence file
+     * (for example {@code ... '?format=markdown' > .scratch/jev-decision-plane/evidence/report.md}). Both
+     * forms are payload-free; an unrecognised format is refused as a client error.
+     */
     @POST
     @Path("/evidence/run")
-    public Response evidenceRun(@QueryParam("version") @DefaultValue("1") int version) {
+    public Response evidenceRun(
+            @QueryParam("version") @DefaultValue("1") int version,
+            @QueryParam("format") @DefaultValue("json") String format) {
         if (!isInternal()) {
             return forbidden();
         }
+        String normalized = format == null ? "json" : format.trim().toLowerCase(Locale.ROOT);
+        boolean markdown = "markdown".equals(normalized);
+        if (!markdown && !"json".equals(normalized)) {
+            return badRequest("INVALID_REQUEST", "format must be json or markdown");
+        }
         try {
             DecisionEvidenceSummary summary = evidenceRunner.run(version, resolveUserId());
+            if (markdown) {
+                return Response.ok(DecisionEvidenceReport.toMarkdown(summary))
+                        .type(MediaType.TEXT_PLAIN_TYPE)
+                        .build();
+            }
             return Response.ok(summary).build();
         } catch (DecisionEvaluationRefusedException ex) {
             return Response.status(statusFor(ex.reason()))

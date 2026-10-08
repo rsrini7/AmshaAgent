@@ -1,8 +1,10 @@
 package com.amsha.core.classifier.evaluation;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -16,6 +18,7 @@ import com.amsha.classifier.api.Choice;
 import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.classifier.api.DecisionAnswer;
 import com.amsha.classifier.api.DecisionDefinition;
+import com.amsha.classifier.api.DecisionLatencyBudget;
 import com.amsha.classifier.api.DecisionRequest;
 import com.amsha.classifier.api.DecisionResult;
 import com.amsha.classifier.api.IntentDecisionPolicy;
@@ -24,8 +27,12 @@ import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.classifier.api.QuestionKey;
 import com.amsha.classifier.api.Score;
 import com.amsha.classifier.api.ToolRiskDecisionPolicy;
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.classifier.DecisionCostGuard;
+import com.amsha.core.classifier.DecisionDriftMonitor;
+import com.amsha.core.classifier.DecisionTelemetry;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.classifier.provider.DecisionCredentialResolver;
 import com.amsha.core.classifier.provider.DecisionEngineFactory;
@@ -41,6 +48,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.vertx.core.Context;
 
 /**
@@ -68,6 +76,10 @@ import io.vertx.core.Context;
  *       the provider call. If the audit write fails, the call does not happen.</li>
  *   <li><b>Payload-free everywhere.</b> The outcome carries answer labels and telemetry, never state,
  *       a credential, or a provider body; the credential is zeroed in a {@code finally}.</li>
+ *   <li><b>Monitored, and budgeted.</b> A completed evaluation feeds bounded telemetry and the drift
+ *       monitor; before egress, the lane's rolling cost per 1,000 decisions is checked against the
+ *       approved ceiling and the call fails closed as {@code NoOpinion(OVERLOAD_REJECTED)} when it is
+ *       exceeded. Both are inert until a ceiling is approved and rates are authorised.</li>
  * </ul>
  */
 @ApplicationScoped
@@ -85,6 +97,10 @@ public class DecisionEvaluationService {
     private final ObjectMapper mapper;
     private final OutboundHttpPolicyService outboundPolicyService;
     private final AuditService auditService;
+    private final DecisionPriceScheduleRegistry priceRegistry;
+    private final DecisionDriftMonitor driftMonitor;
+    private final DecisionCostGuard costGuard;
+    private final MeterRegistry meterRegistry;
     private final boolean enabled;
 
     @Inject
@@ -95,6 +111,10 @@ public class DecisionEvaluationService {
             ObjectMapper mapper,
             OutboundHttpPolicyService outboundPolicyService,
             AuditService auditService,
+            DecisionPriceScheduleRegistry priceRegistry,
+            DecisionDriftMonitor driftMonitor,
+            DecisionCostGuard costGuard,
+            Instance<MeterRegistry> meterRegistries,
             @ConfigProperty(name = "amsha.decision.evaluation.enabled", defaultValue = "false") boolean enabled) {
         this.providerConfig = Objects.requireNonNull(providerConfig, "providerConfig");
         this.registry = Objects.requireNonNull(registry, "registry");
@@ -102,6 +122,11 @@ public class DecisionEvaluationService {
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.outboundPolicyService = Objects.requireNonNull(outboundPolicyService, "outboundPolicyService");
         this.auditService = Objects.requireNonNull(auditService, "auditService");
+        this.priceRegistry = Objects.requireNonNull(priceRegistry, "priceRegistry");
+        this.driftMonitor = Objects.requireNonNull(driftMonitor, "driftMonitor");
+        this.costGuard = Objects.requireNonNull(costGuard, "costGuard");
+        // Micrometer is optional: with no registry the plane still evaluates, it just reports no metrics.
+        this.meterRegistry = meterRegistries != null && meterRegistries.isResolvable() ? meterRegistries.get() : null;
         this.enabled = enabled;
     }
 
@@ -127,8 +152,52 @@ public class DecisionEvaluationService {
         requireValidOptions(decision, request);
         DecisionProviderSelector.Selection.Selected selected = requireSelection();
         requireAllowedProvider(decision, selected);
+        DecisionProviderConfig.Slot slot = requireSlot(selected);
+        DecisionEvaluationOutcome costRefusal = costCeilingRefusal(selected, slot);
+        if (costRefusal != null) {
+            return costRefusal;
+        }
         DecisionRequest engineRequest = buildEngineRequest(decision, request, selected);
-        return execute(selected, decision, request, engineRequest, actorUserId);
+        return execute(selected, slot, decision, request, engineRequest, actorUserId);
+    }
+
+    private DecisionProviderConfig.Slot requireSlot(DecisionProviderSelector.Selection.Selected selected) {
+        DecisionProviderConfig.Slot slot = providerConfig.slots().get(selected.providerId());
+        if (slot == null) {
+            throw new DecisionEvaluationRefusedException(
+                    DecisionRefusalReason.PROVIDER_UNAVAILABLE,
+                    "Decision provider '" + selected.providerId() + "' is selected but not declared");
+        }
+        return slot;
+    }
+
+    /**
+     * Fails closed when the lane's rolling cost per 1,000 decisions exceeds the approved ceiling.
+     *
+     * <p>It is an <em>outcome</em>, not a refusal: the provider is configured and healthy, the plane is
+     * simply not permitted to spend any more on it, so the correct answer is the same one an overloaded
+     * provider gets — {@code NoOpinion(OVERLOAD_REJECTED)} — and the caller's deterministic fallback
+     * applies. With no ceiling approved, or with too few priced decisions to state a rate, nothing here
+     * fires; the guard's own contract explains why an unknown rate is never a breach.
+     *
+     * @return the fail-closed outcome, or null when the lane is within its ceiling
+     */
+    private DecisionEvaluationOutcome costCeilingRefusal(
+            DecisionProviderSelector.Selection.Selected selected, DecisionProviderConfig.Slot slot) {
+        BigDecimal ceiling = ceilingFor(slot);
+        String lane = selected.lane().name();
+        if (!costGuard.exceeded(lane, ceiling)) {
+            driftMonitor.clearAlert(lane, DecisionDriftMonitor.AlertKind.COST_CEILING);
+            return null;
+        }
+        driftMonitor.alertCostCeiling(lane, ceiling);
+        return DecisionEvaluationOutcome.noOpinion(
+                selected.providerId(), lane, selected.model(), null, NoOpinionReason.OVERLOAD_REJECTED.name());
+    }
+
+    private static BigDecimal ceilingFor(DecisionProviderConfig.Slot slot) {
+        DecisionProviderConfig.Slot.Governance governance = slot.governance();
+        return governance == null ? null : governance.costCeilingPerThousand().orElse(null);
     }
 
     private void requireEnabled() {
@@ -240,16 +309,11 @@ public class DecisionEvaluationService {
 
     private DecisionEvaluationOutcome execute(
             DecisionProviderSelector.Selection.Selected selected,
+            DecisionProviderConfig.Slot slot,
             RegisteredDecision decision,
             DecisionEvaluationRequest request,
             DecisionRequest engineRequest,
             String actorUserId) {
-        DecisionProviderConfig.Slot slot = providerConfig.slots().get(selected.providerId());
-        if (slot == null) {
-            throw new DecisionEvaluationRefusedException(
-                    DecisionRefusalReason.PROVIDER_UNAVAILABLE,
-                    "Decision provider '" + selected.providerId() + "' is selected but not declared");
-        }
         byte[] credential = null;
         try {
             credential = new DecisionCredentialResolver(vault)
@@ -291,8 +355,87 @@ public class DecisionEvaluationService {
             log.debugf(
                     "Decision evaluation completed: decision=%s provider=%s opinion=%b",
                     engineRequest.decisionId(), selected.providerId(), result.isOpinion());
-            return toOutcome(selected, decision, request, result);
+            DecisionEvaluationOutcome outcome = toOutcome(selected, decision, request, result);
+            observe(outcome, selected, confidenceOf(result));
+            return outcome;
         }
+    }
+
+    /**
+     * Records the bounded telemetry and drift observation for one completed evaluation.
+     *
+     * <p>Observation only: nothing here can change the outcome. It runs after the engine has answered and
+     * is deliberately tolerant — a monitoring failure must never turn a good decision into a refusal.
+     */
+    private void observe(
+            DecisionEvaluationOutcome outcome,
+            DecisionProviderSelector.Selection.Selected selected,
+            Double confidence) {
+        Duration latency =
+                outcome.metadata() == null ? null : outcome.metadata().latency();
+        Double costUsd = null;
+        try {
+            costUsd = costOf(outcome);
+        } catch (RuntimeException exception) {
+            log.warnf("Decision cost observation failed: %s", LogUtil.rootMessage(exception));
+        }
+        try {
+            DecisionTelemetry.recordEvaluation(
+                    meterRegistry,
+                    new DecisionTelemetry.EvaluationSample(
+                            outcome.lane(), outcome.model(), outcome.opinion(), confidence, latency, costUsd));
+        } catch (RuntimeException exception) {
+            log.warnf("Decision telemetry recording failed: %s", LogUtil.rootMessage(exception));
+        }
+        try {
+            driftMonitor.observe(outcome.lane(), outcome.opinion(), confidence, latency);
+            driftMonitor.checkLatency(outcome.lane(), categoryFor(selected.lane()), DecisionLatencyBudget.ADR_8_3);
+        } catch (RuntimeException exception) {
+            log.warnf("Decision drift observation failed: %s", LogUtil.rootMessage(exception));
+        }
+        try {
+            costGuard.record(outcome.lane(), costUsd);
+        } catch (RuntimeException exception) {
+            log.warnf("Decision cost guard observation failed: %s", LogUtil.rootMessage(exception));
+        }
+    }
+
+    /**
+     * The highest confidence any answered question reported, or null when none reported one.
+     *
+     * <p>Taken from the raw result rather than the flattened summary so the monitor sees the provider's
+     * own number rather than one re-parsed out of a display string.
+     */
+    private static Double confidenceOf(DecisionResult result) {
+        if (!(result instanceof DecisionResult.Opinion opinion)) {
+            return null;
+        }
+        double highest = -1.0;
+        for (DecisionAnswer answer : opinion.answers().values()) {
+            if (answer instanceof Choice choice && choice.confidence().isPresent()) {
+                highest = Math.max(highest, choice.confidence().getAsDouble());
+            }
+        }
+        return highest < 0.0 ? null : highest;
+    }
+
+    /**
+     * The priced cost of one evaluation, or null when it cannot be priced.
+     *
+     * <p>Null — never zero — when the schedule has no rate for the provider/model or the provider
+     * reported no token counts, so an unknown cost can never be read as a free one.
+     */
+    private Double costOf(DecisionEvaluationOutcome outcome) {
+        var metadata = outcome.metadata();
+        if (metadata == null || metadata.inputTokens() == null || metadata.outputTokens() == null) {
+            return null;
+        }
+        return priceRegistry
+                .latest()
+                .flatMap(schedule -> schedule.find(outcome.providerId(), outcome.model()))
+                .flatMap(entry -> entry.costUsd(metadata.inputTokens(), metadata.outputTokens()))
+                .map(BigDecimal::doubleValue)
+                .orElse(null);
     }
 
     private static DecisionResult normalizeResult(DecisionDefinition definition, DecisionResult result) {

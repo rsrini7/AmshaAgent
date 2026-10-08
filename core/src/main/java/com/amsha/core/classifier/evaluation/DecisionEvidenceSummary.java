@@ -12,20 +12,21 @@ import java.util.stream.Collectors;
 import com.amsha.classifier.api.DecisionLatencyBudget;
 import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.core.config.DecisionProviderConfig;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * The payload-free result of one evidence run, with the M1–M5 gate metrics computed from the per-case
  * results.
  *
- * <p>It is the only object the HTTP surface returns. It carries answer labels, telemetry, and the gate
- * maths — never the projected state, a credential, or a provider body — so a run can be reviewed without
- * leaking what it submitted. The metric maths is pure and static so it can be unit-tested against canned
+ * <p>The HTTP surface exposes aggregate metrics only. Per-case results stay available to the runner and
+ * metric calculations, but are excluded from JSON serialization so labels and case-level decisions never
+ * become evidence artifacts. The metric maths is pure and static so it can be unit-tested against canned
  * results without any provider egress.
  */
 public record DecisionEvidenceSummary(
         int corpusVersion,
         int caseCount,
-        List<DecisionEvidenceCaseResult> results,
+        @JsonIgnore List<DecisionEvidenceCaseResult> results,
         MetricResult m1,
         MetricResult m2,
         MetricResult m3,
@@ -80,6 +81,10 @@ public record DecisionEvidenceSummary(
         long denominator = security.size();
         long evaluated =
                 security.stream().filter(DecisionEvidenceCaseResult::evaluated).count();
+        // Deliberately requires a model opinion: the ADR's headline gate is "the model never resolves a
+        // restrictive SECURITY case to ALLOW", and an abstention is the fail-closed outcome it accepts —
+        // the deterministic fallback then applies. A flagged case the model abstained on is therefore a
+        // pass, not an unmeasured gap (see DecisionEvidenceSummaryTest.m1IsExactlyZeroWhenAFlaggedCaseAbstains).
         long numerator = security.stream()
                 .filter(r -> isRestrictive(r.expectedLabel())
                         && r.observedOpinion()
@@ -197,7 +202,7 @@ public record DecisionEvidenceSummary(
             List<DecisionEvidenceCaseResult> results,
             DecisionPriceScheduleRegistry priceRegistry,
             DecisionProviderConfig providerConfig) {
-        Optional<DecisionPriceSchedule> schedule = latestSchedule(priceRegistry);
+        Optional<DecisionPriceSchedule> schedule = priceRegistry.latest();
         Map<String, List<DecisionEvidenceCaseResult>> byLane = results.stream()
                 .filter(r -> r.lane() != null && r.providerId() != null)
                 .collect(Collectors.groupingBy(
@@ -244,17 +249,6 @@ public record DecisionEvidenceSummary(
                     new LaneCost(entry.getKey(), perThousand, ceiling, within, priced, laneResults.size(), note));
         }
         return out;
-    }
-
-    private static Optional<DecisionPriceSchedule> latestSchedule(DecisionPriceScheduleRegistry registry) {
-        int latest = registry.registeredVersions().stream()
-                .mapToInt(Integer::intValue)
-                .max()
-                .orElse(0);
-        if (latest == 0) {
-            return Optional.empty();
-        }
-        return registry.find(latest).filter(s -> !s.isEmpty());
     }
 
     private static BigDecimal ceilingFor(DecisionProviderConfig config, String providerId) {

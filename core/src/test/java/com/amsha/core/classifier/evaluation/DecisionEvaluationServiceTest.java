@@ -14,8 +14,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import jakarta.enterprise.inject.Instance;
+
 import java.io.IOException;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -29,6 +32,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.classifier.DecisionCostGuard;
+import com.amsha.core.classifier.DecisionDriftMonitor;
 import com.amsha.core.classifier.wire.WireProfile;
 import com.amsha.core.config.DecisionProviderConfig;
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -42,6 +47,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.vertx.core.Vertx;
 
 /**
@@ -208,6 +217,33 @@ class DecisionEvaluationServiceTest {
     }
 
     @Test
+    void aTelemetryFailureDoesNotReplaceACompletedDecision() {
+        AuditService audit = mock(AuditService.class);
+        responseBody = """
+                {"model":"laya-multilingual","answers":{"intent_role_choice":{"type":"choice","choice":"coder","confidence":0.91}},"ruleId":"intent-rule-01","latencyMs":12.0,"usage":{"input_tokens":40,"output_tokens":8}}
+                """;
+        MeterRegistry brokenRegistry = new SimpleMeterRegistry() {
+            @Override
+            protected Counter newCounter(Meter.Id id) {
+                throw new IllegalStateException("metrics unavailable");
+            }
+        };
+
+        DecisionEvaluationOutcome outcome = service(
+                        true,
+                        configuredProvider(true),
+                        audit,
+                        new DecisionCostGuard(1),
+                        new DecisionDriftMonitor(4, 0.15, 0.20),
+                        brokenRegistry)
+                .evaluate(request(), "operator");
+
+        assertTrue(outcome.opinion());
+        assertEquals("coder (0.91)", outcome.answers().get(HANDLE));
+        assertEquals(1, requestCount.get());
+    }
+
+    @Test
     void doesNotEgressWhenTheAuditWriteFails() {
         AuditService audit = mock(AuditService.class);
         doThrow(new IllegalStateException("audit unavailable"))
@@ -233,11 +269,77 @@ class DecisionEvaluationServiceTest {
         assertTrue(outcome.answers().isEmpty(), "a no-opinion outcome must not carry answers");
     }
 
+    @Test
+    void failsClosedWithNoOpinionWhenTheLaneCostCeilingIsExceeded() {
+        // The guard's rolling rate is already known and above the approved ceiling, so the lane must fail
+        // closed as OVERLOAD_REJECTED — the same outcome an overloaded provider gets — without egress.
+        DecisionCostGuard guard = new DecisionCostGuard(1);
+        guard.record("SELF_HOSTED", 1.0); // 1,000 USD per 1,000 decisions
+        DecisionProviderConfig config = configuredProvider(true);
+        when(config.slots().get("laya").governance().costCeilingPerThousand())
+                .thenReturn(Optional.of(new BigDecimal("0.001")));
+        DecisionDriftMonitor driftMonitor = new DecisionDriftMonitor(4, 0.15, 0.20);
+        DecisionEvaluationService service = service(true, config, mock(AuditService.class), guard, driftMonitor);
+
+        DecisionEvaluationOutcome outcome = service.evaluate(request(), "operator");
+
+        assertFalse(outcome.opinion());
+        assertEquals("OVERLOAD_REJECTED", outcome.noOpinionReason());
+        assertEquals(0, requestCount.get(), "a cost refusal must not reach the provider");
+        // The fail-closed breach is announced exactly once, and through the monitor: the service does not
+        // log a second, unlatched WARN of its own.
+        assertTrue(
+                driftMonitor.alertEmitted("SELF_HOSTED", DecisionDriftMonitor.AlertKind.COST_CEILING),
+                "the cost-ceiling breach is announced through the drift monitor");
+    }
+
+    @Test
+    void anApprovedCeilingThatIsNotYetExceededDoesNotBlockTheEvaluation() {
+        responseBody = "{\"model\":\"laya-multilingual\",\"answers\":{\"" + HANDLE
+                + "\":{\"type\":\"choice\",\"choice\":\"coder\",\"confidence\":0.91}},"
+                + "\"latencyMs\":1.0,\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}";
+        DecisionCostGuard guard = new DecisionCostGuard(4);
+        guard.record("SELF_HOSTED", 0.0001);
+        DecisionProviderConfig config = configuredProvider(true);
+        when(config.slots().get("laya").governance().costCeilingPerThousand())
+                .thenReturn(Optional.of(new BigDecimal("0.05")));
+        DecisionEvaluationService service =
+                service(true, config, mock(AuditService.class), guard, new DecisionDriftMonitor(4, 0.15, 0.20));
+
+        DecisionEvaluationOutcome outcome = service.evaluate(request(), "operator");
+
+        assertTrue(outcome.opinion());
+        assertEquals(1, requestCount.get(), "an in-budget evaluation still reaches the provider");
+    }
+
     private DecisionEvaluationRequest request() {
         return DecisionEvaluationRequest.of(DECISION_ID, STATE, Map.of(HANDLE, OPTIONS));
     }
 
     private DecisionEvaluationService service(boolean enabled, DecisionProviderConfig config, AuditService audit) {
+        return service(enabled, config, audit, new DecisionCostGuard(1), new DecisionDriftMonitor(4, 0.15, 0.20));
+    }
+
+    private DecisionEvaluationService service(
+            boolean enabled,
+            DecisionProviderConfig config,
+            AuditService audit,
+            DecisionCostGuard costGuard,
+            DecisionDriftMonitor driftMonitor) {
+        return service(enabled, config, audit, costGuard, driftMonitor, new SimpleMeterRegistry());
+    }
+
+    @SuppressWarnings("unchecked")
+    private DecisionEvaluationService service(
+            boolean enabled,
+            DecisionProviderConfig config,
+            AuditService audit,
+            DecisionCostGuard costGuard,
+            DecisionDriftMonitor driftMonitor,
+            MeterRegistry meterRegistry) {
+        Instance<MeterRegistry> registries = mock(Instance.class);
+        when(registries.isResolvable()).thenReturn(true);
+        when(registries.get()).thenReturn(meterRegistry);
         return new DecisionEvaluationService(
                 config,
                 new DecisionDefinitionRegistry(0.50, 0.85, 500L),
@@ -245,6 +347,10 @@ class DecisionEvaluationServiceTest {
                 mapper,
                 mock(OutboundHttpPolicyService.class),
                 audit,
+                new DecisionPriceScheduleRegistry(Map.of()),
+                driftMonitor,
+                costGuard,
+                registries,
                 enabled);
     }
 

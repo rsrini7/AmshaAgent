@@ -57,6 +57,16 @@ public class IntentDecisionRouter {
     public static final int SCHEMA_VERSION = 1;
     public static final String QUESTION_HANDLE = "intent_role_choice";
 
+    /**
+     * The top-level key the intent decision's state projection is keyed by.
+     *
+     * <p>Any caller that builds a state for this decision must send a JSON <em>object</em> with this key
+     * ({@code {"user_message": "..."}}), not a bare message string: the projection redactor parses the
+     * state as a JSON map and fails closed on anything else, and a provider's egress allow-list names
+     * this key. It is the single source of truth for the key, so the definition and every caller agree.
+     */
+    public static final String STATE_KEY = "user_message";
+
     private final Instance<DecisionEngine> decisionEngineInstance;
     private final boolean enabled;
     private final double reviewBandLow;
@@ -219,7 +229,7 @@ public class IntentDecisionRouter {
                 SCHEMA_VERSION,
                 DecisionPrimitive.CHOICE,
                 "Classify ambiguous user intent into an eligible agent role with review band fallback",
-                "user_message",
+                STATE_KEY,
                 RedactionPolicy.DEFAULT,
                 // EPHEMERAL_EXPORTABLE, not EPHEMERAL: this definition admits REMOTE in allowedProviders,
                 // and DecisionDefinition rejects a local-only retention policy alongside REMOTE.

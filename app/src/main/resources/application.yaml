@@ -515,6 +515,25 @@ amsha:
     # -------------------------------------------------------------------------
     evaluation:
       enabled: ${AMSHA_DECISION_EVALUATION_ENABLED:false}
+    # -------------------------------------------------------------------------
+    # Operations monitoring (W6).
+    #
+    # Bounded, payload-free observation of the evaluations the opt-in path runs.
+    # `drift` compares the mean confidence and abstention rate of the most recent
+    # `window` observations on a lane against the first `window`, and logs one WARN
+    # per drift episode; `cost` tracks the rolling cost per 1,000 priced decisions
+    # so an approved per-slot ceiling can fail the evaluation closed.
+    #
+    # Nothing here activates the plane: the monitor observes and the cost guard is
+    # inert until a ceiling is approved and a price schedule authorises rates (the
+    # shipped schedule is empty). See the activation plan §W6.
+    # -------------------------------------------------------------------------
+    drift:
+      window: ${AMSHA_DECISION_DRIFT_WINDOW:64}
+      confidence-threshold: ${AMSHA_DECISION_DRIFT_CONFIDENCE_THRESHOLD:0.15}
+      abstention-threshold: ${AMSHA_DECISION_DRIFT_ABSTENTION_THRESHOLD:0.20}
+    cost:
+      window: ${AMSHA_DECISION_COST_WINDOW:1000}
     shadow:
       intent:
         enabled: ${AMSHA_DECISION_SHADOW_INTENT_ENABLED:false}

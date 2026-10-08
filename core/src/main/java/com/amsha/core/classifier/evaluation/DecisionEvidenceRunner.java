@@ -33,14 +33,16 @@ import io.quarkus.arc.Unremovable;
  * <p><b>One egress seam.</b> Production wiring supplies the service via {@link EvaluationFn}; the test seam
  * supplies a canned evaluator, so the request-shaping and metric maths are both unit-testable without a
  * provider. The runner never constructs an engine and never registers one, so the plane stays Deferred.
+ *
+ * <p><b>The evaluated scope belongs to the corpus.</b> The runner does not decide which tasks an evidence
+ * run covers: it honours {@link DecisionEvidenceCorpus#evaluatedTasks()}, so a task outside that set (the
+ * answer-quality cases in corpus v1) is an explicit, reported exclusion rather than a silent skip. A
+ * corpus that declares a task this runner cannot evaluate is refused up front, because otherwise every one
+ * of that task's cases would be skipped and its metric would read as a vacuous pass.
  */
 @ApplicationScoped
 @Unremovable
 public class DecisionEvidenceRunner {
-
-    /** The intent valid-role universe, mirrored from corpus-v1's expanded seven-role shortlist. */
-    static final List<String> DEFAULT_INTENT_ROLES =
-            List.of("coder", "researcher", "architect", "synthesizer", "debugger", "optimizer", "sentinel");
 
     private final EvaluationFn evaluator;
     private final DecisionEvidenceCorpusRegistry corpusRegistry;
@@ -106,27 +108,49 @@ public class DecisionEvidenceRunner {
                 .orElseThrow(() -> new DecisionEvaluationRefusedException(
                         DecisionRefusalReason.UNREGISTERED_DECISION,
                         "No decision-evidence corpus is registered under version " + corpusVersion));
+        // A corpus may only declare a task as evaluated if this runner can actually evaluate it. Without this
+        // precondition, a corpus that declared a task with no registered decision would skip every one of that
+        // task's cases, and the resulting metric — a zero denominator reported as complete — would read as a
+        // pass. Refuse the whole run instead of measuring a scope we cannot cover.
+        for (String task : corpus.evaluatedTasks()) {
+            if (decisionIdFor(task) == null) {
+                throw new DecisionEvaluationRefusedException(
+                        DecisionRefusalReason.UNREGISTERED_DECISION,
+                        "Corpus " + corpusVersion + " declares task '" + task
+                                + "' as evaluated, but no decision is registered for that task");
+            }
+        }
         List<DecisionEvidenceCaseResult> results = new ArrayList<>();
         for (DecisionEvidenceCase c : corpus.cases()) {
-            results.add(evaluateCase(c, actorUserId));
+            results.add(evaluateCase(c, actorUserId, corpus));
         }
         return DecisionEvidenceSummary.summarize(
                 corpusVersion, results, priceRegistry, providerConfig, DecisionLatencyBudget.ADR_8_3);
     }
 
-    private DecisionEvidenceCaseResult evaluateCase(DecisionEvidenceCase c, String actorUserId) {
+    private DecisionEvidenceCaseResult evaluateCase(
+            DecisionEvidenceCase c, String actorUserId, DecisionEvidenceCorpus corpus) {
+        if (!corpus.evaluatesTask(c.task())) {
+            return DecisionEvidenceCaseResult.skippedNoDecision(
+                    c,
+                    "task '" + c.task() + "' is outside corpus " + corpus.corpusVersion()
+                            + "'s declared evaluatedTasks " + corpus.evaluatedTasks());
+        }
         String decisionId = decisionIdFor(c.task());
         if (decisionId == null) {
+            // Unreachable while run() refuses a corpus that declares an unevaluable task; kept as a fail-closed
+            // guard so a future task vocabulary cannot quietly degrade to a skip here.
             return DecisionEvidenceCaseResult.skippedNoDecision(
                     c, "no registered decision for task '" + c.task() + "'");
         }
         String stateJson;
+        Map<String, List<String>> options;
         try {
             stateJson = buildStateJson(c, decisionId);
+            options = choiceOptionsFor(c);
         } catch (RuntimeException _) {
             return DecisionEvidenceCaseResult.transformError(c, decisionId, "evidence state transformation failed");
         }
-        Map<String, List<String>> options = choiceOptionsFor(c);
         DecisionEvaluationRequest request =
                 new DecisionEvaluationRequest(decisionId, stateJson, options, Optional.empty());
         try {
@@ -161,7 +185,15 @@ public class DecisionEvidenceRunner {
         if (!(message instanceof String s) || s.isBlank()) {
             throw new IllegalArgumentException("intent case '" + c.id() + "' has no usable message");
         }
-        return s;
+        // The intent decision's state is a JSON object keyed by IntentDecisionRouter.STATE_KEY, not a bare
+        // string: the projection redactor parses the state as a JSON map and fails closed on a scalar, and
+        // a provider's egress allow-list names that key. A bare string would make every intent case abstain
+        // against any projection-enforcing provider, silently zeroing the intent half of the evidence run.
+        try {
+            return mapper.writeValueAsString(Map.of(IntentDecisionRouter.STATE_KEY, s));
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("could not serialize intent state for case '" + c.id() + "'", ex);
+        }
     }
 
     private String buildToolRiskState(DecisionEvidenceCase c) {
@@ -240,12 +272,24 @@ public class DecisionEvidenceRunner {
         return DecisionToolRiskShadowClassifier.TOOL_RISK_KEY.name();
     }
 
+    /**
+     * The option list an intent case is routed over, taken only from the case itself.
+     *
+     * <p>There is deliberately no default. A mirrored default would let a corpus revision change which roles
+     * a case is judged against without touching the case, so the artifact under review and the harness that
+     * measures it could diverge silently. The corpus validates the list at load, so an empty one is
+     * unreachable for a registered corpus; the guard keeps a corpus that somehow slips through from being
+     * evaluated against an implicit shortlist.
+     */
     private static Map<String, List<String>> choiceOptionsFor(DecisionEvidenceCase c) {
         if (!DecisionEvidenceCase.TASK_INTENT.equals(c.task())) {
             return Map.of();
         }
-        List<String> roles = c.options() != null && !c.options().isEmpty() ? c.options() : DEFAULT_INTENT_ROLES;
-        return Map.of(IntentDecisionRouter.QUESTION_HANDLE, roles);
+        if (c.options() == null || c.options().isEmpty()) {
+            throw new IllegalArgumentException("intent case '" + c.id()
+                    + "' declares no options; the runner will not substitute a default shortlist");
+        }
+        return Map.of(IntentDecisionRouter.QUESTION_HANDLE, c.options());
     }
 
     /** The single egress seam the runner uses; production wiring supplies the evaluation service. */

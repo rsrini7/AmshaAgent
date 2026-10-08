@@ -67,6 +67,24 @@ public class DecisionPriceScheduleRegistry {
         return schedules.keySet();
     }
 
+    /**
+     * The highest registered schedule that carries at least one rate.
+     *
+     * <p>The highest version wins, because a schedule is a reviewed artifact whose later version
+     * supersedes the earlier one. An <em>empty</em> schedule is skipped rather than allowed to shadow a
+     * priced one: "no rate authorised yet" is not a revision of the rates, it is their absence.
+     *
+     * @return the latest non-empty schedule, or empty when none is registered
+     */
+    public Optional<DecisionPriceSchedule> latest() {
+        int highest =
+                schedules.keySet().stream().mapToInt(Integer::intValue).max().orElse(0);
+        if (highest == 0) {
+            return Optional.empty();
+        }
+        return find(highest).filter(schedule -> !schedule.isEmpty());
+    }
+
     /** Whether any schedule loaded at all. */
     public boolean isEmpty() {
         return schedules.isEmpty();

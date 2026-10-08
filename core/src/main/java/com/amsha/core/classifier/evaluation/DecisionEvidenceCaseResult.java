@@ -17,7 +17,8 @@ import com.amsha.classifier.api.DecisionMetadata;
  *   <li>{@link #transformError} — the runner could not build the request state (for example a malformed
  *       tool-risk context); the system failed closed, which is the safe outcome for an abstention-expected
  *       case;</li>
- *   <li>{@link #skippedNoDecision} — the corpus task has no registered decision, so nothing was evaluated.</li>
+ *   <li>{@link #skippedNoDecision} — the case is outside the run's scope: its task has no registered
+ *       decision, or the corpus did not declare that task in {@code evaluatedTasks}.</li>
  * </ul>
  */
 public record DecisionEvidenceCaseResult(
@@ -225,7 +226,10 @@ public record DecisionEvidenceCaseResult(
                 c.isAbstentionExpected());
     }
 
-    /** The corpus task has no registered decision, so nothing was evaluated. */
+    /**
+     * The case is outside the run's scope — its task is not in the corpus's declared evaluated tasks, or has
+     * no registered decision — so nothing was evaluated.
+     */
     public static DecisionEvidenceCaseResult skippedNoDecision(DecisionEvidenceCase c, String reason) {
         return new DecisionEvidenceCaseResult(
                 c.id(),

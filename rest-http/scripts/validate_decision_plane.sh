@@ -19,7 +19,8 @@
 #   JEV-10     mutation requires an internal key
 #   JEV-11     startupEnabled implies requestedEnabled
 #   JEV-12     the DecisionPlaneReadiness diagnostic fired exactly once and is well-formed
-#   JEV-13     decision evaluation authorization matrix (unauthenticated, non-internal)
+#   JEV-13     decision evaluation authorization matrix (unauthenticated, non-internal) + the
+#              provider-status payload is exactly the identifier/boolean allow-list (no state, no secret)
 #   JEV-14     evaluation is refused with DISABLED while the opt-in switch is off
 #   JEV-15     an unregistered decision id is refused as a client error
 #
@@ -131,6 +132,59 @@ with open(sys.argv[2], "w", encoding="utf-8") as out:
             else:
                 row.append(str(value))
         out.write("\t".join(row) + "\n")
+PY
+}
+
+# JEV-13 payload contract: the resolved provider status has exactly the declared identifier and boolean
+# fields. No field may be omitted or added; nullable string fields must still be present as null or text.
+# This keeps future state or secret fields out of the response and catches incomplete serialization.
+provider_status_shape() {
+  python3 - "$RESP_FILE" <<'PY'
+import json
+import sys
+
+ALLOWED = {
+    "providerId",
+    "lane",
+    "host",
+    "model",
+    "governanceDeclared",
+    "credentialDeclared",
+    "evaluationEnabled",
+    "reason",
+}
+BOOLEAN_FIELDS = ("governanceDeclared", "credentialDeclared", "evaluationEnabled")
+STRING_FIELDS = ("providerId", "lane", "host", "model", "reason")
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as response:
+        payload = json.load(response)
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    print(f"unreadable provider-status payload: {error}")
+    raise SystemExit(1) from error
+
+if not isinstance(payload, dict):
+    print("provider status is not an object")
+    raise SystemExit(1)
+
+extra = sorted(set(payload) - ALLOWED)
+missing = sorted(ALLOWED - set(payload))
+if extra or missing:
+    print(f"unexpected keys {extra}, missing required keys {missing}")
+    raise SystemExit(1)
+
+for key in BOOLEAN_FIELDS:
+    if not isinstance(payload[key], bool):
+        print(f"{key} is not a boolean: {type(payload[key]).__name__}")
+        raise SystemExit(1)
+
+for key in STRING_FIELDS:
+    value = payload[key]
+    if value is not None and not isinstance(value, str):
+        print(f"{key} is neither null nor a string")
+        raise SystemExit(1)
+
+print("ok")
 PY
 }
 
@@ -368,6 +422,17 @@ if [ "$CODE" = "401" ]; then ok "$CODE"; else fail "$CODE"; fi
 info "JEV-13: Decision provider status rejects non-internal callers"
 CODE=$(mute -X GET -H "X-Amsha-API-Key: $CI_KEY" "$DECISION_PROVIDER_URL")
 if [ "$CODE" = "403" ]; then ok "$CODE"; else fail "$CODE"; fi
+
+# The authorization above guards a payload that must stay identifiers-and-booleans only. Assert the
+# shape too, so a future field cannot silently widen it into state or a secret.
+info "JEV-13: Decision provider status payload is the identifier/boolean allow-list"
+CODE=$(mute -X GET -H "X-Amsha-API-Key: $VALID_KEY" "$DECISION_PROVIDER_URL")
+if [ "$CODE" != "200" ]; then
+  fail "$CODE"
+else
+  PROVIDER_SHAPE=$(provider_status_shape)
+  if [ "$PROVIDER_SHAPE" = "ok" ]; then ok "$CODE"; else fail_detail "provider status shape: $PROVIDER_SHAPE"; fi
+fi
 
 # ── JEV-14: Evaluation is refused while the opt-in switch is off ──
 # The shipped posture is disabled, so an evaluation must be refused with DISABLED and must not
