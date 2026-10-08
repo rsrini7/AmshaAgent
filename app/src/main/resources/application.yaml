@@ -593,8 +593,11 @@ amsha:
     #     inventing one from the question handles is exactly the widening the
     #     control exists to prevent. It is a comma-separated list of the top-level
     #     `state` field names permitted to leave the process.
-    #   * `data-location` (residency) is required on the REMOTE lane only, because
-    #     a loopback slot never exports state off the machine.
+    #   * `data-location` is the provider-confirmed country/region where submitted state is
+    #     processed or stored, required on REMOTE lanes. Get it from account terms or the
+    #     provider's data-processing agreement; do not infer it from the endpoint or guess.
+    #     The Jev ADR currently records TypeSafe residency as undeclared. Leave it blank until
+    #     confirmed; the remote slot stays unavailable. Loopback slots never export state.
     #   * `allow-training-use` must stay false and `tenant-isolation` must stay
     #     true; a contrary value is refused rather than sent.
     #   * `retention-window` defaults to PT0S (zero retention), which is a positive
