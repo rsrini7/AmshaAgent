@@ -102,6 +102,53 @@ class DistributionWrapperContractTest(unittest.TestCase):
         plan = self.parse_plan(self.run_wrapper("sqlite", "--dry-run", "--build"))
         self.assertEqual(plan["command"], "serve")
 
+    def test_no_argument_launch_reaches_the_binary(self) -> None:
+        """A bare wrapper invocation must launch the server, not abort.
+
+        Regression: macOS ships bash 3.2, where an *empty* array expanded as
+        `"${ARR[@]}"` aborts under `set -u` with `unbound variable`.  The serve
+        path's final exec expanded the (empty) passthrough array exactly that
+        way, so `scripts/run_dist_sqlite.sh` with no arguments died before the
+        binary was ever reached.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            capture = Path(directory) / "argv.txt"
+            fake_binary = Path(directory) / "amsha-fake"
+            fake_binary.write_text(
+                "#!/usr/bin/env bash\n"
+                f'printf "%s\\n" "$@" > "{capture}"\n',
+                encoding="utf-8",
+            )
+            fake_binary.chmod(0o755)
+
+            result = self.run_wrapper(
+                "sqlite",
+                extra_env={
+                    "AMSHA_DIST_BINARY": str(fake_binary),
+                    "AMSHA_DATA_DIR": str(Path(directory) / "data"),
+                },
+            )
+
+            self.assertNotIn("unbound variable", result.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(capture.read_text(encoding="utf-8").split(), ["serve"])
+
+    def test_serve_path_exec_guards_the_empty_passthrough_array(self) -> None:
+        """The final exec must use the portable empty-array guard.
+
+        The behavioural test above only fails on an interpreter that actually
+        rejects the unguarded construct, and that depends on which bash the
+        `#!/usr/bin/env bash` shebang resolves to.  On a host where bash 5 is
+        first on PATH the unguarded form is legal and the behavioural test would
+        pass anyway, so assert the guard directly as well — a regression must not
+        be able to hide behind a newer interpreter.
+        """
+        script = (ROOT / "scripts" / "distribution" / "run_dist_backend.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('${PASSTHROUGH_ARGS[@]+"${PASSTHROUGH_ARGS[@]}"}', script)
+        self.assertNotIn('exec "$BINARY" "$COMMAND" "${PASSTHROUGH_ARGS[@]}"', script)
+
     def test_clean_flag_is_reflected_in_plan(self) -> None:
         for backend in WRAPPERS:
             with self.subTest(backend=backend):

@@ -373,8 +373,10 @@ unaddressed at proposal time: **there was no sanctioned way to produce that evid
 gate was UNMET because no candidate had been evaluated. The initial `api-key-ref` proposal had no
 runtime resolver, and the shadow classifier SPIs are network-free by construction, so a remote engine
 could not travel them (`ProviderPlacementValidator`). The accepted evaluation-path ADR and W4 now
-provide an explicit, non-routing path for gathering evidence; no successful live provider evaluation
-has yet been recorded.
+provide an explicit, non-routing path for gathering evidence. A first live provider evaluation was
+recorded on **2026-10-09** (TypeSafe, HTTP 200 in ~354 ms for one synthetic intent) against a rebuilt
+native binary. That is a **smoke result**, not the versioned-corpus M1/M2 evidence §8.3 requires, so no
+gate status in §8.2 moves and the plane remains Deferred.
 
 A separate ADR, `ADR-jev-decision-plane-evaluation-path.md`, closes that gap — **Accepted** 2026-10-07.
 It authorises an explicit, opt-in, internal-only, **non-routing** evaluation path: a shared

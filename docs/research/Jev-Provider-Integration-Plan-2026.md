@@ -729,7 +729,8 @@ Decision provider keys use direct environment-backed `AMSHA_DECISION_<ID>_API_KE
   `POST /v1/systemone` contract: both delegate to the shared `SystemOneWireMapper`, both map
   `529 Overloaded`, and the decoder accepts all three answer shapes. The earlier divergence — and the
   self-consistent fixtures that hid it — is recorded in §2. What is still missing is not code but
-  evidence: no credentialed call has been made, and retention/residency remain undeclared. Note also
+  evidence: no comparative corpus has been run and retention/residency remain undeclared. (A first live
+  call was recorded on 2026-10-09 — see §11 — but one smoke evaluation is not gate evidence.) Note also
   that `console.typesafe.ai` is the account console, not the API host.
 - `SelfHostedDecisionEngine` remains a separate-process seam with strict loopback restrictions (the
   literal `127.0.0.1`), not a general cluster-serving integration. It accepts an optional `modelId`,
@@ -737,7 +738,8 @@ Decision provider keys use direct environment-backed `AMSHA_DECISION_<ID>_API_KE
 - The accepted W4 evaluation path consumes provider configuration for explicit, internal-only
   evaluation requests when its default-off switch is enabled. It creates a transient engine and
   registers no `DecisionEngine` bean, so provider configuration still does not route agent traffic.
-  No successful live TypeSafe evaluation has been recorded yet.
+  A first live TypeSafe evaluation was recorded on 2026-10-09 — a smoke result, not the versioned-corpus
+  evidence the Quality gate requires; §11 carries the detail.
 - The ADR remains **Deferred**. This document does not approve enabling router flags or fabricating
   candidate evidence, cost approval, or rollout ownership.
 
@@ -748,7 +750,7 @@ approval, or naming a rollout owner. Those remain unmet, and the ADR remains **D
 
 **Credential configuration update (2026-10-09):** decision slots use direct `AMSHA_DECISION_<ID>_API_KEY` values; `_API_KEY_REF` is unsupported. `SecretVault` remains for governed transport proxy and custom-CA material. A live TypeSafe evaluation requires a rebuilt and restarted native binary.
 
-The accepted W4 evaluation path is implemented. It permits credentialed requests only through the default-off, internal-only evaluation endpoint, constructs a transient engine, and registers no production CDI `DecisionEngine` bean. It does not route agent traffic. No successful live TypeSafe evaluation has yet been recorded, so measured provider evidence and production promotion approvals remain open.
+The accepted W4 evaluation path is implemented. It permits credentialed requests only through the default-off, internal-only evaluation endpoint, constructs a transient engine, and registers no production CDI `DecisionEngine` bean. It does not route agent traffic. **A first live TypeSafe evaluation was recorded on 2026-10-09** — HTTP 200 in ~354 ms for one synthetic intent, against a rebuilt native binary. That is a smoke result, not the versioned-corpus evidence the Quality gate requires, so measured provider evidence and production promotion approvals remain open.
 
 - **`docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md`** specifies a production-grade,
   two-capability design: an **explicit evaluation path** (a shared `DecisionEngineFactory`, an

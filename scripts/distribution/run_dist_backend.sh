@@ -562,4 +562,7 @@ printf '\n'
 printf '📂 Persistence: %s (profile: %s)\n' "$AMSHA_PERSISTENCE_BACKEND" "$QUARKUS_PROFILE"
 printf '📁 Data directory: %s\n' "$AMSHA_DATA_DIR"
 cd "$PROJECT_ROOT"
-exec "$BINARY" "$COMMAND" "${PASSTHROUGH_ARGS[@]}"
+# `set -u` plus macOS's bash 3.2 aborts on `"${PASSTHROUGH_ARGS[@]}"` when the
+# array is empty (a bare `run_dist_sqlite.sh` has no passthrough args), so the
+# expansion must carry its own guard.  `${#PASSTHROUGH_ARGS[@]}` above is safe.
+exec "$BINARY" "$COMMAND" ${PASSTHROUGH_ARGS[@]+"${PASSTHROUGH_ARGS[@]}"}

@@ -25,7 +25,8 @@
 #   JEV-15     an unregistered decision id is refused as a client error
 #
 # Env:
-#   AMSHA_VALIDATION_LOG_FILE                    server log to assert JEV-12 against (skipped when unset)
+#   AMSHA_VALIDATION_LOG_FILE                    server log to assert JEV-12 against (set by the
+#                                                distribution launcher; JEV-12 skips when unset)
 #   AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING    true|false|unset — require/forbid the diagnostic
 #
 # Overlap with validate_onnx.sh ONNX-5..7 is intentional: the same invariant must hold both
@@ -473,7 +474,7 @@ LOG_FILE="${AMSHA_VALIDATION_LOG_FILE:-}"
 EXPECT="${AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING:-}"
 if [ -z "$LOG_FILE" ] || [ ! -r "$LOG_FILE" ]; then
   info "JEV-12: DecisionPlaneReadiness diagnostic is present once and well-formed"
-  skip "set AMSHA_VALIDATION_LOG_FILE to assert the startup diagnostic"
+  skip "AMSHA_VALIDATION_LOG_FILE is unset; run via the distribution launcher (mise run dist:validate-sqlite, or scripts/run_dist_sqlite.sh --validate --fast), which exports it — a hand-started server cannot assert the startup diagnostic"
 else
   info "JEV-12: DecisionPlaneReadiness diagnostic is present once and well-formed"
   COUNT=$(grep -c 'DecisionPlaneReadiness' "$LOG_FILE")
