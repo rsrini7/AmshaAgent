@@ -109,7 +109,7 @@ public class DecisionAdminResource {
                             selected.endpoint().getHost(),
                             blankToNull(selected.model()),
                             governanceDeclared,
-                            hasText(selected.apiKeyRef()),
+                            selected.credentialConfigured(),
                             evaluationEnabled,
                             null))
                     .build();
@@ -304,7 +304,11 @@ public class DecisionAdminResource {
         return WorkspaceContext.getUserIdOrUnknown();
     }
 
-    /** Resolved provider status. Identifiers and booleans only — never a secret, never state. */
+    /**
+     * Resolved provider status exposes identifiers, booleans, and a payload-free reason only.
+     * {@code credentialDeclared} remains the wire field name and means a direct provider API
+     * key is configured; it never contains credential material.
+     */
     public record ProviderStatusResponse(
             String providerId,
             String lane,

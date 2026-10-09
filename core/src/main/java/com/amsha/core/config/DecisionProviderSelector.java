@@ -27,21 +27,18 @@ import com.amsha.core.classifier.wire.WireProfile;
  *       validator-rejected provider yields {@link Selection.Unavailable} with a reason instead of a
  *       partial configuration. That includes the rules this class adds on top of the mapping: a remote
  *       slot with no model (the hosted contract requires one, whereas a self-hosted slot may omit it),
- *       a credentialed remote provider with no {@code api-key-ref}, a non-positive timeout, a CLM
+ *       a credentialed remote provider with no {@code api-key}, a non-positive timeout, a CLM
  *       model not declared as prose, and an incomplete data-governance declaration (see
  *       {@link DecisionProviderGovernance#problem}). The reason describes operator configuration only —
  *       never user state, credentials, or a resolved secret.</li>
- *   <li><b>It never resolves a credential.</b> {@code apiKeyRef} is carried through as a
- *       {@code SecretVault} reference; turning it into a bearer token is the vault's job at the wiring
- *       layer. That wiring does not exist yet, and the self-hosted lane does not consume an
- *       {@code apiKeyRef} at all — it authenticates with its own loopback header — so a credential ref
- *       is currently carried and checked for presence, nothing more.</li>
+ *   <li><b>It never carries credential material.</b> The direct {@code api-key} value is reduced
+ *       to a presence flag. The secret stays in configuration and is copied only when an evaluation
+ *       executes.</li>
  * </ul>
  *
- * <p><b>No production caller exists yet, by design.</b> Consuming a selection means building a
- * provider config, resolving its credential, and constructing an engine — and constructing a
- * production {@code DecisionEngine} is the ADR change the plane is deliberately Deferred on. Until
- * that is approved, the selector is the configuration surface and nothing more.
+ * <p><b>No production {@code DecisionEngine} bean exists, by design.</b> The accepted evaluation
+ * path consumes a selection through a transient engine for an explicit, audited request. Production
+ * routing remains Deferred until the parent ADR's promotion procedure is completed.
  */
 public final class DecisionProviderSelector {
 
@@ -81,7 +78,7 @@ public final class DecisionProviderSelector {
          * @param lane governance lane derived from the endpoint host
          * @param endpoint the validated endpoint URI
          * @param model the decision model to request; blank is permitted only on the self-hosted lane
-         * @param apiKeyRef a {@code SecretVault} reference, blank when unset; never a secret
+         * @param credentialConfigured whether a direct API key is configured; never the secret
          * @param timeout request execution timeout
          * @param wireProfile how this provider expects {@code state} to be rendered
          */
@@ -90,7 +87,7 @@ public final class DecisionProviderSelector {
                 Lane lane,
                 URI endpoint,
                 String model,
-                String apiKeyRef,
+                boolean credentialConfigured,
                 Duration timeout,
                 WireProfile wireProfile)
                 implements Selection {}
@@ -174,14 +171,14 @@ public final class DecisionProviderSelector {
 
     /**
      * Whether this provider's documented profile authenticates with a bearer credential, so a slot
-     * naming it is incomplete without an {@code api-key-ref}.
+     * naming it is incomplete without an {@code api-key}.
      *
      * <p>Kept as an explicit, named check rather than inferred from the lane: "remote" does not imply
      * "needs a bearer token", because a remote deployment may authenticate by mTLS or network policy
      * instead. TypeSafe is the closed hosted reference implementation whose contract documents
      * {@code Authorization: Bearer}. A second such provider is a deliberate addition here.
      */
-    private static boolean requiresCredentialRef(String providerId) {
+    private static boolean requiresBearerCredential(String providerId) {
         return "typesafe".equals(providerId);
     }
 
@@ -192,10 +189,12 @@ public final class DecisionProviderSelector {
      */
     private static Selection validate(String providerId, DecisionProviderConfig.Slot slot, URI endpoint, Lane lane) {
         String model = trimToEmpty(slot.model().orElse(""));
-        String apiKeyRef = trimToEmpty(slot.apiKeyRef().orElse(""));
+        boolean credentialConfigured =
+                slot.apiKey().filter(value -> !value.isBlank()).isPresent();
         Duration timeout = slot.timeout();
         WireProfile wireProfile = slot.wireProfile();
-        Optional<String> problem = selectionProblem(providerId, lane, endpoint, model, apiKeyRef, timeout, wireProfile);
+        Optional<String> problem =
+                selectionProblem(providerId, lane, endpoint, model, credentialConfigured, timeout, wireProfile);
         if (problem.isPresent()) {
             return unavailableFor(providerId, problem.get());
         }
@@ -206,7 +205,7 @@ public final class DecisionProviderSelector {
         if (governanceProblem.isPresent()) {
             return unavailableFor(providerId, governanceProblem.get());
         }
-        return new Selection.Selected(providerId, lane, endpoint, model, apiKeyRef, timeout, wireProfile);
+        return new Selection.Selected(providerId, lane, endpoint, model, credentialConfigured, timeout, wireProfile);
     }
 
     /**
@@ -230,7 +229,7 @@ public final class DecisionProviderSelector {
      * @param lane the lane the endpoint resolved to
      * @param endpoint the endpoint URI
      * @param model the requested model; may be blank where the lane allows it
-     * @param apiKeyRef a {@code SecretVault} reference, never a secret; blank when unset
+     * @param credentialConfigured whether a direct API key is configured
      * @param timeout the request deadline
      * @param wireProfile how the provider expects {@code state} rendered
      * @return the reason the selection is unusable, or empty when it is well formed
@@ -240,7 +239,7 @@ public final class DecisionProviderSelector {
             Lane lane,
             URI endpoint,
             String model,
-            String apiKeyRef,
+            boolean credentialConfigured,
             Duration timeout,
             WireProfile wireProfile) {
         if (lane == null) {
@@ -265,10 +264,8 @@ public final class DecisionProviderSelector {
             return Optional.of("names CLM model '" + effectiveModel + "' but declares wire-profile " + wireProfile
                     + "; CLM was trained on prose and requires " + WireProfile.PROSE);
         }
-        if (lane == Lane.REMOTE
-                && requiresCredentialRef(providerId)
-                && trimToEmpty(apiKeyRef).isEmpty()) {
-            return Optional.of("is a credentialed remote provider but declares no api-key-ref; its documented profile"
+        if (lane == Lane.REMOTE && requiresBearerCredential(providerId) && !credentialConfigured) {
+            return Optional.of("is a credentialed remote provider but declares no api-key; its documented profile"
                     + " authenticates with a bearer token, so the configuration is incomplete");
         }
         if (timeout == null || timeout.isZero() || timeout.isNegative()) {
@@ -292,16 +289,14 @@ public final class DecisionProviderSelector {
      * Whether a resolved selection must be given non-empty credential material before it can be built.
      *
      * <p>This is the second half of the credential rule. {@link #selectionProblem} refuses a credentialed
-     * provider that declares no {@code api-key-ref}; this answers whether the material that reference
-     * names is mandatory. {@link com.amsha.core.classifier.provider.DecisionEngineFactory} consults it so
-     * a provider is never built to authenticate with an empty bearer token — a reference the vault could
-     * not resolve to any bytes is as unusable as no reference at all, but only the second was refused
-     * before.
+     * provider that declares no {@code api-key}; this answers whether credential material is mandatory.
+     * {@link com.amsha.core.classifier.provider.DecisionEngineFactory} consults it so a provider is never
+     * built to authenticate with an empty bearer token.
      *
      * <p>It is deliberately <em>not</em> "remote implies credentialed": a remote deployment may
      * authenticate by mTLS or network policy instead of a bearer token, and the self-hosted lane
-     * authenticates with its own optional loopback header, so a self-hosted selection that names a
-     * reference still builds without material. Only the closed hosted profiles that document a bearer
+     * authenticates with its own optional loopback header, so a self-hosted selection without a key still
+     * builds. Only the closed hosted profiles that document a bearer
      * token require material, exactly as in {@link #selectionProblem}.
      *
      * @param providerId the declared slot id
@@ -309,7 +304,7 @@ public final class DecisionProviderSelector {
      * @return true when the provider authenticates with a bearer credential
      */
     public static boolean requiresCredentialMaterial(String providerId, Lane lane) {
-        return lane == Lane.REMOTE && requiresCredentialRef(providerId);
+        return lane == Lane.REMOTE && requiresBearerCredential(providerId);
     }
 
     private static Selection.Unavailable unavailableFor(String providerId, String problem) {

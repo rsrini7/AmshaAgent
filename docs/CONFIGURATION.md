@@ -257,11 +257,7 @@ Two behaviours are worth calling out because both are fail-closed:
 
 ### Decision provider selection (Jev / System One)
 
-Selects which provider answers decision requests, mirroring the LLM provider convention (`AMSHA_LLM_PROVIDER`
-plus `amsha.llm.<provider>.model`). **Inert:** this is the configuration surface only — nothing consumes it into
-a `DecisionEngine`, so setting these changes no behaviour, and selecting a provider is not activating the plane.
-The [activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md) specifies the wiring that
-would consume it, and the governance keys that wiring would require; none of that is implemented.
+Selects the provider used by the explicit decision-evaluation path, following the LLM provider convention (`AMSHA_LLM_PROVIDER` plus `amsha.llm.<provider>.model`). Production routing remains inert: setting `AMSHA_DECISION_PROVIDER` alone does not register a production `DecisionEngine` or route agent decisions through it. The accepted, default-off evaluation path consumes provider configuration only for an internal request when `AMSHA_DECISION_EVALUATION_ENABLED=true`. See [the activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md) for the remaining production-routing gates.
 
 Two axes: a provider id names the System One **endpoint** that receives `POST /v1/systemone` (as an LLM provider
 id names the endpoint receiving `/v1/chat/completions`), and `AMSHA_DECISION_{PROVIDER}_MODEL` names the
@@ -274,7 +270,7 @@ host (`omlx`), or a hosted API (`typesafe`).
 | `AMSHA_DECISION_{PROVIDER}_ENABLED` | `false` | Whether the slot may be selected |
 | `AMSHA_DECISION_{PROVIDER}_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint; the lane is derived from its host |
 | `AMSHA_DECISION_{PROVIDER}_MODEL` | *(per slot)* | Decision model to request — **required for a remote provider, optional for a self-hosted one** (blank = the server picks its own checkpoint and the field is omitted) |
-| `AMSHA_DECISION_{PROVIDER}_API_KEY_REF` | *(unset)* | A `SecretVault` reference, never a literal key. Carried and checked for presence only — no wiring resolves it onto either engine's credentials yet |
+| `AMSHA_DECISION_{PROVIDER}_API_KEY` | *(unset)* | Direct provider API key, following the same environment-backed convention as other Amsha providers; blank means no key is configured |
 | `AMSHA_DECISION_{PROVIDER}_TIMEOUT` | `PT5S` | Request execution timeout |
 | `AMSHA_DECISION_{PROVIDER}_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered; belongs to the model — CLM requires `PROSE` |
 
@@ -283,8 +279,8 @@ Declared providers: `typesafe`, `clm`, `laya`, `kev`, `omlx`.
 The lane is derived from the endpoint host, not declared: the literal `127.0.0.1` selects the self-hosted lane,
 anything else the remote lane. `localhost`, `::1`, and other `127.x` hosts are refused as ambiguous. A **remote**
 slot with no `model` is refused (a self-hosted one may omit it), as is a credentialed remote provider
-(`typesafe`) with no `api-key-ref`, a non-positive `timeout`, and a CLM model declared without
-`WIRE_PROFILE=PROSE`.
+(`typesafe`) with no direct `api-key` (`AMSHA_DECISION_TYPESAFE_API_KEY`), a
+non-positive `timeout`, or a CLM model declared without `WIRE_PROFILE=PROSE`.
 
 Classifier *runtime* control (`/api/v1/admin/local-ml/onnx/classifiers*`) is a separate admin
 surface with its own requested-versus-effective semantics; see

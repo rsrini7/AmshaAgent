@@ -62,7 +62,12 @@ public class EnvFileValidator {
             "TELEGRAM_BOT_TOKEN",
             "AMSHA_TOOLS_GITHUB_TOKEN",
             "AMSHA_TOOLS_SERPER_API_KEY",
-            "AMSHA_TOOLS_BRAVE_API_KEY");
+            "AMSHA_TOOLS_BRAVE_API_KEY",
+            "AMSHA_DECISION_TYPESAFE_API_KEY",
+            "AMSHA_DECISION_CLM_API_KEY",
+            "AMSHA_DECISION_LAYA_API_KEY",
+            "AMSHA_DECISION_KEV_API_KEY",
+            "AMSHA_DECISION_OMLX_API_KEY");
 
     /**
      * Result of validating a .env file.

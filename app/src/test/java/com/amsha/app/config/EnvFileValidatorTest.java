@@ -98,6 +98,17 @@ class EnvFileValidatorTest {
     }
 
     @Test
+    void recognizesAnEmptyDirectDecisionKeyAsAnApiKey(@TempDir Path tempDir) throws IOException {
+        Path envFile = tempDir.resolve(".env");
+        Files.write(envFile, List.of("AMSHA_DECISION_TYPESAFE_API_KEY="));
+
+        EnvFileValidator.ValidationResult result = EnvFileValidator.validate(envFile);
+
+        assertTrue(
+                result.emptyApiKeys().stream().anyMatch(value -> value.startsWith("AMSHA_DECISION_TYPESAFE_API_KEY")));
+    }
+
+    @Test
     void testPrintReport(@TempDir Path tempDir) throws IOException {
         Path envFile = tempDir.resolve(".env");
         Files.write(

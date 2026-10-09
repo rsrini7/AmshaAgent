@@ -45,9 +45,8 @@ class DecisionEngineFactoryTest {
 
     @Test
     void buildsASelfHostedEngineForTheLoopbackLane() {
-        // This selection declares a credential reference (the helper defaults it to "REF") yet supplies no
-        // material, and must still build: the credential requirement is provider-based, so it covers only
-        // the bearer-token remote profiles, never the loopback lane's optional header.
+        // The helper marks the key configured by default, but no material is supplied. Self-hosted
+        // loopback tokens are optional; only remote bearer profiles require credential bytes.
         try (DecisionEngineHandle handle = create(
                 selected("laya", Lane.SELF_HOSTED, LOOPBACK, "laya-multilingual", WireProfile.JSON_OBJECT),
                 DecisionGovernanceFixture.valid(),
@@ -118,32 +117,37 @@ class DecisionEngineFactoryTest {
     }
 
     @Test
-    void refusesARemoteSelectionWithNoCredentialReference() {
-        // Selection.Selected is a publicly constructible record, so the factory must apply the
-        // selector's credential rule itself rather than trusting that only the selector builds one.
-        var thrown = assertThrows(
-                DecisionProviderUnavailableException.class,
-                () -> create(
-                        selected(
-                                "typesafe",
-                                Lane.REMOTE,
-                                HOSTED,
-                                "jev-latest",
-                                "",
-                                Duration.ofSeconds(3),
-                                WireProfile.JSON_OBJECT),
-                        DecisionGovernanceFixture.valid(),
-                        Optional.empty()));
+    void refusesARemoteSelectionWithoutDirectCredentialConfiguration() {
+        // Supply valid bytes while marking the key unconfigured. This isolates the selector's
+        // configuration rule from the factory's separate missing-material guard.
+        byte[] suppliedCredential = credential();
+        try {
+            var thrown = assertThrows(
+                    DecisionProviderUnavailableException.class,
+                    () -> create(
+                            selected(
+                                    "typesafe",
+                                    Lane.REMOTE,
+                                    HOSTED,
+                                    "jev-latest",
+                                    false,
+                                    Duration.ofSeconds(3),
+                                    WireProfile.JSON_OBJECT),
+                            DecisionGovernanceFixture.valid(),
+                            Optional.of(suppliedCredential)));
 
-        assertTrue(thrown.getMessage().contains("typesafe"), thrown.getMessage());
-        assertTrue(thrown.getMessage().contains("api-key-ref"), thrown.getMessage());
+            assertTrue(thrown.getMessage().contains("typesafe"), thrown.getMessage());
+            assertTrue(thrown.getMessage().contains("declares no api-key"), thrown.getMessage());
+        } finally {
+            DecisionCredentialResolver.zero(suppliedCredential);
+        }
     }
 
     @Test
     void refusesACredentialedProviderWithNoResolvedCredential() {
-        // The mirror of the test above: the reference is declared, but the vault resolved it to nothing.
+        // The mirror of the test above: a direct key is declared, but no credential bytes are supplied.
         // Building anyway would send an empty Authorization header and fail at the provider instead of
-        // here, so a reference that resolved to no material is refused as firmly as a missing reference.
+        // here, so missing material is refused as firmly as a missing key configuration.
         var thrown = assertThrows(
                 DecisionProviderUnavailableException.class,
                 () -> create(
@@ -152,7 +156,7 @@ class DecisionEngineFactoryTest {
                         Optional.empty()));
 
         assertTrue(thrown.getMessage().contains("typesafe"), thrown.getMessage());
-        assertTrue(thrown.getMessage().contains("api-key-ref"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("api-key"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains("credential material"), thrown.getMessage());
     }
 
@@ -192,7 +196,7 @@ class DecisionEngineFactoryTest {
                                 Lane.SELF_HOSTED,
                                 "http://127.0.0.1:8700/v1/systemone",
                                 "clm-latest",
-                                "REF",
+                                true,
                                 Duration.ofSeconds(3),
                                 WireProfile.JSON_OBJECT),
                         DecisionGovernanceFixture.valid(),
@@ -211,7 +215,7 @@ class DecisionEngineFactoryTest {
                                 Lane.SELF_HOSTED,
                                 LOOPBACK,
                                 "laya-multilingual",
-                                "REF",
+                                true,
                                 Duration.ZERO,
                                 WireProfile.JSON_OBJECT),
                         DecisionGovernanceFixture.valid(),
@@ -231,7 +235,7 @@ class DecisionEngineFactoryTest {
                                 Lane.REMOTE,
                                 "http://api.typesafe.ai/v1/systemone",
                                 "jev-latest",
-                                "REF",
+                                true,
                                 Duration.ofSeconds(3),
                                 WireProfile.JSON_OBJECT),
                         DecisionGovernanceFixture.valid(),
@@ -294,7 +298,7 @@ class DecisionEngineFactoryTest {
 
     private static Selected selected(
             String providerId, Lane lane, String endpoint, String model, WireProfile wireProfile) {
-        return selected(providerId, lane, endpoint, model, "REF", Duration.ofSeconds(3), wireProfile);
+        return selected(providerId, lane, endpoint, model, true, Duration.ofSeconds(3), wireProfile);
     }
 
     private static Selected selected(
@@ -302,10 +306,10 @@ class DecisionEngineFactoryTest {
             Lane lane,
             String endpoint,
             String model,
-            String apiKeyRef,
+            boolean credentialConfigured,
             Duration timeout,
             WireProfile wireProfile) {
         return new DecisionProviderSelector.Selection.Selected(
-                providerId, lane, URI.create(endpoint), model, apiKeyRef, timeout, wireProfile);
+                providerId, lane, URI.create(endpoint), model, credentialConfigured, timeout, wireProfile);
     }
 }

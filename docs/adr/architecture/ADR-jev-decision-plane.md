@@ -369,11 +369,12 @@ Issue 07 evaluates activation gates for the low-risk ambiguous intent routing pi
 ### 7.8 Explicit Evaluation Path authorised (2026-10-07)
 
 §7.7 refused activation and named the evidence that would justify re-opening it, but left one gap
-unaddressed: **there was no sanctioned way to produce that evidence.** The Quality gate is UNMET
-because no candidate has ever been evaluated, and the plane could not evaluate one — no runtime caller
-consumed `DecisionProviderSelector`, `api-key-ref` was resolved by nobody, and the shadow classifier
-SPIs are network-free by construction, so a remote engine cannot travel them
-(`ProviderPlacementValidator`).
+unaddressed at proposal time: **there was no sanctioned way to produce that evidence.** The Quality
+gate was UNMET because no candidate had been evaluated. The initial `api-key-ref` proposal had no
+runtime resolver, and the shadow classifier SPIs are network-free by construction, so a remote engine
+could not travel them (`ProviderPlacementValidator`). The accepted evaluation-path ADR and W4 now
+provide an explicit, non-routing path for gathering evidence; no successful live provider evaluation
+has yet been recorded.
 
 A separate ADR, `ADR-jev-decision-plane-evaluation-path.md`, closes that gap — **Accepted** 2026-10-07.
 It authorises an explicit, opt-in, internal-only, **non-routing** evaluation path: a shared
@@ -555,6 +556,9 @@ Even when every gate is met and the plane activates:
   or weaken deterministic policy.
 * Shadow classifiers and the intent router remain separately gated; satisfying one does not enable
   the other.
-* Credentials are still never resolved from the configuration surface alone, and
-  `api-key-ref` remains a `SecretVault` reference rather than a literal.
+* Decision provider bearer credentials use direct `AMSHA_DECISION_<ID>_API_KEY` environment
+  configuration, matching the other Amsha provider keys. The evaluation path copies keys into
+  request-owned bytes and clears them after use; the configuration `String` remains resident for
+  the process lifetime. `SecretVault` continues to provide governed transport proxy and custom-CA
+  material.
 * Rollback remains configuration-only: one flag, no data migration.

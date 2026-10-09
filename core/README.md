@@ -276,9 +276,9 @@ Observational-only shadow evaluation for intent routing, tool risk, and answer q
 ## Decision Provider Selection (Jev / System One)
 
 Configuration-driven selection of the provider that answers decision (`choice` / `score` / `noul`) requests,
-mirroring the LLM provider convention (`AMSHA_LLM_PROVIDER` plus `amsha.llm.<provider>.model`). **Inert:** this
-is the configuration surface only — nothing consumes it into a `DecisionEngine`, so a value here changes no
-behaviour. Selecting a provider is not activating the plane. See
+mirroring the LLM provider convention (`AMSHA_LLM_PROVIDER` plus `amsha.llm.<provider>.model`). The accepted
+evaluation path consumes this configuration for explicit, audited evaluations through a transient engine.
+No CDI `DecisionEngine` bean exists, and selecting a provider does not activate production routing. See
 [Jev-Provider-Integration-Plan-2026](../docs/research/Jev-Provider-Integration-Plan-2026.md) §8.
 
 **Two axes.** A provider id names the System One **endpoint** that receives `POST /v1/systemone` — exactly as an
@@ -293,7 +293,7 @@ LLM provider id names the endpoint that receives `/v1/chat/completions`. `model`
 | `amsha.decision.providers.slots.<id>.enabled` | `AMSHA_DECISION_<ID>_ENABLED` | `false` | Whether the slot may be selected. |
 | `amsha.decision.providers.slots.<id>.endpoint` | `AMSHA_DECISION_<ID>_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint. The governance lane is derived from its host. |
 | `amsha.decision.providers.slots.<id>.model` | `AMSHA_DECISION_<ID>_MODEL` | *(per slot)* | The decision model to request. **Required for a remote slot; optional for a self-hosted one**, where blank means "the server picks its own checkpoint" and the field is omitted from the request. |
-| `amsha.decision.providers.slots.<id>.api-key-ref` | `AMSHA_DECISION_<ID>_API_KEY_REF` | `""` | A `SecretVault` **reference**, never a literal key. |
+| `amsha.decision.providers.slots.<id>.api-key` | `AMSHA_DECISION_<ID>_API_KEY` | `""` | Direct provider key, following the same environment-backed convention as other Amsha providers. |
 | `amsha.decision.providers.slots.<id>.timeout` | `AMSHA_DECISION_<ID>_TIMEOUT` | `PT5S` | Request execution timeout. |
 | `amsha.decision.providers.slots.<id>.wire-profile` | `AMSHA_DECISION_<ID>_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered. Belongs to the **model**: a CLM model requires `PROSE`. |
 
@@ -305,14 +305,14 @@ Declared slots: `typesafe` (`jev-latest`, remote), `clm` (`clm-latest`, `PROSE`)
 `127.0.0.1` selects the self-hosted lane, anything else the remote lane — and refuses `localhost`, `::1`, and
 other `127.x` hosts as **ambiguous**, because the two lanes carry different governance. It also refuses a
 **remote** slot with no `model` (a self-hosted slot may omit it), a credentialed remote provider (`typesafe`)
-with no `api-key-ref`, a non-positive `timeout`, and a CLM model declared without `WIRE_PROFILE=PROSE`.
+with no `api-key`, a non-positive `timeout`, and a CLM model declared without `WIRE_PROFILE=PROSE`.
 Refusals name the operator configuration at fault and never a credential.
 
-**Not wired yet.** The selector carries `api-key-ref` as a `SecretVault` reference and never resolves it — but
-nothing else resolves it either. The remote lane's governed transport has a vault; the self-hosted lane uses a
-plain HTTP client and sends its own `X-Amsha-Loopback-Token` header instead. So a declared `api-key-ref` is
-intent, not a working credential, and a secured Laya/CLM endpoint that expects `Authorization: Bearer` needs an
-auth mapping that does not exist yet.
+**Credential handling.** Decision keys use direct environment-backed configuration, just like other
+Amsha provider keys. The selector and status response carry only a configured flag. Evaluation creates a
+request-owned UTF-8 byte copy and clears it after use; the source configuration `String` remains in process
+memory. These provider keys are not SecretVault references. The remote lane still uses SecretVault for
+governed transport proxy and custom-CA material, while a self-hosted lane may use its loopback token.
 
 ## Multimodal Message Mapping & Capability Resolution
 

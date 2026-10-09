@@ -82,13 +82,13 @@ into a configurational one.
 
 | Gap | Evidence | Consequence today |
 |---|---|---|
-| No production `DecisionEngine` bean | `Instance<DecisionEngine>` is unresolvable; engines are `final class`es with no CDI annotation | `IntentDecisionRouter.isEnabled()` is permanently false; the plane is **structurally** inert |
-| No caller for `DecisionProviderSelector` | No `DecisionProviderSelector.select(...)` call outside `DecisionProviderSelectorTest` | A `.env` change cannot activate anything |
-| `api-key-ref` consumed by nobody | `DecisionProviderSelector` carries it; neither engine maps it to a credential | No credentialed TypeSafe call is possible |
-| No orchestration / evaluation entry point | No admin resource, service, or task constructs an engine | There is no sanctioned way to gather Phase 3 evidence |
-| Governance not declared | `RemoteProviderConfig` requires `dataLocation` + non-training retention, but nothing supplies them from config | Governance gate UNMET |
-| No drift / model-identity telemetry | `DecisionTelemetry` tags are `action`/`escalated`/`fallback`/`outcome` only | Operations gate UNMET (cannot express drift) |
-| Self-hosted lane has no bearer credential | `SelfHostedProviderConfig` has only `loopbackToken`; engine sends `X-Amsha-Loopback-Token` | A secured Laya/CLM expecting `Authorization: Bearer` is unreachable |
+| No production `DecisionEngine` bean | `Instance<DecisionEngine>` is unresolvable; engines are `final class`es with no CDI annotation | `IntentDecisionRouter.isEnabled()` remains false; explicit evaluation constructs a transient engine without activating production routing |
+| No production-routing caller for `DecisionProviderSelector` | `DecisionEvaluationService` uses `select(...)` only for explicit evaluation requests; the agent router does not | A `.env` change alone does not route agent decisions through the provider |
+| Credential input (updated 2026-10-09) | The initial `_API_KEY_REF` proposal required a matching SecretVault entry; the evaluation path now reads the direct key from bound config. | Set `AMSHA_DECISION_<ID>_API_KEY`; no vault provisioning is required. The source config String remains resident for process lifetime. |
+| No successful live provider evidence | The internal-only evaluation endpoint and runner exist, but no credentialed provider evaluation has been recorded | The evidence and promotion gates remain unmet |
+| Provider governance approval | Configuration accepts residency and retention declarations; provider-specific approval and evidence are still required | Governance gate remains unmet until the declarations are reviewed and recorded |
+| Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded evaluation and drift signals; provider/model identity is not a metric label | The Operations gate still requires approved cost ceilings, an accountable owner, and review evidence |
+| Self-hosted authentication header | The direct key configures `SelfHostedProviderConfig.loopbackToken`; the engine sends `X-Amsha-Loopback-Token` | A service requiring `Authorization: Bearer` needs separate header support; use only with an endpoint configured for Amsha's loopback-token header |
 | Candidate evidence is synthetic | `DecisionShadowComparisonHarness.CandidateType` marks `REMOTE`/`SELF_HOSTED` as simulations | Quality gate UNMET |
 
 ### 1.3 The three independent locks (all must open, in order)
@@ -115,8 +115,9 @@ eventually open Lock 3.
    the evaluation path is a new, separate seam.
 4. **Governance is declared in config, not inferred.** Retention, residency, training-use, tenant
    isolation and the projection allow-list are explicit, validated, and fail closed when absent.
-5. **Credential refs are resolved, never stored.** `apiKeyRef` is a `SecretVault` reference; the
-   resolver resolves it, the engine uses it, and the bytes are zeroed.
+5. **Direct provider keys, request-owned copies.** `apiKey` binds from
+`AMSHA_DECISION_<ID>_API_KEY`, like other Amsha provider keys. Evaluation copies it to UTF-8 bytes and
+zeroes those bytes in `finally`; the source configuration String remains resident for the process lifetime.
 6. **Evidence is payload-free and versioned.** Aggregate metrics only; no prompts, states, labels or
    answers in logs, metrics, or committed evidence.
 7. **A decision may escalate, never downgrade.** Unchanged from the ADR; the evaluation path does not
@@ -141,7 +142,7 @@ eventually open Lock 3.
                      │                            │                            │
         ┌────────────▼────────────┐   ┌───────────▼───────────┐   ┌────────────▼────────────┐
         │ DecisionCredentialResolver│  │ DecisionProviderGovernance│ │  DecisionEngineFactory  │
-        │  apiKeyRef → SecretVault  │  │ retention/residency/…   │  │ Selected → DecisionEngine│
+        │  direct apiKey → bytes  │  │ retention/residency/…   │  │ Selected → DecisionEngine│
         └────────────┬─────────────┘   └───────────┬───────────┘   └────────────┬────────────┘
                      └──────────────┬───────────────┘                            │
                                     ▼                                            │
@@ -257,7 +258,7 @@ Appendix C has concrete config/reflection/test sketches; Appendix D is the five-
     tenant-isolation to `true` so a caller that skipped validation still cannot hold the permissive
     value. `retentionPolicy()` and `projectionPolicy()` then hand the engines their two policies.
 - Extend `DecisionProviderSelector.validate(...)` to refuse an enabled slot with incomplete governance,
-  mirroring how it already refuses a missing `model` or `api-key-ref`. The check runs **last**, after
+  mirroring how it already refuses a missing `model` or `api-key`. The check runs **last**, after
   the lane is certain and after endpoint validation, so a slot with an unusable endpoint reports that
   rather than a governance rule it would never reach. It is the one fail-closed answer to "is this
   provider usable?", so the evaluation path (W4) gets a payload-free `Unavailable` reason instead of an
@@ -275,42 +276,19 @@ Appendix C has concrete config/reflection/test sketches; Appendix D is the five-
   `DecisionProviderGovernanceTest` (the rejection matrix plus the two forced-safe transformations);
   `DecisionProviderSelectorTest` (the same matrix through `select()`).
 
-### W3 — Credential resolution (core)
+### W3 — Direct provider API key handling (core)
 
-**Goal:** `apiKeyRef` actually becomes a credential, safely.
+**Goal:** use the same environment-backed API-key convention as the other Amsha providers, while keeping
+secret material out of selections, status, logs, and responses.
 
-- New: `core/.../classifier/provider/DecisionCredentialResolver.java`
-  - `Optional<byte[]> resolve(String providerId, String apiKeyRef)` →
-    `SecretVault.retrieveSystemKey(ref)`; empty when the ref is blank or absent; fail closed (throw
-    `DecisionProviderUnavailableException`) when the ref is present but the vault rejects it or does not
-    hold it. The provider id is a parameter only so a refusal can name the slot; the reference value
-    itself is never echoed.
-  - The returned array is a **detached copy**: the resolver closes the vault's `VaultKey` (which wipes
-    its buffer) before returning, so a caller that held the vault's array would be handed zeroes.
-  - `static void zero(byte[])` wipes the material and tolerates `null`; the caller calls it in a
-    `finally` once the engine has consumed the credential.
-- **Zero-String note — the limitation is real, not eliminated.** `RemoteProviderConfig.apiKey` and
-  `SelfHostedProviderConfig.loopbackToken` are `String`s (guarded by `@JsonProperty(WRITE_ONLY)` and a
-  redacted `toString()`), and `HttpRequest.Builder.header` requires a `String` regardless. The factory
-  decodes the credential bytes exactly once, at the construction call site, and never writes the text to
-  a log line or an exception — **but it does hand it to the provider config, so a `String` copy lives on
-  that config for as long as the engine does.** `DecisionEngineHandle.close()` closes the engine and its
-  transport; it cannot erase an immutable `String`. The window is therefore bounded by the engine's
-  lifetime (one evaluation), not the process's, and the caller's `byte[]` is zeroed in `finally` — but
-  the `String` itself is not zeroable. That is a **production security decision, not optional
-  hardening**. Two options, both W4-scoped, to be settled before the evaluation path is enabled:
-  (a) accept the bounded-`String` window and record it as a residual risk in the ADR; or (b) W3b — add
-  an engine overload that takes a `byte[]`/`char[]` credential supplier and builds the header without a
-  lingering `String`. Whichever is chosen, the claim to make in the ADR is "transient and bounded",
-  never "never stored".
-- **W3c — self-hosted bearer support.** Add `Optional<String> credentialRef` to
-  `SelfHostedProviderConfig`, resolve it via the same resolver, and have `SelfHostedDecisionEngine`
-  send `Authorization: Bearer` when set (falling back to `X-Amsha-Loopback-Token` when only
-  `loopbackToken` is set). This closes the documented "secured Laya/CLM is unreachable" gap. **Not in
-  PR-1** — it changes engine behaviour and belongs with the evaluation path.
-- **Tests:** `DecisionCredentialResolverTest` (present/absent/unresolvable; vault failure; detached
-  bytes; zeroed buffer; payload-free refusal), and — for W3c — `SelfHostedDecisionEngineBearerTest`
-  (header selection matrix).
+- Each provider slot exposes an optional direct `api-key`, bound from
+  `AMSHA_DECISION_<ID>_API_KEY`; no `_API_KEY_REF` alias is supported.
+- `DecisionProviderSelector` reduces the configured value to `credentialConfigured` and never puts the
+  secret in `Selection.Selected`.
+- `DecisionCredentialResolver` copies the configured value into request-owned UTF-8 bytes; the evaluation
+  service zeroes those bytes in `finally` after engine use.
+- The config system retains the source String for the process lifetime, matching the established provider
+  configuration pattern. `SecretVault` remains responsible for governed transport proxy/custom-CA material.
 
 ### W4 — Explicit evaluation / orchestration path (core + app)
 
@@ -781,37 +759,12 @@ The remaining W5 detail below records the metric foundations as they were pinned
 
 ### W8 — ADR & invariant changes
 
-**Status: W8.1–W8.4 landed.** Only one thing remains open in this workstream: the parent ADR's §8.4
-status flip, which is PR-5's deliberate last act. (The evaluation-path ADR was **Accepted** 2026-10-07.)
-The shape below is what is on disk.
+**Status: W8.1–W8.4 documentation updates are landed.** The evaluation-path ADR was accepted on 2026-10-07. The parent ADR's §8.4 promotion procedure remains PR-5's final production-routing action.
 
-1. **New ADR** `docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md` — **Accepted**
-   (2026-10-07). W4 may now land.
-   - Authorises the explicit evaluation path: on-demand engine construction, opt-in, internal-only,
-     allow-listed + redacted data, no CDI engine bean, no routing authority.
-   - States that it does **not** satisfy ADR §8.4 steps 1–5 and does **not** move production routing
-     off Deferred.
-2. **Amend** `ADR-jev-decision-plane.md` — **done** (already in the staged set):
-   - §2: the evaluation path is recorded as an approved adapter-category usage.
-   - §7: §7.8 "Explicit Evaluation Path authorised (2026-10-07)" records this plan and the
-     evaluation-path ADR.
-   - §8.3: the M4 reconciliation (lane-specific budgets — see §6) is recorded, and the evaluation path
-     is named as the instrument for closing Quality.
-   - **Status stays `Deferred`** — only the promotion procedure (§8.4) may change it.
-3. **Amend** `docs/Architecture_Invariants.md` §27 — **done** (already in the staged set; do not repeat):
-   - §27.1 carries the evaluation-path exception — transient construction permitted, no CDI bean, routes
-     nothing, disabled by default, and "MUST NOT be implemented before that ADR is accepted".
-   - §27.6 — the evaluation path is opt-in, internal-only, audited, allow-listed, and never on the event
-     loop.
-   - §27.7 — no production `DecisionEngine` bean until §8.4 steps 1–5 are recorded.
-   An earlier draft of W8 listed these as future work. They landed with the documentation set, so the
-   PR-5 row no longer carries W8.3.
-4. **Amend** `docs/research/Jev-Provider-Integration-Plan-2026.md` — **done**: new §11 records the
-   evaluation path, the two unnamed gaps (`api-key-ref` unconsumed, no self-hosted bearer), the
-   telemetry/drift scope, and the M4 reconciliation; the new ADR and this plan are added to its
-   repository-artifact list.
-
-### W9 — Tests, gates, validator
+1. **Evaluation-path ADR** — [`ADR-jev-decision-plane-evaluation-path.md`](../adr/architecture/ADR-jev-decision-plane-evaluation-path.md) is **Accepted**. It authorizes explicit, opt-in, internal-only evaluation with a transient engine and allow-listed, redacted data. It does not register a CDI `DecisionEngine` bean or grant routing authority.
+2. **Parent ADR** — §2 records evaluation as an approved adapter-category use; §7.8 records the accepted evaluation path; §8.3 reconciles the lane-specific M4 budgets with §6. The parent ADR remains **Deferred** until its §8.4 promotion steps are met.
+3. **Architecture invariants** — §27.1 permits the accepted evaluation-path exception without activating routing; §27.6 keeps evaluation opt-in, non-routing, audited, allow-listed, and separate from classifier SPIs; §27.7 requires the §8.4 promotion procedure before a production engine bean is registered.
+4. **Provider integration plan** — records the accepted evaluation path, the direct `AMSHA_DECISION_<ID>_API_KEY` convention, the credential lifetime residual, telemetry/drift scope, and the reconciled M4 budgets.
 
 - **Landed with W4 (2026-10-07).** `rest-http/scripts/validate_decision_plane.sh` now carries:
   - **JEV-13** — `GET /admin/decision/provider` rejects unauthenticated (401) and non-internal (403).
@@ -852,7 +805,7 @@ The shape below is what is on disk.
 | `AMSHA_DECISION_<ID>_GOVERNANCE_TENANT_ISOLATION` | `true` | Must stay true |
 | `AMSHA_DECISION_<ID>_GOVERNANCE_PROJECTION_ALLOW_LIST` | _(blank)_ | Top-level state fields allowed to egress |
 | `AMSHA_DECISION_<ID>_GOVERNANCE_COST_CEILING_PER_THOUSAND` | _(blank)_ | Required for production activation. `PER_THOUSAND`, not `PER_1000`: SmallRye's `StringUtil.skewer` inserts no separator before a digit, so `costCeilingPer1000` derives to `cost-ceiling-per1000` and fails the mapping |
-| `AMSHA_DECISION_<ID>_CREDENTIAL_REF` | _(blank)_ | Self-hosted bearer (W3c) |
+| `AMSHA_DECISION_<ID>_API_KEY` | _(blank)_ | Direct provider key; required for remote bearer authentication and optional as a self-hosted loopback token |
 | `AMSHA_DECISION_DRIFT_WINDOW` | `64` | W6 — observations per drift window (baseline and current). A delta is reported only once **both** windows are full |
 | `AMSHA_DECISION_DRIFT_CONFIDENCE_THRESHOLD` | `0.15` | W6 — mean-confidence delta that counts as drift (one latched WARN per lane per kind per episode) |
 | `AMSHA_DECISION_DRIFT_ABSTENTION_THRESHOLD` | `0.20` | W6 — abstention-rate delta that counts as drift |
@@ -922,7 +875,7 @@ W4 lands after the evaluation-path ADR (W8.1) is accepted — **Accepted 2026-10
 2. **Rollout & rollback owner** — a person or team, never a placeholder (`ActivationGateReadiness`
    warns on placeholders by design).
 3. **Review cadence** — the ADR §8.5 90-day trigger is still an unconfirmed proposal.
-4. **TypeSafe account + ZDR** — issue the key at `console.typesafe.ai/keys`, bind via `SecretVault`,
+4. **TypeSafe account + ZDR** — issue the key at `console.typesafe.ai/keys` and set `AMSHA_DECISION_TYPESAFE_API_KEY` in the ignored local `.env` (direct value, no `_REF` suffix),
    and record the retention/residency declarations (ZDR is enterprise-only via `sales@typesafe.ai`).
 5. **Corpus provenance and baseline classification** — who signs off that the versioned evidence corpus is
    representative, and who reviews the per-intent-case `AMBIGUOUS`/`UNAMBIGUOUS` classification against the
@@ -1007,7 +960,7 @@ Sketches, not code. Values are the shipped defaults; `_<ID>_` is a provider id (
           enabled: ${AMSHA_DECISION_TYPESAFE_ENABLED:false}
           endpoint: "${AMSHA_DECISION_TYPESAFE_ENDPOINT:https://api.typesafe.ai/v1/systemone}"
           model: "${AMSHA_DECISION_TYPESAFE_MODEL:jev-latest}"
-          api-key-ref: "${AMSHA_DECISION_TYPESAFE_API_KEY_REF:}"
+          api-key: "${AMSHA_DECISION_TYPESAFE_API_KEY:}"
           timeout: ${AMSHA_DECISION_TYPESAFE_TIMEOUT:PT5S}
           wire-profile: ${AMSHA_DECISION_TYPESAFE_WIRE_PROFILE:JSON_OBJECT}
           governance:
@@ -1058,7 +1011,7 @@ registered: they are ordinary classes invoked directly, with no reflection or se
 |---|---|---|
 | `DecisionEngineFactoryTest` | unit | lane → engine mapping; blank self-hosted model accepted; `PROSE` accepted; governance-incomplete refused; remote-without-model refused; refusal/`toString()` never carry the credential; double `close()` safe; null arguments rejected |
 | `DecisionProviderGovernanceTest` | unit | `allowTrainingUse=true` / `tenantIsolation=false` / empty-or-blank allow-list / negative window / negative cost ceiling / blank remote `dataLocation` all refused; `of()` forces the safe training + isolation values; the derived policies follow the lane |
-| `DecisionCredentialResolverTest` | unit | present → bytes; absent ref → empty (vault untouched); unresolvable ref → throws; vault failure → throws with cause; bytes detached from the vault buffer; refusal never echoes the ref |
+| `DecisionCredentialResolverTest` | unit | configured key → caller-owned UTF-8 bytes; null/blank → empty; the caller zeroes the byte array after use. |
 | `DecisionProviderSelectorTest` | unit | the governance matrix through `select()`, plus the existing lane/model/dialect refusals |
 | `DecisionProviderConfigBindingTest` | `@QuarkusTest` (`app`) | the nested governance group binds in-container, including the comma-separated allow-list and the `PT0S` → `Duration` conversion |
 | `DecisionEvaluationServiceTest` (W4) | unit | disabled ⇒ no egress; governance-incomplete refused; event-loop invocation refused; audit emitted |
@@ -1098,9 +1051,9 @@ nothing calls the seam and no bean is registered.
 | File | Role |
 |---|---|
 | `config/DecisionProviderGovernance.java` | Validated governance record. `problem(...)` → the lane-dependent refusal reason; `of(...)` → the record with training-use forced false and tenant-isolation forced true; `retentionPolicy()` / `projectionPolicy()` derive the engine policies. Lives in `config` so the selector can use it without a `config ↔ classifier.provider` package cycle. |
-| `classifier/provider/DecisionEngineFactory.java` | The one construction path. `create(selected, declaredGovernance, credential, mapper, outboundPolicyService, vault)` → `DecisionEngineHandle`. Re-checks the **selection** through `DecisionProviderSelector.selectionProblem`, then the governance, then refuses a credentialed provider whose reference resolved to no material (via `DecisionProviderSelector.requiresCredentialMaterial`), then maps the lane to `RemoteDecisionEngine` / `SelfHostedDecisionEngine`. Normalises `IllegalArgumentException`/`SecurityException` into `DecisionProviderUnavailableException`. |
+| `classifier/provider/DecisionEngineFactory.java` | The one construction path. `create(selected, declaredGovernance, credential, mapper, outboundPolicyService, vault)` → `DecisionEngineHandle`. Re-checks the **selection** through `DecisionProviderSelector.selectionProblem`, then the governance, then refuses a credentialed provider whose direct key material is absent or blank (via `DecisionProviderSelector.requiresCredentialMaterial`), then maps the lane to `RemoteDecisionEngine` / `SelfHostedDecisionEngine`. Normalises `IllegalArgumentException`/`SecurityException` into `DecisionProviderUnavailableException`. |
 | `classifier/provider/DecisionEngineHandle.java` | Owns the engine plus any transport the factory created (the loopback `HttpClient`); closes both, best-effort, never throwing. Needed because `DecisionEngine` is a functional interface and is not `AutoCloseable`. |
-| `classifier/provider/DecisionCredentialResolver.java` | `resolve(providerId, apiKeyRef)` → detached credential bytes; closes the vault key; `zero(byte[])` for the caller's `finally`. |
+| `classifier/provider/DecisionCredentialResolver.java` | `resolve(apiKey)` creates request-owned UTF-8 bytes; `zero(byte[])` clears them in the evaluation service `finally`. The config String remains resident for process lifetime. |
 | `classifier/provider/DecisionProviderUnavailableException.java` | The single fail-closed refusal type; payload-free message. |
 
 **New — `core` tests:** `config/DecisionGovernanceFixture.java` (shared governance double),
@@ -1112,10 +1065,10 @@ nothing calls the seam and no bean is registered.
 | File | Change |
 |---|---|
 | `config/DecisionProviderConfig.java` | Nested `Slot.Governance` group + `Slot.governance()`. All members optional/defaulted, so the group binds without failing the mapping and the `Deferred` posture is unchanged. |
-| `config/DecisionProviderSelector.java` | `validate(...)` refuses an enabled slot whose governance is incomplete, checked last so endpoint problems report first. The non-governance rules (model-per-lane, CLM dialect, credential reference, positive timeout, endpoint validator) were extracted into a public pure `selectionProblem(...)` so the factory applies the identical rule to a hand-built selection. A companion public `requiresCredentialMaterial(providerId, lane)` answers the second half of the credential rule — whether the material the reference names is mandatory — so the factory refuses a reference that resolved to nothing. |
+| `config/DecisionProviderSelector.java` | `validate(...)` refuses an enabled slot whose governance is incomplete, checked last so endpoint problems report first. The non-governance rules (model-per-lane, CLM dialect, direct credential presence, positive timeout, endpoint validator) were extracted into a public pure `selectionProblem(...)` so the factory applies the identical rule to a hand-built selection. A companion public `requiresCredentialMaterial(providerId, lane)` answers the second half of the credential rule — whether key material is mandatory — so the factory refuses absent material. |
 | `config/CoreReflectionConfig.java` | `DecisionProviderGovernance` and `DecisionProviderUnavailableException` added to `targets`. |
 | `app/src/main/resources/application.yaml` | A six-line `governance` block on each of the five slots, plus a comment explaining the lane-dependent rules. |
-| `.env.example` | `AMSHA_DECISION_<ID>_GOVERNANCE_*` keys on each provider block; the stale "no wiring maps an api-key-ref" note corrected. |
+| `.env.example` | `AMSHA_DECISION_<ID>_GOVERNANCE_*` keys on each provider block; the stale "no wiring maps an api-key" note corrected. |
 | `app/src/test/.../DecisionProviderConfigBindingTest.java` | Governance overrides on both slots, and a test that the nested group — including the comma-separated allow-list — binds in-container. |
 
 **Verification run**
@@ -1133,19 +1086,21 @@ nothing calls the seam and no bean is registered.
 |---|---|
 | The factory accepted a publicly constructible `Selection.Selected` and re-checked only governance, so a hand-built selection could carry a model the lane forbids, a credential-less TypeSafe endpoint, a contradictory CLM dialect, a non-positive timeout, or a rejected endpoint. | The selector's non-governance rules were extracted into a public pure `DecisionProviderSelector.selectionProblem(...)`; `DecisionEngineFactory.create` now consults it **before** governance and raises the same payload-free refusal. One rule, two callers — the ADR §2.2 rule 1 principle extended from governance to the whole selection. `DecisionEngineFactoryTest` gained four refusal tests (10 → 14). |
 | The ADR required `isInternal()` on every endpoint including the `GET`, contradicting the standing "admin reads remain public" convention. | Recorded as an explicit exception in the evaluation-path ADR §2.2 rule 4 and in `Architecture_Invariants.md` §27.6: the provider-status read discloses provider identity, lane, host, model, and credential presence, so the surface is operational rather than a data read. |
-| "The credential is transient" over-claimed: the decoded `String` is held by the provider config for the engine's lifetime and cannot be erased when the handle closes. | Claim corrected in the factory Javadoc, the evaluation-path ADR's costs-and-risks, and W3 — now "transient and bounded by one evaluation", with the residual window recorded as a **production security decision** (accept it, or do W3b). |
+| Direct provider keys are held as configuration Strings for the process lifetime, matching Amsha's other provider keys; each evaluation also creates a bounded engine/header String that cannot be erased when its handle closes. | The direct-config String lifetime is an explicit convention recorded by the 2026-10-09 credential amendment. The byte copy is zeroed in `finally`; a future byte-oriented transport overload could reduce only the additional per-evaluation String, not the source config String. |
 | Plan §6 still called M4 unresolved, though the parent ADR §8.3 already sets lane-specific budgets. | §6 marked resolved; the W8 and PR-5 rows corrected. |
 | W8 scheduled §§27.6–27.7 that already exist; PR-5 still listed W8.2/8.3. | Both marked landed; PR-5 now carries W7 only. |
 | W7's runtime producer switch cannot prove structural absence — a `@Produces` method is a registered bean even when it returns no engine, so `Instance<DecisionEngine>` would be *satisfied* and `isEnabled()` could read true with the engine off. | W7 rewritten to gate the producer with a build-time `@IfBuildProperty`; the IT must assert bean **resolution**, not a null return from a producer method. |
-| The factory checked that a credential **reference** was declared but not that the **material** resolved, so a reference the vault resolved to nothing (or to whitespace) built a provider that would authenticate with an empty bearer token and only fail at the provider. | `DecisionProviderSelector.requiresCredentialMaterial(providerId, lane)` answers whether the provider authenticates with a bearer credential; `DecisionEngineFactory.create` refuses a credentialed provider whose resolved material is absent or blank. The rule is provider-based, not "any selection that names a reference", so the self-hosted lane still builds without material. `DecisionEngineFactoryTest` gained three refusal tests (14 → 17) and `DecisionProviderSelectorTest` one direct predicate test (37 → 38). |
+| Direct decision-provider keys are bound from environment configuration; the selection carries only a presence flag and the factory also refuses missing or blank request-owned bytes. | The API key is copied for evaluation and cleared in `finally`; the source config String remains resident for process lifetime, matching the existing provider-key convention. |
 | Plan §8 still listed "M4 reconciliation — approve the lane-specific budget in §6" as an open Committee item, though §6 marks it resolved and the parent ADR §8.3 records the budget. | The item was removed from §8 and a note added that M4 is resolved, so §6, §8, and the ADR now agree. |
 
 **Deliberately not done in PR-1** (and why):
 
 - The `amsha.decision.evaluation.enabled` / `production-engine.enabled` switches — nothing reads them
   until W4/W7, and an env var with no reader is dead configuration.
-- W3b (a `byte[]` credential overload) and W3c (self-hosted bearer) — both change engine behaviour and
-  belong with the evaluation path.
+- At PR-1 time, W3b (a byte-oriented transport overload) and W3c (self-hosted bearer authentication)
+  were deferred to the evaluation path. W4 now clears a request-owned byte copy, but the transport
+  still decodes it to an immutable `String`; self-hosted keys are sent as `X-Amsha-Loopback-Token`, not
+  `Authorization: Bearer`.
 - Any `@QuarkusTest` profile proving the selector refuses through the *bound* mapping — the refusal is
   unit-tested twice already and the composition adds no new failure mode.
 - The `app`-side binding test run and the reactor-wide coverage gate — those belong to the PR's own
@@ -1161,7 +1116,7 @@ without registering one — so `Instance<DecisionEngine>` is still unsatisfied.
 
 | File | Role |
 |---|---|
-| `classifier/evaluation/DecisionEvaluationService.java` | The single sanctioned egress path. Builds the engine via the W1 factory for one evaluation, projects/redacts state through the registered decision's allow-list, attaches the policy resolution, resolves the credential from the vault as a **system key** and zeroes the bytes in `finally`, and emits the audit event. |
+| `classifier/evaluation/DecisionEvaluationService.java` | The single sanctioned egress path. Builds the engine via the W1 factory for one evaluation, projects/redacts state through the registered decision's allow-list, attaches the policy resolution, copies the direct configured API key into request-owned bytes and zeroes them in `finally`, and emits the audit event. |
 | `classifier/evaluation/DecisionEvaluationRequest.java` / `DecisionEvaluationOutcome.java` | The payload-free request/outcome records. The outcome carries lane, provider, model, `DecisionMetadata` (tokens + latency) and the optional intent/tool-risk policy resolutions the metrics read. |
 | `classifier/evaluation/DecisionEvaluationRefusedException.java` + `DecisionRefusalReason.java` | The single fail-closed refusal type and its reason vocabulary (`DISABLED`, `UNREGISTERED_DECISION`, …), shared by the service, the runner and the HTTP surface. |
 | `classifier/evaluation/DecisionDefinitionRegistry.java`, `RegisteredDecision.java`, `QuestionSpec.java` | The seeded decision definitions the path can evaluate. Two entries: the router's `amsha.routing.intent.v1` and the tool-risk `tool.risk.shadow` (the latter built by `DecisionToolRiskShadowClassifier.definition(...)` and sharing `TOOL_RISK_CRITERIA` with `classify`). |

@@ -100,10 +100,12 @@ public interface DecisionProviderConfig {
         Optional<String> model();
 
         /**
-         * A {@code SecretVault} <em>reference</em> for the bearer credential — never a literal key.
-         * Resolution belongs to the vault and the wiring layer; this mapping only carries the name.
+         * Direct provider API key, supplied through the same environment-backed configuration
+         * convention as the other Amsha providers. The selector never copies this value into a
+         * selection, status response, or diagnostic; evaluation copies it to request-owned bytes
+         * and clears those bytes after the call.
          */
-        Optional<String> apiKeyRef();
+        Optional<String> apiKey();
 
         /** Request execution timeout. */
         @WithDefault("PT5S")

@@ -69,7 +69,14 @@ class DecisionProviderConfigBindingTest {
         assertTrue(clm.enabled());
         assertEquals("http://127.0.0.1:8700/v1/systemone", clm.endpoint().orElseThrow());
         assertEquals("clm-latest", clm.model().orElseThrow());
-        assertEquals("vault://decision/clm", clm.apiKeyRef().orElseThrow());
+        assertEquals("test-only-clm-api-key", clm.apiKey().orElseThrow());
+
+        assertEquals(
+                "test-only-typesafe-api-key",
+                config.slots().get("typesafe").apiKey().orElseThrow());
+        DecisionProviderSelector.Selection.Selected selected = assertInstanceOf(
+                DecisionProviderSelector.Selection.Selected.class, DecisionProviderSelector.select(config));
+        assertTrue(selected.credentialConfigured());
     }
 
     @Test
@@ -143,7 +150,7 @@ class DecisionProviderConfigBindingTest {
                     Map.entry("amsha.decision.providers.slots.clm.enabled", "true"),
                     Map.entry("amsha.decision.providers.slots.clm.endpoint", "http://127.0.0.1:8700/v1/systemone"),
                     Map.entry("amsha.decision.providers.slots.clm.model", "clm-latest"),
-                    Map.entry("amsha.decision.providers.slots.clm.api-key-ref", "vault://decision/clm"),
+                    Map.entry("amsha.decision.providers.slots.clm.api-key", "test-only-clm-api-key"),
                     Map.entry("amsha.decision.providers.slots.clm.timeout", "PT7S"),
                     Map.entry("amsha.decision.providers.slots.clm.wire-profile", "PROSE"),
                     // A projection allow-list is required on both lanes; without it the selector refuses
@@ -155,7 +162,7 @@ class DecisionProviderConfigBindingTest {
                     Map.entry(
                             "amsha.decision.providers.slots.typesafe.endpoint", "https://api.typesafe.ai/v1/systemone"),
                     Map.entry("amsha.decision.providers.slots.typesafe.model", "jev-latest"),
-                    Map.entry("amsha.decision.providers.slots.typesafe.api-key-ref", "vault://decision/typesafe"),
+                    Map.entry("amsha.decision.providers.slots.typesafe.api-key", "test-only-typesafe-api-key"),
                     Map.entry("amsha.decision.providers.slots.typesafe.governance.data-location", "US_EAST"),
                     Map.entry("amsha.decision.providers.slots.typesafe.governance.projection-allow-list", "goal"));
         }

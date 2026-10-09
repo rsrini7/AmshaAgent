@@ -488,9 +488,11 @@ For TypeSafe/System One, the following is confirmed from first-party documentati
 - error codes `401`, `422`, `429`, and `529` (there is no documented `503`);
 - no training on customer data; ZDR available on enterprise; explicit retention/residency still to be declared.
 
-Not yet done: an account and a credentialed sandbox call. The API key must be issued at
-`console.typesafe.ai/keys` and bound through `SecretVault`; the retention window, training prohibition,
-and data-residency declarations still have to be recorded explicitly by whoever configures the provider.
+Not yet done: an account and a credentialed sandbox call. Issue the API key at
+`console.typesafe.ai/keys` and set `AMSHA_DECISION_TYPESAFE_API_KEY` in the ignored local `.env`;
+provider API keys use the direct environment-backed convention and do not require a `SecretVault` entry.
+The retention window, training prohibition, and data-residency declarations still have to be recorded
+explicitly by whoever configures and approves the provider.
 
 For each open-weight candidate, record the exact model/revision, weight and code licenses, hardware needs,
 serving runtime, protocol, and source provenance. Do not infer protocol compatibility from a model
@@ -533,9 +535,7 @@ The governance, transport, redaction, placement, transaction-guard, and no-retry
 already implemented and tested and did not need rework. What remains before a credentialed call is
 the account and the explicit retention/residency declarations.
 
-Bind credentials through `SecretVault`; require explicit endpoint and data-governance declarations;
-keep the provider disabled by default. Invoke it only through an authorized orchestration/shadow
-path. Do not place remote evaluation behind synchronous network-free classifier SPIs.
+Use direct environment-backed `AMSHA_DECISION_<PROVIDER>_API_KEY` credentials, following the pattern used for other Amsha providers. Require explicit endpoint and data-governance declarations. Keep providers disabled by default; use remote credentials only through the authorized evaluation path, never from the synchronous, network-free classifier SPIs.
 
 ### Phase 2 — Open-weight/self-hosted adapter
 
@@ -617,7 +617,7 @@ has been made, and no candidate runtime has been conformance-tested against the 
 interchangeable either: the remote lane resolves credentials through its vault-backed governed transport, while
 the self-hosted lane uses a plain HTTP client and sends its own `X-Amsha-Loopback-Token` header. A secured Laya
 or CLM deployment that expects `Authorization: Bearer` therefore cannot use this adapter as documented.
-`DecisionProviderConfig.Slot.apiKeyRef` is carried and checked for presence, but nothing maps it onto either
+`DecisionProviderConfig.Slot.apiKey` is carried and checked for presence, but nothing maps it onto either
 engine's credentials.
 
 | Piece | State |
@@ -658,7 +658,7 @@ The LLM slots already solve this:
 | `generic-openai` | a catch-all slot for "self-hosted proxies, or any OpenAI API-compatible service" |
 
 The decision-plane equivalent is `AMSHA_DECISION_PROVIDER=typesafe|clm|laya|kev|omlx|…` plus
-`AMSHA_DECISION_{PROVIDER}_{ENDPOINT,MODEL,API_KEY_REF,TIMEOUT,WIRE_PROFILE}`.
+`AMSHA_DECISION_{PROVIDER}_{ENDPOINT,MODEL,API_KEY,TIMEOUT,WIRE_PROFILE}`.
 
 **Two axes, and the naming has to keep them apart (corrected 2026-10-01).** The provider id names the
 System One *endpoint* — the thing that receives `POST /v1/systemone` — exactly as an LLM provider id
@@ -712,8 +712,7 @@ one of these two must fail closed rather than be coerced into the nearer profile
 
 ### Credentials
 
-`API_KEY_REF` is a `SecretVault` reference, not a literal key in `.env` — consistent with how the remote
-lane already binds credentials.
+Decision provider keys use direct environment-backed `AMSHA_DECISION_<ID>_API_KEY` values, following the convention used by other Amsha providers. The selector and status endpoint expose only whether a key is configured. Evaluation copies the configured key into request-owned bytes and clears the byte array after the request. The source configuration `String` remains resident for the process lifetime; provider configuration may retain an immutable `String` while the transient engine is alive. The former `_API_KEY_REF` name is unsupported.
 
 ## 9. Decision gates
 
@@ -735,20 +734,21 @@ lane already binds credentials.
 - `SelfHostedDecisionEngine` remains a separate-process seam with strict loopback restrictions (the
   literal `127.0.0.1`), not a general cluster-serving integration. It accepts an optional `modelId`,
   omitted from the wire when blank, and a `WireProfile` selecting the `state` dialect (§8).
-- **The configuration surface exists but nothing consumes it into an engine.** There is no
-  `DecisionEngine` bean, no selector-to-engine wiring, and therefore no way for a `.env` change to
-  activate decision evaluation. That is the Deferred posture, not an oversight.
+- The accepted W4 evaluation path consumes provider configuration for explicit, internal-only
+  evaluation requests when its default-off switch is enabled. It creates a transient engine and
+  registers no `DecisionEngine` bean, so provider configuration still does not route agent traffic.
+  No successful live TypeSafe evaluation has been recorded yet.
 - The ADR remains **Deferred**. This document does not approve enabling router flags or fabricating
   candidate evidence, cost approval, or rollout ownership.
 
 Nothing here authorizes enabling the router flags, fabricating candidate evidence, recording cost
 approval, or naming a rollout owner. Those remain unmet, and the ADR remains **Deferred**.
 
-## 11. Status update (2026-10-07) — the evaluation path is now specified
+## 11. Status update (2026-10-09) — evaluation path implemented; production routing remains Deferred
 
-The §10 boundary — "no credentialed call has been made, and retention/residency remain undeclared" —
-is unchanged in the code. What is new is the *design* that closes it, and it is deliberately a
-documentation-only step: no engine, producer, resource, or configuration has been added.
+**Credential configuration update (2026-10-09):** decision slots use direct `AMSHA_DECISION_<ID>_API_KEY` values; `_API_KEY_REF` is unsupported. `SecretVault` remains for governed transport proxy and custom-CA material. A live TypeSafe evaluation requires a rebuilt and restarted native binary.
+
+The accepted W4 evaluation path is implemented. It permits credentialed requests only through the default-off, internal-only evaluation endpoint, constructs a transient engine, and registers no production CDI `DecisionEngine` bean. It does not route agent traffic. No successful live TypeSafe evaluation has yet been recorded, so measured provider evidence and production promotion approvals remain open.
 
 - **`docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md`** specifies a production-grade,
   two-capability design: an **explicit evaluation path** (a shared `DecisionEngineFactory`, an
@@ -757,12 +757,8 @@ documentation-only step: no engine, producer, resource, or configuration has bee
   **production routing** activation that remains behind the ADR §8.4 promotion steps.
 - **`ADR-jev-decision-plane-evaluation-path.md`** (**Accepted**, 2026-10-07) authorizes that evaluation
   path and nothing more. It does not move the parent ADR off `Deferred` and does not satisfy §8.4 steps 1–5.
-- Two specific gaps §10 does not name are recorded there: **`api-key-ref` is consumed by nobody**
-  (so a credentialed call is currently impossible, not merely unapproved), and the **self-hosted lane
-  has no bearer** (it sends only `X-Amsha-Loopback-Token`, so a secured Laya/CLM is unreachable).
-- The Operations gate's drift requirement is also scoped: `DecisionMetadata` already carries
-  `providerId`/`modelId`/`latency`/`inputTokens`/`outputTokens`, but `DecisionTelemetry` does not
-  consume it, so no confidence distribution or model identity — and therefore no drift signal — exists.
+- The 2026-10-09 change replaces the former `API_KEY_REF` proposal with direct `AMSHA_DECISION_<ID>_API_KEY` configuration. The evaluation service consumes it and clears its request-owned byte copy; the source config String remains resident for the process lifetime.
+- The self-hosted lane sends `X-Amsha-Loopback-Token`, not `Authorization: Bearer`; use it only with a local endpoint configured to accept that header.
 - **M4 is reconciled** in the parent ADR §8.3 as a lane-specific budget: p95 < 50 ms for an
   in-process/self-hosted local lane, p95 < 500 ms for a remote hosted lane. The earlier single
   "< 50 ms" figure was written for the local intent pilot and is unreachable for a hosted provider.

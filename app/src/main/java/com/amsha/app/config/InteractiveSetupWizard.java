@@ -62,7 +62,12 @@ public class InteractiveSetupWizard {
             "AMSHA_CLASSIFIER_OPENCODE_API_KEY",
             "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY",
             "AMSHA_SARVAM_API_KEY",
-            "AMSHA_OPENCODE_API_KEY");
+            "AMSHA_OPENCODE_API_KEY",
+            "AMSHA_DECISION_TYPESAFE_API_KEY",
+            "AMSHA_DECISION_CLM_API_KEY",
+            "AMSHA_DECISION_LAYA_API_KEY",
+            "AMSHA_DECISION_KEV_API_KEY",
+            "AMSHA_DECISION_OMLX_API_KEY");
 
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
             "AMSHA_VAULT_PEPPER",

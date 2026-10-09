@@ -19,36 +19,33 @@ import com.amsha.security.api.SecretVault;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * The single place that turns a resolved provider selection into a usable {@link DecisionEngine}.
+ * Creates a {@link DecisionEngine} from an already-resolved provider selection.
  *
- * <p>This exists so there is exactly one construction path. Before it, the only callers of
- * {@code RemoteProviderConfig.builder()} and {@code new RemoteDecisionEngine(...)} were tests, which is
- * why configuring a provider changed nothing. Any future production producer MUST build through here
- * too, or the two paths will drift and a governance rule enforced in one will be missing from the other.
+ * <p>This is the single provider construction path used by explicit decision evaluation.
+ * It creates an engine on demand and performs no provider request itself. Any future production
+ * producer must use this factory so governance checks and provider construction cannot diverge
+ * across paths.
  *
- * <p><b>It is deliberately not a CDI bean, and it registers no bean.</b> The factory is a pure
- * construction seam: it is handed an already-resolved selection, a declared governance group and
- * resolved credential material, and returns an engine the caller owns and closes. It performs no I/O
- * beyond creating an {@link HttpClient} for the loopback lane. That is what lets it exist while the
- * decision plane is Deferred — constructing an engine is not registering one, so
- * {@code Instance<DecisionEngine>} stays unresolvable.
+ * <p><b>This is not a CDI bean.</b> Creating the factory or an engine never registers a
+ * {@code DecisionEngine}. Production routing can remain {@code Deferred}, and
+ * {@code Instance<DecisionEngine>} stays unsatisfied until production activation is
+ * separately approved and implemented.
  *
- * <p><b>It fails closed.</b> The selection is re-validated with the selector's own rule
- * ({@link DecisionProviderSelector#selectionProblem}) and its governance is validated for the resolved
- * lane, so a hand-built {@code Selection.Selected} cannot smuggle in a model the lane forbids, a
- * credentialed provider with no reference or with a reference that resolved to no material, a
- * contradictory state dialect, a non-positive timeout, or a rejected endpoint. Any of those raises
- * {@link DecisionProviderUnavailableException} with a payload-free reason rather than being completed
- * with a permissive default.
+ * <p><b>It revalidates and fails closed.</b> The factory rechecks the selector's pure rule
+ * ({@link DecisionProviderSelector#selectionProblem}) and governance for the resolved lane.
+ * A hand-built {@code DecisionProviderSelector.Selection.Selected} cannot bypass checks
+ * for an invalid model, missing required key material, unsupported wire profile, timeout,
+ * endpoint, or governance declaration. A refusal has a payload-free
+ * {@link DecisionProviderUnavailableException} reason.
  *
- * <p><b>The credential is transient but not zeroable end to end.</b> The caller resolves it and zeroes
- * the bytes in a {@code finally} once the engine has consumed them. The remote lane needs a
- * {@code String} for the {@code Authorization} header and the loopback lane for its token header, so the
- * bytes are decoded once here — and that {@code String} is then held by the provider config
- * ({@code RemoteProviderConfig.apiKey} / {@code SelfHostedProviderConfig.loopbackToken}) for as long as
- * the engine lives. Closing the handle cannot erase it, because a {@code String} is immutable. The
- * exposure is therefore bounded by the engine's lifetime rather than eliminated, which makes it a
- * production security decision and not a property of this class.
+ * <p><b>Credential strings cannot be zeroed.</b> The caller clears the request-owned
+ * {@code byte[]} in a {@code finally} after evaluation. This factory decodes the bytes into
+ * an immutable {@link String} used by provider configuration
+ * ({@code RemoteProviderConfig.apiKey} or {@code SelfHostedProviderConfig.loopbackToken})
+ * while the transient engine is alive. That engine is created per evaluation; closing it
+ * ends the object's logical lifetime but cannot force immediate erasure of the decoded
+ * string. The environment-backed configuration {@link String} remains in memory for the
+ * process lifetime.
  */
 public final class DecisionEngineFactory {
 
@@ -96,7 +93,7 @@ public final class DecisionEngineFactory {
                         selected.lane(),
                         selected.endpoint(),
                         selected.model(),
-                        selected.apiKeyRef(),
+                        selected.credentialConfigured(),
                         selected.timeout(),
                         selected.wireProfile())
                 .orElse(null);
@@ -119,16 +116,11 @@ public final class DecisionEngineFactory {
                 DecisionProviderGovernance.of(selected.providerId(), declaredGovernance, selected.lane());
         String credentialText = credential.map(DecisionEngineFactory::decode).orElse(null);
 
-        // A declared reference is not a resolved credential. selectionProblem refuses a credentialed
-        // provider that names no api-key-ref; this closes the mirror gap — a reference the vault could not
-        // resolve to any bytes, which would otherwise build a provider that sends an empty Authorization
-        // header and only fails at the provider. Refused here, where the reason names the configuration.
-        // Only the remote bearer profiles are covered; the self-hosted lane authenticates with its own
-        // optional loopback header, so an empty credential is legitimate there.
+        // A configured key must resolve to non-empty bytes before building a hosted bearer profile.
         if (DecisionProviderSelector.requiresCredentialMaterial(selected.providerId(), selected.lane())
                 && (credentialText == null || credentialText.isBlank())) {
             throw new DecisionProviderUnavailableException("Decision provider '" + selected.providerId()
-                    + "' declares an api-key-ref but no credential material was resolved; refusing to build a"
+                    + "' declares an api-key but no credential material was resolved; refusing to build a"
                     + " provider that would authenticate with an empty bearer token");
         }
 

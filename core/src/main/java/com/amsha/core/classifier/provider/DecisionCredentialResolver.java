@@ -1,70 +1,33 @@
 package com.amsha.core.classifier.provider;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Objects;
 import java.util.Optional;
 
-import com.amsha.security.api.SecretVault;
-import com.amsha.security.api.VaultKey;
-
 /**
- * Resolves a provider's credential <em>reference</em> into credential bytes.
+ * Copies an environment-backed provider API key into request-owned credential bytes.
  *
- * <p>{@code amsha.decision.providers.slots.<id>.api-key-ref} is a {@code SecretVault} reference, never a
- * literal key. Nothing resolved it before this class existed, which is why a credentialed provider call
- * was impossible rather than merely unapproved. This is the one place that turns the reference into
- * material.
+ * <p>Decision provider keys use the same direct environment configuration convention as Amsha's
+ * other providers. The source {@link String} is held by the configuration system for the process
+ * lifetime; this class does not retain it. It creates a per-request UTF-8 byte copy that the caller
+ * must clear after engine construction and use.
  *
- * <p><b>The returned array is owned by the caller and must be zeroed.</b> The vault's own {@link VaultKey}
- * is closed here, which wipes its internal buffer; the copy handed back is deliberately detached so that
- * closing the vault key does not blank the credential the caller is about to use. A caller that drops the
- * array without zeroing it defeats the point, so the evaluation path zeroes it in a {@code finally}.
- *
- * <p>A refusal names the provider and says the reference could not be resolved. It never echoes the
- * reference value: the reference is operator configuration, and the selector's contract is that a refusal
- * describes configuration without reproducing it.
+ * <p><b>The returned array is owned by the caller and must be zeroed.</b>
  */
 public final class DecisionCredentialResolver {
-
-    private final SecretVault vault;
-
-    public DecisionCredentialResolver(SecretVault vault) {
-        this.vault = Objects.requireNonNull(vault, "vault");
-    }
+    private DecisionCredentialResolver() {}
 
     /**
-     * Resolves a credential reference.
+     * Copies configured credential material.
      *
-     * @param providerId the declared slot id, named in a refusal
-     * @param apiKeyRef the {@code SecretVault} reference; blank means "no credential configured"
-     * @return the credential bytes, or empty when no reference is configured
-     * @throws DecisionProviderUnavailableException when a reference is configured but cannot be resolved
+     * @param apiKey the direct provider API key; blank means no credential is configured
+     * @return request-owned credential bytes, or empty when no key is configured
      */
-    public Optional<byte[]> resolve(String providerId, String apiKeyRef) {
-        String ref = apiKeyRef == null ? "" : apiKeyRef.trim();
-        if (ref.isEmpty()) {
+    public static Optional<byte[]> resolve(String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
             return Optional.empty();
         }
-        Optional<VaultKey> found;
-        try {
-            found = vault.retrieveSystemKey(ref);
-        } catch (RuntimeException ex) {
-            throw new DecisionProviderUnavailableException(
-                    "Decision provider '" + providerId + "' declares a credential reference that the vault"
-                            + " rejected while resolving it",
-                    ex);
-        }
-        if (found == null || found.isEmpty()) {
-            throw new DecisionProviderUnavailableException(
-                    "Decision provider '" + providerId + "' declares a credential reference that is not"
-                            + " present in the vault, so the provider cannot be authenticated");
-        }
-        try (VaultKey key = found.get()) {
-            // Detach the material from the vault's buffer before close() wipes it: the caller needs a
-            // live copy, and holding the vault key open would keep the secret resident for longer than
-            // the request that needs it.
-            return Optional.of(key.get().clone());
-        }
+        return Optional.of(apiKey.getBytes(StandardCharsets.UTF_8));
     }
 
     /** Zeroes credential material. Call in a {@code finally} once the engine has consumed it. */

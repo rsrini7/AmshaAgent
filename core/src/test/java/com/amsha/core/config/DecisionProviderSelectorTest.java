@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +37,7 @@ import org.junit.jupiter.api.Test;
 class DecisionProviderSelectorTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(3);
-    private static final String CREDENTIAL_REF = "vault://decision/api-key";
+    private static final String TEST_API_KEY = "test-only-typesafe-key";
     private static final String DEFAULT_MODEL = "model-x";
 
     /** In-memory slot; the mapping is a plain interface, so a hand-written double is enough. */
@@ -45,7 +46,7 @@ class DecisionProviderSelectorTest {
         private final boolean enabled;
         private final String endpoint;
         private final String model;
-        private final String apiKeyRef;
+        private final String apiKey;
         private final Duration timeout;
         private final WireProfile wireProfile;
         private final DecisionProviderConfig.Slot.Governance governance;
@@ -54,14 +55,14 @@ class DecisionProviderSelectorTest {
                 boolean enabled,
                 String endpoint,
                 String model,
-                String apiKeyRef,
+                String apiKey,
                 Duration timeout,
                 WireProfile wireProfile,
                 DecisionProviderConfig.Slot.Governance governance) {
             this.enabled = enabled;
             this.endpoint = endpoint;
             this.model = model;
-            this.apiKeyRef = apiKeyRef;
+            this.apiKey = apiKey;
             this.timeout = timeout;
             this.wireProfile = wireProfile;
             this.governance = governance;
@@ -77,7 +78,7 @@ class DecisionProviderSelectorTest {
 
         static TestSlot on(String endpoint, String model, WireProfile wireProfile) {
             return new TestSlot(
-                    true, endpoint, model, CREDENTIAL_REF, TIMEOUT, wireProfile, DecisionGovernanceFixture.valid());
+                    true, endpoint, model, TEST_API_KEY, TIMEOUT, wireProfile, DecisionGovernanceFixture.valid());
         }
 
         static TestSlot off(String endpoint) {
@@ -88,7 +89,7 @@ class DecisionProviderSelectorTest {
         /** An enabled slot whose governance declaration is replaced wholesale, valid or not. */
         static TestSlot withGovernance(String endpoint, DecisionProviderConfig.Slot.Governance governance) {
             return new TestSlot(
-                    true, endpoint, DEFAULT_MODEL, CREDENTIAL_REF, TIMEOUT, WireProfile.JSON_OBJECT, governance);
+                    true, endpoint, DEFAULT_MODEL, TEST_API_KEY, TIMEOUT, WireProfile.JSON_OBJECT, governance);
         }
 
         @Override
@@ -107,8 +108,8 @@ class DecisionProviderSelectorTest {
         }
 
         @Override
-        public Optional<String> apiKeyRef() {
-            return Optional.ofNullable(apiKeyRef);
+        public Optional<String> apiKey() {
+            return Optional.ofNullable(apiKey);
         }
 
         @Override
@@ -248,7 +249,7 @@ class DecisionProviderSelectorTest {
                         true,
                         "http://127.0.0.1:8000/v1/systemone",
                         DEFAULT_MODEL,
-                        CREDENTIAL_REF,
+                        TEST_API_KEY,
                         Duration.ZERO,
                         WireProfile.JSON_OBJECT,
                         DecisionGovernanceFixture.valid())));
@@ -260,7 +261,7 @@ class DecisionProviderSelectorTest {
                         true,
                         "http://127.0.0.1:8000/v1/systemone",
                         DEFAULT_MODEL,
-                        CREDENTIAL_REF,
+                        TEST_API_KEY,
                         Duration.ofSeconds(-1),
                         WireProfile.JSON_OBJECT,
                         DecisionGovernanceFixture.valid())));
@@ -268,9 +269,9 @@ class DecisionProviderSelectorTest {
     }
 
     @Test
-    void refusesACredentialedRemoteProviderWithoutACredentialReference() {
+    void refusesACredentialedRemoteProviderWithoutAnApiKey() {
         // TypeSafe's documented profile authenticates with a bearer token, so a slot naming it with no
-        // api-key-ref is incomplete rather than merely unauthenticated.
+        // api-key is incomplete rather than merely unauthenticated.
         var refused = unavailable(one(
                 "typesafe",
                 new TestSlot(
@@ -282,11 +283,11 @@ class DecisionProviderSelectorTest {
                         WireProfile.JSON_OBJECT,
                         DecisionGovernanceFixture.valid())));
 
-        assertTrue(refused.reason().contains("api-key-ref"), refused.reason());
+        assertTrue(refused.reason().contains("api-key"), refused.reason());
     }
 
     @Test
-    void allowsAnUncredentialedRemoteProviderWithoutACredentialReference() {
+    void allowsAnUncredentialedRemoteProviderWithoutAnApiKey() {
         // The rule is deliberately narrow: "remote" alone does not imply "needs a bearer token", because
         // a remote deployment may authenticate by mTLS or network policy instead.
         var resolved = selected(one(
@@ -300,7 +301,7 @@ class DecisionProviderSelectorTest {
                         WireProfile.JSON_OBJECT,
                         DecisionGovernanceFixture.valid())));
 
-        assertEquals("", resolved.apiKeyRef());
+        assertFalse(resolved.credentialConfigured());
     }
 
     @Test
@@ -420,19 +421,24 @@ class DecisionProviderSelectorTest {
     }
 
     @Test
-    void carriesTheCredentialReferenceWithoutResolvingIt() {
+    void reportsConfiguredKeyPresenceWithoutExposingTheKey() {
         var resolved = selected(one("typesafe", TestSlot.on("https://api.typesafe.ai/v1/systemone")));
 
-        assertEquals(CREDENTIAL_REF, resolved.apiKeyRef());
+        assertTrue(resolved.credentialConfigured());
+        assertEquals(
+                List.of("providerId", "lane", "endpoint", "model", "credentialConfigured", "timeout", "wireProfile"),
+                Arrays.stream(DecisionProviderSelector.Selection.Selected.class.getRecordComponents())
+                        .map(component -> component.getName())
+                        .toList());
     }
 
     @Test
-    void aRefusalNamesTheProviderButNeverTheCredentialReference() {
+    void aRefusalNamesTheProviderButNeverTheCredentialValue() {
         var slot = new TestSlot(
                 true,
                 null,
                 DEFAULT_MODEL,
-                CREDENTIAL_REF,
+                TEST_API_KEY,
                 TIMEOUT,
                 WireProfile.JSON_OBJECT,
                 DecisionGovernanceFixture.valid());
@@ -440,7 +446,7 @@ class DecisionProviderSelectorTest {
         var refused = unavailable(one("omlx", slot));
 
         assertTrue(refused.reason().contains("omlx"), refused.reason());
-        assertFalse(refused.reason().contains("vault://"), refused.reason());
+        assertFalse(refused.reason().contains(TEST_API_KEY), refused.reason());
     }
 
     @Test

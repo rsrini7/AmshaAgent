@@ -23,8 +23,8 @@ Concretely, today:
 * `DecisionProviderSelector` resolves a configured slot into a `Selection.Selected`, but **no runtime
   caller consumes it** — the selector is a pure function with no production caller.
 * `RemoteProviderConfig.builder()` and `new RemoteDecisionEngine(...)` are referenced **only by tests**.
-* `api-key-ref` is carried and checked for presence but **resolved by nobody**, so a credentialed
-  TypeSafe call is not merely unapproved — it is impossible.
+* At proposal time, `api-key-ref` was carried and checked for presence but resolved by nobody. The
+  credential input was later changed to the direct environment-backed key described in §2.3.
 * The parent ADR's Quality gate is UNMET because candidate models have never been evaluated; §7.4
   evidence was explicitly `N/A (Synthetic)`.
 
@@ -114,6 +114,20 @@ both, which is what lets the evaluation path treat an engine as a transient, sco
 10. **Placement unchanged.** `ProviderPlacementValidator` remains authoritative: the evaluation path is
     a separate seam and MUST NOT be used to place a remote or self-hosted engine behind a classifier SPI.
 
+### 2.3 Credential configuration amendment — 2026-10-09
+
+Decision provider credentials use direct environment-backed `api-key` configuration, following the
+same convention as Amsha's other provider keys. The supported names are
+`AMSHA_DECISION_<ID>_API_KEY`; `API_KEY_REF` is not a supported alias. This replaces the original
+SecretVault-reference design for provider bearer credentials.
+
+The selector and status response carry only a boolean indicating that a key is configured. The
+evaluation path creates a request-owned UTF-8 byte copy and clears those bytes after engine use. The
+configuration system retains the source `String` for the lifetime of the process, matching the
+existing environment-backed provider-key convention. Credentials are never included in selections,
+logs, audit details, refusals, or HTTP responses. `SecretVault` remains in use for governed transport
+proxy and custom-CA material.
+
 ## 3. Invariants and Compliance
 
 * **Control-plane ownership** — `PreflightState`, `LoopStuckDetector`, `ToolInvocationGuard`, HITL,
@@ -157,13 +171,14 @@ both, which is what lets the evaluation path treat an engine as a transient, sco
 ### Costs and risks
 
 * A new internal surface must be authorized, audited, and tested; a regression there is an egress risk.
-* **Credentials cannot be zeroed end to end.** The caller zeroes the resolved `byte[]`, but the decoded
-  `String` is held by the provider config for the engine's lifetime (`RemoteProviderConfig.apiKey` /
-  `SelfHostedProviderConfig.loopbackToken`), and an immutable `String` cannot be erased when the handle
-  closes. The exposure is bounded by one evaluation rather than eliminated; it is recorded here as a
-  residual risk instead of being described as "transient". Removing it requires an engine overload that
-  builds the transport header without a lingering `String` — a production security decision to take
-  before the evaluation path is enabled.
+* **Credentials cannot be zeroed end-to-end.** The environment-backed configuration `String`
+  remains in memory for the process lifetime. For each evaluation, the service copies the key
+  into request-owned `byte[]` and clears that array in a `finally`; the factory decodes it into
+  an immutable `String` held by provider configuration while the transient engine is alive.
+  The engine is closed after that evaluation, but Java does not guarantee immediate erasure of
+  its `String`. Removing the provider-configuration copy requires a transport/header API that
+  accepts credential bytes; the source configuration `String` needs separate lifecycle
+  hardening.
 * An operator could mistake the evaluation path for activation. The naming, the default-off switch, and
   the parent ADR's unchanged `Deferred` status must make the distinction explicit.
 

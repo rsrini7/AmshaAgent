@@ -316,12 +316,12 @@ public class DecisionEvaluationService {
             String actorUserId) {
         byte[] credential = null;
         try {
-            credential = new DecisionCredentialResolver(vault)
-                    .resolve(selected.providerId(), selected.apiKeyRef())
+            credential = DecisionCredentialResolver.resolve(slot.apiKey().orElse(null))
                     .orElse(null);
             recordEgressAudit(selected, decision, actorUserId);
             return evaluateWithEngine(selected, slot, credential, decision, request, engineRequest);
-        } catch (DecisionProviderUnavailableException _) {
+        } catch (DecisionProviderUnavailableException exception) {
+            log.warnf("Decision evaluation provider unavailable: %s", LogUtil.rootMessage(exception));
             throw new DecisionEvaluationRefusedException(
                     DecisionRefusalReason.PROVIDER_UNAVAILABLE, PROVIDER_UNAVAILABLE_MESSAGE);
         } finally {

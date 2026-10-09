@@ -66,6 +66,7 @@ class DecisionEvaluationServiceTest {
     private static final String DECISION_ID = "amsha.routing.intent.v1";
     private static final String HANDLE = "intent_role_choice";
     private static final List<String> OPTIONS = List.of("coder", "researcher");
+    private static final String TEST_DIRECT_KEY = "test-only-direct-decision-key";
     private static final String STATE = "{\"user_message\":\"please fix the bug\"}";
 
     private HttpServer server;
@@ -73,6 +74,7 @@ class DecisionEvaluationServiceTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final AtomicInteger requestCount = new AtomicInteger();
     private final AtomicReference<String> lastBody = new AtomicReference<>();
+    private final AtomicReference<String> lastLoopbackToken = new AtomicReference<>();
     private volatile String responseBody = "{}";
 
     @BeforeEach
@@ -83,6 +85,7 @@ class DecisionEvaluationServiceTest {
             @Override
             public void handle(HttpExchange exchange) throws IOException {
                 requestCount.incrementAndGet();
+                lastLoopbackToken.set(exchange.getRequestHeaders().getFirst("X-Amsha-Loopback-Token"));
                 byte[] requestBytes = exchange.getRequestBody().readAllBytes();
                 lastBody.set(new String(requestBytes, StandardCharsets.UTF_8));
                 byte[] bytes = responseBody.getBytes(StandardCharsets.UTF_8);
@@ -195,7 +198,7 @@ class DecisionEvaluationServiceTest {
                   "usage": { "input_tokens": 40, "output_tokens": 8 }
                 }
                 """;
-        DecisionEvaluationService service = service(true, configuredProvider(true), audit);
+        DecisionEvaluationService service = service(true, configuredProvider(true, TEST_DIRECT_KEY), audit);
 
         DecisionEvaluationOutcome outcome = service.evaluate(request(), "operator");
 
@@ -212,6 +215,7 @@ class DecisionEvaluationServiceTest {
                         eq(SecurityEventType.DECISION_EVALUATION_REQUESTED),
                         contains("decision=" + DECISION_ID));
         assertEquals(1, requestCount.get());
+        assertEquals(TEST_DIRECT_KEY, lastLoopbackToken.get());
         // The projected body must carry the allow-listed field and nothing else.
         assertTrue(lastBody.get().contains("user_message"));
     }
@@ -359,6 +363,10 @@ class DecisionEvaluationServiceTest {
      * governance, factory, engine, projection — is exercised without a credential.
      */
     private DecisionProviderConfig configuredProvider(boolean withAllowList) {
+        return configuredProvider(withAllowList, null);
+    }
+
+    private DecisionProviderConfig configuredProvider(boolean withAllowList, String apiKey) {
         DecisionProviderConfig config = mock(DecisionProviderConfig.class);
         DecisionProviderConfig.Slot slot = mock(DecisionProviderConfig.Slot.class);
         DecisionProviderConfig.Slot.Governance governance = mock(DecisionProviderConfig.Slot.Governance.class);
@@ -367,7 +375,7 @@ class DecisionEvaluationServiceTest {
         when(slot.enabled()).thenReturn(true);
         when(slot.endpoint()).thenReturn(Optional.of("http://127.0.0.1:" + port + "/v1/systemone"));
         when(slot.model()).thenReturn(Optional.of("laya-multilingual"));
-        when(slot.apiKeyRef()).thenReturn(Optional.empty());
+        when(slot.apiKey()).thenReturn(Optional.ofNullable(apiKey));
         when(slot.timeout()).thenReturn(Duration.ofSeconds(5));
         when(slot.wireProfile()).thenReturn(WireProfile.JSON_OBJECT);
         when(slot.governance()).thenReturn(governance);
