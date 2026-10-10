@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import com.amsha.classifier.api.IntentDecisionPolicy;
 import com.amsha.classifier.api.ReviewBand;
 import com.amsha.classifier.api.ToolRiskDecisionPolicy;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
@@ -104,7 +105,9 @@ public class DecisionDefinitionRegistry {
         return new RegisteredDecision(
                 IntentDecisionRouter.definition(reviewBand, timeoutFor(timeoutMs)),
                 List.of(QuestionSpec.callerSupplied(
-                        IntentDecisionRouter.QUESTION_HANDLE, "Classify user intent into an eligible agent role")));
+                        IntentDecisionRouter.QUESTION_HANDLE,
+                        IntentDecisionRouter.INTENT_CRITERIA,
+                        List.of(IntentDecisionPolicy.NO_OPINION_LABEL))));
     }
 
     /**

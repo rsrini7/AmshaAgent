@@ -270,7 +270,10 @@ public class DecisionEvaluationService {
         if (!question.callerSupplied()) {
             return question.fixedOptions();
         }
-        return request.choiceOptions().getOrDefault(question.handle(), List.of());
+        LinkedHashSet<String> options =
+                new LinkedHashSet<>(request.choiceOptions().getOrDefault(question.handle(), List.of()));
+        options.addAll(question.requiredOptions());
+        return List.copyOf(options);
     }
 
     /** The definition's deadline is a ceiling: a request may tighten it, never extend it. */

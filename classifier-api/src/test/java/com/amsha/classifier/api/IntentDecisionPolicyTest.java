@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 class IntentDecisionPolicyTest {
 
     private static final String DECISION_ID = "amsha.routing.intent.v1";
-    private static final int SCHEMA_VERSION = 1;
+    private static final int SCHEMA_VERSION = 2;
     private static final Set<String> VALID_ROLES = Set.of("coordinator", "coder", "researcher", "data_analyst");
     private static final ReviewBand BAND = new ReviewBand(0.50, 0.85);
 
@@ -99,6 +99,23 @@ class IntentDecisionPolicyTest {
     }
 
     @Test
+    @DisplayName("reserved NO_OPINION choice produces deterministic fallback regardless of confidence")
+    void explicitNoOpinionChoiceProducesFallback() {
+        QuestionKey<Choice> key = QuestionKey.choice("intent_choice");
+        DecisionResult opinion =
+                createChoiceResult(key, IntentDecisionPolicy.NO_OPINION_LABEL, OptionalDouble.of(0.99));
+
+        IntentPolicyResolution res =
+                IntentDecisionPolicy.resolve(opinion, DECISION_ID, SCHEMA_VERSION, key, VALID_ROLES, BAND);
+
+        assertEquals(IntentDecisionAction.DETERMINISTIC_FALLBACK, res.action());
+        assertTrue(res.fallback());
+        assertTrue(res.selectedRole().isEmpty());
+        assertEquals(0.99, res.confidence().orElseThrow(), 0.001);
+        assertEquals("MODEL_ABSTAINED", res.reason());
+    }
+
+    @Test
     @DisplayName("middle review band ([0.50, 0.85)) produces secondary review signal")
     void middleBandProducesSecondaryReview() {
         QuestionKey<Choice> key = QuestionKey.choice("intent_choice");
@@ -148,8 +165,8 @@ class IntentDecisionPolicyTest {
     @DisplayName("schemaVersion mismatch rejects to deterministic fallback before using answer")
     void schemaVersionMismatchProducesFallback() {
         QuestionKey<Choice> key = QuestionKey.choice("intent_choice");
-        // Result has wrong schema version (2 instead of 1)
-        DecisionResult foreignOpinion = DecisionResult.opinionBuilder(DECISION_ID, 2)
+        // Result has the next schema version instead of the expected one.
+        DecisionResult foreignOpinion = DecisionResult.opinionBuilder(DECISION_ID, SCHEMA_VERSION + 1)
                 .put(key, new Choice("coder", 0.99))
                 .ruleId("rule-1")
                 .build();
@@ -159,7 +176,7 @@ class IntentDecisionPolicyTest {
         assertTrue(res.fallback());
         assertTrue(res.selectedRole().isEmpty());
         assertEquals("SCHEMA_VERSION_MISMATCH", res.reason());
-        assertEquals(1, res.schemaVersion());
+        assertEquals(SCHEMA_VERSION, res.schemaVersion());
     }
 
     @Test

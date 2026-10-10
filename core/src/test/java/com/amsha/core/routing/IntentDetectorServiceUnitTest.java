@@ -245,8 +245,12 @@ class IntentDetectorServiceUnitTest {
     void pilotEnabled_directRoute_routesDirectlyToSpecialist() {
         when(intentDecisionRouter.isEnabled()).thenReturn(true);
         when(intentDecisionRouter.isDirectRoutingPermitted()).thenReturn(true);
-        IntentPolicyResolution resolution =
-                IntentPolicyResolution.direct("coder", 0.95, "amsha.routing.intent.v1", 1, "HIGH_CONFIDENCE_ROUTE");
+        IntentPolicyResolution resolution = IntentPolicyResolution.direct(
+                "coder",
+                0.95,
+                IntentDecisionRouter.DECISION_ID,
+                IntentDecisionRouter.SCHEMA_VERSION,
+                "HIGH_CONFIDENCE_ROUTE");
         when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
         when(destructiveFilter.filter("coder", "write a java class")).thenReturn("coder");
 
@@ -259,7 +263,11 @@ class IntentDetectorServiceUnitTest {
         when(intentDecisionRouter.isEnabled()).thenReturn(true);
         when(intentDecisionRouter.isDirectRoutingPermitted()).thenReturn(true);
         IntentPolicyResolution resolution = IntentPolicyResolution.direct(
-                "researcher", 0.92, "amsha.routing.intent.v1", 1, "HIGH_CONFIDENCE_ROUTE");
+                "researcher",
+                0.92,
+                IntentDecisionRouter.DECISION_ID,
+                IntentDecisionRouter.SCHEMA_VERSION,
+                "HIGH_CONFIDENCE_ROUTE");
         when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
         when(destructiveFilter.filter("researcher", "delete database and search docs"))
                 .thenReturn("coordinator");
@@ -272,8 +280,12 @@ class IntentDetectorServiceUnitTest {
     void pilotEnabled_activationGatePending_blocksDirectRoutingAndFallsThrough() {
         when(intentDecisionRouter.isEnabled()).thenReturn(true);
         when(intentDecisionRouter.isDirectRoutingPermitted()).thenReturn(false);
-        IntentPolicyResolution resolution =
-                IntentPolicyResolution.direct("coder", 0.95, "amsha.routing.intent.v1", 1, "HIGH_CONFIDENCE_ROUTE");
+        IntentPolicyResolution resolution = IntentPolicyResolution.direct(
+                "coder",
+                0.95,
+                IntentDecisionRouter.DECISION_ID,
+                IntentDecisionRouter.SCHEMA_VERSION,
+                "HIGH_CONFIDENCE_ROUTE");
         when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
 
         CapableChatModel capableModel = mock(CapableChatModel.class);
@@ -301,7 +313,11 @@ class IntentDetectorServiceUnitTest {
     void pilotEnabled_secondaryReview_fallsThroughToAuthoritativeModel() {
         when(intentDecisionRouter.isEnabled()).thenReturn(true);
         IntentPolicyResolution resolution = IntentPolicyResolution.secondaryReview(
-                Optional.of("coder"), OptionalDouble.of(0.68), "amsha.routing.intent.v1", 1, "MIDDLE_REVIEW_BAND");
+                Optional.of("coder"),
+                OptionalDouble.of(0.68),
+                IntentDecisionRouter.DECISION_ID,
+                IntentDecisionRouter.SCHEMA_VERSION,
+                "MIDDLE_REVIEW_BAND");
         when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
 
         CapableChatModel capableModel = mock(CapableChatModel.class);
@@ -329,7 +345,10 @@ class IntentDetectorServiceUnitTest {
     void pilotEnabled_fallback_fallsThroughToAuthoritativeModel() {
         when(intentDecisionRouter.isEnabled()).thenReturn(true);
         IntentPolicyResolution resolution = IntentPolicyResolution.fallback(
-                "amsha.routing.intent.v1", 1, OptionalDouble.of(0.35), "LOW_CONFIDENCE");
+                IntentDecisionRouter.DECISION_ID,
+                IntentDecisionRouter.SCHEMA_VERSION,
+                OptionalDouble.of(0.35),
+                "LOW_CONFIDENCE");
         when(intentDecisionRouter.evaluateIntent(anyString(), any())).thenReturn(resolution);
 
         CapableChatModel capableModel = mock(CapableChatModel.class);

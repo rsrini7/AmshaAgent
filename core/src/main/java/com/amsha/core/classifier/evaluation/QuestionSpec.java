@@ -1,5 +1,6 @@
 package com.amsha.core.classifier.evaluation;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -23,10 +24,16 @@ import com.amsha.classifier.api.DecisionPrimitive;
  * @param kind the decision primitive the question asks for
  * @param criteria the evaluation instructions the provider receives
  * @param fixedOptions the closed option list for a fixed {@code CHOICE}; empty otherwise
+ * @param requiredOptions registry-owned options appended to caller-supplied choices; empty otherwise
  * @param callerSupplied whether the request supplies this question's options instead of the registry
  */
 public record QuestionSpec(
-        String handle, DecisionPrimitive kind, String criteria, List<String> fixedOptions, boolean callerSupplied) {
+        String handle,
+        DecisionPrimitive kind,
+        String criteria,
+        List<String> fixedOptions,
+        List<String> requiredOptions,
+        boolean callerSupplied) {
 
     public QuestionSpec {
         Objects.requireNonNull(handle, "handle");
@@ -39,10 +46,19 @@ public record QuestionSpec(
             throw new IllegalArgumentException("question criteria must not be blank");
         }
         fixedOptions = fixedOptions == null ? List.of() : List.copyOf(fixedOptions);
+        requiredOptions = requiredOptions == null ? List.of() : List.copyOf(requiredOptions);
         for (String option : fixedOptions) {
             if (option == null || option.isBlank()) {
                 throw new IllegalArgumentException("fixed option for question '" + handle + "' must not be blank");
             }
+        }
+        for (String option : requiredOptions) {
+            if (option == null || option.isBlank()) {
+                throw new IllegalArgumentException("required option for question '" + handle + "' must not be blank");
+            }
+        }
+        if (new HashSet<>(requiredOptions).size() != requiredOptions.size()) {
+            throw new IllegalArgumentException("required options for question '" + handle + "' must be unique");
         }
         if (callerSupplied) {
             // Only a closed CHOICE can have its options delegated: a SCORE rubric or a NOUL proposition
@@ -57,6 +73,10 @@ public record QuestionSpec(
                         "a caller-supplied question must declare no fixed options, got '" + handle + "'");
             }
         } else if (kind == DecisionPrimitive.CHOICE) {
+            if (!requiredOptions.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "a fixed CHOICE cannot declare caller-supplied required options, got '" + handle + "'");
+            }
             if (fixedOptions.size() < 2) {
                 throw new IllegalArgumentException("a fixed CHOICE question requires at least 2 options, got "
                         + fixedOptions.size() + " for '" + handle + "'");
@@ -64,6 +84,9 @@ public record QuestionSpec(
         } else if (!fixedOptions.isEmpty()) {
             throw new IllegalArgumentException(
                     "only a CHOICE question may declare options, got " + kind + " for '" + handle + "'");
+        } else if (!requiredOptions.isEmpty()) {
+            throw new IllegalArgumentException("only a caller-supplied CHOICE may declare required options, got " + kind
+                    + " for '" + handle + "'");
         }
     }
 
@@ -75,7 +98,19 @@ public record QuestionSpec(
      * @return a caller-supplied choice question
      */
     public static QuestionSpec callerSupplied(String handle, String criteria) {
-        return new QuestionSpec(handle, DecisionPrimitive.CHOICE, criteria, List.of(), true);
+        return callerSupplied(handle, criteria, List.of());
+    }
+
+    /**
+     * A {@code CHOICE} whose caller supplies dynamic options and the registry supplies required options.
+     *
+     * @param handle question handle
+     * @param criteria evaluation instructions
+     * @param requiredOptions options always appended by the registry
+     * @return caller-supplied choice question
+     */
+    public static QuestionSpec callerSupplied(String handle, String criteria, List<String> requiredOptions) {
+        return new QuestionSpec(handle, DecisionPrimitive.CHOICE, criteria, List.of(), requiredOptions, true);
     }
 
     /**
@@ -87,7 +122,7 @@ public record QuestionSpec(
      * @return a fixed choice question
      */
     public static QuestionSpec fixedChoice(String handle, String criteria, List<String> options) {
-        return new QuestionSpec(handle, DecisionPrimitive.CHOICE, criteria, options, false);
+        return new QuestionSpec(handle, DecisionPrimitive.CHOICE, criteria, options, List.of(), false);
     }
 
     /**
@@ -99,7 +134,7 @@ public record QuestionSpec(
      * @return a fixed non-choice question
      */
     public static QuestionSpec fixed(String handle, DecisionPrimitive kind, String criteria) {
-        return new QuestionSpec(handle, kind, criteria, List.of(), false);
+        return new QuestionSpec(handle, kind, criteria, List.of(), List.of(), false);
     }
 
     @Override

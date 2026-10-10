@@ -79,12 +79,21 @@ public record RegisteredDecision(DecisionDefinition definition, List<QuestionSpe
         }
         for (String handle : callerHandles) {
             List<String> values = options.get(handle);
-            if (values == null || values.size() < 2) {
+            QuestionSpec question = questions.stream()
+                    .filter(candidate -> candidate.handle().equals(handle))
+                    .findFirst()
+                    .orElseThrow();
+            if (values != null && values.stream().anyMatch(question.requiredOptions()::contains)) {
+                return Optional.of("Decision '" + decisionId() + "' received a reserved option for '" + handle + "'");
+            }
+            if (values == null || values.size() + question.requiredOptions().size() < 2) {
                 return Optional.of("Decision '" + decisionId() + "' requires at least 2 options for the"
                         + " caller-supplied question '" + handle + "'");
             }
-            if (values.size() > DecisionQuestion.MAX_CHOICE_OPTIONS) {
-                return Optional.of("Decision '" + decisionId() + "' received " + values.size()
+            int effectiveOptionCount =
+                    values.size() + question.requiredOptions().size();
+            if (effectiveOptionCount > DecisionQuestion.MAX_CHOICE_OPTIONS) {
+                return Optional.of("Decision '" + decisionId() + "' received " + effectiveOptionCount
                         + " options for '" + handle + "', exceeding the ceiling of "
                         + DecisionQuestion.MAX_CHOICE_OPTIONS);
             }

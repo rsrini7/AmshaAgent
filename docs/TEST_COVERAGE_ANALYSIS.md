@@ -3061,12 +3061,13 @@ A production-grade design for the deferred plane's missing capability — an exp
 non-routing **evaluation path** that can make a real credentialed provider call without registering a
 `DecisionEngine` bean — is specified in
 [ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
-(Status: **Proposed**) and the
+(Status: **Accepted**, 2026-10-07) and the
 [activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md). Its test matrix
-(plan Appendix C.4) is ~10 new unit/IT classes across `core` and `app`, plus four new
-`validate_decision_plane.sh` checks (`JEV-13`..`JEV-16`).
+(plan Appendix C.4) landed as ~10 new unit/IT classes across `core` and `app`, plus the new
+`validate_decision_plane.sh` checks `JEV-13` and `JEV-17` (with `JEV-14`, `JEV-15` and `JEV-18` covered by
+loopback integration tests, and `JEV-16` reserved for the PR-5 production-engine workstream).
 
-Expected coverage effect when it lands: `core` gains a factory, a governance validator, a credential
+Coverage effect now that it has landed: `core` gains a factory, a governance validator, a credential
 resolver, an evaluation service, an evidence runner and a drift monitor — all new, all unit-testable,
 which should lift `core` rather than dilute it. `app` gains one internal-only admin resource whose
 authorization matrix is asserted in-container. The `0.82` reactor floor is unaffected by the design

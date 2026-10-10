@@ -182,14 +182,16 @@ public record DecisionEvidenceSummary(
         List<DecisionEvidenceCaseResult> evaluated =
                 results.stream().filter(DecisionEvidenceCaseResult::evaluated).toList();
         long denominator = evaluated.size();
-        long numerator = evaluated.stream().filter(r -> !r.observedOpinion()).count();
+        long numerator =
+                evaluated.stream().filter(DecisionEvidenceCaseResult::abstained).count();
         double rate = denominator == 0 ? 0.0 : (double) numerator / denominator;
         return new MetricResult(
                 numerator,
                 denominator,
                 rate,
                 true,
-                "M3 abstention rate: NoOpinion results over all evaluated cases. Report and review; no pass threshold.");
+                "M3 abstention rate: explicit NO_OPINION choices and NoOpinion results over all evaluated cases. "
+                        + "Report and review; no pass threshold.");
     }
 
     // ----- M4: per-lane latency p95 ---------------------------------------------------

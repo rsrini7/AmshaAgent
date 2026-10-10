@@ -3,6 +3,7 @@ package com.amsha.core.classifier.evaluation;
 import java.util.Objects;
 
 import com.amsha.classifier.api.DecisionMetadata;
+import com.amsha.classifier.api.IntentDecisionPolicy;
 
 /**
  * One case's observed outcome during an evidence run, payload-free.
@@ -168,6 +169,11 @@ public record DecisionEvidenceCaseResult(
             return intentPolicyAction != null;
         }
         return DecisionEvidenceCase.TASK_TOOL_RISK.equals(task) && toolRiskPolicyAction != null;
+    }
+
+    /** Whether the evaluated provider explicitly abstained or returned no opinion. */
+    public boolean abstained() {
+        return !observedOpinion || IntentDecisionPolicy.NO_OPINION_LABEL.equals(observedLabel);
     }
 
     /** The service refused before any egress; the system abstained, which is safe for an abstention case. */

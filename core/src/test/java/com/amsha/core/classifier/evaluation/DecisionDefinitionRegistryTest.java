@@ -13,6 +13,7 @@ import java.util.Set;
 import com.amsha.classifier.api.DecisionDefinition;
 import com.amsha.classifier.api.DecisionPrimitive;
 import com.amsha.classifier.api.FailMode;
+import com.amsha.classifier.api.IntentDecisionPolicy;
 import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.classifier.api.RetentionPolicy;
 import com.amsha.classifier.api.ReviewBand;
@@ -111,13 +112,20 @@ class DecisionDefinitionRegistryTest {
         String handle = IntentDecisionRouter.QUESTION_HANDLE;
 
         assertTrue(decision.questions().getFirst().callerSupplied(), "the intent shortlist is runtime data");
+        QuestionSpec question = decision.questions().getFirst();
+        assertEquals(IntentDecisionRouter.INTENT_CRITERIA, question.criteria());
+        assertEquals(List.of(IntentDecisionPolicy.NO_OPINION_LABEL), question.requiredOptions());
         assertTrue(
                 decision.optionsProblem(Map.of(handle, List.of("coder", "researcher")))
                         .isEmpty(),
                 "a two-role shortlist is valid");
         assertTrue(
-                decision.optionsProblem(Map.of(handle, List.of("coder"))).isPresent(),
-                "a single-role shortlist is below the floor");
+                decision.optionsProblem(Map.of(handle, List.of("coder"))).isEmpty(),
+                "one role plus the registry-owned abstention option is valid");
+        assertTrue(
+                decision.optionsProblem(Map.of(handle, List.of("coder", IntentDecisionPolicy.NO_OPINION_LABEL)))
+                        .isPresent(),
+                "the caller must not supply a registry-owned option");
         assertTrue(decision.optionsProblem(Map.of()).isPresent(), "the intent decision requires its shortlist");
     }
 

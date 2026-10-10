@@ -23,6 +23,9 @@ import java.util.Set;
  */
 public final class IntentDecisionPolicy {
 
+    /** Reserved choice label that means the model declines to select a specialist. */
+    public static final String NO_OPINION_LABEL = "NO_OPINION";
+
     public static final ReviewBand DEFAULT_INTENT_REVIEW_BAND = new ReviewBand(0.50, 0.85);
 
     private IntentDecisionPolicy() {}
@@ -101,6 +104,10 @@ public final class IntentDecisionPolicy {
         }
 
         String label = choice.label();
+        if (NO_OPINION_LABEL.equals(label)) {
+            return IntentPolicyResolution.fallback(
+                    opinion.decisionId(), opinion.schemaVersion(), choice.confidence(), "MODEL_ABSTAINED");
+        }
         if (!roles.isEmpty() && !roles.contains(label)) {
             return IntentPolicyResolution.fallback(
                     opinion.decisionId(), opinion.schemaVersion(), choice.confidence(), "UNRECOGNIZED_ROLE_LABEL");

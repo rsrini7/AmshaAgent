@@ -30,14 +30,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.classifier.api.IntentDecisionPolicy;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.classifier.DecisionCostGuard;
 import com.amsha.core.classifier.DecisionDriftMonitor;
 import com.amsha.core.classifier.wire.WireProfile;
 import com.amsha.core.config.DecisionProviderConfig;
+import com.amsha.core.routing.IntentDecisionRouter;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.security.api.SecretVault;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -63,8 +66,8 @@ import io.vertx.core.Vertx;
  */
 class DecisionEvaluationServiceTest {
 
-    private static final String DECISION_ID = "amsha.routing.intent.v1";
-    private static final String HANDLE = "intent_role_choice";
+    private static final String DECISION_ID = IntentDecisionRouter.DECISION_ID;
+    private static final String HANDLE = IntentDecisionRouter.QUESTION_HANDLE;
     private static final List<String> OPTIONS = List.of("coder", "researcher");
     private static final String TEST_DIRECT_KEY = "test-only-direct-decision-key";
     private static final String STATE = "{\"user_message\":\"please fix the bug\"}";
@@ -180,7 +183,7 @@ class DecisionEvaluationServiceTest {
     }
 
     @Test
-    void emitsAnAuditEventBeforeEgressAndReturnsAPayloadFreeOutcome() {
+    void emitsAnAuditEventBeforeEgressAndReturnsAPayloadFreeOutcome() throws Exception {
         AuditService audit = mock(AuditService.class);
         responseBody = """
                 {
@@ -218,6 +221,15 @@ class DecisionEvaluationServiceTest {
         assertEquals(TEST_DIRECT_KEY, lastLoopbackToken.get());
         // The projected body must carry the allow-listed field and nothing else.
         assertTrue(lastBody.get().contains("user_message"));
+        JsonNode question = mapper.readTree(lastBody.get()).path("questions").path(HANDLE);
+        assertEquals(
+                IntentDecisionRouter.INTENT_CRITERIA,
+                question.path("instructions").asText());
+        JsonNode choices = question.path("criteria");
+        assertEquals(3, choices.size());
+        assertTrue(choices.has("coder"));
+        assertTrue(choices.has("researcher"));
+        assertTrue(choices.has(IntentDecisionPolicy.NO_OPINION_LABEL));
     }
 
     @Test
