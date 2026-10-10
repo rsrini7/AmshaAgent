@@ -6,12 +6,11 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Renders a {@link DecisionEvidenceSummary} as a payload-free Markdown report.
+ * Renders a {@link DecisionEvidenceSummary} as a Markdown report.
  *
- * <p>The summary is the machine-readable artifact; this is the reviewable one. It contains aggregate gate
- * results and per-lane telemetry only. Per-case labels, state, credentials, and provider bodies are never
- * rendered into evidence. The renderer is a pure function of the summary: no clock, no I/O, no configuration,
- * so it is trivially testable and safe to call from the opt-in admin surface.
+ * <p>The default report carries run provenance, aggregate gate results, and per-lane telemetry.
+ * Opt-in diagnostics also remain aggregate, with disposition counts and provider/model/token
+ * coverage only. Case identifiers, labels, decisions, inputs, and error details are never rendered.
  */
 public final class DecisionEvidenceReport {
 
@@ -24,6 +23,7 @@ public final class DecisionEvidenceReport {
         appendHeader(md, summary);
         appendGates(md, summary);
         appendLanes(md, summary);
+        appendDiagnostics(md, summary);
         return md.toString();
     }
 
@@ -37,9 +37,27 @@ public final class DecisionEvidenceReport {
         md.append("# Decision-plane evidence report — corpus v")
                 .append(summary.corpusVersion())
                 .append("\n\n");
+        appendAttribution(md, summary.attribution());
         md.append("- Cases: ").append(summary.caseCount()).append('\n');
         md.append("- Evaluated: ").append(evaluated).append('\n');
         md.append("- Excluded (outside the declared scope): ").append(excluded).append("\n\n");
+    }
+
+    /**
+     * Renders the run's provenance: the identifier that tells this run apart from any other, and the
+     * provider selection that served it.
+     *
+     * <p>Every value is an identifier, so this is safe in a committed artifact. An unresolved selection
+     * renders as an em dash rather than being omitted, so a reader can see that nothing resolved instead
+     * of inferring it from an absent line.
+     */
+    private static void appendAttribution(StringBuilder md, DecisionEvidenceRunAttribution attribution) {
+        md.append("- Run: ").append(cell(attribution.runId())).append('\n');
+        md.append("- Provider: ").append(cell(attribution.providerId())).append('\n');
+        md.append("- Configured model: ")
+                .append(cell(attribution.configuredModel()))
+                .append('\n');
+        md.append("- Lane: ").append(cell(attribution.lane())).append("\n\n");
     }
 
     private static void appendGates(StringBuilder md, DecisionEvidenceSummary summary) {
@@ -123,6 +141,51 @@ public final class DecisionEvidenceReport {
             }
             md.append('\n');
         }
+    }
+
+    /** Renders opt-in aggregate diagnostics, or nothing when they were not projected. */
+    private static void appendDiagnostics(StringBuilder md, DecisionEvidenceSummary summary) {
+        DecisionEvidenceDiagnostics diagnostics = summary.diagnostics();
+        if (diagnostics == null) {
+            return;
+        }
+        md.append("## Aggregate diagnostics (opt-in)\n\n");
+        md.append("| Disposition | Cases |\n| --- | ---: |\n");
+        md.append("| Evaluated | ").append(diagnostics.evaluatedCaseCount()).append(" |\n");
+        md.append("| Refused | ").append(diagnostics.refusedCaseCount()).append(" |\n");
+        md.append("| Transform errors | ")
+                .append(diagnostics.transformErrorCaseCount())
+                .append(" |\n");
+        md.append("| Skipped | ").append(diagnostics.skippedCaseCount()).append(" |\n\n");
+
+        if (diagnostics.providerUsage().isEmpty()) {
+            md.append("_No provider telemetry was reported._\n\n");
+            return;
+        }
+        md.append("### Provider telemetry\n\n");
+        md.append(
+                "| Provider | Reported model | Lane | Evaluated | Input token reports | Output token reports | Input tokens | Output tokens |\n");
+        md.append("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |\n");
+        for (DecisionEvidenceDiagnostics.ProviderUsage usage : diagnostics.providerUsage()) {
+            md.append("| ")
+                    .append(cell(usage.providerId()))
+                    .append(" | ")
+                    .append(cell(usage.model()))
+                    .append(" | ")
+                    .append(cell(usage.lane()))
+                    .append(" | ")
+                    .append(usage.evaluatedCaseCount())
+                    .append(" | ")
+                    .append(usage.inputTokenReportedCaseCount())
+                    .append(" | ")
+                    .append(usage.outputTokenReportedCaseCount())
+                    .append(" | ")
+                    .append(usage.totalInputTokens())
+                    .append(" | ")
+                    .append(usage.totalOutputTokens())
+                    .append(" |\n");
+        }
+        md.append('\n');
     }
 
     private static String costWithin(DecisionEvidenceSummary.LaneCost cost) {

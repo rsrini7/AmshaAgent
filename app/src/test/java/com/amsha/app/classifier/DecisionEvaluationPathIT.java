@@ -23,7 +23,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 
 /**
- * End-to-end proof that the evaluation path makes a real provider call while the plane stays Deferred.
+ * End-to-end proof that the evaluation path uses its provider fixture while the plane stays Deferred.
  *
  * <p>The assertion that matters is the pair: the evaluation returns an opinion, and
  * {@code Instance<DecisionEngine>} is still unsatisfiable. If the evaluation path had registered an
@@ -70,6 +70,20 @@ class DecisionEvaluationPathIT {
     void thePlaneStaysStructurallyInert() {
         assertFalse(
                 decisionEngines.isResolvable(), "no DecisionEngine bean may be registered while the plane is Deferred");
+    }
+
+    @Test
+    void unregisteredDecisionIdIsRejectedBeforeProviderCall() {
+        given().header(HttpConstants.X_AMSHA_API_KEY, INTERNAL)
+                .contentType("application/json")
+                .body(
+                        "{\"decisionId\":\"amsha.routing.unknown.v9\",\"stateJson\":\"{\\\"user_message\\\":\\\"hi\\\"}\"}")
+                .post("/api/v1/admin/decision/evaluate")
+                .then()
+                .statusCode(400)
+                .body("error", equalTo("UNREGISTERED_DECISION"));
+
+        assertEquals(0, DecisionProviderFixture.requestCount(), "unknown decision ids must not egress");
     }
 
     @Test

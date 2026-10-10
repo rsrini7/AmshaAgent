@@ -9,6 +9,9 @@ import java.util.Set;
 import com.amsha.app.ui.dto.AgentEvent;
 import com.amsha.app.ui.dto.ChatMessageDto;
 import com.amsha.app.ui.dto.PageDto;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceDiagnostics;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceRunAttribution;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceSummary;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityUserDto;
@@ -46,6 +49,13 @@ class NativeReflectionCompletenessTest {
         assertTrue(targetSet.contains(WorkspaceMembershipDto.class));
         assertTrue(targetSet.contains(ExternalIdentityDto.class));
         assertTrue(targetSet.contains(IdentityInvitationDto.class));
+
+        // The evidence endpoint returns Response, so its entity graph is registered explicitly.
+        // This guards the JSON graph that failed only in a native run before these targets were added.
+        assertTrue(targetSet.contains(DecisionEvidenceSummary.class));
+        assertTrue(targetSet.contains(DecisionEvidenceRunAttribution.class));
+        assertTrue(targetSet.contains(DecisionEvidenceDiagnostics.class));
+        assertTrue(targetSet.contains(DecisionEvidenceDiagnostics.ProviderUsage.class));
     }
 
     @Test

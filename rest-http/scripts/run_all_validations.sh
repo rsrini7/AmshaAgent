@@ -13,8 +13,8 @@
 #   bash run_all_validations.sh --auth-session   → API Key Auth + Session lifecycle (fast)
 #   bash run_all_validations.sh --identity       → P109 Identity/Access/bootstrap + OAuth negative (fast)
 #   bash run_all_validations.sh --pii-audit      → PII scanner + Prompt injection + Audit verify (fast)
-#   bash run_all_validations.sh --decision-plane → Jev decision-plane Deferred contract (fast, zero-token)
-#   bash run_all_validations.sh --fast           → all fast/zero-token validators (no LLM wait)
+#   bash run_all_validations.sh --decision-plane → Jev decision-plane Deferred contract (fast, no evaluation requests)
+#   bash run_all_validations.sh --fast           → fast validation set; some agent-backed suites use the configured provider
 #   bash run_all_validations.sh --llm            → memory + web + roles (needs LLM)
 #   bash run_all_validations.sh --list           → list available validators
 
@@ -116,7 +116,7 @@ for arg in "$@"; do
     --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_DELEGATION=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true; RUN_DATA_COLLECTION=true ;;
     --list)
       echo "Available validators:"
-      echo "  --reflex       validate_reflex.sh             (zero-token, ~30s)"
+      echo "  --reflex       validate_reflex.sh             (deterministic, ~30s)"
       echo "  --skills       validate_skill.sh              (CRUD + errors, ~90s)"
       echo "  --skills-admission validate_skillsjar_admission.sh (admission/quarantine, fast)"
       echo "  --mcp          validate_mcp.sh                (MCP protocol, ~2min)"
@@ -190,7 +190,7 @@ else
 fi
 
 if [ "$FAST" = true ]; then
-  echo "Mode: --fast (portable zero-token validators; ONNX runs explicitly with --onnx)"
+  echo "Mode: --fast (fast validation set; agent-backed suites may use the configured provider; ONNX runs explicitly with --onnx)"
 elif [ "$LLM" = true ]; then
   echo "Mode: --llm (memory + web + roles, needs LLM)"
 elif [ "$RUN_ALL" = true ]; then

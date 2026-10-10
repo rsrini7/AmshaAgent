@@ -526,7 +526,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 
 | Flag | Script | Coverage | Cost |
 |---|---|---|---|
-| `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | zero-token |
+| `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | deterministic |
 | `--skills` | `validate_skill.sh` | Skill CRUD, routing, errors | low |
 | `--skills-admission` | `validate_skillsjar_admission.sh` | SkillsJar admission, quarantine schema, refresh stability | zero-token |
 | `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol plus approval-gated discover/connect, policies, reconfigure, pause/resume, import, setup-token, and cleanup | low |
@@ -551,7 +551,7 @@ complete flow across the rate-limit window.
 | `--budget` | `validate_budget.sh` | Budget limits + autonomy; FULL safe-operation bypass and mandatory network/shell HITL | LLM |
 | `--sse-settings` | `validate_sse_settings.sh` | UI SSE streams, ws-token, settings CRUD | fast |
 | `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
-| `--fast` | `(master)` | all fast/zero-token validators | mixed |
+| `--fast` | `(master)` | Fast validation set; some agent-backed suites use the configured provider | mixed |
 The `--fast` profile includes `validate_mcp_fast.sh`: MCP admin status/tools, REST API-key rejection, the current durable connection-list shape, JSON-RPC initialize, session handshake, tools/list, and unknown-tool rejection. It does not invoke LLM-backed tools or mutate managed connections.
 | `--llm` | `(master)` | memory + web + roles + cron + rag + budget + hitl | LLM |
 
@@ -563,22 +563,22 @@ forces `generic-openai` plus ONNX, never selects Ollama, and does not print raw 
 payloads or credentials. See the
 [local ONNX guide](../docs/ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
 
-`--decision-plane` is the zero-token half of the classifier control-plane contract. The
-decision plane is Deferred, so no `DecisionEngine` bean exists and every evaluation fails
-closed; the validator asserts that posture is observable and coherent rather than merely
-documented. It overlaps deliberately with `validate_onnx.sh` ONNX-5..7 — the same
-invariant must hold with and without the local ONNX bundle loaded, so do not remove one
-copy. When `AMSHA_VALIDATION_LOG_FILE` is set (the `run_dist_*` wrappers export it) the
-validator also asserts the `DecisionPlaneReadiness` startup diagnostic fired exactly once;
-set `AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true` to require it, or `=false` to forbid
-it when the shadow switches are disabled.
+`--decision-plane` runs the zero-token classifier control-plane contract. The decision
+plane is Deferred, so no `DecisionEngine` bean is available; the validator checks that
+posture and the startup readiness diagnostic. It makes no evidence or decision-evaluation
+requests. JEV-14/15 evaluation paths are covered by loopback integration tests. This
+coverage overlaps deliberately with `validate_onnx.sh` ONNX-5..7 — the same invariant
+must hold with and without the local ONNX bundle loaded. When `AMSHA_VALIDATION_LOG_FILE`
+is set (the `run_dist_*` wrappers export it), the validator checks that the
+`DecisionPlaneReadiness` startup diagnostic appears exactly once; set
+`AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true` to require it, or `=false` to forbid it
+when the shadow switches are disabled.
 
-> **Implemented:** the evaluation path is Accepted and default-off. `validate_decision_plane.sh`
-> currently checks provider-status authorization (JEV-13), disabled evaluation refusal (JEV-14),
-> and unknown decision refusal (JEV-15). `DecisionEvaluationPathIT` checks that CDI still cannot
-> resolve a `DecisionEngine`; `DecisionEvidenceIT` exercises the versioned evidence endpoint with
-> a loopback provider fixture. Exact provider-status payload shape is not yet asserted by the shell
-> validator.
+> **Evaluation coverage:** the shell validator checks provider-status authorization and
+> exact payload shape (JEV-13). It skips the evaluation requests for JEV-14/15, which are
+> covered by `DecisionEvaluationPathIT` and `DecisionEvaluationDisabledPathIT` against a
+> loopback provider fixture. `DecisionEvidenceIT` exercises the evidence endpoint with
+> that fixture and asserts the aggregate response contract and token telemetry.
 
 ### New P109 config flags (also in `.env.example`)
 

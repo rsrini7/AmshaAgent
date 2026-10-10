@@ -114,7 +114,27 @@ class DecisionAdminResourceTest {
                 .then()
                 .statusCode(409)
                 .body("error", equalTo("DISABLED"));
+        // Asking for the opt-in diagnostics must not widen anything: the switch is checked before any
+        // egress, so the request is still refused and still makes no provider call.
+        given().header(HttpConstants.X_AMSHA_API_KEY, INTERNAL)
+                .queryParam("diagnostics", "true")
+                .post(EVIDENCE)
+                .then()
+                .statusCode(409)
+                .body("error", equalTo("DISABLED"));
         assertEquals(0, DecisionProviderFixture.requestCount(), "a disabled evidence run must not egress");
+    }
+
+    @Test
+    void invalidDiagnosticsParameterIsRejectedBeforeEgress() {
+        given().header(HttpConstants.X_AMSHA_API_KEY, INTERNAL)
+                .queryParam("diagnostics", "maybe")
+                .post(EVIDENCE)
+                .then()
+                .statusCode(400)
+                .body("error", equalTo("INVALID_REQUEST"));
+
+        assertEquals(0, DecisionProviderFixture.requestCount(), "invalid query values must not egress");
     }
 
     @Test

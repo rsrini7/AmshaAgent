@@ -504,7 +504,7 @@ reconnaissance — two bullets above named facilities that exist only in `core/s
   `DecisionEvidenceCorpus`, `DecisionEvidenceCorpusRegistry`, `corpus-v1.json`, the `CoreReflectionConfig`
   entries, both `quarkus.native.resources.includes` entries, and `DecisionEvidenceCorpusRegistryTest`.
 
-**W5 runner and metric computation are implemented (2026-10-07).** The endpoint runs the shipped corpus through both deterministic policies and reports M1–M5. JSON and Markdown responses expose aggregate metrics only; case-level labels and decisions remain internal.
+**W5 runner and metric computation are implemented (2026-10-07).** The endpoint evaluates the shipped corpus through the configured `DecisionEvaluationService` and composes results through the decision policies to report M1–M5. JSON and Markdown expose aggregate metrics; case-level labels and decisions remain internal.
 
 The remaining W5 detail below records the metric foundations as they were pinned:
 
@@ -768,13 +768,37 @@ The remaining W5 detail below records the metric foundations as they were pinned
 
 - **Landed with W4 (2026-10-07).** `rest-http/scripts/validate_decision_plane.sh` now carries:
   - **JEV-13** — `GET /admin/decision/provider` rejects unauthenticated (401) and non-internal (403).
-  - **JEV-14** — evaluation is refused with `DISABLED` (409, no egress) while
-    `amsha.decision.evaluation.enabled=false`; when the switch is on it tolerates 200 /
-    409 `PROVIDER_UNAVAILABLE` rather than failing, since that is the operator gathering evidence.
-  - **JEV-15** — an unregistered decision id is refused as a client error (400 `UNREGISTERED_DECISION`);
-    skipped while the switch is off, because the registered/unregistered distinction is unreachable then.
-- **Still open in W9:**
-  - **Provider-status payload shape — landed (2026-10-07).** JEV-13 now *also* asserts the provider-status
+  - **JEV-14** — the disabled evaluation path returns 409 DISABLED without provider requests in
+  DecisionEvaluationDisabledPathIT, using the loopback DecisionProviderFixture. The shell validator
+  skips evaluation requests.
+- **JEV-15** — an unregistered decision id returns 400 UNREGISTERED_DECISION without provider
+  requests in DecisionEvaluationPathIT, using the same fixture. The shell validator skips evaluation
+  requests.
+
+- **Landed 2026-10-09 — native resource inclusion (JEV-17).** `decision-evidence/**` was absent from the native image because the multi-line POM property left whitespace-prefixed patterns that matched nothing. The property is now one line. JEV-17 reads startup logs only: both registries are `@Startup`, so their load or missing-resource result is logged without invoking `/evidence/run` or contacting a provider. The native rebuild confirmed both resources load; the shipped price schedule remains intentionally unpriced.
+**Follow-up (same day) — the same list gained two explicit entries, `env-example` and
+  `build-info.properties`,** both read at runtime and neither previously named. GraalVM auto-registers
+  `Class.getResourceAsStream`/`getResource` only when the receiver class *and* the `name` argument are
+  compile-time constants, so `env-example` survived on that rule alone (a later refactor to a dynamic path, or
+  to `getClassLoader()`, would have dropped it silently) and `build-info.properties` did not survive at all:
+  `BackendValidator` reads it through `getClassLoader()`, so `readBuildBackend()` returned `"default"` in every
+  native binary and the backend-mismatch guard never fired. Both are now embedded — the startup log shows
+  `BackendValidator: native binary matches runtime config — backend=sqlite` (that line was absent before) —
+  JEV-17 still passes, and the suite stays 22/0/0 over 12/12. Naming a resource here is the durable form;
+  relying on constant detection is not. The duplicate `application.yaml` list remains inert and still to be
+  deleted or single-sourced (reserved for the maintainer).
+- **Landed 2026-10-09 — attributed aggregate diagnostics.** Each `/evidence/run` request is a separate corpus run, so JSON and Markdown requests receive distinct run IDs and measurements. `DecisionEvidenceRunAttribution` records the selected provider, configured model, lane, and run ID. The opt-in `?diagnostics=true` field is aggregate-only: it reports disposition counts and grouped provider/model/lane token coverage and totals. It contains no case IDs, prompts, states, labels, decisions, or error details, consistent with the evidence rule. `DecisionEvidenceIT` verifies the JSON contract with the loopback `DecisionProviderFixture`; the shell fast validator does not invoke the evaluation endpoint.
+
+**Follow-up (2026-10-10) — shell validator egress.** The JEV-14 and JEV-15 evaluation requests were
+removed from the native shell validator and moved to the loopback integration tests. Those tests pass
+(6 and 1 tests); the targeted native run passed JEV-17 and recorded zero
+DECISION_EVALUATION_REQUESTED audit events. The targeted native JEV validator now passes: 20 passed, 0 failed, and 2 skipped (JEV-14/15 are covered by loopback integration tests). It recorded one unique `DecisionPlaneReadiness` warning, both resource-load messages, and zero `DECISION_EVALUATION_REQUESTED` audit events. JEV-12 counts distinct rendered records, so byte-identical copies of one event do not look like repeated bean initialization while distinct warnings still fail the check.
+
+
+
+The three captured TypeSafe `jev-latest` REMOTE runs are separate provider evaluations. M1 was 2/11, 3/11, and 2/11; M2 was 2/3 in every run, so both quality gates fail. Remote M4 p95 was 502.58 ms, 442.99 ms, and 420.43 ms; one run exceeded the 500 ms budget. M5 remains unpriced despite token telemetry because no authorized rate and ceiling are present. `DecisionPlaneReadiness` concerns the Deferred production CDI hooks; the evidence runner itself uses `DecisionEvaluationService` and the configured candidate provider.
+
+**Provider-status payload shape — landed (2026-10-07).** JEV-13 now *also* asserts the provider-status
     payload is exactly the identifier/boolean allow-list: no key outside
     `{providerId, lane, host, model, governanceDeclared, credentialDeclared, evaluationEnabled, reason}`
     may appear (that is what keeps state and a secret out of the response), the three boolean flags must be
@@ -1034,7 +1058,7 @@ Five PRs, in order. Each is independently reviewable; PR-2 is the only one gated
 | **PR-2** ✅ | W4 | `DecisionEvaluationService` + records; `DecisionAdminResource` + DTOs; `amsha.decision.evaluation.enabled`; audit; reflection. | **ADR accepted first**; ITs incl. no-egress-when-disabled and no-leak; validator JEV-13..15 |
 | **PR-3** ✅ | W5 | Versioned corpus, policy-composed `DecisionEvidenceRunner`, `/evidence/run`, and fixture-backed IT. | M1–M5 metric tests; redaction review; JSON/Markdown artifact writer (landed — `DecisionEvidenceReport`, `format=markdown`). |
 | **PR-4** ✅ | W6 | `DecisionTelemetry` extension; `DecisionDriftMonitor`; cost-ceiling and latency-budget enforcement. | unit tests; bounded-cardinality review |
-| **PR-5** | W7 | `DecisionEngineProducer` with a **build-time** `@IfBuildProperty` gate (not a runtime switch — see W7); `amsha.decision.production-engine.enabled`; **only then** the ADR status flip and gate-value recording. | §8.4 steps 1–4 recorded; ITs; validator JEV-16. **W8.2/W8.3 are already landed** — see W8 |
+| **PR-5** | W7 | `DecisionEngineProducer` with a **build-time** `@IfBuildProperty` gate (not a runtime switch — see W7); `amsha.decision.production-engine.enabled`; **only then** the ADR status flip and gate-value recording. | §8.4 steps 1–4 recorded; ITs; DecisionEvaluationPathIT asserts the engine remains unresolved (JEV-16; not a shell check). **W8.2/W8.3 are already landed** — see W8 |
 
 Guardrails for every PR: no production `DecisionEngine` bean before PR-5; no remote/self-hosted engine
 behind a classifier SPI; no gate boolean set without evidence; no state, secret, label, or provider body

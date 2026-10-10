@@ -137,6 +137,21 @@ class DecisionEvidenceCorpusRegistryTest {
     }
 
     @Test
+    void findsTheShippedCorpusEvenWhenTheContextClassLoaderCannot() {
+        // A native image or container thread can carry a context classloader that is present yet blind to a
+        // resource this build ships. The registry must fall back to its own classloader rather than report
+        // the corpus as missing, which would leave the evidence endpoint refusing every request.
+        String resourcePath = DecisionEvidenceCorpusRegistry.RESOURCE_DIR + "/corpus-v1.json";
+
+        DecisionEvidenceCorpusRegistry registry = DecisionRegistryTestSupport.withResourceHidden(
+                resourcePath, () -> new DecisionEvidenceCorpusRegistry(MAPPER));
+
+        assertTrue(
+                registry.registeredVersions().contains(1),
+                "a context classloader that misses must not hide a corpus the registry itself ships");
+    }
+
+    @Test
     void refusesARedactionReviewThatIsNotApproved() {
         DecisionEvidenceCorpus.RedactionReview pending =
                 new DecisionEvidenceCorpus.RedactionReview("PENDING", "2026-10-07T00:00:00Z", "verifier", false, false);

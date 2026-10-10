@@ -60,6 +60,8 @@ import com.amsha.core.classifier.evaluation.DecisionEvaluationRequest;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceCase;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceCaseResult;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceCorpus;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceDiagnostics;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceRunAttribution;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceSummary;
 import com.amsha.core.classifier.evaluation.DecisionPriceSchedule;
 import com.amsha.core.classifier.evaluation.DecisionRefusalReason;
@@ -264,11 +266,14 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             DecisionEvidenceCorpus.class,
             DecisionEvidenceCorpus.Baseline.class,
             DecisionEvidenceCorpus.RedactionReview.class,
-            // W5 evidence run result: the summary (and its nested metric records) is serialized as the
-            // /evidence/run response and the per-case results carry the gate maths. Registered centrally,
-            // per AGENTS.md §8.
+            // W5 evidence run response graph: aggregate summary, run attribution, and optional
+            // diagnostics are serialized at /evidence/run. Per-case results stay internal for metric
+            // calculation and are ignored in the response. Registered centrally, per AGENTS.md §8.
             DecisionEvidenceCaseResult.class,
             DecisionEvidenceSummary.class,
+            DecisionEvidenceRunAttribution.class,
+            DecisionEvidenceDiagnostics.class,
+            DecisionEvidenceDiagnostics.ProviderUsage.class,
             DecisionEvidenceSummary.MetricResult.class,
             DecisionEvidenceSummary.LaneLatency.class,
             DecisionEvidenceSummary.LaneCost.class,

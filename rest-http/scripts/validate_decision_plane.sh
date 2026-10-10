@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # validate_decision_plane.sh — Jev decision-plane (ADR-jev-decision-plane) contract validator
 #
-# The decision plane is deliberately Deferred: no DecisionEngine bean exists, so every
-# evaluation fails closed and intent routing stays on the deterministic baseline. The only
-# externally observable surface of that posture is the classifier control plane, and until
-# now it was covered solely by validate_onnx.sh — which only runs behind --onnx and needs a
-# model bundle. This validator asserts the same contract with zero tokens and no model.
+# Production classifier/router plane is Deferred: no DecisionEngine bean is registered.
+# Shadow hooks remain inert; evidence evaluation separately uses DecisionEvaluationService
+# and a configured candidate provider. This shell suite checks control-plane and startup
+# contracts without sending evaluation requests or invoking a provider.
 #
 # Covers:
 #   JEV-1..2   authorization matrix (unauthenticated, non-internal)
@@ -21,12 +20,15 @@
 #   JEV-12     the DecisionPlaneReadiness diagnostic fired exactly once and is well-formed
 #   JEV-13     decision evaluation authorization matrix (unauthenticated, non-internal) + the
 #              provider-status payload is exactly the identifier/boolean allow-list (no state, no secret)
-#   JEV-14     evaluation is refused with DISABLED while the opt-in switch is off
-#   JEV-15     an unregistered decision id is refused as a client error
-#
+#   JEV-14     disabled evaluation path is covered by a loopback integration test
+#   JEV-15     an unregistered decision id is covered by a loopback integration test
+#   JEV-16     (reserved — the activation plan assigns it to the PR-5 production-engine workstream;
+#              that plan also notes such a check cannot be a shell assertion. Do not reuse the number.)
+#   JEV-17 shipped resources load at startup without evaluation requests
+#   JEV-18 aggregate response contract is covered by DecisionEvidenceIT with a loopback fixture
 # Env:
-#   AMSHA_VALIDATION_LOG_FILE                    server log to assert JEV-12 against (set by the
-#                                                distribution launcher; JEV-12 skips when unset)
+#   AMSHA_VALIDATION_LOG_FILE                    server log to assert JEV-12 and JEV-17 against (set by
+#                                                the distribution launcher; both skip when unset)
 #   AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING    true|false|unset — require/forbid the diagnostic
 #
 # Overlap with validate_onnx.sh ONNX-5..7 is intentional: the same invariant must hold both
@@ -72,12 +74,6 @@ mute() { curl -s -m "$CURL_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" "$@"; }
 
 CLASSIFIERS_URL="$B/api/v1/admin/local-ml/onnx/classifiers"
 DECISION_PROVIDER_URL="$B/api/v1/admin/decision/provider"
-DECISION_EVALUATE_URL="$B/api/v1/admin/decision/evaluate"
-
-# One valid evaluation of the router's own registered decision, and one naming an id that is not in
-# the registry. The state carries only the allow-listed field the fixture's governance permits.
-DECISION_EVAL_BODY='{"decisionId":"amsha.routing.intent.v1","stateJson":"{\"user_message\":\"contract-validator\"}","choiceOptions":{"intent_role_choice":["coder","researcher"]}}'
-DECISION_EVAL_UNKNOWN_BODY='{"decisionId":"amsha.routing.unknown.v9","stateJson":"{\"user_message\":\"contract-validator\"}","choiceOptions":{}}'
 
 # Extracts one TSV row per classifier. Booleans become 1/0 so the invariants below can be
 # evaluated arithmetically. Exits non-zero when the payload shape is not exactly the contract.
@@ -435,39 +431,14 @@ else
   if [ "$PROVIDER_SHAPE" = "ok" ]; then ok "$CODE"; else fail_detail "provider status shape: $PROVIDER_SHAPE"; fi
 fi
 
-# ── JEV-14: Evaluation is refused while the opt-in switch is off ──
-# The shipped posture is disabled, so an evaluation must be refused with DISABLED and must not
-# egress. When the switch IS on (an operator gathering evidence) the request reaches the provider
-# layer instead, and the response is 200 or 409 PROVIDER_UNAVAILABLE — both of which are accepted
-# here, because JEV-15 is the check that then exercises the enabled path.
-EVAL_ENABLED=1
-info "JEV-14: Evaluation is refused with DISABLED while the opt-in switch is off"
-CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
-  -d "$DECISION_EVAL_BODY" "$DECISION_EVALUATE_URL")
-if [ "$CODE" = "409" ] && grep -q '"DISABLED"' "$RESP_FILE"; then
-  ok "$CODE"
-  EVAL_ENABLED=0
-elif [ "$CODE" = "409" ] && grep -q '"PROVIDER_UNAVAILABLE"' "$RESP_FILE"; then
-  ok_detail "switch on, provider unavailable"
-elif [ "$CODE" = "200" ]; then
-  ok_detail "switch on, evaluation succeeded"
-else
-  fail "$CODE"
-fi
+# ── JEV-14/15: Evaluation paths covered by loopback integration tests ──
+# The enabled and disabled paths use DecisionProviderFixture. The distribution
+# validator must never call the configured candidate provider.
+info "JEV-14: Disabled evaluation path covered by loopback integration test"
+skip "DecisionEvaluationDisabledPathIT covers this path with a local provider fixture"
 
-# ── JEV-15: An unregistered decision id is refused as a client error ──
-info "JEV-15: Evaluation refuses a decision id that is not registered"
-if [ "$EVAL_ENABLED" = "1" ]; then
-  CODE=$(mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
-    -d "$DECISION_EVAL_UNKNOWN_BODY" "$DECISION_EVALUATE_URL")
-  if [ "$CODE" = "400" ] && grep -q '"UNREGISTERED_DECISION"' "$RESP_FILE"; then
-    ok "$CODE"
-  else
-    fail "$CODE"
-  fi
-else
-  skip "evaluation switch is off; the registered/unregistered distinction is not reachable"
-fi
+info "JEV-15: Unregistered decision id covered by loopback integration test"
+skip "DecisionEvaluationPathIT covers this path with a local provider fixture"
 
 # ── JEV-12: Startup readiness diagnostic ──
 LOG_FILE="${AMSHA_VALIDATION_LOG_FILE:-}"
@@ -477,7 +448,10 @@ if [ -z "$LOG_FILE" ] || [ ! -r "$LOG_FILE" ]; then
   skip "AMSHA_VALIDATION_LOG_FILE is unset; run via the distribution launcher (mise run dist:validate-sqlite, or scripts/run_dist_sqlite.sh --validate --fast), which exports it — a hand-started server cannot assert the startup diagnostic"
 else
   info "JEV-12: DecisionPlaneReadiness diagnostic is present once and well-formed"
-  COUNT=$(grep -c 'DecisionPlaneReadiness' "$LOG_FILE")
+  # Count each readiness record in the Quarkus file-appender log. The launcher
+  # keeps redirected process output in a sidecar, so console copies cannot
+  # inflate this count; repeated records in the canonical log fail the gate.
+  COUNT=$(awk '/DecisionPlaneReadiness/ { count++ } END { print count+0 }' "$LOG_FILE")
   if [ "$COUNT" -gt 1 ]; then
     fail_detail "diagnostic logged $COUNT times; @Startup initialization is not idempotent"
   elif [ "$COUNT" -eq 0 ]; then
@@ -502,6 +476,30 @@ else
   fi
 fi
 
+# ── JEV-17: shipped decision-evidence resources load at startup ──
+# The registries are eagerly initialized and log their load result. Inspecting startup logs proves
+# native resource inclusion without POSTing /evidence/run or making provider calls.
+LOG_FILE="${AMSHA_VALIDATION_LOG_FILE:-}"
+if [ -z "$LOG_FILE" ] || [ ! -r "$LOG_FILE" ]; then
+  info "JEV-17: Shipped decision-evidence corpus and price schedule load in artifact"
+  skip "AMSHA_VALIDATION_LOG_FILE is unavailable; run via the distribution launcher to inspect startup resource logs"
+else
+  info "JEV-17: Shipped decision-evidence corpus and price schedule load in artifact"
+  MISSING_CORPUS=$(grep -cF 'decision-evidence/corpus-v1.json is not present on the classpath' "$LOG_FILE" || true)
+  MISSING_SCHEDULE=$(grep -cF 'decision-evidence/price-schedule-v1.json is not present on the classpath' "$LOG_FILE" || true)
+  LOADED_CORPUS=$(grep -cF 'Decision-evidence corpus v1 loaded:' "$LOG_FILE" || true)
+  LOADED_SCHEDULE=$(grep -cF 'Decision price schedule v1 loaded:' "$LOG_FILE" || true)
+  if [ "$MISSING_CORPUS" -gt 0 ] || [ "$MISSING_SCHEDULE" -gt 0 ]; then
+    fail_detail "decision-evidence resources are missing from this artifact (corpus missing x$MISSING_CORPUS, price schedule missing x$MISSING_SCHEDULE); see ADR-jev-decision-plane"
+  elif [ "$LOADED_CORPUS" -gt 0 ] && [ "$LOADED_SCHEDULE" -gt 0 ]; then
+    ok_detail "corpus and price schedule loaded at startup"
+  else
+    fail_detail "startup log does not prove both decision-evidence registries loaded (corpus x$LOADED_CORPUS, price schedule x$LOADED_SCHEDULE)"
+  fi
+fi
+
+# JEV-18 response-contract assertions run in DecisionEvidenceIT with its loopback provider fixture.
+# This shell validator deliberately makes no evaluation request or provider call.
 echo ""
 echo "───────────────────────────────────────────"
 echo " Jev Decision Plane Results: $PASS passed, $FAIL failed, $SKIP skipped"

@@ -36,6 +36,39 @@ final class DecisionRegistryTestSupport {
         }
     }
 
+    /**
+     * Runs {@code operation} with a context classloader that is present and functional but cannot see
+     * {@code resourcePath}.
+     *
+     * <p>This is the shape a registry must survive in a native image or a container: the thread carries a
+     * context loader that resolves other resources yet returns null for an artifact the application ships.
+     * A lookup that consults the context loader and gives up on a miss reports that artifact as missing; a
+     * lookup that then tries its own classloader still finds it. The delegating loader {@link #withResource}
+     * installs cannot reproduce this, because it never misses.
+     */
+    static <T> T withResourceHidden(String resourcePath, Supplier<T> operation) {
+        Objects.requireNonNull(resourcePath, "resourcePath");
+        Objects.requireNonNull(operation, "operation");
+
+        Thread thread = Thread.currentThread();
+        ClassLoader original = thread.getContextClassLoader();
+        ClassLoader hiding = new ClassLoader(original) {
+            @Override
+            public InputStream getResourceAsStream(String name) {
+                if (resourcePath.equals(name)) {
+                    return null;
+                }
+                return super.getResourceAsStream(name);
+            }
+        };
+        thread.setContextClassLoader(hiding);
+        try {
+            return operation.get();
+        } finally {
+            thread.setContextClassLoader(original);
+        }
+    }
+
     static <T> T withResource(String resourcePath, byte[] replacement, Supplier<T> operation) {
         Objects.requireNonNull(resourcePath, "resourcePath");
         byte[] resourceBytes =

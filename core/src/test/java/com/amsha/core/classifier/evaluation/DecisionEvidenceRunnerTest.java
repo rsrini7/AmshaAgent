@@ -1,6 +1,8 @@
 package com.amsha.core.classifier.evaluation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -161,6 +163,59 @@ class DecisionEvidenceRunnerTest {
                         .allMatch(r -> r.skipReason() != null && r.skipReason().contains("declared evaluatedTasks")),
                 "the exclusion must be reported as a declared scope, not an ad-hoc skip");
         assertTrue(excluded.stream().noneMatch(DecisionEvidenceCaseResult::evaluated));
+    }
+
+    @Test
+    void everyRunIsAttributedAndProjectsDiagnosticsOnlyOnRequest() {
+        DecisionEvidenceRunner.EvaluationFn worstCase =
+                (request, actor) -> DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())
+                        ? lowRiskOpinion()
+                        : abstain();
+
+        DecisionEvidenceSummary aggregateOnly = runnerWith(worstCase).run(1, "tester");
+
+        String runId = aggregateOnly.attribution().runId();
+        assertTrue(runId != null && !runId.isBlank(), "every run must carry its own identifier");
+        // The mocked provider config selects nothing, so the attribution records the absence rather than
+        // inventing a provider — which is what makes a run whose cases were all refused self-describing.
+        assertEquals(null, aggregateOnly.attribution().providerId());
+        assertEquals(null, aggregateOnly.attribution().configuredModel());
+        assertEquals(null, aggregateOnly.attribution().lane());
+        assertFalse(aggregateOnly.diagnosticsIncluded());
+        assertEquals(null, aggregateOnly.diagnostics());
+
+        DecisionEvidenceSummary withDiagnostics = runnerWith(worstCase).run(1, "tester", true);
+
+        assertTrue(withDiagnostics.diagnosticsIncluded());
+        DecisionEvidenceDiagnostics diagnostics = withDiagnostics.diagnostics();
+        assertEquals(25, diagnostics.evaluatedCaseCount());
+        assertEquals(0, diagnostics.refusedCaseCount());
+        assertEquals(0, diagnostics.transformErrorCaseCount());
+        assertEquals(5, diagnostics.skippedCaseCount());
+        assertEquals(1, diagnostics.providerUsage().size());
+
+        DecisionEvidenceDiagnostics.ProviderUsage usage =
+                diagnostics.providerUsage().getFirst();
+        assertEquals(PROVIDER, usage.providerId());
+        assertEquals(MODEL, usage.model());
+        assertEquals(LANE, usage.lane());
+        assertEquals(25, usage.evaluatedCaseCount());
+        assertTrue(usage.inputTokenReportedCaseCount() > 0);
+        assertEquals(usage.inputTokenReportedCaseCount() * 100L, usage.totalInputTokens());
+        assertEquals(usage.outputTokenReportedCaseCount() * 10L, usage.totalOutputTokens());
+    }
+
+    @Test
+    void twoRunsOfTheSameCorpusAreDistinguishableByTheirRunId() {
+        DecisionEvidenceRunner.EvaluationFn worstCase =
+                (request, actor) -> DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())
+                        ? lowRiskOpinion()
+                        : abstain();
+
+        String first = runnerWith(worstCase).run(1, "tester").attribution().runId();
+        String second = runnerWith(worstCase).run(1, "tester").attribution().runId();
+
+        assertNotEquals(first, second, "two runs of the same corpus must not share a run identifier");
     }
 
     @Test

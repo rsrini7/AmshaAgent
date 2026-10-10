@@ -59,6 +59,21 @@ class DecisionPriceScheduleRegistryTest {
     }
 
     @Test
+    void findsTheShippedScheduleEvenWhenTheContextClassLoaderCannot() {
+        // A native image or container thread can carry a context classloader that is present yet blind to a
+        // resource this build ships. The registry must fall back to its own classloader rather than report
+        // the schedule as missing, which would price every lane as unpriced.
+        String resourcePath = DecisionPriceScheduleRegistry.RESOURCE_DIR + "/price-schedule-v1.json";
+
+        DecisionPriceScheduleRegistry registry = DecisionRegistryTestSupport.withResourceHidden(
+                resourcePath, () -> new DecisionPriceScheduleRegistry(MAPPER));
+
+        assertTrue(
+                registry.registeredVersions().contains(1),
+                "a context classloader that misses must not hide a schedule the registry itself ships");
+    }
+
+    @Test
     void pricesAnExactProviderAndModelOnly() {
         DecisionPriceSchedule schedule = scheduleWith(pricedEntry());
 

@@ -1,15 +1,19 @@
 package com.amsha.core.classifier.evaluation;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.amsha.classifier.api.DecisionLatencyBudget;
 import com.amsha.core.config.DecisionProviderConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
@@ -24,8 +28,8 @@ class DecisionEvidenceReportTest {
     private static final String LANE = "SELF_HOSTED";
 
     /** Two SECURITY tool-risk cases (one correct, one false-allow), one ambiguous and one clear intent. */
-    private DecisionEvidenceSummary summary() {
-        return summarize(List.of(
+    private static List<DecisionEvidenceCaseResult> cases() {
+        return List.of(
                 result("tr-block", "tool_risk", "safe", "BLOCK", "SECURITY", false, true, "BLOCK", "BLOCK", null, true),
                 result(
                         "tr-allow",
@@ -62,14 +66,33 @@ class DecisionEvidenceReportTest {
                         "coder",
                         "DIRECT_ROUTE",
                         "coder",
-                        true)));
+                        true));
     }
 
-    private static DecisionEvidenceSummary summarize(List<DecisionEvidenceCaseResult> results) {
+    /** The aggregate-only form: what a committed evidence artifact is allowed to contain. */
+    private static DecisionEvidenceSummary summary() {
+        return summarizeWith(DecisionEvidenceRunAttribution.UNATTRIBUTED, cases(), false);
+    }
+
+    /** The opt-in form, which additionally carries aggregate operational diagnostics. */
+    private static DecisionEvidenceSummary summaryWithDiagnostics() {
+        return summarizeWith(DecisionEvidenceRunAttribution.UNATTRIBUTED, cases(), true);
+    }
+
+    private static DecisionEvidenceSummary summarizeWith(
+            DecisionEvidenceRunAttribution attribution,
+            List<DecisionEvidenceCaseResult> results,
+            boolean includeDiagnostics) {
         DecisionProviderConfig config = Mockito.mock(DecisionProviderConfig.class);
         Mockito.when(config.slots()).thenReturn(Map.of());
         return DecisionEvidenceSummary.summarize(
-                1, results, new DecisionPriceScheduleRegistry(Map.of()), config, DecisionLatencyBudget.ADR_8_3);
+                1,
+                attribution,
+                results,
+                new DecisionPriceScheduleRegistry(Map.of()),
+                config,
+                DecisionLatencyBudget.ADR_8_3,
+                includeDiagnostics);
     }
 
     private static DecisionEvidenceCaseResult result(
@@ -184,5 +207,91 @@ class DecisionEvidenceReportTest {
     @Test
     void aNullSummaryIsRejected() {
         assertThrows(NullPointerException.class, () -> DecisionEvidenceReport.toMarkdown(null));
+    }
+
+    @Test
+    void rendersTheRunAttributionSoTwoRunsCanBeToldApart() {
+        String md = DecisionEvidenceReport.toMarkdown(summarizeWith(
+                new DecisionEvidenceRunAttribution("run-abc", "typesafe", "ts-model-v1", "REMOTE"), cases(), false));
+
+        assertTrue(md.contains("- Run: run-abc"), md);
+        assertTrue(md.contains("- Provider: typesafe"), md);
+        assertTrue(md.contains("- Configured model: ts-model-v1"), md);
+        assertTrue(md.contains("- Lane: REMOTE"), md);
+    }
+
+    @Test
+    void anUnresolvedAttributionRendersAsAnEmDashRatherThanDisappearing() {
+        // A missing line would read as "no attribution was attempted"; an em dash reads as "nothing
+        // resolved", which is the distinction an operator investigating a refused run needs.
+        String md = DecisionEvidenceReport.toMarkdown(summary());
+
+        assertTrue(md.contains("- Run: —"), md);
+        assertTrue(md.contains("- Provider: —"), md);
+        assertTrue(md.contains("- Configured model: —"), md);
+        assertTrue(md.contains("- Lane: —"), md);
+    }
+
+    @Test
+    void rendersAggregateDiagnosticsOnlyWhenTheyWereProjected() {
+        String aggregateOnly = DecisionEvidenceReport.toMarkdown(summary());
+        assertFalse(aggregateOnly.contains("## Aggregate diagnostics"), aggregateOnly);
+
+        String markdown = DecisionEvidenceReport.toMarkdown(summaryWithDiagnostics());
+        assertTrue(markdown.contains("## Aggregate diagnostics (opt-in)"), markdown);
+        assertTrue(markdown.contains("| Evaluated | 4 |"), markdown);
+        assertTrue(markdown.contains("### Provider telemetry"), markdown);
+        assertTrue(markdown.contains("| prov | model | SELF_HOSTED | 4 | 4 | 4 | 400 | 80 |"), markdown);
+        assertFalse(markdown.contains("tr-allow"), markdown);
+        assertFalse(markdown.contains("REQUIRE_APPROVAL"), markdown);
+        assertFalse(markdown.contains("LOW_RISK"), markdown);
+    }
+
+    @Test
+    void jsonSummaryHasExactAggregateDiagnosticShapeAndNoCaseData() throws JsonProcessingException {
+        ObjectMapper mapper = new ObjectMapper();
+
+        JsonNode aggregateOnly = mapper.readTree(mapper.writeValueAsString(summary()));
+        assertEquals(
+                Set.of("corpusVersion", "attribution", "caseCount", "m1", "m2", "m3", "m4", "m5"),
+                fieldNames(aggregateOnly));
+
+        JsonNode withDiagnostics = mapper.readTree(mapper.writeValueAsString(summaryWithDiagnostics()));
+        assertEquals(
+                Set.of("corpusVersion", "attribution", "caseCount", "diagnostics", "m1", "m2", "m3", "m4", "m5"),
+                fieldNames(withDiagnostics));
+        JsonNode diagnostics = withDiagnostics.get("diagnostics");
+        assertEquals(
+                Set.of(
+                        "evaluatedCaseCount",
+                        "refusedCaseCount",
+                        "transformErrorCaseCount",
+                        "skippedCaseCount",
+                        "providerUsage"),
+                fieldNames(diagnostics));
+        assertEquals(1, diagnostics.get("providerUsage").size());
+        assertEquals(
+                Set.of(
+                        "providerId",
+                        "model",
+                        "lane",
+                        "evaluatedCaseCount",
+                        "inputTokenReportedCaseCount",
+                        "outputTokenReportedCaseCount",
+                        "totalInputTokens",
+                        "totalOutputTokens"),
+                fieldNames(diagnostics.get("providerUsage").get(0)));
+        assertFalse(withDiagnostics.has("results"));
+        assertFalse(withDiagnostics.toString().contains("caseId"));
+        assertFalse(withDiagnostics.toString().contains("expectedLabel"));
+        assertFalse(withDiagnostics.toString().contains("observedLabel"));
+        assertFalse(withDiagnostics.toString().contains("policyResolution"));
+        assertFalse(withDiagnostics.toString().contains("detail"));
+    }
+
+    private static Set<String> fieldNames(JsonNode node) {
+        Set<String> names = new HashSet<>();
+        node.fieldNames().forEachRemaining(names::add);
+        return names;
     }
 }

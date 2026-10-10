@@ -581,16 +581,23 @@ paths: {}</echo>
           quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-25
         </quarkus.native.builder-image>
         <quarkus.native.additional-build-args>-H:+ReportExceptionStackTraces</quarkus.native.additional-build-args>
-        <quarkus.native.resources.includes>
-          native/vec0/*,
-          templates/**,
-          prompts/**,
-          skills/**,
-          META-INF/skills/**,
-          META-INF/services/**,
-          provider-catalog.json,
-          decision-evidence/**
-        </quarkus.native.resources.includes>
+        <!-- Keep this on ONE line. Quarkus splits the value on ',' WITHOUT trimming, so a wrapped
+             value prefixes every entry after the first with the XML newline and indentation; the
+             resulting patterns then match nothing. A multi-line list silently disables all but the
+             first entry (the earlier eight-entry list had seven patterns inert, which is why decision-evidence/** was absent
+             from the image while native/vec0/* — the first entry — worked).
+
+             This list is the ONLY effective one: as a Maven property it overrides application.yaml's
+             quarkus.native.resources.includes (config sources do not merge), so that YAML copy is dead
+             config.
+
+             env-example and build-info.properties are both read at runtime (EnvConfigInitializer,
+             BackendValidator) and are explicitly included here. env-example also qualifies for
+             GraalVM's constant Class.getResourceAsStream detection today, but keeping it in this
+             list protects a future refactor to a dynamic path. build-info.properties is read via
+             ClassLoader.getResourceAsStream and therefore depends on this explicit inclusion for
+             native backend-mismatch validation. -->
+        <quarkus.native.resources.includes>native/vec0/*,templates/**,prompts/**,skills/**,META-INF/skills/**,META-INF/services/**,provider-catalog.json,decision-evidence/**,env-example,build-info.properties</quarkus.native.resources.includes>
       </properties>
     </profile>
 

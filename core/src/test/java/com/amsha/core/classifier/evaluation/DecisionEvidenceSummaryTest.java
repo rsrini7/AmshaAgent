@@ -2,6 +2,7 @@ package com.amsha.core.classifier.evaluation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
@@ -67,6 +68,26 @@ class DecisionEvidenceSummaryTest {
         DecisionProviderConfig config = Mockito.mock(DecisionProviderConfig.class);
         Mockito.when(config.slots()).thenReturn(Map.of());
         return DecisionEvidenceSummary.summarize(1, results, priceRegistry, config, DecisionLatencyBudget.ADR_8_3);
+    }
+
+    private static DecisionProviderConfig emptyProviderConfig() {
+        DecisionProviderConfig config = Mockito.mock(DecisionProviderConfig.class);
+        Mockito.when(config.slots()).thenReturn(Map.of());
+        return config;
+    }
+
+    private static DecisionEvidenceSummary summarizeWith(
+            DecisionEvidenceRunAttribution attribution,
+            List<DecisionEvidenceCaseResult> results,
+            boolean includeDiagnostics) {
+        return DecisionEvidenceSummary.summarize(
+                1,
+                attribution,
+                results,
+                new DecisionPriceScheduleRegistry(Map.of()),
+                emptyProviderConfig(),
+                DecisionLatencyBudget.ADR_8_3,
+                includeDiagnostics);
     }
 
     @Test
@@ -150,5 +171,82 @@ class DecisionEvidenceSummaryTest {
         assertEquals(2, lane.totalDecisions());
         assertEquals(null, lane.costPerThousand());
         assertFalse(lane.within());
+    }
+
+    @Test
+    void theSummaryCarriesItsRunAttribution() {
+        DecisionEvidenceSummary summary = summarizeWith(
+                new DecisionEvidenceRunAttribution("run-1", "typesafe", "ts-model-v1", "REMOTE"), List.of(), false);
+
+        assertEquals("run-1", summary.attribution().runId());
+        assertEquals("typesafe", summary.attribution().providerId());
+        assertEquals("ts-model-v1", summary.attribution().configuredModel());
+        assertEquals("REMOTE", summary.attribution().lane());
+    }
+
+    @Test
+    void anUnattributedSummaryIsStillReadableRatherThanNull() {
+        // The metric-maths convenience path builds a summary with no run context; it must carry an
+        // attribution object (so the shape is uniform) rather than a null the renderer would have to guard.
+        DecisionEvidenceSummary summary = summarize(List.of(lowRisk(securityToolRisk("tr-1", "BLOCK"))));
+
+        assertEquals(DecisionEvidenceRunAttribution.UNATTRIBUTED, summary.attribution());
+        assertEquals(null, summary.attribution().runId());
+        assertEquals(false, summary.diagnosticsIncluded());
+    }
+
+    @Test
+    void diagnosticsAreAbsentByDefaultAndContainOnlyAggregatedOperationalData() {
+        List<DecisionEvidenceCaseResult> results =
+                List.of(lowRisk(securityToolRisk("tr-1", "BLOCK")), abstain(securityToolRisk("tr-2", "BLOCK")));
+
+        DecisionEvidenceSummary aggregateOnly =
+                summarizeWith(DecisionEvidenceRunAttribution.UNATTRIBUTED, results, false);
+        assertFalse(aggregateOnly.diagnosticsIncluded());
+        assertEquals(null, aggregateOnly.diagnostics());
+
+        DecisionEvidenceSummary withDiagnostics =
+                summarizeWith(DecisionEvidenceRunAttribution.UNATTRIBUTED, results, true);
+        assertTrue(withDiagnostics.diagnosticsIncluded());
+        DecisionEvidenceDiagnostics diagnostics = withDiagnostics.diagnostics();
+        assertEquals(2, diagnostics.evaluatedCaseCount());
+        assertEquals(0, diagnostics.refusedCaseCount());
+        assertEquals(0, diagnostics.transformErrorCaseCount());
+        assertEquals(0, diagnostics.skippedCaseCount());
+        assertEquals(1, diagnostics.providerUsage().size());
+
+        DecisionEvidenceDiagnostics.ProviderUsage usage =
+                diagnostics.providerUsage().getFirst();
+        assertEquals("onnx-local", usage.providerId());
+        assertEquals("jev-1.13.0", usage.model());
+        assertEquals("SELF_HOSTED", usage.lane());
+        assertEquals(2, usage.evaluatedCaseCount());
+        assertEquals(0, usage.inputTokenReportedCaseCount());
+        assertEquals(0, usage.outputTokenReportedCaseCount());
+    }
+
+    @Test
+    void refusedCasesAreCountedWithoutExposingTheirReasons() {
+        DecisionEvidenceCaseResult refused = DecisionEvidenceCaseResult.refused(
+                securityToolRisk("tr-3", "BLOCK"), "tool.risk.shadow", "PROVIDER_UNAVAILABLE");
+        DecisionEvidenceSummary summary =
+                summarizeWith(DecisionEvidenceRunAttribution.UNATTRIBUTED, List.of(refused), true);
+
+        assertEquals(1, summary.diagnostics().refusedCaseCount());
+        assertEquals(0, summary.diagnostics().evaluatedCaseCount());
+        assertTrue(summary.diagnostics().providerUsage().isEmpty());
+    }
+
+    @Test
+    void providerUsageRejectsInconsistentTokenCounts() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceDiagnostics.ProviderUsage("provider", "model", "REMOTE", 1, 2, 0, 20, 0));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceDiagnostics.ProviderUsage("provider", "model", "REMOTE", 1, 0, 2, 0, 20));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new DecisionEvidenceDiagnostics.ProviderUsage("provider", "model", "REMOTE", 1, 0, 0, 1, 0));
     }
 }

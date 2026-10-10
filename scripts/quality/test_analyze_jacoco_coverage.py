@@ -6,6 +6,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -572,6 +573,82 @@ class BadgePreconditionTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertIsNone(recorded_test_total(readme))
+
+
+_BADGE_COUNTS_RE = re.compile(
+    r"!\[Java Tests\]\(https://img\.shields\.io/badge/Tests-"
+    r"(?P<passed>\d+)_passed"
+    r"(?:_%C2%B7_(?P<skipped>\d+)_skipped)?"
+    r"(?:_%C2%B7_(?P<failed>\d+)_failed)?"
+    r"_of_(?P<total>\d+)-[^)]+\)"
+)
+
+
+def _badge_counts(text: str) -> tuple[int, int, int, int] | None:
+    """Parse the README's Java Tests badge into (passed, skipped, failed, total).
+
+    ``None`` when the badge is absent or does not match the emitted shape, so a caller can tell
+    "no badge" apart from "a badge that contradicts itself".
+    """
+    match = _BADGE_COUNTS_RE.search(text)
+    if match is None:
+        return None
+    return (
+        int(match.group("passed")),
+        int(match.group("skipped") or 0),
+        int(match.group("failed") or 0),
+        int(match.group("total")),
+    )
+
+
+class ShippedReadmeBadgeTest(unittest.TestCase):
+    """The committed badge must be arithmetically possible.
+
+    ``tests_badge_message`` derives ``passed`` as ``total - failures - errors - skipped``, so every
+    badge this emitter writes satisfies ``passed + skipped + failed == total``. A badge that breaks
+    that identity cannot have come from this emitter, and it is self-contradictory on its face: the
+    one that reached the index on this branch read ``9683 passed · 7 skipped of 9672`` - 9690
+    outcomes from 9672 tests. Nothing in the repository can produce it (``passed`` is a derived
+    property, and ``total`` is read once), so it was written by something outside the current code
+    and was caught only by eye. Reading the shipped file makes the impossible value uncommittable.
+    """
+
+    def test_shipped_readme_badge_is_arithmetically_consistent(self) -> None:
+        readme = REPO_ROOT / "README.md"
+        counts = _badge_counts(readme.read_text(encoding="utf-8"))
+        self.assertIsNotNone(counts, "the Java Tests badge is missing or has an unrecognised shape")
+        passed, skipped, failed, total = counts
+        self.assertEqual(
+            passed + skipped + failed,
+            total,
+            f"the shipped badge reads {passed} passed, {skipped} skipped, {failed} failed of "
+            f"{total}; those counts must sum to the total",
+        )
+
+    def test_the_guard_rejects_the_badge_that_reached_the_index(self) -> None:
+        # The exact staged string: 9683 + 7 + 0 != 9672. Asserted here so the guard above is known
+        # to bite rather than assumed to.
+        counts = _badge_counts(
+            "  ![Java Tests](https://img.shields.io/badge/Tests-"
+            "9683_passed_%C2%B7_7_skipped_of_9672-brightgreen.svg?style=flat)\n"
+        )
+        self.assertIsNotNone(counts)
+        passed, skipped, failed, total = counts
+        self.assertNotEqual(passed + skipped + failed, total)
+
+    def test_a_correct_badge_satisfies_the_identity(self) -> None:
+        counts = _badge_counts(
+            "  ![Java Tests](https://img.shields.io/badge/Tests-"
+            "9676_passed_%C2%B7_7_skipped_of_9683-brightgreen.svg?style=flat)\n"
+        )
+        self.assertEqual(counts, (9676, 7, 0, 9683))
+
+    def test_a_badge_naming_failures_still_satisfies_the_identity(self) -> None:
+        counts = _badge_counts(
+            "  ![Java Tests](https://img.shields.io/badge/Tests-"
+            "7_passed_%C2%B7_1_skipped_%C2%B7_2_failed_of_10-red.svg?style=flat)\n"
+        )
+        self.assertEqual(counts, (7, 1, 2, 10))
 
 
 if __name__ == "__main__":

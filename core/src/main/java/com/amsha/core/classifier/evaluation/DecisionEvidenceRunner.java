@@ -10,11 +10,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.amsha.classifier.api.DecisionLatencyBudget;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.config.DecisionProviderConfig;
+import com.amsha.core.config.DecisionProviderSelector;
 import com.amsha.core.routing.IntentDecisionRouter;
 import com.amsha.security.api.AutonomyLevel;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -33,6 +35,11 @@ import io.quarkus.arc.Unremovable;
  * <p><b>One egress seam.</b> Production wiring supplies the service via {@link EvaluationFn}; the test seam
  * supplies a canned evaluator, so the request-shaping and metric maths are both unit-testable without a
  * provider. The runner never constructs an engine and never registers one, so the plane stays Deferred.
+ *
+ * <p><b>Every run is attributable.</b> A run mints its own identifier and resolves its provider
+ * attribution from the same selection the evaluation path uses, so two responses are distinguishable and
+ * a saved artifact names the provider and configured model that produced it. Opt-in diagnostics remain aggregate: disposition counts and provider/model/token coverage,
+ * with no case-level data.
  *
  * <p><b>The evaluated scope belongs to the corpus.</b> The runner does not decide which tasks an evidence
  * run covers: it honours {@link DecisionEvidenceCorpus#evaluatedTasks()}, so a task outside that set (the
@@ -94,10 +101,28 @@ public class DecisionEvidenceRunner {
      *
      * @param corpusVersion the registered corpus version to evaluate
      * @param actorUserId the operator the audit events are attributed to
-     * @return the summary with all M1–M5 metrics
+     * @return the summary with all M1–M5 metrics and its run attribution
      * @throws DecisionEvaluationRefusedException when the corpus version is not registered
      */
     public DecisionEvidenceSummary run(int corpusVersion, String actorUserId) {
+        return run(corpusVersion, actorUserId, false);
+    }
+
+    /**
+     * Runs every case in the registered corpus version and returns the payload-free summary.
+     *
+     * <p>Each invocation is its own run: it gets a fresh run identifier, and its measurements stand alone.
+     * Two responses cannot be combined into one evidence package, because the M4 p95 is runner-measured
+     * wall-clock and varies between runs — the attribution is what lets an operator tell them apart.
+     *
+     * @param corpusVersion the registered corpus version to evaluate
+     * @param actorUserId the operator the audit events are attributed to
+     * @param includeDiagnostics whether to include aggregate operational diagnostics; when false,
+     *     the optional diagnostics field is absent
+     * @return the summary with all M1–M5 metrics and its run attribution
+     * @throws DecisionEvaluationRefusedException when the corpus version is not registered
+     */
+    public DecisionEvidenceSummary run(int corpusVersion, String actorUserId, boolean includeDiagnostics) {
         if (!evaluator.enabled()) {
             throw new DecisionEvaluationRefusedException(
                     DecisionRefusalReason.DISABLED,
@@ -125,7 +150,39 @@ public class DecisionEvidenceRunner {
             results.add(evaluateCase(c, actorUserId, corpus));
         }
         return DecisionEvidenceSummary.summarize(
-                corpusVersion, results, priceRegistry, providerConfig, DecisionLatencyBudget.ADR_8_3);
+                corpusVersion,
+                attribution(newRunId()),
+                results,
+                priceRegistry,
+                providerConfig,
+                DecisionLatencyBudget.ADR_8_3,
+                includeDiagnostics);
+    }
+
+    /** A fresh identifier for one run; two runs of the same corpus must be distinguishable. */
+    private static String newRunId() {
+        return UUID.randomUUID().toString();
+    }
+
+    /**
+     * The provider attribution for a run, resolved from the same selection the evaluation path uses.
+     *
+     * <p>When the selection does not resolve, the configured provider id is still named so the artifact
+     * records what was intended, with no lane and no model. A run whose cases were all refused is then
+     * self-describing rather than anonymous — which is the difference between "the provider was missing"
+     * and "the provider served this and failed the gates".
+     */
+    private DecisionEvidenceRunAttribution attribution(String runId) {
+        DecisionProviderSelector.Selection selection = DecisionProviderSelector.select(providerConfig);
+        if (selection instanceof DecisionProviderSelector.Selection.Selected selected) {
+            return new DecisionEvidenceRunAttribution(
+                    runId,
+                    selected.providerId(),
+                    selected.model(),
+                    selected.lane().name());
+        }
+        return new DecisionEvidenceRunAttribution(
+                runId, providerConfig.selected().orElse(null), null, null);
     }
 
     private DecisionEvidenceCaseResult evaluateCase(

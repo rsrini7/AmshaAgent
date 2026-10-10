@@ -17,6 +17,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.runtime.Startup;
+
 /**
  * The registered, versioned decision price schedules (M5).
  *
@@ -31,6 +33,7 @@ import org.jboss.logging.Logger;
  * partially-trusted schedule. An <em>empty</em> schedule is valid and meaningful: it is the state before a
  * rate is authorised, and it prices nothing.
  */
+@Startup
 @ApplicationScoped
 public class DecisionPriceScheduleRegistry {
 
@@ -146,10 +149,7 @@ public class DecisionPriceScheduleRegistry {
     }
 
     private static byte[] readResource(String path) {
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        try (InputStream stream = loader != null
-                ? loader.getResourceAsStream(path)
-                : DecisionPriceScheduleRegistry.class.getResourceAsStream("/" + path)) {
+        try (InputStream stream = openResource(path)) {
             if (stream == null) {
                 return null;
             }
@@ -158,5 +158,25 @@ public class DecisionPriceScheduleRegistry {
             log.warnf("Decision price schedule %s could not be read; refusing to load it", path);
             return null;
         }
+    }
+
+    /**
+     * Opens a shipped schedule, preferring the context classloader but not depending on it.
+     *
+     * <p>The context classloader can be present and still unable to see a resource this build ships: a
+     * native image or a container loader need not delegate to the loader that owns the application
+     * classes. Consulting it only when it is <em>null</em> therefore reports a shipped schedule as
+     * missing and prices every lane as unpriced. Falling back to this class's own loader is what makes
+     * the artifact reachable, and it is the loader the schedule is unambiguously registered against.
+     */
+    private static InputStream openResource(String path) {
+        ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+        if (contextLoader != null) {
+            InputStream fromContextLoader = contextLoader.getResourceAsStream(path);
+            if (fromContextLoader != null) {
+                return fromContextLoader;
+            }
+        }
+        return DecisionPriceScheduleRegistry.class.getResourceAsStream("/" + path);
     }
 }

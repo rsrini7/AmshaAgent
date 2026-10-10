@@ -490,9 +490,10 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   export QUARKUS_HTTP_PORT="$validation_port"
   log_file="${AMSHA_VALIDATION_LOG_FILE:-$PROJECT_ROOT/amsha-${BACKEND}-validation.$$.log}"
   mkdir -p "$(dirname "$log_file")"
-  # Native distributions disable console logging and write to the backend
-  # log configured in application.yaml. Point the validation server at the
-  # advertised wrapper log so it contains the actual server diagnostics.
+  console_log_file="${log_file}.console"
+  # Keep redirected process output separate from the Quarkus file appender.
+  # Writing both sinks to one file duplicates readiness records with different
+  # prefixes and makes the exact-once JEV-12 check ambiguous.
   export QUARKUS_LOG_FILE_ENABLE=true
   export QUARKUS_LOG_FILE_PATH="$log_file"
   # Publish the resolved path so validators can assert startup diagnostics
@@ -500,7 +501,8 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   export AMSHA_VALIDATION_LOG_FILE="$log_file"
   printf '🚀 Starting %s validation server on %s.\n' "$BACKEND" "$validation_base"
   printf '📄 Server logs: %s\n' "$log_file"
-  (cd "$PROJECT_ROOT" && exec "$BINARY" serve) < /dev/null > "$log_file" 2>&1 &
+  printf '📄 Console logs: %s\n' "$console_log_file"
+  (cd "$PROJECT_ROOT" && exec "$BINARY" serve) < /dev/null > "$console_log_file" 2>&1 &
   server_pid=$!
 
   cleanup() {

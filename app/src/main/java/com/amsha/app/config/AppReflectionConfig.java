@@ -38,6 +38,9 @@ import com.amsha.app.ui.dto.PageDto;
 import com.amsha.app.ui.dto.PendingApprovalDto;
 import com.amsha.app.ui.dto.ProviderHealthSummary;
 import com.amsha.app.ui.dto.SmallRyeHealthSummary;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceDiagnostics;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceRunAttribution;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceSummary;
 import com.amsha.onboarding.BootstrapResource;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
@@ -123,6 +126,14 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             DecisionAdminResource.ProviderStatusResponse.class,
             DecisionAdminResource.EvaluateRequest.class,
             DecisionAdminResource.EvaluateResponse.class,
+            // The evidence endpoint returns Response, so its dynamic JSON entity graph cannot be inferred
+            // from the declared return type. Register the aggregate summary, attribution, and diagnostics
+            // explicitly. A previous native run returned 500 for JSON attribution while Markdown succeeded,
+            // which exposed this gap.
+            DecisionEvidenceSummary.class,
+            DecisionEvidenceRunAttribution.class,
+            DecisionEvidenceDiagnostics.class,
+            DecisionEvidenceDiagnostics.ProviderUsage.class,
             DbQueryRequest.class,
             DbQueryResponse.class,
             ArenaCompareRequest.class,

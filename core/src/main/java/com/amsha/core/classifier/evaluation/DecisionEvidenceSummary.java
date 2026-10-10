@@ -13,20 +13,27 @@ import com.amsha.classifier.api.DecisionLatencyBudget;
 import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.core.config.DecisionProviderConfig;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * The payload-free result of one evidence run, with the M1–M5 gate metrics computed from the per-case
  * results.
  *
- * <p>The HTTP surface exposes aggregate metrics only. Per-case results stay available to the runner and
- * metric calculations, but are excluded from JSON serialization so labels and case-level decisions never
- * become evidence artifacts. The metric maths is pure and static so it can be unit-tested against canned
- * results without any provider egress.
+ * <p>The default HTTP surface exposes aggregate metrics plus {@link #attribution()} — which run this was,
+ * and which provider and model served it. Per-case results stay available to the runner and metric
+ * calculations, but are excluded from JSON serialization so labels and case-level decisions never become
+ * evidence artifacts by default. The metric maths is pure and static so it can be unit-tested against
+ * canned results without any provider egress.
+ *
+ * <p><b>Diagnostics are opt-in.</b> {@link #diagnostics()} contains aggregate operational
+ * metadata only: disposition counts and provider/model/token coverage, with no case-level data.
  */
 public record DecisionEvidenceSummary(
         int corpusVersion,
+        DecisionEvidenceRunAttribution attribution,
         int caseCount,
         @JsonIgnore List<DecisionEvidenceCaseResult> results,
+        @JsonInclude(JsonInclude.Include.NON_NULL) DecisionEvidenceDiagnostics diagnostics,
         MetricResult m1,
         MetricResult m2,
         MetricResult m3,
@@ -34,6 +41,7 @@ public record DecisionEvidenceSummary(
         Map<String, LaneCost> m5) {
 
     public DecisionEvidenceSummary {
+        Objects.requireNonNull(attribution, "attribution");
         Objects.requireNonNull(results, "results");
         results = List.copyOf(results);
         Objects.requireNonNull(m1, "m1");
@@ -47,11 +55,43 @@ public record DecisionEvidenceSummary(
      * Assembles the summary and computes every gate metric from the per-case results.
      *
      * @param corpusVersion the corpus version that was run
+     * @param attribution which run this was, and which provider and model served it
      * @param results the per-case outcomes (opinions, refusals, transform errors, skips)
      * @param priceRegistry the registered price schedules (M5)
      * @param providerConfig the provider configuration, for the per-slot cost ceiling (M5)
      * @param latencyBudget the per-lane p95 budgets (M4)
+     * @param includeDiagnostics whether to include aggregate operational diagnostics; when false,
+     *     the optional diagnostics field is absent
      * @return the summary with all metrics
+     */
+    public static DecisionEvidenceSummary summarize(
+            int corpusVersion,
+            DecisionEvidenceRunAttribution attribution,
+            List<DecisionEvidenceCaseResult> results,
+            DecisionPriceScheduleRegistry priceRegistry,
+            DecisionProviderConfig providerConfig,
+            DecisionLatencyBudget latencyBudget,
+            boolean includeDiagnostics) {
+        Objects.requireNonNull(results, "results");
+        return new DecisionEvidenceSummary(
+                corpusVersion,
+                attribution,
+                results.size(),
+                results,
+                includeDiagnostics ? DecisionEvidenceDiagnostics.from(results) : null,
+                computeM1(results),
+                computeM2(results),
+                computeM3(results),
+                computeM4(results, latencyBudget),
+                computeM5(results, priceRegistry, providerConfig));
+    }
+
+    /**
+     * Convenience for metric-maths callers and unit tests: an unattributed, aggregate-only summary.
+     *
+     * <p>The production path always supplies a {@link DecisionEvidenceRunAttribution} and threads the
+     * diagnostics flag, so this overload exists only to keep the pure metric maths testable without
+     * inventing a provider selection.
      */
     public static DecisionEvidenceSummary summarize(
             int corpusVersion,
@@ -59,16 +99,19 @@ public record DecisionEvidenceSummary(
             DecisionPriceScheduleRegistry priceRegistry,
             DecisionProviderConfig providerConfig,
             DecisionLatencyBudget latencyBudget) {
-        Objects.requireNonNull(results, "results");
-        return new DecisionEvidenceSummary(
+        return summarize(
                 corpusVersion,
-                results.size(),
+                DecisionEvidenceRunAttribution.UNATTRIBUTED,
                 results,
-                computeM1(results),
-                computeM2(results),
-                computeM3(results),
-                computeM4(results, latencyBudget),
-                computeM5(results, priceRegistry, providerConfig));
+                priceRegistry,
+                providerConfig,
+                latencyBudget,
+                false);
+    }
+
+    /** Whether aggregate operational diagnostics were projected into this summary. */
+    public boolean diagnosticsIncluded() {
+        return diagnostics != null;
     }
 
     // ----- M1: tool-risk false-allow over SECURITY cases -------------------------------

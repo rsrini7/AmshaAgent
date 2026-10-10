@@ -2494,40 +2494,17 @@ return `409 MISSING_READY_IMPLEMENTATION` for enable, and reject non-internal mu
 
 #### 23.6.1 Zero-token decision-plane validation (`--decision-plane`)
 
-The classifier control plane's HTTP contract is reachable **without a model bundle, LLM, or provider token**;
-the validator uses the normal internal API credential to authenticate admin requests:
-`classifierRuntimeStatus()` and `updateClassifier()` check only `isInternal()`, never
-`onnxEnabled`. `rest-http/scripts/validate_decision_plane.sh` therefore asserts the
-decision-plane contract with no ONNX runtime, no LLM, and no provider tokens, and it runs in the
-`--fast` set and can also be run standalone with `--decision-plane`:
+The decision-plane shell validator checks the classifier control-plane contract and native resource availability without invoking a model provider. It runs in `--fast` and can also be run by itself:
 
 ```bash
 bash rest-http/scripts/run_all_validations.sh --decision-plane
 ```
 
-It runs 16 checks (`JEV-1`..`JEV-12`): the authorization matrix (unauthenticated `401`,
-non-internal `403`, mutation requires an internal key), the exact nine-field snapshot shape with
-no extra fields, snapshot coherence
-(`effectiveEnabled == acceptingRequests == (requestedEnabled && implementationAvailable)`, and
-`draining == (!accepting && inFlight > 0)`), the Deferred posture, fail-closed enable with
-revision stability, disable without an implementation, `400 unknown_classifier`, and
-`startupEnabled ⇒ requestedEnabled`. When `AMSHA_VALIDATION_LOG_FILE` is set — the
-`run_dist_*` wrappers export it — it also asserts the `DecisionPlaneReadiness` startup
-diagnostic fired exactly once. Setting `AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true`
-requires that diagnostic and `=false` forbids it; the distribution wrapper derives the value
-from the switches the run actually loads.
+The distribution launcher exports `AMSHA_VALIDATION_LOG_FILE`. JEV-17 verifies the corpus and price-schedule startup load messages; the registries initialize at startup, so this check reads logs and does not call `POST /evidence/run`. If the log file is unavailable, JEV-17 skips and names the required launcher path.
 
-`JEV-5`..`JEV-7` overlap `ONNX-5`..`ONNX-7` **deliberately**: the same invariant must hold both
-with and without the local ONNX bundle loaded, so do not delete either copy.
+The /evidence/run response contract, including opt-in aggregate diagnostics, is covered by DecisionEvidenceIT with the loopback DecisionProviderFixture. That test exercises the HTTP boundary without a hosted provider. The decision-plane shell validator checks control-plane and startup contracts only and makes no evaluation request. Enabled and disabled evaluation requests stay in the loopback integration tests.
 
-> **Planned, not implemented.** If the proposed explicit evaluation path is accepted
-> ([ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md),
-> Status: Proposed), this validator gains four checks — **JEV-13** (a decision-admin authorization
-> matrix: unauthenticated `401`, non-internal `403`), **JEV-14** (the provider-status payload is
-> payload-free: an exact key set, no state, no secret), **JEV-15** (evaluation is refused with **no
-> egress** while `amsha.decision.evaluation.enabled=false`), and **JEV-16** (no `DecisionEngine` bean
-> is resolvable while the plane is Deferred, extending `JEV-5`). No such endpoint exists yet, so the
-> current count stays at `JEV-1`..`JEV-12`.
+The suite also covers internal authorization, exact response shapes, Deferred posture, fail-closed enable behavior, revision stability, and the single `DecisionPlaneReadiness` startup warning. `AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true` requires that warning; `false` forbids it.
 
 ## 24. Testing Identity, OIDC, Web Sessions, and Multi-Admin
 

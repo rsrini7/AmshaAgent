@@ -57,9 +57,11 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
  *       emits no {@code VAULT_ACCESS} audit event.</li>
  *   <li>{@code POST /admin/decision/evaluate} — one evaluation over a registered decision.</li>
  *   <li>{@code POST /admin/decision/evidence/run} — runs a registered versioned evidence corpus and returns a
- *       payload-free summary with the M1–M5 gate metrics, as JSON or (with {@code format=markdown}) as a
- *       review-ready report. The version defaults to 1 and is selected from the corpus registry; an
- *       unregistered version is refused.</li>
+ *       summary with the M1–M5 gate metrics, as JSON or (with {@code format=markdown}) as a review-ready
+ *       report. The version defaults to 1 and is selected from the corpus registry; an unregistered version
+ *       is refused. The summary is attributed with a run id and the resolved provider and configured model;
+ *       {@code diagnostics=true} adds aggregate disposition counts and grouped provider/model/lane token
+ *       coverage, without exposing case-level data.</li>
  * </ul>
  *
  * <p>Every method runs on a virtual thread ({@link RunOnVirtualThread}), so the provider call can
@@ -230,28 +232,43 @@ public class DecisionAdminResource {
     }
 
     /**
-     * Runs the registered evidence corpus and returns a payload-free summary with the M1–M5 metrics.
+     * Runs the registered evidence corpus and returns a summary with the M1–M5 metrics.
      *
      * <p>{@code format=json} (the default) returns the structured summary; {@code format=markdown} returns
      * the same content rendered for review, so an operator can redirect it straight into an evidence file
-     * (for example {@code ... '?format=markdown' > .scratch/jev-decision-plane/evidence/report.md}). Both
-     * forms are payload-free; an unrecognised format is refused as a client error.
+     * (for example {@code ... '?format=markdown' > .scratch/jev-decision-plane/evidence/report.md}). An
+     * unrecognised format is refused as a client error.
+     *
+     * <p><b>Each call is a separate run.</b> The corpus is evaluated anew for either format, so the two
+     * forms are not two views of one measurement. The response carries a run identifier and the resolved
+     * provider and configured model, which is what lets a saved artifact be attributed to a specific run
+     * rather than to whichever run happened to produce it.
+     *
+     * <p><b>{@code diagnostics=true} is opt-in.</b> It adds payload-free aggregate disposition counts and
+     * provider/model/lane token coverage and totals. It contains no case identifiers, labels, policy
+     * decisions, inputs, or error details.
      */
     @POST
     @Path("/evidence/run")
     public Response evidenceRun(
             @QueryParam("version") @DefaultValue("1") int version,
-            @QueryParam("format") @DefaultValue("json") String format) {
+            @QueryParam("format") @DefaultValue("json") String format,
+            @QueryParam("diagnostics") String diagnosticsParameter) {
         if (!isInternal()) {
             return forbidden();
         }
+        String normalizedDiagnostics = diagnosticsParameter == null ? "false" : diagnosticsParameter.trim();
+        if (!"true".equalsIgnoreCase(normalizedDiagnostics) && !"false".equalsIgnoreCase(normalizedDiagnostics)) {
+            return badRequest("INVALID_REQUEST", "diagnostics must be true or false");
+        }
+        boolean diagnostics = Boolean.parseBoolean(normalizedDiagnostics);
         String normalized = format == null ? "json" : format.trim().toLowerCase(Locale.ROOT);
         boolean markdown = "markdown".equals(normalized);
         if (!markdown && !"json".equals(normalized)) {
             return badRequest("INVALID_REQUEST", "format must be json or markdown");
         }
         try {
-            DecisionEvidenceSummary summary = evidenceRunner.run(version, resolveUserId());
+            DecisionEvidenceSummary summary = evidenceRunner.run(version, resolveUserId(), diagnostics);
             if (markdown) {
                 return Response.ok(DecisionEvidenceReport.toMarkdown(summary))
                         .type(MediaType.TEXT_PLAIN_TYPE)

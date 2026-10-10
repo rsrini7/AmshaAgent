@@ -334,6 +334,52 @@ class DistributionWrapperContractTest(unittest.TestCase):
         fast_case = next(line for line in runner.splitlines() if line.strip().startswith("--fast)"))
         self.assertIn("RUN_DECISION_PLANE=true", fast_case)
 
+    def test_decision_plane_validator_never_posts_evaluation_requests(self):
+        validator = (ROOT / "rest-http" / "scripts" / "validate_decision_plane.sh").read_text(
+            encoding="utf-8"
+        )
+        executable_lines = "\n".join(
+            line for line in validator.splitlines() if not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("evidence/run", executable_lines)
+        self.assertNotIn("/api/v1/admin/decision/evaluate", executable_lines)
+        self.assertNotIn("DECISION_EVALUATE_URL", executable_lines)
+        self.assertNotIn("DECISION_EVAL_BODY", executable_lines)
+        self.assertIn("Decision-evidence corpus v1 loaded:", validator)
+        registry_sources = (
+            ROOT
+            / "core"
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "amsha"
+            / "core"
+            / "classifier"
+            / "evaluation"
+            / "DecisionEvidenceCorpusRegistry.java",
+            ROOT
+            / "core"
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "amsha"
+            / "core"
+            / "classifier"
+            / "evaluation"
+            / "DecisionPriceScheduleRegistry.java",
+        )
+        for source in registry_sources:
+            self.assertIn("is not present on the classpath", source.read_text(encoding="utf-8"))
+        self.assertIn("DecisionEvaluationDisabledPathIT", executable_lines)
+        self.assertIn("DecisionEvaluationPathIT", executable_lines)
+        self.assertIn("decision-evidence/corpus-v1.json is not present on the classpath", executable_lines)
+        self.assertIn(
+            "decision-evidence/price-schedule-v1.json is not present on the classpath",
+            executable_lines,
+        )
+
     def test_validation_run_always_sets_the_inert_plane_diagnostic_expectation(self) -> None:
         """Leaving the expectation unset makes the startup-diagnostic check vacuous.
 
@@ -381,6 +427,52 @@ class DistributionWrapperContractTest(unittest.TestCase):
                     expected,
                     f"expectation wrong when {enabled or 'no switch'} is enabled",
                 )
+
+    def test_readiness_counter_counts_every_warning_record(self):
+        validator = (
+            ROOT / "rest-http" / "scripts" / "validate_decision_plane.sh"
+        ).read_text(encoding="utf-8")
+        count_line = next(
+            line for line in validator.splitlines() if "COUNT=$(awk " in line
+        )
+        awk_program = count_line.split("awk '", 1)[1].split("' \"$LOG_FILE\")", 1)[0]
+        self.assertEqual(
+            "/DecisionPlaneReadiness/ { count++ } END { print count+0 }",
+            awk_program,
+        )
+
+        console_record = (
+            "2026-10-10 00:00:00,000 WARN "
+            "[com.amsha.core.classifier.DecisionPlaneReadiness] readiness warning"
+        )
+        file_record = (
+            "amsha-sqlite[10106] WARN "
+            "[com.ams.cor.cla.DecisionPlaneReadiness] readiness warning"
+        )
+
+        def count_records(records):
+            result = subprocess.run(
+                ["awk", awk_program],
+                input="".join(f"{record}\n" for record in records),
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            return result.stdout.strip()
+
+        self.assertEqual("1", count_records([file_record]))
+        self.assertEqual("2", count_records([console_record, file_record]))
+        self.assertEqual("2", count_records([file_record, file_record]))
+
+    def test_validation_wrapper_separates_console_and_quarkus_logs(self):
+        runner = (ROOT / "scripts" / "distribution" / "run_dist_backend.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('console_log_file="${log_file}.console"', runner)
+        self.assertIn('export QUARKUS_LOG_FILE_PATH="$log_file"', runner)
+        self.assertIn('export AMSHA_VALIDATION_LOG_FILE="$log_file"', runner)
+        self.assertIn('> "$console_log_file" 2>&1 &', runner)
+        self.assertNotIn('> "$log_file" 2>&1 &', runner)
 
     def test_decision_switch_lookup_tolerates_unset_variables(self) -> None:
         """A clean checkout has no root .env, so the four decision switches are simply absent.
