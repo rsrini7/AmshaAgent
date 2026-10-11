@@ -35,7 +35,10 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @param baselineAmbiguity for an intent case, whether the pinned deterministic baseline uniquely
  *     selects one eligible specialist ({@code AMBIGUOUS}/{@code UNAMBIGUOUS}); null for every other task
  * @param ambiguityRationale why the case carries that classification; required for every intent case
- * @param criteria optional extra instructions the case carries alongside its state
+ * @param criteria optional extra instructions the case carries alongside its state; no main-code path
+ *     delivers them to the provider — the sole reader is the test-only shadow comparison harness — so
+ *     the evidence runner <b>refuses</b> any corpus that carries one, rather than measure a prompt the
+ *     case was not calibrated against
  * @param options the closed option list an intent case is routed over; required and non-empty for an
  *     intent case, and forbidden for every other task
  * @param input the redacted state submitted to the provider

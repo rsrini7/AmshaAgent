@@ -85,11 +85,11 @@ into a configurational one.
 | No production `DecisionEngine` bean | `Instance<DecisionEngine>` is unresolvable; engines are `final class`es with no CDI annotation | `IntentDecisionRouter.isEnabled()` remains false; explicit evaluation constructs a transient engine without activating production routing |
 | No production-routing caller for `DecisionProviderSelector` | `DecisionEvaluationService` uses `select(...)` only for explicit evaluation requests; the agent router does not | A `.env` change alone does not route agent decisions through the provider |
 | Credential input (updated 2026-10-09) | The initial `_API_KEY_REF` proposal required a matching SecretVault entry; the evaluation path now reads the direct key from bound config. | Set `AMSHA_DECISION_<ID>_API_KEY`; no vault provisioning is required. The source config String remains resident for process lifetime. |
-| Live provider evidence — now recorded, and failing | A credentialed evaluation and a full corpus run were both recorded on **2026-10-09** against a rebuilt native binary (`typesafe` / `jev-latest`, REMOTE). Corpus v1: 25 of 30 cases evaluated, **M1 2–3/11**, **M2 2/3** | The evidence and promotion gates remain unmet — because the measured M1/M2 fail, not because evidence is absent |
+| Live provider evidence — current run recorded, failing | Fresh native corpus run 2026-10-10 after rubric/abstention changes (`typesafe` / `jev-latest`, REMOTE), run ID `cd5beb45-d2de-495c-af59-e977c4f0133d`: 25 evaluated, 5 skipped; M1 1/11, M2 1/3, M3 4/25, M4 p95 503.95 ms, M5 0/25 priced | Quality remains UNMET on measured failure; latest M2 case identity is intentionally absent from aggregate evidence |
 | Provider governance approval | Configuration accepts residency and retention declarations; provider-specific approval and evidence are still required | Governance gate remains unmet until the declarations are reviewed and recorded |
 | Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded evaluation and drift signals; provider/model identity is not a metric label | The Operations gate still requires approved cost ceilings, an accountable owner, and review evidence |
 | Self-hosted authentication header | The direct key configures `SelfHostedProviderConfig.loopbackToken`; the engine sends `X-Amsha-Loopback-Token` | A service requiring `Authorization: Bearer` needs separate header support; use only with an endpoint configured for Amsha's loopback-token header |
-| Candidate evidence is no longer synthetic | `DecisionShadowComparisonHarness.CandidateType` still marks `REMOTE`/`SELF_HOSTED` as simulations, but the evaluation path has since produced **real** credentialed candidate evidence (the 2026-10-09 corpus run) | Quality gate remains UNMET on **measured failure**: M1 must be exactly 0 and M2 < 1% |
+| Candidate evidence is real and current | The 2026-10-10 run against the fresh native binary measured the updated rubric and `NO_OPINION` option; see run ID and aggregate metrics above | Quality remains UNMET: M1 must be 0 and M2 below 1%; this run reports 1/11 and 1/3 |
 
 ### 1.3 The three independent locks (all must open, in order)
 
@@ -796,7 +796,7 @@ DECISION_EVALUATION_REQUESTED audit events. The targeted native JEV validator no
 
 
 
-The three captured TypeSafe `jev-latest` REMOTE runs are separate provider evaluations. M1 was 2/11, 3/11, and 2/11; M2 was 2/3 in every run, so both quality gates fail. Remote M4 p95 was 502.58 ms, 442.99 ms, and 420.43 ms; one run exceeded the 500 ms budget. M5 remains unpriced despite token telemetry because no authorized rate and ceiling are present. `DecisionPlaneReadiness` concerns the Deferred production CDI hooks; the evidence runner itself uses `DecisionEvaluationService` and the configured candidate provider.
+The three TypeSafe `jev-latest` REMOTE runs listed here are historical 2026-10-09 captures. The fresh 2026-10-10 run is recorded separately above: M1 1/11, M2 1/3, M3 4/25, p95 503.95 ms, and 0/25 priced. Across six recorded p95 measurements, two exceed 500 ms. M5 remains unpriced despite token telemetry; no sourced rate or authorized ceiling is present. The latest safe aggregate does not identify the M2 case.
 
 **Provider-status payload shape — landed (2026-10-07).** JEV-13 now *also* asserts the provider-status
     payload is exactly the identifier/boolean allow-list: no key outside

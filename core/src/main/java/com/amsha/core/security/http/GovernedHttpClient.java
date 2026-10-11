@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -50,6 +51,19 @@ public final class GovernedHttpClient {
 
     private static final Logger log = Logger.getLogger(GovernedHttpClient.class);
 
+    /**
+     * Payload-free per-hop outbound timing, in nanoseconds.
+     *
+     * <p>Durations only: no host, URI, credential, or body content. {@code transportNanos} is a single
+     * combined <b>connection / TLS / remote-exchange</b> bucket: it spans TCP connect, TLS handshake,
+     * request send, and response receive, because the JDK {@link HttpClient} exposes no hook to time
+     * connect and handshake separately. This transport builds a fresh client per hop, so every hop pays a
+     * cold connect inside that span. <b>Do not infer a TLS share from it.</b> If that combined bucket is
+     * the bottleneck, attributing it needs a controlled connection-resumption experiment or a reviewed
+     * instrumentation seam — never arithmetic on these figures.
+     */
+    public record PhaseTimings(long policyNanos, long dnsPinningNanos, long clientSetupNanos, long transportNanos) {}
+
     public static final int DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
     public static final int DEFAULT_READ_TIMEOUT_MS = 30_000;
     public static final int MAX_REDIRECT_HOPS = 5;
@@ -64,6 +78,7 @@ public final class GovernedHttpClient {
     private final Duration connectTimeoutOverride;
     private final InetAddress pinnedAddress;
     private final HttpClient httpClientOverride;
+    private final Consumer<PhaseTimings> timingListener;
 
     private GovernedHttpClient(
             OutboundHttpPolicyService policyService,
@@ -75,7 +90,8 @@ public final class GovernedHttpClient {
             UnaryOperator<URI> policyUriMapper,
             Duration connectTimeoutOverride,
             InetAddress pinnedAddress,
-            HttpClient httpClientOverride) {
+            HttpClient httpClientOverride,
+            Consumer<PhaseTimings> timingListener) {
         this.policyService = policyService;
         this.vault = vault;
         this.purpose = purpose;
@@ -86,6 +102,7 @@ public final class GovernedHttpClient {
         this.connectTimeoutOverride = connectTimeoutOverride;
         this.pinnedAddress = pinnedAddress;
         this.httpClientOverride = httpClientOverride;
+        this.timingListener = timingListener;
     }
 
     public static Builder builder(OutboundHttpPolicyService policyService) {
@@ -98,6 +115,7 @@ public final class GovernedHttpClient {
     }
 
     private <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> bodyHandler, int depth) {
+        long startedNanos = System.nanoTime();
         request = withDefaultTimeout(request);
         URI policyUri = policyUri(request.uri());
         OutboundPolicyDecision decision =
@@ -114,13 +132,23 @@ public final class GovernedHttpClient {
             throw OutboundHttpException.hitl(decision.reason().orElse("approval required"));
         }
 
+        long policyDoneNanos = System.nanoTime();
         revalidateDns(request.uri());
+        long dnsDoneNanos = System.nanoTime();
 
         List<Runnable> cleanups = new ArrayList<>();
         HttpResponse<T> response;
         try {
             HttpClient client = buildClient(request.uri(), cleanups);
+            long clientReadyNanos = System.nanoTime();
             response = client.send(request, bodyHandler);
+            if (timingListener != null) {
+                timingListener.accept(new PhaseTimings(
+                        policyDoneNanos - startedNanos,
+                        dnsDoneNanos - policyDoneNanos,
+                        clientReadyNanos - dnsDoneNanos,
+                        System.nanoTime() - clientReadyNanos));
+            }
         } catch (HttpTimeoutException e) {
             log.warnf("Request timed out: %s", policyUri.getHost());
             throw OutboundHttpException.timeout("Request timed out: " + policyUri.getHost());
@@ -357,6 +385,7 @@ public final class GovernedHttpClient {
         private Duration connectTimeoutOverride;
         private InetAddress pinnedAddress;
         private HttpClient httpClientOverride;
+        private Consumer<PhaseTimings> timingListener;
 
         private Builder(OutboundHttpPolicyService policyService) {
             this.policyService = policyService;
@@ -437,6 +466,16 @@ public final class GovernedHttpClient {
             return this;
         }
 
+        /**
+         * Installs a payload-free per-hop timing sink. Durations only: no host, URI, credential, or body
+         * content is passed. Absent by default, so the shared transport stays silent unless a caller —
+         * for example the opt-in decision-evidence path — opts in.
+         */
+        public Builder timingListener(Consumer<PhaseTimings> timingListener) {
+            this.timingListener = timingListener;
+            return this;
+        }
+
         public GovernedHttpClient build() {
             return new GovernedHttpClient(
                     policyService,
@@ -448,7 +487,8 @@ public final class GovernedHttpClient {
                     policyUriMapper,
                     connectTimeoutOverride,
                     pinnedAddress,
-                    httpClientOverride);
+                    httpClientOverride,
+                    timingListener);
         }
     }
 }

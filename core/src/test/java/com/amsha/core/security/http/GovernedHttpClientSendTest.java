@@ -329,6 +329,68 @@ class GovernedHttpClientSendTest {
     }
 
     // -----------------------------------------------------------------------
+    // Timing listener
+    // -----------------------------------------------------------------------
+
+    @Test
+    void timingListenerReceivesOnePayloadFreeSamplePerHop() throws Exception {
+        HttpResponse<String> expected = response(200);
+        HttpClient transport = neverRedirecting();
+        willReturn(transport, expected);
+        List<GovernedHttpClient.PhaseTimings> samples = new ArrayList<>();
+
+        GovernedHttpClient client = GovernedHttpClient.builder(allowingPolicy())
+                .actor(ACTOR)
+                .httpClient(transport)
+                .timingListener(samples::add)
+                .build();
+
+        assertSame(expected, client.send(get(LOCAL_URI), STRING_BODY));
+
+        assertEquals(1, samples.size(), "one hop must emit exactly one sample");
+        GovernedHttpClient.PhaseTimings timings = samples.get(0);
+        assertTrue(timings.policyNanos() >= 0, "policyNanos must be non-negative");
+        assertTrue(timings.dnsPinningNanos() >= 0, "dnsPinningNanos must be non-negative");
+        assertTrue(timings.clientSetupNanos() >= 0, "clientSetupNanos must be non-negative");
+        assertTrue(timings.transportNanos() >= 0, "transportNanos must be non-negative");
+    }
+
+    @Test
+    void timingListenerIsInvokedOncePerFollowedRedirectHop() throws Exception {
+        HttpResponse<String> redirect = response(302, headers(Map.of("location", List.of("/v2/chat"))));
+        HttpClient transport = neverRedirecting();
+        willReturnSequence(transport, redirect, response(200));
+        List<GovernedHttpClient.PhaseTimings> samples = new ArrayList<>();
+
+        GovernedHttpClient client = GovernedHttpClient.builder(allowingPolicy())
+                .actor(ACTOR)
+                .httpClient(transport)
+                .timingListener(samples::add)
+                .build();
+
+        client.send(get(LOCAL_URI), STRING_BODY);
+
+        assertEquals(2, samples.size(), "each followed hop must emit its own sample");
+    }
+
+    @Test
+    void aFailingSendEmitsNoTimingSample() throws Exception {
+        HttpClient transport = neverRedirecting();
+        willThrow(transport, new IOException("boom"));
+        List<GovernedHttpClient.PhaseTimings> samples = new ArrayList<>();
+
+        GovernedHttpClient client = GovernedHttpClient.builder(allowingPolicy())
+                .actor(ACTOR)
+                .httpClient(transport)
+                .timingListener(samples::add)
+                .build();
+
+        assertThrows(OutboundHttpException.class, () -> client.send(get(LOCAL_URI), STRING_BODY));
+
+        assertTrue(samples.isEmpty(), "a transport failure has no completed phase breakdown to report");
+    }
+
+    // -----------------------------------------------------------------------
     // policyUriMapper
     // -----------------------------------------------------------------------
 

@@ -145,6 +145,26 @@ public class DecisionEvidenceRunner {
                                 + "' as evaluated, but no decision is registered for that task");
             }
         }
+        // This path sends only the registered question criteria; it has no channel for a case's own criteria
+        // text (the request carries state and options, not policy). A corpus whose cases carry criteria was
+        // therefore calibrated against a prompt this path does not send — the shadow comparison harness
+        // appends that text to the goal/message, this runner does not — so its expected labels are not
+        // achievable here and measuring M1/M2 on it would score the prompt difference, not the model.
+        // Refuse the whole run rather than silently ignore the field: a partial run would be a scope change
+        // nobody approved, the same reason the evaluated-scope check above refuses rather than skips.
+        List<String> criteriaBearing = corpus.cases().stream()
+                .filter(c -> c.criteria() != null && !c.criteria().isBlank())
+                .map(DecisionEvidenceCase::id)
+                .toList();
+        if (!criteriaBearing.isEmpty()) {
+            throw new DecisionEvaluationRefusedException(
+                    DecisionRefusalReason.CORPUS_NOT_MEASURABLE,
+                    "Corpus " + corpusVersion + " carries case-level criteria on " + criteriaBearing.size()
+                            + " case(s) " + criteriaBearing + ", but the evidence path delivers only the registered"
+                            + " question criteria. Those cases were calibrated against a prompt this path does not"
+                            + " send, so their expected labels are not measurable here. Re-scope the corpus (v2)"
+                            + " before running it.");
+        }
         List<DecisionEvidenceCaseResult> results = new ArrayList<>();
         for (DecisionEvidenceCase c : corpus.cases()) {
             results.add(evaluateCase(c, actorUserId, corpus));

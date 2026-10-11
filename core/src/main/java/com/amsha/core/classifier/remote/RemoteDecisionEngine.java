@@ -29,6 +29,8 @@ import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jboss.logging.Logger;
+
 import io.vertx.core.Context;
 
 /**
@@ -54,6 +56,7 @@ import io.vertx.core.Context;
  */
 public final class RemoteDecisionEngine implements DecisionEngine, RemoteDecisionProvider, AutoCloseable {
 
+    private static final Logger log = Logger.getLogger(RemoteDecisionEngine.class);
     private static final Duration SHUTDOWN_DRAIN_TIMEOUT = Duration.ofSeconds(2);
 
     private final RemoteProviderConfig config;
@@ -306,7 +309,8 @@ public final class RemoteDecisionEngine implements DecisionEngine, RemoteDecisio
                 .connection(config.connection())
                 .vault(vault)
                 .actor("system")
-                .connectTimeout(effectiveTimeout);
+                .connectTimeout(effectiveTimeout)
+                .timingListener(RemoteDecisionEngine::logPhaseTimings);
 
         if (testHttpClient != null) {
             clientBuilder.httpClient(testHttpClient);
@@ -326,6 +330,27 @@ public final class RemoteDecisionEngine implements DecisionEngine, RemoteDecisio
                     null,
                     "Remote transport failure: " + ex.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * Emits a payload-free per-hop timing breakdown at INFO so an evidence run's log records where the
+     * outbound latency was spent. Durations only: no host, URI, credential, or body content.
+     *
+     * <p>{@code transport} is one combined <b>connection / TLS / remote-exchange</b> bucket: connection
+     * setup (TCP + TLS) plus send and receive, because the JDK client exposes no hook to time connect and
+     * handshake separately. This engine builds a fresh governed client — and therefore a fresh
+     * {@link HttpClient} and connection pool — per call, so every hop pays a cold connect inside that span.
+     * <b>Do not infer a TLS share from it.</b> A transport-dominated breakdown means "connect and/or
+     * provider"; attributing it needs a controlled connection-resumption experiment, which this
+     * instrumentation is meant to justify or rule out.
+     */
+    private static void logPhaseTimings(GovernedHttpClient.PhaseTimings timings) {
+        log.infof(
+                "Decision outbound timing: policy=%dms dnsPinning=%dms clientSetup=%dms transport=%dms",
+                Math.round(timings.policyNanos() / 1_000_000.0),
+                Math.round(timings.dnsPinningNanos() / 1_000_000.0),
+                Math.round(timings.clientSetupNanos() / 1_000_000.0),
+                Math.round(timings.transportNanos() / 1_000_000.0));
     }
 
     private static Duration calculateTimeout(Duration reqTimeout, Duration confTimeout) {

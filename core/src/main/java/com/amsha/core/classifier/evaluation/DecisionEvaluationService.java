@@ -351,10 +351,19 @@ public class DecisionEvaluationService {
             RegisteredDecision decision,
             DecisionEvaluationRequest request,
             DecisionRequest engineRequest) {
+        long startedNanos = System.nanoTime();
         try (DecisionEngineHandle handle = DecisionEngineFactory.create(
                 selected, slot.governance(), Optional.ofNullable(credential), mapper, outboundPolicyService, vault)) {
-            DecisionResult result =
-                    normalizeResult(decision.definition(), handle.engine().evaluate(engineRequest));
+            long engineReadyNanos = System.nanoTime();
+            DecisionResult raw = handle.engine().evaluate(engineRequest);
+            long engineDoneNanos = System.nanoTime();
+            DecisionResult result = normalizeResult(decision.definition(), raw);
+            long normalizedNanos = System.nanoTime();
+            log.infof(
+                    "Decision local timing: engineSetup=%dms engineCall=%dms normalize=%dms",
+                    millisBetween(startedNanos, engineReadyNanos),
+                    millisBetween(engineReadyNanos, engineDoneNanos),
+                    millisBetween(engineDoneNanos, normalizedNanos));
             log.debugf(
                     "Decision evaluation completed: decision=%s provider=%s opinion=%b",
                     engineRequest.decisionId(), selected.providerId(), result.isOpinion());
@@ -362,6 +371,10 @@ public class DecisionEvaluationService {
             observe(outcome, selected, confidenceOf(result));
             return outcome;
         }
+    }
+
+    private static long millisBetween(long startNanos, long endNanos) {
+        return Math.round((endNanos - startNanos) / 1_000_000.0);
     }
 
     /**

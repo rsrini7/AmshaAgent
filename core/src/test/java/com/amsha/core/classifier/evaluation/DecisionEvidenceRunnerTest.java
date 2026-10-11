@@ -41,7 +41,7 @@ class DecisionEvidenceRunnerTest {
     private static final String MODEL = "jev-1.13.0";
 
     private DecisionEvidenceRunner runnerWith(DecisionEvidenceRunner.EvaluationFn evaluator) {
-        return runnerWith(evaluator, loadShippedCorpus());
+        return runnerWith(evaluator, measurableShippedCorpus());
     }
 
     private DecisionEvidenceRunner runnerWith(
@@ -71,6 +71,47 @@ class DecisionEvidenceRunnerTest {
         } catch (Exception ex) {
             throw new IllegalStateException("could not load corpus-v1 from the classpath", ex);
         }
+    }
+
+    /**
+     * The shipped corpus with every case's criteria text removed.
+     *
+     * <p>The runner refuses the shipped corpus as-is: five of its cases were calibrated with case-level
+     * criteria that this path never sends to the provider (the shadow comparison harness appends that text
+     * to the goal/message; the evidence path does not), so their expected labels are not measurable here.
+     * Until the corpus is re-scoped to v2, these behaviour tests run the criteria-free projection of it.
+     * The projection is metric-identical — the path never delivered the criteria, so removing it cannot
+     * move a gate — and it keeps every assertion below anchored to the real shipped cases.
+     */
+    private DecisionEvidenceCorpus measurableShippedCorpus() {
+        DecisionEvidenceCorpus shipped = loadShippedCorpus();
+        return new DecisionEvidenceCorpus(
+                shipped.corpusVersion(),
+                shipped.description(),
+                shipped.provenance(),
+                shipped.baseline(),
+                shipped.evaluatedTasks(),
+                shipped.redactionReview(),
+                shipped.governance(),
+                shipped.cases().stream()
+                        .map(DecisionEvidenceRunnerTest::withoutCriteria)
+                        .toList());
+    }
+
+    private static DecisionEvidenceCase withoutCriteria(DecisionEvidenceCase c) {
+        return new DecisionEvidenceCase(
+                c.id(),
+                c.task(),
+                c.partition(),
+                c.expectedLabel(),
+                c.acceptableLabels(),
+                c.riskCategory(),
+                c.baselineAmbiguity(),
+                c.ambiguityRationale(),
+                null,
+                c.options(),
+                c.input(),
+                c.notes());
     }
 
     /** Every tool-risk case resolves to LOW_RISK (the worst case) and intent cases abstain. */
@@ -244,6 +285,23 @@ class DecisionEvidenceRunnerTest {
         DecisionEvaluationRefusedException thrown =
                 assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(1, "tester"));
         assertTrue(thrown.getMessage().contains("no decision is registered"), thrown.getMessage());
+    }
+
+    @Test
+    void theShippedCorpusIsRefusedWhileItsCasesCarryUndeliveredCriteria() {
+        // Five shipped cases carry case-level criteria that the evidence path never sends (the shadow
+        // comparison harness appends it to the goal/message; DecisionEvaluationRequest carries state and
+        // options, not policy). Measuring M1/M2 on them would score that prompt difference rather than the
+        // model, so the run is refused outright rather than silently ignoring the field. This guard is what
+        // forces the versioned re-scope; it must keep failing closed until the corpus is re-scoped.
+        DecisionEvidenceRunner runner = runnerWith((request, actor) -> abstain(), loadShippedCorpus());
+
+        DecisionEvaluationRefusedException thrown =
+                assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(1, "tester"));
+
+        assertEquals(DecisionRefusalReason.CORPUS_NOT_MEASURABLE, thrown.reason());
+        assertTrue(thrown.getMessage().contains("intent-contra-01"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("toolrisk-contra-01"), thrown.getMessage());
     }
 
     @Test

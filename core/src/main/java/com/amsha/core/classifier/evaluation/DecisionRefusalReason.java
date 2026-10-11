@@ -22,6 +22,16 @@ public enum DecisionRefusalReason {
     /** The request's structure is invalid for the named decision (for example its options). */
     INVALID_REQUEST,
 
+    /**
+     * The registered corpus cannot be measured on this path: one or more of its cases were calibrated
+     * with case-level criteria that the evidence path does not deliver to the provider.
+     *
+     * <p>Distinct from {@link #INVALID_REQUEST} because the request is well-formed — the conflict is
+     * between the shipped artifact's expectations and this path's prompt, and it is resolved by
+     * re-scoping the corpus, not by correcting the caller.
+     */
+    CORPUS_NOT_MEASURABLE,
+
     /** No usable provider is configured, or the configured one cannot be built. */
     PROVIDER_UNAVAILABLE
 }

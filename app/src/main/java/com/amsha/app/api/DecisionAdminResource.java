@@ -284,7 +284,7 @@ public class DecisionAdminResource {
 
     private static Response.Status statusFor(DecisionRefusalReason reason) {
         return switch (reason) {
-            case DISABLED, PROVIDER_UNAVAILABLE -> Response.Status.CONFLICT;
+            case DISABLED, PROVIDER_UNAVAILABLE, CORPUS_NOT_MEASURABLE -> Response.Status.CONFLICT;
             case UNREGISTERED_DECISION, INVALID_REQUEST -> Response.Status.BAD_REQUEST;
             case EVENT_LOOP -> Response.Status.INTERNAL_SERVER_ERROR;
         };
