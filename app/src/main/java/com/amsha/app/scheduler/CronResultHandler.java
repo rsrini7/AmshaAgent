@@ -236,7 +236,7 @@ public class CronResultHandler {
         if (t.getMessage() != null && t.getMessage().contains("[TEST-EXPECTED]")) {
             log.warnf("CRON-FAIL (EXPECTED) cronId=%s: %s", job.getId(), LogUtil.rootMessage(t));
         } else {
-            log.warnf(t, "CRON-FAIL cronId=%s", job.getId());
+            log.warnf(LogUtil.relevantThrowable(t), "CRON-FAIL cronId=%s", job.getId());
         }
 
         String errorMessage =

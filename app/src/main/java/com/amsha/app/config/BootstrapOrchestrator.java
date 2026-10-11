@@ -112,9 +112,9 @@ public class BootstrapOrchestrator {
             System.exit(pb.start().waitFor());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("Interrupted while re-exec-ing with LD_PRELOAD", e);
+            log.error("Interrupted while re-exec-ing with LD_PRELOAD", LogUtil.relevantThrowable(e));
         } catch (Exception e) {
-            log.error("Failed to re-exec with LD_PRELOAD", e);
+            log.error("Failed to re-exec with LD_PRELOAD", LogUtil.relevantThrowable(e));
         }
     }
 
@@ -195,7 +195,7 @@ public class BootstrapOrchestrator {
         try {
             while (System.in.available() > 0) System.in.read();
         } catch (IOException e) {
-            log.warn("Failed to drain input buffer", e);
+            log.warn("Failed to drain input buffer", LogUtil.relevantThrowable(e));
         }
     }
 }

@@ -7,6 +7,7 @@ import java.util.function.BiConsumer;
 
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.hitl.ApprovalNotifier;
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.domain.model.AgentCron;
@@ -36,7 +37,7 @@ public class ApprovalNotificationService implements ApprovalNotifier {
                 eventBus.publish(EventTypeCatalog.FLUSH_QUEUED_NOTIFICATIONS, new FlushQueuedNotifications(chatId));
             }
         } catch (Exception e) {
-            log.warn("Failed to flush notifications", e);
+            log.warn("Failed to flush notifications", LogUtil.relevantThrowable(e));
         }
     }
 

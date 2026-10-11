@@ -8,6 +8,7 @@ import jakarta.interceptor.Interceptor;
 
 import java.util.Locale;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.AuditSchemaPort;
 
 import org.jboss.logging.Logger;
@@ -74,7 +75,7 @@ public class PostgresAuditSchemaEnforcer implements AuditSchemaPort {
             });
             log.info("PostgresAuditSchemaEnforcer: WORM triggers verified.");
         } catch (Exception e) {
-            log.error("PostgresAuditSchemaEnforcer: Failed to enforce WORM triggers", e);
+            log.error("PostgresAuditSchemaEnforcer: Failed to enforce WORM triggers", LogUtil.relevantThrowable(e));
         }
     }
 

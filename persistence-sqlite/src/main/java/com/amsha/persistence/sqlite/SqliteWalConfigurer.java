@@ -13,6 +13,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import com.amsha.common.util.LogUtil;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -78,7 +80,7 @@ public class SqliteWalConfigurer {
             }
 
         } catch (SQLException e) {
-            log.error("SQLite: Failed to configure WAL/ATTACH on startup", e);
+            log.error("SQLite: Failed to configure WAL/ATTACH on startup", LogUtil.relevantThrowable(e));
         }
     }
 

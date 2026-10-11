@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.util.HttpConstants;
@@ -277,7 +278,7 @@ public class BootstrapResource {
         try {
             return credentialIssuer.get().activate(prepared, reservationRevision);
         } catch (Exception e) {
-            log.error("Bootstrap credential activation failed: " + e.getMessage(), e);
+            log.error("Bootstrap credential activation failed", LogUtil.relevantThrowable(e));
             return null;
         } finally {
             prepared.close();

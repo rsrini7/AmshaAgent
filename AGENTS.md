@@ -120,6 +120,11 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   `computeIfAbsent` over fragile lock-free volatile schemes. Use `VarHandle` when
   zero-allocation field access modes (`getAcquire`/`setRelease`) are required. See
   [§24.6](docs/Architecture_Invariants.md#246-volatile-field-invariants--modern-jdk-25-concurrency-alternatives-246-invariant).
+- Log exceptions with `LogUtil.relevantThrowable(e)` (`amsha-common`) rather than passing a raw
+  throwable or a pre-rendered stack string; it drops test-runner, build and reflection frames so an
+  expected failure cannot flood the log. Never embed a stack trace in the log *message* — the redacting
+  filter rewrites frame names. For format-style calls pass the throwable first:
+  `log.errorf(LogUtil.relevantThrowable(e), "failed for %s", id)`.
 
 
 ### Routing, channels, and prompts

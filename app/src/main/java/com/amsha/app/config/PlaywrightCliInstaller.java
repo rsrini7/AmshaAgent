@@ -148,7 +148,7 @@ public class PlaywrightCliInstaller {
             }
         } catch (Exception e) {
             System.err.println("  ✗ Failed to install @playwright/cli: " + e.getMessage());
-            log.error("Playwright CLI auto-install failed", e);
+            log.error("Playwright CLI auto-install failed", LogUtil.relevantThrowable(e));
         }
     }
 

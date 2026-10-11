@@ -189,7 +189,7 @@ public class TelegramCallbackHandler {
             notificationService.flushPendingNotifications(chatId);
 
         } catch (Exception e) {
-            log.error("Failed to process callback", e);
+            log.error("Failed to process callback", LogUtil.relevantThrowable(e));
             sender.sendRaw(user, "❌ Failed to process callback");
         }
     }

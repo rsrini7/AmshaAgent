@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.amsha.common.util.HtmlArtifactUtil;
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.tools.CodeLanguageDetector;
@@ -190,13 +191,13 @@ public class HostExecTool implements AgentTool {
             String msg = e.getMessage() != null && !e.getMessage().isBlank()
                     ? e.getMessage()
                     : "I/O error during host_exec: " + e.getClass().getSimpleName();
-            log.errorf(e, "[HostExecTool] I/O failure session=%s", sessionId);
+            log.errorf(LogUtil.relevantThrowable(e), "[HostExecTool] I/O failure session=%s", sessionId);
             return ToolResponse.failure(1, msg);
         } catch (Exception e) {
             String msg = e.getMessage() != null && !e.getMessage().isBlank()
                     ? e.getMessage()
                     : "Host execution failed with no details.";
-            log.errorf(e, "[HostExecTool] Unexpected failure session=%s", sessionId);
+            log.errorf(LogUtil.relevantThrowable(e), "[HostExecTool] Unexpected failure session=%s", sessionId);
             return ToolResponse.failure(1, msg);
         }
     }

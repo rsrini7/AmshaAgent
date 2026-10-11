@@ -174,7 +174,7 @@ public class AgentCronScheduler {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = !active || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
-                log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
+                log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", LogUtil.relevantThrowable(e));
             } else {
                 log.infof(
                         "AgentCronScheduler: persistence closed during sweep (app shutting down) - suppression intentional.");
@@ -182,7 +182,7 @@ public class AgentCronScheduler {
             }
         } catch (Exception e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
-            log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", e);
+            log.error("AgentCronScheduler: failed to sweep orphaned approval jobs", LogUtil.relevantThrowable(e));
         }
     }
 
@@ -406,7 +406,7 @@ public class AgentCronScheduler {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = !active || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
-                log.error("AgentCronScheduler: pollAndDispatch failed", e);
+                log.error("AgentCronScheduler: pollAndDispatch failed", LogUtil.relevantThrowable(e));
             } else {
                 log.infof(
                         "AgentCronScheduler: database closed during pollAndDispatch (app shutting down) - suppression intentional.");
@@ -414,7 +414,7 @@ public class AgentCronScheduler {
             }
         } catch (Exception e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
-            log.error("AgentCronScheduler: pollAndDispatch failed", e);
+            log.error("AgentCronScheduler: pollAndDispatch failed", LogUtil.relevantThrowable(e));
         }
     }
 }

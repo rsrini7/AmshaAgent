@@ -162,7 +162,7 @@ public class RateLimitRetryScheduler {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
-                log.error("RateLimitRetryScheduler: processPendingRetries failed", e);
+                log.error("RateLimitRetryScheduler: processPendingRetries failed", LogUtil.relevantThrowable(e));
             } else {
                 log.infof(
                         "RateLimitRetryScheduler: database closed during processPendingRetries (app shutting down) - suppression intentional.");
@@ -170,7 +170,7 @@ public class RateLimitRetryScheduler {
             }
         } catch (Exception e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
-            log.error("RateLimitRetryScheduler: processPendingRetries failed", e);
+            log.error("RateLimitRetryScheduler: processPendingRetries failed", LogUtil.relevantThrowable(e));
         }
     }
 
@@ -206,7 +206,7 @@ public class RateLimitRetryScheduler {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
-                log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", e);
+                log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", LogUtil.relevantThrowable(e));
             } else {
                 log.infof(
                         "RateLimitRetryScheduler: database closed during sweepOrphanedRetries (app shutting down) - suppression intentional.");
@@ -214,7 +214,7 @@ public class RateLimitRetryScheduler {
             }
         } catch (Exception e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
-            log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", e);
+            log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", LogUtil.relevantThrowable(e));
         }
     }
 }

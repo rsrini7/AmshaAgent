@@ -252,7 +252,7 @@ public class SessionReaper {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
-                log.error("SessionReaper: gcSweep failed", e);
+                log.error("SessionReaper: gcSweep failed", LogUtil.relevantThrowable(e));
             } else {
                 log.infof(
                         "SessionReaper: database closed during gcSweep (app shutting down) - suppression intentional.");
@@ -260,7 +260,7 @@ public class SessionReaper {
             }
         } catch (Exception e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
-            log.error("SessionReaper: gcSweep failed", e);
+            log.error("SessionReaper: gcSweep failed", LogUtil.relevantThrowable(e));
         }
     }
 
@@ -306,7 +306,7 @@ public class SessionReaper {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
-                log.error("SessionReaper: sweepTimedOutApprovals failed", e);
+                log.error("SessionReaper: sweepTimedOutApprovals failed", LogUtil.relevantThrowable(e));
             } else {
                 log.infof(
                         "SessionReaper: database closed during sweepTimedOutApprovals (app shutting down) - suppression intentional.");
@@ -314,7 +314,7 @@ public class SessionReaper {
             }
         } catch (Exception e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
-            log.error("SessionReaper: sweepTimedOutApprovals failed", e);
+            log.error("SessionReaper: sweepTimedOutApprovals failed", LogUtil.relevantThrowable(e));
         }
     }
 

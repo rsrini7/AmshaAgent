@@ -118,7 +118,10 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                 try {
                     Files.createDirectories(ftsDb.getParentFile().toPath());
                 } catch (IOException e) {
-                    log.warnf("Failed to create data directory for FTS: %s", ftsDb.getParent(), e);
+                    log.warnf(
+                            LogUtil.relevantThrowable(e),
+                            "Failed to create data directory for FTS: %s",
+                            ftsDb.getParent());
                 }
                 String ftsPath = ftsDb.getAbsolutePath().replace("\\", "/");
                 try (Statement stmt = connection.createStatement()) {
