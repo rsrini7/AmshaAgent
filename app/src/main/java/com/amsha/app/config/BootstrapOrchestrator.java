@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 
 import org.jboss.logging.Logger;
@@ -16,7 +17,7 @@ public class BootstrapOrchestrator {
 
     private static final Logger log = Logger.getLogger(BootstrapOrchestrator.class);
 
-    private static final String PROP_DATA_DIR = "AMSHA_DATA_DIR";
+    private static final String PROP_DATA_DIR = ConfigKeys.DATA_DIR;
 
     public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();

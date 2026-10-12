@@ -5,6 +5,8 @@ import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.amsha.llm.api.ModelDefaults;
+
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.Unremovable;
@@ -20,7 +22,7 @@ public class OpenAiEmbeddingProviderFactory implements EmbeddingProviderFactory 
 
     @Override
     public String providerId() {
-        return "openai";
+        return ModelDefaults.PROVIDER_OPENAI;
     }
 
     @Override

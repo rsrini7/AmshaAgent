@@ -12,6 +12,7 @@ import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.observability.AgentOtelContext;
@@ -261,7 +262,7 @@ public class AgentStateMachineRunner {
         // Null checks on classifierService and taskManager are required for manually-constructed test suites.
         if (classifierService != null
                 && taskManager != null
-                && "coordinator".equalsIgnoreCase(context.agentRole())
+                && AgentRoleEnum.COORDINATOR_ID.equalsIgnoreCase(context.agentRole())
                 && resumedHistory.isEmpty()) {
             List<TaskClassifierService.TaskDomain> domains = classifierService.classify(goal);
             if (domains.size() > 1) {

@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.security.http.GovernedHttpClient;
@@ -232,8 +233,8 @@ class HttpMcpTransportClient {
 
         HttpRequest.Builder req = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl))
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json, text/event-stream")
+                .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
+                .header(HttpProtocol.HEADER_ACCEPT, "application/json, text/event-stream")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(rpc)));
         if (sessionId != null) req.header("Mcp-Session-Id", sessionId);
         applyDirectHeaders(req, directHeaders);
@@ -259,8 +260,8 @@ class HttpMcpTransportClient {
 
         HttpRequest.Builder req = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl))
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json, text/event-stream")
+                .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
+                .header(HttpProtocol.HEADER_ACCEPT, "application/json, text/event-stream")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(notification)));
         if (sessionId != null) req.header("Mcp-Session-Id", sessionId);
         applyDirectHeaders(req, directHeaders);

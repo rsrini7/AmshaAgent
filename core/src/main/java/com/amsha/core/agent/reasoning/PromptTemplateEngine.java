@@ -197,18 +197,18 @@ public class PromptTemplateEngine {
             return skillTemplate;
         }
         return switch (role.id()) {
-            case "coordinator" -> coordinatorTemplate;
-            case "researcher" -> researcherTemplate;
-            case "coder" -> coderTemplate;
-            case "debugger" -> debuggerTemplate;
-            case "architect" -> architectTemplate;
-            case "synthesizer" -> synthesizerTemplate;
-            case "healer" -> healerTemplate;
-            case "optimizer" -> optimizerTemplate;
-            case "sentinel" -> sentinelTemplate;
-            case "protector" -> protectorTemplate;
-            case "purifier" -> purifierTemplate;
-            case "nurturer" -> nurturerTemplate;
+            case AgentRoleEnum.COORDINATOR_ID -> coordinatorTemplate;
+            case AgentRoleEnum.RESEARCHER_ID -> researcherTemplate;
+            case AgentRoleEnum.CODER_ID -> coderTemplate;
+            case AgentRoleEnum.DEBUGGER_ID -> debuggerTemplate;
+            case AgentRoleEnum.ARCHITECT_ID -> architectTemplate;
+            case AgentRoleEnum.SYNTHESIZER_ID -> synthesizerTemplate;
+            case AgentRoleEnum.HEALER_ID -> healerTemplate;
+            case AgentRoleEnum.OPTIMIZER_ID -> optimizerTemplate;
+            case AgentRoleEnum.SENTINEL_ID -> sentinelTemplate;
+            case AgentRoleEnum.PROTECTOR_ID -> protectorTemplate;
+            case AgentRoleEnum.PURIFIER_ID -> purifierTemplate;
+            case AgentRoleEnum.NURTURER_ID -> nurturerTemplate;
             default ->
                 throw new IllegalStateException("No Qute template registered for role '" + role.id() + "'. "
                         + "Create templates/prompts/role-" + role.id() + ".txt in core/src/main/resources to fix.");

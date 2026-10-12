@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
@@ -367,7 +368,7 @@ public class OnboardingApprovalService {
             HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(probeUrl))
                     .timeout(Duration.ofSeconds(10))
-                    .header("Accept", "application/json");
+                    .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON);
 
             applyAuthHeaders(reqBuilder, provider, conn, ownerId);
 

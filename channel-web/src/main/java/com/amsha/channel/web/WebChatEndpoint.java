@@ -26,6 +26,7 @@ import com.amsha.channel.api.ChannelServices;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.channel.api.MediaAttachment;
+import com.amsha.channel.api.MediaTypes;
 import com.amsha.channel.api.session.SessionRotatedEvent;
 import com.amsha.common.util.LogUtil;
 import com.amsha.security.api.MediaBudgetLimits;
@@ -50,7 +51,7 @@ public class WebChatEndpoint {
     private static final int MAX_AUDIO_BASE64_CHARS = 4 * ((MAX_AUDIO_UPLOAD_BYTES + 2) / 3);
     private static final int MAX_FILE_NAME_CHARS = 255;
     private static final Set<String> SUPPORTED_AUDIO_MIME_TYPES =
-            Set.of("audio/mpeg", "audio/wav", "audio/ogg", "audio/webm");
+            Set.of(MediaTypes.MPEG, MediaTypes.WAV, MediaTypes.OGG, MediaTypes.WEBM);
 
     @Inject
     WebSocketSessionStore sessionStore;
@@ -269,9 +270,9 @@ public class WebChatEndpoint {
         String normalized =
                 mimeType == null ? "" : mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
         return switch (normalized) {
-            case "audio/mp3" -> "audio/mpeg";
-            case "audio/x-wav", "audio/wave" -> "audio/wav";
-            case "video/webm" -> "audio/webm";
+            case MediaTypes.MP3 -> MediaTypes.MPEG;
+            case MediaTypes.X_WAV, MediaTypes.WAVE -> MediaTypes.WAV;
+            case MediaTypes.VIDEO_WEBM -> MediaTypes.WEBM;
             default -> normalized;
         };
     }
@@ -290,10 +291,10 @@ public class WebChatEndpoint {
                 .trim();
         if (candidate.isBlank()) {
             candidate = switch (mimeType) {
-                case "audio/mpeg" -> "audio.mp3";
-                case "audio/wav" -> "audio.wav";
-                case "audio/ogg" -> "audio.ogg";
-                case "audio/webm" -> "audio.webm";
+                case MediaTypes.MPEG -> "audio.mp3";
+                case MediaTypes.WAV -> "audio.wav";
+                case MediaTypes.OGG -> "audio.ogg";
+                case MediaTypes.WEBM -> "audio.webm";
                 default -> "audio.bin";
             };
         }

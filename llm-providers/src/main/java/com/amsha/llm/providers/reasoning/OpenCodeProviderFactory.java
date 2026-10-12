@@ -13,6 +13,7 @@ import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
@@ -31,13 +32,13 @@ public class OpenCodeProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "amsha.llm.opencode.api-key")
+    @ConfigProperty(name = LlmConfigKeys.OPENCODE_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "amsha.llm.opencode.base-url", defaultValue = ModelDefaults.DEFAULT_OPENCODE_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.OPENCODE_BASE_URL, defaultValue = ModelDefaults.DEFAULT_OPENCODE_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.llm.opencode.model", defaultValue = ModelDefaults.DEFAULT_OPENCODE_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.OPENCODE_MODEL, defaultValue = ModelDefaults.DEFAULT_OPENCODE_MODEL)
     String modelName;
 
     @Override

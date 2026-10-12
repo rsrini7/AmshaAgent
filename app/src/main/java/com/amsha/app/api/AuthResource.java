@@ -39,6 +39,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.ExternalUserProfile;
+import com.amsha.core.util.HttpConstants;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityInvitationStorePort;
@@ -166,7 +167,7 @@ public class AuthResource {
             @QueryParam("code") String code,
             @QueryParam("state") String state) {
 
-        Cookie incomingSessionCookie = httpHeaders.getCookies().get("AMSHA_SESSION_ID");
+        Cookie incomingSessionCookie = httpHeaders.getCookies().get(HttpConstants.COOKIE_SESSION_ID);
         String activeSessionToken = incomingSessionCookie != null ? incomingSessionCookie.getValue() : null;
 
         String cachedProvider = stateCache.getIfPresent(state);
@@ -226,7 +227,7 @@ public class AuthResource {
 
         boolean secureCookie = "https".equalsIgnoreCase(uriInfo.getBaseUri().getScheme());
 
-        NewCookie sessionCookie = new NewCookie.Builder("AMSHA_SESSION_ID")
+        NewCookie sessionCookie = new NewCookie.Builder(HttpConstants.COOKIE_SESSION_ID)
                 .value(sessionToken)
                 .path("/")
                 .maxAge(3600 * 24 * 7)
@@ -253,7 +254,7 @@ public class AuthResource {
     @Path("/logout")
     public Response logout() {
         boolean secureCookie = "https".equalsIgnoreCase(uriInfo.getBaseUri().getScheme());
-        Cookie incomingSessionCookie = httpHeaders.getCookies().get("AMSHA_SESSION_ID");
+        Cookie incomingSessionCookie = httpHeaders.getCookies().get(HttpConstants.COOKIE_SESSION_ID);
         String sessionToken = incomingSessionCookie != null ? incomingSessionCookie.getValue() : null;
         if (sessionToken != null && !sessionToken.isBlank()) {
             String sessionDigest = apiKeyRegistry.computeDigest(sessionToken);
@@ -284,7 +285,7 @@ public class AuthResource {
             }
         }
 
-        NewCookie sessionCookie = new NewCookie.Builder("AMSHA_SESSION_ID")
+        NewCookie sessionCookie = new NewCookie.Builder(HttpConstants.COOKIE_SESSION_ID)
                 .value("")
                 .path("/")
                 .maxAge(0)

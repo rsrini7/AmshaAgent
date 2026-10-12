@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -25,7 +26,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FilesystemFileStore {
 
     private final Path dataDir;

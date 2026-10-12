@@ -9,10 +9,12 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
@@ -35,19 +37,19 @@ public class GeminiProviderFactory implements AgentChatModelProvider {
     @Inject
     GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "AMSHA_GEMINI_API_KEY")
+    @ConfigProperty(name = ConfigKeys.GEMINI_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_GEMINI_BASE_URL", defaultValue = ModelDefaults.DEFAULT_GEMINI_BASE_URL)
+    @ConfigProperty(name = ConfigKeys.GEMINI_BASE_URL, defaultValue = ModelDefaults.DEFAULT_GEMINI_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_GEMINI_MODEL", defaultValue = ModelDefaults.DEFAULT_GEMINI_MODEL)
+    @ConfigProperty(name = ConfigKeys.GEMINI_MODEL, defaultValue = ModelDefaults.DEFAULT_GEMINI_MODEL)
     String modelName;
 
-    @ConfigProperty(name = "amsha.llm.gemini.log-requests", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.GEMINI_LOG_REQUESTS, defaultValue = "false")
     boolean logRequests;
 
-    @ConfigProperty(name = "amsha.llm.gemini.log-responses", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.GEMINI_LOG_RESPONSES, defaultValue = "false")
     boolean logResponses;
 
     @Override

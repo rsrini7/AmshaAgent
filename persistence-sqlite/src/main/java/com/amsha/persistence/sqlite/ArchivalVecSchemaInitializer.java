@@ -5,6 +5,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import com.amsha.persistence.api.PersistenceBackend;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
@@ -25,7 +27,7 @@ import io.quarkus.runtime.StartupEvent;
  * archival_chunks is in the main DB.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class ArchivalVecSchemaInitializer {
 
     private static final Logger log = Logger.getLogger(ArchivalVecSchemaInitializer.class);

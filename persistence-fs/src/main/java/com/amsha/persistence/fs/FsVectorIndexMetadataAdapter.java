@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.VectorIndexCompatibility;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
@@ -31,7 +32,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 /** Checksummed filesystem manifest for the Lucene vector index. */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsVectorIndexMetadataAdapter implements VectorIndexMetadataPort {
 
     private static final Logger log = Logger.getLogger(FsVectorIndexMetadataAdapter.class);

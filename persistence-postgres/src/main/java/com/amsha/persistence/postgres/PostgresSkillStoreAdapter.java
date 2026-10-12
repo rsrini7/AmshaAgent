@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.SkillStorePort;
 import com.amsha.persistence.postgres.jdbi.SkillJdbiDao;
@@ -20,7 +21,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresSkillStoreAdapter implements SkillStorePort {
 
     private final Jdbi jdbi;

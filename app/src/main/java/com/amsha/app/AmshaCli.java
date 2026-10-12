@@ -12,6 +12,7 @@ import com.amsha.app.cli.ChatCommand;
 import com.amsha.app.cli.ModelsCommand;
 import com.amsha.app.config.AppBootstrap;
 import com.amsha.app.util.CliUtils;
+import com.amsha.common.config.ConfigKeys;
 
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
@@ -82,7 +83,7 @@ public class AmshaCli implements Runnable, QuarkusApplication {
         // 3.5. Preload ONNX Runtime JNI library to avoid class initialization deadlocks
         // during Quarkus boot, especially when the JNI library invokes logging hooks
         // inside the OrtEnvironment static initializer.
-        if (Boolean.parseBoolean(System.getProperty("amsha.onnx.enabled", System.getenv("AMSHA_ONNX_ENABLED")))) {
+        if (Boolean.parseBoolean(System.getProperty("amsha.onnx.enabled", System.getenv(ConfigKeys.ONNX_ENABLED)))) {
             try {
                 // Trigger ai.onnxruntime.OnnxRuntime.<clinit> which calls System.load()
                 OrtEnvironment.getEnvironment();

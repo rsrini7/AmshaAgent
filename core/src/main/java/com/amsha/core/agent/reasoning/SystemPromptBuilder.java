@@ -19,6 +19,8 @@ import com.amsha.core.agent.persona.AgentPersonaRegistry;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.skill.SkillRegistry;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.ToolCapability;
@@ -53,11 +55,11 @@ public class SystemPromptBuilder {
     private final Instance<ContextEnricher> contextEnrichers;
 
     @Inject
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "openai")
-    String defaultProvider = "openai";
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_OPENAI)
+    String defaultProvider = ModelDefaults.PROVIDER_OPENAI;
 
     @Inject
-    @ConfigProperty(name = "amsha.llm.model")
+    @ConfigProperty(name = LlmConfigKeys.MODEL)
     Optional<String> defaultModel = Optional.empty();
 
     @Inject

@@ -21,13 +21,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.AdvisoryLockPort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsLockManager implements AdvisoryLockPort {
 
     private static final Logger log = Logger.getLogger(FsLockManager.class);

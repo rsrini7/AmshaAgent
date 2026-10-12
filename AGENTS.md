@@ -110,6 +110,12 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   `isInternal()`. Reads remain public.
 - Use `ToolCapability.toolName()` instead of tool-name literals where `amsha-core`
   is available. Put tool mode values in `static final` constants.
+- Repeated string identifiers that must stay in sync — build-time property names,
+  config keys, enum-like ids — belong in one shared `static final String` constant
+  or enum, never retyped at each site. The persistence backend key and its ids live
+  in `com.amsha.persistence.api.PersistenceBackend`; reference them from
+  `@IfBuildProperty` / `@ConfigProperty`. Constants are inlined by the compiler, so
+  the emitted annotation is byte-identical to the previous literal.
 - Static data is immutable (`Map.copyOf()`); records validate cross-field rules in
   compact constructors. Qualifier literals extend `AnnotationLiteral<T>` and
   implement `T` (suppress `java:S2176`).

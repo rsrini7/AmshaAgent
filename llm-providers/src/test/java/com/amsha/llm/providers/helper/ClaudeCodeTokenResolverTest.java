@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.llm.api.oauth.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -264,7 +265,7 @@ class ClaudeCodeTokenResolverTest {
     void resolveToken_blankPropertyIsSkippedAndTheChainIsExhausted() {
         System.setProperty(CLAUDE_CODE_PROPERTY, "   ");
         Assumptions.assumeTrue(
-                System.getenv("AMSHA_CLAUDE_CODE_API_KEY") == null,
+                System.getenv(ConfigKeys.CLAUDE_CODE_API_KEY) == null,
                 "a Claude Code API key is present in the environment");
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> resolver.resolveToken());
@@ -277,7 +278,7 @@ class ClaudeCodeTokenResolverTest {
                 .thenReturn(Optional.empty());
         when(tokenExtractor.extractToken()).thenReturn(Optional.empty());
         Assumptions.assumeTrue(
-                System.getenv("AMSHA_CLAUDE_CODE_API_KEY") == null,
+                System.getenv(ConfigKeys.CLAUDE_CODE_API_KEY) == null,
                 "a Claude Code API key is present in the environment");
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> resolver.resolveToken());

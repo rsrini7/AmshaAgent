@@ -8,6 +8,7 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
@@ -40,10 +41,10 @@ public class LlamaCppProviderFactory implements AgentChatModelProvider {
 
     private GovernedTransportService directTransport;
 
-    @ConfigProperty(name = "AMSHA_LLAMACPP_BASE_URL", defaultValue = ModelDefaults.DEFAULT_LLAMACPP_BASE_URL)
+    @ConfigProperty(name = ConfigKeys.LLAMACPP_BASE_URL, defaultValue = ModelDefaults.DEFAULT_LLAMACPP_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_LLAMACPP_MODEL", defaultValue = ModelDefaults.DEFAULT_LLAMACPP_MODEL)
+    @ConfigProperty(name = ConfigKeys.LLAMACPP_MODEL, defaultValue = ModelDefaults.DEFAULT_LLAMACPP_MODEL)
     String modelId;
 
     public LlamaCppProviderFactory() {}

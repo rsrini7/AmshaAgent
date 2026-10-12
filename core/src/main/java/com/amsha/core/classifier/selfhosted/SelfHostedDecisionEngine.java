@@ -24,6 +24,7 @@ import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.classifier.api.RedactionPolicy;
 import com.amsha.classifier.api.SelfHostedDecisionProvider;
 import com.amsha.classifier.api.StateProjectionPolicy;
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.core.classifier.wire.SystemOneWireMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -227,8 +228,8 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
         Duration effectiveTimeout = calculateTimeout(request.timeout(), config.timeout());
         HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(config.endpoint())
                 .timeout(effectiveTimeout)
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
+                .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
+                .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody));
 
         config.optionalLoopbackToken().ifPresent(token -> reqBuilder.header("X-Amsha-Loopback-Token", token));

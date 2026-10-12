@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.llm.LlmValidationException;
 import com.amsha.core.llm.LlmValidationGateway;
 import com.amsha.llm.api.ModelDefaults;
@@ -37,7 +38,7 @@ public class LlmValidationService implements LlmValidationGateway {
     @Inject
     Executor validationExecutor;
 
-    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_BASE_URL")
+    @ConfigProperty(name = ConfigKeys.GENERIC_OPENAI_BASE_URL)
     Optional<String> genericOpenAiBaseUrl;
 
     @Override
@@ -75,7 +76,7 @@ public class LlmValidationService implements LlmValidationGateway {
                         default -> "";
                     };
 
-            if ("generic-openai".equalsIgnoreCase(provider) && effectiveBaseUrl.isBlank()) {
+            if (ModelDefaults.PROVIDER_GENERIC_OPENAI.equalsIgnoreCase(provider) && effectiveBaseUrl.isBlank()) {
                 throw new LlmValidationException(
                         "generic-openai provider requires AMSHA_GENERIC_OPENAI_BASE_URL to be configured");
             }
@@ -89,8 +90,8 @@ public class LlmValidationService implements LlmValidationGateway {
                     10,
                     Duration.ofSeconds(15),
                     1, // maxRetries
-                    "ollama".equalsIgnoreCase(provider) ? effectiveBaseUrl : null,
-                    "ollama".equalsIgnoreCase(provider) ? model : null);
+                    ModelDefaults.PROVIDER_OLLAMA.equalsIgnoreCase(provider) ? effectiveBaseUrl : null,
+                    ModelDefaults.PROVIDER_OLLAMA.equalsIgnoreCase(provider) ? model : null);
 
             var future = CompletableFuture.supplyAsync(() -> chatModel.chat("hi"), validationExecutor)
                     .orTimeout(15, TimeUnit.SECONDS);

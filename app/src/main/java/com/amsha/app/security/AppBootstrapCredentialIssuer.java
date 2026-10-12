@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.BootstrapStateDto;
@@ -72,7 +73,7 @@ public class AppBootstrapCredentialIssuer implements BootstrapCredentialIssuer {
 
         Instant now = Instant.now();
         ApiCredentialDto cred = new ApiCredentialDto(
-                "bootstrap-cred", prepared.ownerId(), prepared.keyDigest(), "OWNER", 1, null, null, now, now);
+                "bootstrap-cred", prepared.ownerId(), prepared.keyDigest(), AccessRoles.OWNER, 1, null, null, now, now);
         if (!apiCredentialStore.save(cred)) {
             throw new IllegalStateException("Bootstrap credential changed concurrently");
         }

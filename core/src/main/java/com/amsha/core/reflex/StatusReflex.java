@@ -17,6 +17,8 @@ import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.state.ActiveWork;
 import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CronStatus;
@@ -48,10 +50,10 @@ public class StatusReflex implements AgentReflex {
     @InputSanitizer.PII
     InputSanitizer piiSanitizer;
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "openai")
-    String provider = "openai";
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_OPENAI)
+    String provider = ModelDefaults.PROVIDER_OPENAI;
 
-    @ConfigProperty(name = "amsha.llm.model")
+    @ConfigProperty(name = LlmConfigKeys.MODEL)
     Optional<String> modelName = Optional.empty();
 
     @Override
@@ -116,7 +118,7 @@ public class StatusReflex implements AgentReflex {
                 .orElse("Not compacted - session within active window");
 
         String shortId = sessionId.length() > 8 ? sessionId.substring(sessionId.length() - 8) : sessionId;
-        String prov = provider != null ? provider : "openai";
+        String prov = provider != null ? provider : ModelDefaults.PROVIDER_OPENAI;
         String modelDisplay =
                 (modelName != null && modelName.isPresent() && !modelName.get().isBlank())
                         ? prov + "/" + modelName.get()

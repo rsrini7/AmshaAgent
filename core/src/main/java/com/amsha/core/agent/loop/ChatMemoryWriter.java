@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.events.ConversationMessageEvent;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
@@ -156,7 +157,9 @@ public class ChatMemoryWriter {
         conversationMessageEvents.fireAsync(ConversationMessageEvent.agent(
                 sessionId,
                 WorkspaceContext.getUserIdOrUnknown(),
-                WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : "coordinator",
+                WorkspaceContext.AGENT_ROLE.isBound()
+                        ? WorkspaceContext.AGENT_ROLE.get()
+                        : AgentRoleEnum.COORDINATOR_ID,
                 content,
                 turnNumber));
     }

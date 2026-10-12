@@ -3,6 +3,8 @@ package com.amsha.localml.onnx;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import com.amsha.common.config.ConfigKeys;
+
 /**
  * The single canonical rule set for locating the local ONNX model root.
  *
@@ -30,10 +32,10 @@ public final class OnnxModelRootResolver {
     public static final String MODEL_ROOT_PROPERTY = "amsha.onnx.model-root";
 
     /** Environment variable naming the model root. */
-    public static final String MODEL_ROOT_ENV = "AMSHA_ONNX_MODEL_ROOT";
+    public static final String MODEL_ROOT_ENV = ConfigKeys.ONNX_MODEL_ROOT;
 
     /** Property and environment variable naming the data directory. */
-    public static final String DATA_DIR_NAME = "AMSHA_DATA_DIR";
+    public static final String DATA_DIR_NAME = ConfigKeys.DATA_DIR;
 
     private static final String DEFAULT_RELATIVE_ROOT = "data/models";
 

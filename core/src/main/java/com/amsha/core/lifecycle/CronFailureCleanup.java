@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.CronScheduleUtil;
@@ -128,7 +129,7 @@ public class CronFailureCleanup {
         }
         String role = cron.executionRole();
         if (role == null || role.isBlank()) {
-            role = "coordinator";
+            role = AgentRoleEnum.COORDINATOR_ID;
         }
         return agentStore.load(sessionId, role);
     }

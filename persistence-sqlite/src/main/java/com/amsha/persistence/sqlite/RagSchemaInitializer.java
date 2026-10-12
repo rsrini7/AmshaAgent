@@ -9,6 +9,7 @@ import jakarta.interceptor.Interceptor;
 import java.sql.Connection;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -19,7 +20,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class RagSchemaInitializer {
 
     private static final Logger log = Logger.getLogger(RagSchemaInitializer.class);

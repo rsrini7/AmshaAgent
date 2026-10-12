@@ -12,6 +12,7 @@ import com.amsha.core.routing.ModelProfileValidator;
 import com.amsha.core.routing.ProfileValidationResult;
 import com.amsha.llm.api.ConnectionValidationRequest;
 import com.amsha.llm.api.LlmProviderOnboardingAdapter;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.ProviderValidationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -121,7 +122,7 @@ public class OnboardingSelectionValidator {
         String model = String.valueOf(conn.getOrDefault("modelId", ""));
         String baseUrl = String.valueOf(
                 conn.getOrDefault("customBaseUrl", conn.getOrDefault("baseUrl", conn.getOrDefault("targetUrl", ""))));
-        if ("generic-openai".equalsIgnoreCase(provider) && baseUrl.isBlank()) {
+        if (ModelDefaults.PROVIDER_GENERIC_OPENAI.equalsIgnoreCase(provider) && baseUrl.isBlank()) {
             errors.add("Provider generic-openai requires a targetUrl or baseUrl");
         }
         boolean hasKey = conn.containsKey("apiKeyVaultRef")

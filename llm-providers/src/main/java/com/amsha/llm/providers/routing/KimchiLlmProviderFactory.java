@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import java.time.Duration;
 
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.RoutingChatModelProvider;
@@ -32,10 +33,10 @@ public class KimchiLlmProviderFactory implements RoutingChatModelProvider {
     @Inject
     GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "amsha.llm.kimchi.base-url", defaultValue = ModelDefaults.DEFAULT_KIMCHI_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.KIMCHI_BASE_URL, defaultValue = ModelDefaults.DEFAULT_KIMCHI_BASE_URL)
     String configuredBaseUrl;
 
-    @ConfigProperty(name = "amsha.llm.temperature", defaultValue = "0.1")
+    @ConfigProperty(name = LlmConfigKeys.TEMPERATURE, defaultValue = "0.1")
     double defaultTemperature;
 
     @Override
@@ -48,7 +49,7 @@ public class KimchiLlmProviderFactory implements RoutingChatModelProvider {
         String key = tokenResolver.resolveToken(config.apiKey());
 
         String modelName = config.modelName();
-        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
+        if (modelName == null || modelName.isBlank() || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(modelName)) {
             modelName = ModelDefaults.DEFAULT_KIMCHI_MODEL;
         }
 

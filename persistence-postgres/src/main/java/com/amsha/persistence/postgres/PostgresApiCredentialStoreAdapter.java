@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.postgres.jdbi.ApiCredentialJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
@@ -17,7 +18,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresApiCredentialStoreAdapter implements ApiCredentialStorePort {
 
     private final Jdbi jdbi;

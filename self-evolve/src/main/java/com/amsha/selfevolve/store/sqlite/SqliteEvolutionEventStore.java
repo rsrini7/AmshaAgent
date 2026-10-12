@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.List;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.selfevolve.api.EvolutionEvent;
 import com.amsha.selfevolve.store.EvolutionEventStorePort;
 
@@ -18,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Uses JDBI with INSERT OR IGNORE for DB-enforced idempotency.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteEvolutionEventStore implements EvolutionEventStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteEvolutionEventStore.class);

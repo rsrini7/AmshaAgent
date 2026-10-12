@@ -10,6 +10,7 @@ import java.util.List;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
@@ -34,10 +35,10 @@ public class FoundryProviderFactory implements AgentChatModelProvider {
     @Inject
     GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "amsha.llm.foundry.model", defaultValue = ModelDefaults.DEFAULT_FOUNDRY_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.FOUNDRY_MODEL, defaultValue = ModelDefaults.DEFAULT_FOUNDRY_MODEL)
     String modelName;
 
-    @ConfigProperty(name = "amsha.llm.foundry.base-url", defaultValue = ModelDefaults.DEFAULT_FOUNDRY_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.FOUNDRY_BASE_URL, defaultValue = ModelDefaults.DEFAULT_FOUNDRY_BASE_URL)
     String baseUrl;
 
     @Override
@@ -67,7 +68,9 @@ public class FoundryProviderFactory implements AgentChatModelProvider {
 
     private ChatModel doCreate(String overrideModel) {
         String resolvedModel = (overrideModel != null && !overrideModel.isBlank()) ? overrideModel : modelName;
-        if (resolvedModel == null || resolvedModel.isBlank() || "mistral-small".equalsIgnoreCase(resolvedModel)) {
+        if (resolvedModel == null
+                || resolvedModel.isBlank()
+                || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(resolvedModel)) {
             resolvedModel = ModelDefaults.DEFAULT_FOUNDRY_MODEL;
         }
 

@@ -493,18 +493,28 @@ public class PersonaEscalationService {
 
     private String personaDisplayName(String role) {
         return switch (role) {
-            case "coder" -> AgentRoleEnum.CODER.definition().displayName();
-            case "debugger" -> AgentRoleEnum.DEBUGGER.definition().displayName();
-            case "researcher" -> AgentRoleEnum.RESEARCHER.definition().displayName();
-            case "architect" -> AgentRoleEnum.ARCHITECT.definition().displayName();
-            case "coordinator" -> AgentRoleEnum.COORDINATOR.definition().displayName();
-            case "synthesizer" -> AgentRoleEnum.SYNTHESIZER.definition().displayName();
-            case "optimizer" -> AgentRoleEnum.OPTIMIZER.definition().displayName();
-            case "sentinel" -> AgentRoleEnum.SENTINEL.definition().displayName();
-            case "healer" -> AgentRoleEnum.HEALER.definition().displayName();
-            case "protector" -> AgentRoleEnum.PROTECTOR.definition().displayName();
-            case "purifier" -> AgentRoleEnum.PURIFIER.definition().displayName();
-            case "nurturer" -> AgentRoleEnum.NURTURER.definition().displayName();
+            case AgentRoleEnum.CODER_ID -> AgentRoleEnum.CODER.definition().displayName();
+            case AgentRoleEnum.DEBUGGER_ID ->
+                AgentRoleEnum.DEBUGGER.definition().displayName();
+            case AgentRoleEnum.RESEARCHER_ID ->
+                AgentRoleEnum.RESEARCHER.definition().displayName();
+            case AgentRoleEnum.ARCHITECT_ID ->
+                AgentRoleEnum.ARCHITECT.definition().displayName();
+            case AgentRoleEnum.COORDINATOR_ID ->
+                AgentRoleEnum.COORDINATOR.definition().displayName();
+            case AgentRoleEnum.SYNTHESIZER_ID ->
+                AgentRoleEnum.SYNTHESIZER.definition().displayName();
+            case AgentRoleEnum.OPTIMIZER_ID ->
+                AgentRoleEnum.OPTIMIZER.definition().displayName();
+            case AgentRoleEnum.SENTINEL_ID ->
+                AgentRoleEnum.SENTINEL.definition().displayName();
+            case AgentRoleEnum.HEALER_ID -> AgentRoleEnum.HEALER.definition().displayName();
+            case AgentRoleEnum.PROTECTOR_ID ->
+                AgentRoleEnum.PROTECTOR.definition().displayName();
+            case AgentRoleEnum.PURIFIER_ID ->
+                AgentRoleEnum.PURIFIER.definition().displayName();
+            case AgentRoleEnum.NURTURER_ID ->
+                AgentRoleEnum.NURTURER.definition().displayName();
             default -> role;
         };
     }

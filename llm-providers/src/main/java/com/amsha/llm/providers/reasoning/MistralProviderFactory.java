@@ -12,6 +12,7 @@ import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
@@ -30,13 +31,13 @@ public class MistralProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "amsha.llm.mistral.api-key")
+    @ConfigProperty(name = LlmConfigKeys.MISTRAL_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "amsha.llm.mistral.base-url", defaultValue = ModelDefaults.DEFAULT_MISTRAL_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.MISTRAL_BASE_URL, defaultValue = ModelDefaults.DEFAULT_MISTRAL_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.llm.mistral.model", defaultValue = ModelDefaults.DEFAULT_MISTRAL_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.MISTRAL_MODEL, defaultValue = ModelDefaults.DEFAULT_MISTRAL_MODEL)
     String modelName;
 
     @Override

@@ -27,6 +27,7 @@ import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
 import com.amsha.llm.api.LlmModelConfig;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.llm.api.StructuredOutputCapabilities;
@@ -251,31 +252,31 @@ public class ChatModelFactory implements ChatModelCreationPort {
     }
 
     private static final Set<String> SUPPORTED_ADAPTERS = Set.of(
-            "gemini",
-            "anthropic",
+            ModelDefaults.PROVIDER_GEMINI,
+            ModelDefaults.PROVIDER_ANTHROPIC,
             "claude",
-            "claude-code",
-            "agy",
+            ModelDefaults.PROVIDER_CLAUDE_CODE,
+            ModelDefaults.PROVIDER_AGY,
             "antigravity",
-            "kimchi",
-            "foundry",
+            ModelDefaults.PROVIDER_KIMCHI,
+            ModelDefaults.PROVIDER_FOUNDRY,
             "foundrylocal",
-            "ollama",
-            "codex",
-            "openai",
-            "groq",
-            "cerebras",
-            "sarvam",
-            "opencode",
-            "huggingface",
-            "mistral",
-            "cloudflare",
-            "cohere",
-            "nvidia",
-            "omlx",
-            "llamacpp",
-            "openrouter",
-            "generic-openai");
+            ModelDefaults.PROVIDER_OLLAMA,
+            ModelDefaults.PROVIDER_CODEX,
+            ModelDefaults.PROVIDER_OPENAI,
+            ModelDefaults.PROVIDER_GROQ,
+            ModelDefaults.PROVIDER_CEREBRAS,
+            ModelDefaults.PROVIDER_SARVAM,
+            ModelDefaults.PROVIDER_OPENCODE,
+            ModelDefaults.PROVIDER_HUGGINGFACE,
+            ModelDefaults.PROVIDER_MISTRAL,
+            ModelDefaults.PROVIDER_CLOUDFLARE,
+            ModelDefaults.PROVIDER_COHERE,
+            ModelDefaults.PROVIDER_NVIDIA,
+            ModelDefaults.PROVIDER_OMLX,
+            ModelDefaults.PROVIDER_LLAMACPP,
+            ModelDefaults.PROVIDER_OPENROUTER,
+            ModelDefaults.PROVIDER_GENERIC_OPENAI);
 
     @Override
     public boolean supportsAdapter(String provider) {
@@ -302,7 +303,7 @@ public class ChatModelFactory implements ChatModelCreationPort {
                             config.logHttp())
                     .build();
         }
-        boolean eligible = "openai".equals(adapter)
+        boolean eligible = ModelDefaults.PROVIDER_OPENAI.equals(adapter)
                 && StructuredOutputCapabilities.resolvesToStrictSchema(
                         config.structuredOutputMode(), true, baseUrl, true);
         MultimodalCapability multimodalCap = MultimodalCapabilities.defaultCapabilityForModel(adapter, model);

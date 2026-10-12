@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.StructuredOutputMode;
 
 import org.eclipse.microprofile.config.Config;
@@ -50,16 +52,16 @@ public class InfiniteLoopCompactionChatModelProvider {
     private static final Logger log = Logger.getLogger(InfiniteLoopCompactionChatModelProvider.class);
     private static final String CONFIG_PREFIX = "amsha.compaction.";
 
-    @ConfigProperty(name = "amsha.infinite-loop.compaction.providers", defaultValue = "groq,ollama")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COMPACTION_PROVIDERS, defaultValue = "groq,ollama")
     String loopProviders;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-base-seconds", defaultValue = "30")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_BASE_SECONDS, defaultValue = "30")
     int cooldownBaseSeconds;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-max-seconds", defaultValue = "300")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_MAX_SECONDS, defaultValue = "300")
     int cooldownMaxSeconds;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-transient-seconds", defaultValue = "5")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS, defaultValue = "5")
     int cooldownTransientSeconds;
 
     @ConfigProperty(name = "amsha.memory.compaction.max-output-tokens", defaultValue = "1024")
@@ -145,7 +147,8 @@ public class InfiniteLoopCompactionChatModelProvider {
         String baseUrl = resolveRequired(config, providerName, "base-url");
         String apiKey = resolveOptional(config, providerName, "api-key", "");
         if (apiKey.isBlank()) {
-            apiKey = config.getOptionalValue("amsha.llm." + providerName + ".api-key", String.class)
+            apiKey = config.getOptionalValue(
+                            LlmConfigKeys.providerKey(providerName, LlmConfigKeys.SUFFIX_API_KEY), String.class)
                     .or(() -> Optional.ofNullable(System.getProperty(
                             "AMSHA_" + providerName.toUpperCase().replace('-', '_') + "_API_KEY")))
                     .or(() -> Optional.ofNullable(
@@ -156,7 +159,8 @@ public class InfiniteLoopCompactionChatModelProvider {
         int retries = resolveOptionalInt(config, providerName, "max-retries", 3);
         String accountId = resolveOptional(config, providerName, "account-id", "");
         if (accountId.isBlank()) {
-            accountId = config.getOptionalValue("amsha.llm." + providerName + ".account-id", String.class)
+            accountId = config.getOptionalValue(
+                            LlmConfigKeys.providerKey(providerName, LlmConfigKeys.SUFFIX_ACCOUNT_ID), String.class)
                     .or(() -> Optional.ofNullable(System.getProperty(
                             "AMSHA_" + providerName.toUpperCase().replace('-', '_') + "_ACCOUNT_ID")))
                     .or(() -> Optional.ofNullable(

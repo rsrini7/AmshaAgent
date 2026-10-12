@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.Optional;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SecretStorePort;
 import com.amsha.persistence.postgres.jdbi.SecretJdbiDao;
@@ -19,7 +20,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresSecretStoreAdapter implements SecretStorePort {
 
     private final Jdbi jdbi;

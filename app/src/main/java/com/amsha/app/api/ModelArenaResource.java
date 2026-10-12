@@ -49,8 +49,11 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.CredentialDetectionResult;
 import com.amsha.core.security.CredentialDetector;
 import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.http.GovernedTransportMetrics;
 import com.amsha.security.http.GovernedTransportService;
@@ -78,7 +81,7 @@ public class ModelArenaResource {
 
     private static final Logger log = Logger.getLogger(ModelArenaResource.class);
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
     String defaultProviderName;
 
     @Inject
@@ -416,7 +419,7 @@ public class ModelArenaResource {
             ChatModel model = chatModelProducer != null ? chatModelProducer.chatModel() : null;
             String cleanDefault = (defaultProviderName != null && !defaultProviderName.isBlank())
                     ? defaultProviderName.trim().toLowerCase(Locale.ROOT)
-                    : "groq";
+                    : ModelDefaults.PROVIDER_GROQ;
             return new ResolvedProvider(model, ModelArenaHelper.resolveBaseUrl(cleanDefault, providers));
         }
 
@@ -478,7 +481,7 @@ public class ModelArenaResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

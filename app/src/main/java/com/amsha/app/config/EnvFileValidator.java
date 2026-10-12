@@ -12,6 +12,9 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.security.api.VaultConstants;
+
 import org.jboss.logging.Logger;
 
 /**
@@ -33,41 +36,41 @@ public class EnvFileValidator {
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
     private static final Set<String> SECURITY_KEYS = Set.of(
-            "AMSHA_VAULT_PEPPER",
-            "AMSHA_AUDIT_HMAC_KEY",
-            "AMSHA_API_KEYS_INTERNAL",
-            "AMSHA_API_KEYS_CI",
-            "AMSHA_API_KEYS_ADMIN",
-            "AMSHA_AUTH_HMAC_KEY");
+            VaultConstants.VAULT_PEPPER,
+            VaultConstants.AUDIT_HMAC_KEY,
+            VaultConstants.API_KEYS_INTERNAL,
+            VaultConstants.API_KEYS_CI,
+            VaultConstants.API_KEYS_ADMIN,
+            VaultConstants.AUTH_HMAC_KEY);
 
     private static final Set<String> API_KEY_KEYS = Set.of(
-            "AMSHA_GROQ_API_KEY",
-            "AMSHA_OPENAI_API_KEY",
-            "AMSHA_OPENROUTER_API_KEY",
-            "AMSHA_GEMINI_API_KEY",
-            "AMSHA_NVIDIA_API_KEY",
-            "AMSHA_CEREBRAS_API_KEY",
-            "AMSHA_SARVAM_API_KEY",
-            "AMSHA_OPENCODE_API_KEY",
-            "AMSHA_HUGGINGFACE_API_KEY",
-            "AMSHA_MISTRAL_API_KEY",
-            "AMSHA_CLOUDFLARE_API_KEY",
-            "AMSHA_CLOUDFLARE_ACCOUNT_ID",
-            "AMSHA_COHERE_API_KEY",
-            "AMSHA_CODEX_API_KEY",
-            "AMSHA_OMLX_API_KEY",
-            "AMSHA_GENERIC_OPENAI_API_KEY",
-            "AMSHA_EMBEDDING_JINA_API_KEY",
-            "AMSHA_EMBEDDING_OPENAI_API_KEY",
-            "TELEGRAM_BOT_TOKEN",
-            "AMSHA_TOOLS_GITHUB_TOKEN",
-            "AMSHA_TOOLS_SERPER_API_KEY",
-            "AMSHA_TOOLS_BRAVE_API_KEY",
-            "AMSHA_DECISION_TYPESAFE_API_KEY",
-            "AMSHA_DECISION_CLM_API_KEY",
-            "AMSHA_DECISION_LAYA_API_KEY",
-            "AMSHA_DECISION_KEV_API_KEY",
-            "AMSHA_DECISION_OMLX_API_KEY");
+            ConfigKeys.GROQ_API_KEY,
+            ConfigKeys.OPENAI_API_KEY,
+            ConfigKeys.OPENROUTER_API_KEY,
+            ConfigKeys.GEMINI_API_KEY,
+            ConfigKeys.NVIDIA_API_KEY,
+            ConfigKeys.CEREBRAS_API_KEY,
+            ConfigKeys.SARVAM_API_KEY,
+            ConfigKeys.OPENCODE_API_KEY,
+            ConfigKeys.HUGGINGFACE_API_KEY,
+            ConfigKeys.MISTRAL_API_KEY,
+            ConfigKeys.CLOUDFLARE_API_KEY,
+            ConfigKeys.CLOUDFLARE_ACCOUNT_ID,
+            ConfigKeys.COHERE_API_KEY,
+            ConfigKeys.CODEX_API_KEY,
+            ConfigKeys.OMLX_API_KEY,
+            ConfigKeys.GENERIC_OPENAI_API_KEY,
+            ConfigKeys.EMBEDDING_JINA_API_KEY,
+            ConfigKeys.EMBEDDING_OPENAI_API_KEY,
+            ConfigKeys.TELEGRAM_BOT_TOKEN,
+            VaultConstants.TOOLS_GITHUB_TOKEN,
+            VaultConstants.TOOLS_SERPER_API_KEY,
+            VaultConstants.TOOLS_BRAVE_API_KEY,
+            ConfigKeys.DECISION_TYPESAFE_API_KEY,
+            ConfigKeys.DECISION_CLM_API_KEY,
+            ConfigKeys.DECISION_LAYA_API_KEY,
+            ConfigKeys.DECISION_KEV_API_KEY,
+            ConfigKeys.DECISION_OMLX_API_KEY);
 
     /**
      * Result of validating a .env file.

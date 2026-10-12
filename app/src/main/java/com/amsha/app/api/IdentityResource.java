@@ -22,6 +22,7 @@ import java.util.Optional;
 import com.amsha.app.security.ApiKeyRegistry;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityInvitationDto;
@@ -67,8 +68,8 @@ public class IdentityResource {
 
         Optional<IdentityUserDto> userOpt = identityStore.findUserById(userId);
         if (userOpt.isEmpty()) {
-            if ("internal".equalsIgnoreCase(userId)
-                    || (securityContext != null && securityContext.isUserInRole("internal"))) {
+            if (AccessRoles.INTERNAL.equalsIgnoreCase(userId)
+                    || (securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL))) {
                 Instant epoch = Instant.EPOCH;
                 IdentityUserDto internalUser = new IdentityUserDto(userId, "System Operator", "ACTIVE", epoch, epoch);
                 return Response.ok(new MeResponse(internalUser, List.of())).build();
@@ -120,7 +121,7 @@ public class IdentityResource {
         }
 
         String role = membershipOpt.get().role();
-        if (!"OWNER".equals(role) && !"ADMIN".equals(role)) {
+        if (!AccessRoles.OWNER.equals(role) && !AccessRoles.ADMIN.equals(role)) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity(new ErrorResponse("FORBIDDEN", "Only workspace owners or admins can invite new members."))
                     .build();
@@ -273,7 +274,7 @@ public class IdentityResource {
         }
 
         String role = membershipOpt.get().role();
-        if (!"OWNER".equals(role) && !"ADMIN".equals(role)) {
+        if (!AccessRoles.OWNER.equals(role) && !AccessRoles.ADMIN.equals(role)) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity(new ErrorResponse("FORBIDDEN", "Only owners or admins can manage members."))
                     .build();
@@ -285,7 +286,7 @@ public class IdentityResource {
         }
 
         List<WorkspaceMembershipDto> workspaceMembers =
-                "OWNER".equals(targetMembership.get().role())
+                AccessRoles.OWNER.equals(targetMembership.get().role())
                         ? identityStore.listMembershipsByWorkspaceId(workspaceId)
                         : List.of();
         Response removalError =
@@ -327,7 +328,7 @@ public class IdentityResource {
         Optional<WorkspaceMembershipDto> callerMembership = identityStore.findMembership(workspaceId, userId);
         if (callerMembership.isEmpty()
                 || !"ACTIVE".equals(callerMembership.get().status())
-                || !"OWNER".equals(callerMembership.get().role())) {
+                || !AccessRoles.OWNER.equals(callerMembership.get().role())) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity(new ErrorResponse("FORBIDDEN", "Only an active owner can transfer ownership."))
                     .build();
@@ -345,7 +346,7 @@ public class IdentityResource {
         boolean promoted = identityStore.saveMembership(new WorkspaceMembershipDto(
                 workspaceId,
                 targetUserId,
-                "OWNER",
+                AccessRoles.OWNER,
                 targetMembership.get().status(),
                 targetMembership.get().revision(),
                 targetMembership.get().createdAt(),
@@ -360,7 +361,7 @@ public class IdentityResource {
             boolean demoted = identityStore.saveMembership(new WorkspaceMembershipDto(
                     workspaceId,
                     userId,
-                    "ADMIN",
+                    AccessRoles.ADMIN,
                     callerMembership.get().status(),
                     callerMembership.get().revision(),
                     callerMembership.get().createdAt(),
@@ -393,7 +394,7 @@ public class IdentityResource {
         Optional<WorkspaceMembershipDto> callerMembership = identityStore.findMembership(workspaceId, userId);
         if (callerMembership.isEmpty()
                 || !"ACTIVE".equals(callerMembership.get().status())
-                || !"OWNER".equals(callerMembership.get().role())) {
+                || !AccessRoles.OWNER.equals(callerMembership.get().role())) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity(new ErrorResponse("FORBIDDEN", "Only an active owner can rotate workspace credentials."))
                     .build();

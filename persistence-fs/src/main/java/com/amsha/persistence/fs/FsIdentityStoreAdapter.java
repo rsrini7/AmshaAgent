@@ -6,10 +6,12 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 
 import io.quarkus.arc.Unremovable;
@@ -17,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsIdentityStoreAdapter implements IdentityStorePort {
 
     private static final String DOMAIN = "identity";
@@ -162,9 +164,9 @@ public class FsIdentityStoreAdapter implements IdentityStorePort {
     public synchronized int deleteMembershipIfNotLastOwner(String workspaceId, String userId) {
         Optional<WorkspaceMembershipDto> target = findMembership(workspaceId, userId);
         if (target.isEmpty()) return 0;
-        if ("OWNER".equalsIgnoreCase(target.get().role())) {
+        if (AccessRoles.OWNER.equalsIgnoreCase(target.get().role())) {
             long activeOwners = listMembershipsByWorkspaceId(workspaceId).stream()
-                    .filter(m -> "OWNER".equalsIgnoreCase(m.role()) && "ACTIVE".equalsIgnoreCase(m.status()))
+                    .filter(m -> AccessRoles.OWNER.equalsIgnoreCase(m.role()) && "ACTIVE".equalsIgnoreCase(m.status()))
                     .count();
             if (activeOwners <= 1) return 0;
         }

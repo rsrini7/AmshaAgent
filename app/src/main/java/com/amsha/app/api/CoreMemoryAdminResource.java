@@ -18,6 +18,7 @@ import java.util.List;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.memory.tiered.CoreMemoryService;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -95,7 +96,7 @@ public class CoreMemoryAdminResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

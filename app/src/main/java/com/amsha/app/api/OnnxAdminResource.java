@@ -22,15 +22,18 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Snapshot;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.ToggleResult;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
 import com.amsha.persistence.api.VectorIndexCompatibility;
@@ -78,7 +81,7 @@ public class OnnxAdminResource {
     @ConfigProperty(name = "amsha.onnx.enabled", defaultValue = "false")
     boolean onnxEnabled;
 
-    @ConfigProperty(name = "amsha.infinite-loop.embedding.providers", defaultValue = "ollama")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_EMBEDDING_PROVIDERS, defaultValue = ModelDefaults.PROVIDER_OLLAMA)
     String embeddingProviders;
 
     @Context
@@ -234,7 +237,7 @@ public class OnnxAdminResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

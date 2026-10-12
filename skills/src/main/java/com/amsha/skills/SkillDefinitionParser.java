@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
+import com.amsha.core.tools.LanguageIds;
 import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -106,7 +107,7 @@ public class SkillDefinitionParser {
     }
 
     private static final Map<String, String> SKILLSJARS_TOOL_MAP = Map.ofEntries(
-            Map.entry("bash", "SANDBOX_EXEC"),
+            Map.entry(LanguageIds.BASH, "SANDBOX_EXEC"),
             Map.entry("shell", "SANDBOX_EXEC"),
             Map.entry("cmd", "SANDBOX_EXEC"),
             Map.entry("browser_navigate", "BROWSER_NAVIGATE"),

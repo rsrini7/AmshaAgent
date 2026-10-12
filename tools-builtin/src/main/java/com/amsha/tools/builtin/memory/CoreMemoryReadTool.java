@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.memory.tiered.CoreMemoryService;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
@@ -18,6 +19,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
@@ -33,11 +35,17 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "core_memory_read",
+        capabilityId = ToolNames.CORE_MEMORY_READ,
         description =
                 "Read core memory blocks for the current user. " + "Returns all blocks or a specific block by key. "
                         + "Block keys: user_profile, active_task, constraints, project_context, preferences.",
-        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
+        defaultRoles = {
+            AgentRoleEnum.ARCHITECT_ID,
+            AgentRoleEnum.COORDINATOR_ID,
+            AgentRoleEnum.RESEARCHER_ID,
+            AgentRoleEnum.SYNTHESIZER_ID,
+            AgentRoleEnum.CODER_ID
+        })
 public class CoreMemoryReadTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(CoreMemoryReadTool.class);

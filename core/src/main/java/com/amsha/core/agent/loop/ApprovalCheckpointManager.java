@@ -16,6 +16,7 @@ import com.amsha.core.agent.event.AgentStateChangedEvent;
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.agent.sse.HitlEventType;
 import com.amsha.core.agent.trace.StationCode;
@@ -487,7 +488,7 @@ public class ApprovalCheckpointManager {
         agentSseService.publish(sessionId, event);
         SessionTree.parentOf(sessionId).ifPresent(parent -> agentSseService.publish(parent, event));
         if (eventBusInstance != null && eventBusInstance.isResolvable()) {
-            String role = (agentRole != null && !agentRole.isBlank()) ? agentRole : "coordinator";
+            String role = (agentRole != null && !agentRole.isBlank()) ? agentRole : AgentRoleEnum.COORDINATOR_ID;
             eventBusInstance
                     .get()
                     .publish(

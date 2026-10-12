@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.core.tools.LanguageIds;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -122,11 +124,11 @@ public class DirectExecutor {
         if (!os.contains("win")) return command;
 
         String exe = command.get(0);
-        if ("python3".equals(exe)) {
+        if (LanguageIds.PYTHON3.equals(exe)) {
             // Check if python3 is actually callable. If not, swap to python.
             if (!canRun(exe)) {
                 var fixed = new ArrayList<>(command);
-                fixed.set(0, "python");
+                fixed.set(0, LanguageIds.PYTHON);
                 return fixed;
             }
         }

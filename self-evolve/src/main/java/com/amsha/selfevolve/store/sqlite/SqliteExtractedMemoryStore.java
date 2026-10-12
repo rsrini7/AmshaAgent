@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.List;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.selfevolve.api.ExtractedMemory;
 import com.amsha.selfevolve.api.MemoryRecordType;
 import com.amsha.selfevolve.store.ExtractedMemoryStorePort;
@@ -19,7 +20,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Uses JDBI with INSERT OR IGNORE for DB-enforced deduplication.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteExtractedMemoryStore implements ExtractedMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteExtractedMemoryStore.class);

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.tools.CheckList;
@@ -23,6 +24,7 @@ import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import io.quarkus.arc.Unremovable;
@@ -34,9 +36,9 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "manage_checklist",
+        capabilityId = ToolNames.MANAGE_CHECKLIST,
         description = "Manage task checklist progress",
-        defaultRoles = {"coder", "debugger"})
+        defaultRoles = {AgentRoleEnum.CODER_ID, AgentRoleEnum.DEBUGGER_ID})
 public class CheckListTool implements AgentTool {
 
     private static final String PARAM_CHECKLIST = "checkList";

@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.OnboardingCommitReceiptDto;
 import com.amsha.persistence.api.OnboardingCommitReceiptStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.OnboardingCommitReceiptJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
@@ -17,7 +18,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteOnboardingCommitReceiptStoreAdapter implements OnboardingCommitReceiptStorePort {
 
     private final Jdbi jdbi;

@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.selfevolve.api.ExtractedMemory;
 import com.amsha.selfevolve.api.MemoryRecordType;
 import com.amsha.selfevolve.store.ExtractedMemoryStorePort;
@@ -22,7 +23,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Stores memories as JSON wrapper per session in {dataDir}/extracted/{sessionId}.json.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsExtractedMemoryStore implements ExtractedMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(FsExtractedMemoryStore.class);

@@ -4,6 +4,7 @@ import dev.langchain4j.model.chat.ChatModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.RoutingChatModelProvider;
@@ -17,10 +18,10 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 public class OpenRouterLlmProviderFactory implements RoutingChatModelProvider {
 
-    @ConfigProperty(name = "amsha.llm.openrouter.site-url", defaultValue = "https://github.com/rsrini7/amsha")
+    @ConfigProperty(name = LlmConfigKeys.OPENROUTER_SITE_URL, defaultValue = "https://github.com/rsrini7/amsha")
     String siteUrl;
 
-    @ConfigProperty(name = "amsha.llm.openrouter.app-name", defaultValue = "Amsha Agent")
+    @ConfigProperty(name = LlmConfigKeys.OPENROUTER_APP_NAME, defaultValue = "Amsha Agent")
     String appName;
 
     @Override

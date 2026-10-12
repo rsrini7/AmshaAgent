@@ -10,6 +10,7 @@ import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 import com.amsha.persistence.postgres.jdbi.IdentityJdbiDao;
 
@@ -20,7 +21,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresIdentityStoreAdapter implements IdentityStorePort {
 
     private final Jdbi jdbi;

@@ -23,6 +23,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.util.HttpConstants;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.BootstrapStateStorePort;
@@ -138,7 +139,8 @@ public class BootstrapResource {
         // Winner creates identity rows only after the reservation won.
         identityStore.saveUser(new IdentityUserDto(ownerId, "Initial Owner", "ACTIVE", now, now));
         identityStore.saveWorkspace(new IdentityWorkspaceDto(workspaceId, "Default Workspace", ownerId, now, now));
-        identityStore.saveMembership(new WorkspaceMembershipDto(workspaceId, ownerId, "OWNER", "ACTIVE", 1, now, now));
+        identityStore.saveMembership(
+                new WorkspaceMembershipDto(workspaceId, ownerId, AccessRoles.OWNER, "ACTIVE", 1, now, now));
 
         IssuedCredential issued = issueForReservedOwner(ownerId, reservationRevision);
         if (issued == null) {

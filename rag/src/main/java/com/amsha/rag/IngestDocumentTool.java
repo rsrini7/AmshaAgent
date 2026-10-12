@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.reflex.PiiScanReflex;
@@ -22,6 +23,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import io.quarkus.arc.Unremovable;
@@ -29,9 +31,9 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 @ApplicationScoped
 @ToolMetadata(
-        capabilityId = "ingest_document",
+        capabilityId = ToolNames.INGEST_DOCUMENT,
         description = "Ingest a document into the RAG knowledge base",
-        defaultRoles = {"coordinator", "synthesizer", "nurturer"})
+        defaultRoles = {AgentRoleEnum.COORDINATOR_ID, AgentRoleEnum.SYNTHESIZER_ID, AgentRoleEnum.NURTURER_ID})
 public class IngestDocumentTool implements AgentTool {
 
     @Inject

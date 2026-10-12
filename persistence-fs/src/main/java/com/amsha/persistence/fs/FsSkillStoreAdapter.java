@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.SkillStorePort;
 
@@ -14,7 +15,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 @SuppressWarnings("java:S1192")
 public class FsSkillStoreAdapter implements SkillStorePort {
 

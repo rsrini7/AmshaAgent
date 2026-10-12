@@ -12,6 +12,7 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
 
@@ -24,7 +25,7 @@ import io.quarkus.runtime.StartupEvent;
 
 /** Validates SQLite vec0 namespaces after their virtual tables have been initialized. */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteVectorIndexCompatibilityInitializer {
 
     /**

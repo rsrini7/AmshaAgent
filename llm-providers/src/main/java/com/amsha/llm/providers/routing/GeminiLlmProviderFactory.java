@@ -58,7 +58,7 @@ public class GeminiLlmProviderFactory implements RoutingChatModelProvider {
         }
         ChatModel model = builder.build();
         MultimodalCapability multimodalCap =
-                MultimodalCapabilities.defaultCapabilityForModel("gemini", config.modelName());
+                MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_GEMINI, config.modelName());
         return CapabilityAwareChatModel.withCapabilities(model, false, multimodalCap);
     }
 }

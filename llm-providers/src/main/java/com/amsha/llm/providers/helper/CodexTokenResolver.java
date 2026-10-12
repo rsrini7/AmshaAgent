@@ -8,6 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.oauth.CodexOAuthTokenExtractor;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -95,11 +98,11 @@ public class CodexTokenResolver {
             }
         }
 
-        return Optional.ofNullable(System.getProperty("AMSHA_CODEX_API_KEY"))
+        return Optional.ofNullable(System.getProperty(ConfigKeys.CODEX_API_KEY))
                 .filter(k -> !k.isBlank())
-                .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.codex.api-key"))
+                .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.CODEX_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getenv("AMSHA_CODEX_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.CODEX_API_KEY))
                         .filter(k -> !k.isBlank()))
                 .orElseThrow(() -> new IllegalStateException("Codex provider requires an active login. "
                         + "Please run 'codex login' in your local terminal first, or set AMSHA_CODEX_API_KEY."));
@@ -132,7 +135,8 @@ public class CodexTokenResolver {
         if (!actorUserId.equals(receipt.approvedByUserId())) {
             throw new IllegalStateException("Operation grant actor mismatch");
         }
-        if (!ApprovalReceiptIssuer.oauthExchangeSessionId("codex", sessionId).equals(receipt.sessionId())) {
+        if (!ApprovalReceiptIssuer.oauthExchangeSessionId(ModelDefaults.PROVIDER_CODEX, sessionId)
+                .equals(receipt.sessionId())) {
             throw new IllegalStateException("Operation grant session mismatch");
         }
 

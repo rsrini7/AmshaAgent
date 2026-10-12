@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.List;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.selfevolve.api.DirectiveState;
 import com.amsha.selfevolve.api.SynthesizedDirective;
 import com.amsha.selfevolve.store.DirectiveStorePort;
@@ -18,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * SQLite implementation of directive store.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteDirectiveStore implements DirectiveStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteDirectiveStore.class);

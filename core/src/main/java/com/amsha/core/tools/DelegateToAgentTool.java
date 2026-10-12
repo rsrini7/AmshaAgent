@@ -36,6 +36,7 @@ import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -52,11 +53,13 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 @ApplicationScoped
 @ToolMetadata(
-        capabilityId = "garuda",
+        capabilityId = ToolNames.DELEGATE_TO_AGENT,
         description = "Garuda - The divine vahana of Vishnu. Dispatch tasks to domain expert sub-agents.",
         defaultRoles = {
-            "architect", "coordinator", "researcher", "coder", "debugger", "synthesizer",
-            "optimizer", "sentinel", "healer", "protector", "purifier", "nurturer"
+            AgentRoleEnum.ARCHITECT_ID, AgentRoleEnum.COORDINATOR_ID, AgentRoleEnum.RESEARCHER_ID,
+                    AgentRoleEnum.CODER_ID, AgentRoleEnum.DEBUGGER_ID, AgentRoleEnum.SYNTHESIZER_ID,
+            AgentRoleEnum.OPTIMIZER_ID, AgentRoleEnum.SENTINEL_ID, AgentRoleEnum.HEALER_ID, AgentRoleEnum.PROTECTOR_ID,
+                    AgentRoleEnum.PURIFIER_ID, AgentRoleEnum.NURTURER_ID
         })
 public class DelegateToAgentTool implements AgentTool {
 
@@ -423,7 +426,7 @@ public class DelegateToAgentTool implements AgentTool {
 
                     AgentRoleEnum shivaRole;
                     try {
-                        shivaRole = AgentRoleEnum.fromString("debugger");
+                        shivaRole = AgentRoleEnum.fromString(AgentRoleEnum.DEBUGGER_ID);
                     } catch (IllegalArgumentException e) {
                         log.warnf("[VerificationGate] Could not resolve debugger role: %s", e.getMessage());
                         return handleSubAgentResult(result, targetRole, outerSessionId, "shiva");

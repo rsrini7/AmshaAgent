@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import java.time.Duration;
 
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.RoutingChatModelProvider;
@@ -28,13 +29,13 @@ public class FoundryLlmProviderFactory implements RoutingChatModelProvider {
     @Inject
     GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "amsha.llm.foundry.base-url", defaultValue = ModelDefaults.DEFAULT_FOUNDRY_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.FOUNDRY_BASE_URL, defaultValue = ModelDefaults.DEFAULT_FOUNDRY_BASE_URL)
     String configuredBaseUrl;
 
-    @ConfigProperty(name = "amsha.llm.foundry.model", defaultValue = ModelDefaults.DEFAULT_FOUNDRY_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.FOUNDRY_MODEL, defaultValue = ModelDefaults.DEFAULT_FOUNDRY_MODEL)
     String defaultModel;
 
-    @ConfigProperty(name = "amsha.llm.temperature", defaultValue = "0.1")
+    @ConfigProperty(name = LlmConfigKeys.TEMPERATURE, defaultValue = "0.1")
     double defaultTemperature;
 
     @Override
@@ -45,7 +46,7 @@ public class FoundryLlmProviderFactory implements RoutingChatModelProvider {
     @Override
     public ChatModel create(LlmModelConfig config) {
         String modelName = config.modelName();
-        if (modelName == null || modelName.isBlank() || "mistral-small".equalsIgnoreCase(modelName)) {
+        if (modelName == null || modelName.isBlank() || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(modelName)) {
             modelName = defaultModel;
         }
 

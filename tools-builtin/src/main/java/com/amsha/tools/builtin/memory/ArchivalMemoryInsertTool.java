@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
@@ -24,6 +25,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
@@ -41,11 +43,17 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "archival_memory_insert",
+        capabilityId = ToolNames.ARCHIVAL_MEMORY_INSERT,
         description = "Insert a knowledge chunk into long-term archival memory. "
                 + "Requires approval. Rate limited to 10 inserts/hour. Max 4000 chars. "
                 + "Chunk types: CODE, DOC, PATTERN, FACT, PREFERENCE, DIRECTIVE.",
-        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
+        defaultRoles = {
+            AgentRoleEnum.ARCHITECT_ID,
+            AgentRoleEnum.COORDINATOR_ID,
+            AgentRoleEnum.RESEARCHER_ID,
+            AgentRoleEnum.SYNTHESIZER_ID,
+            AgentRoleEnum.CODER_ID
+        })
 public class ArchivalMemoryInsertTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(ArchivalMemoryInsertTool.class);

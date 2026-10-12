@@ -8,6 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.oauth.AgyOAuthTokenExtractor;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -99,10 +102,10 @@ public class AgyTokenResolver {
             }
         }
 
-        return Optional.ofNullable(System.getProperty("amsha.llm.agy.api-key"))
+        return Optional.ofNullable(System.getProperty(LlmConfigKeys.AGY_API_KEY))
                 .filter(k -> !k.isBlank())
-                .or(() ->
-                        Optional.ofNullable(System.getenv("AMSHA_AGY_API_KEY")).filter(k -> !k.isBlank()))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.AGY_API_KEY))
+                        .filter(k -> !k.isBlank()))
                 .or(() -> Optional.ofNullable(System.getenv("GEMINI_API_KEY")).filter(k -> !k.isBlank()))
                 .or(() -> Optional.ofNullable(System.getenv("GOOGLE_API_KEY")).filter(k -> !k.isBlank()))
                 .orElseThrow(
@@ -139,7 +142,8 @@ public class AgyTokenResolver {
         if (!actorUserId.equals(receipt.approvedByUserId())) {
             throw new IllegalStateException("Operation grant actor mismatch");
         }
-        if (!ApprovalReceiptIssuer.oauthExchangeSessionId("agy", sessionId).equals(receipt.sessionId())) {
+        if (!ApprovalReceiptIssuer.oauthExchangeSessionId(ModelDefaults.PROVIDER_AGY, sessionId)
+                .equals(receipt.sessionId())) {
             throw new IllegalStateException("Operation grant session mismatch");
         }
 

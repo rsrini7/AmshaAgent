@@ -14,12 +14,15 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.security.api.VaultConstants;
 import com.amsha.security.http.GovernedTransportService;
 import com.amsha.security.http.OutboundHttpException;
 import com.amsha.tool.api.AgentTool;
@@ -27,6 +30,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,9 +51,9 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "serper_web_search",
+        capabilityId = ToolNames.WEB_SEARCH_SERPER,
         description = "Search the web for real-time Google results using the Serper API",
-        defaultRoles = {"researcher", "synthesizer"})
+        defaultRoles = {AgentRoleEnum.RESEARCHER_ID, AgentRoleEnum.SYNTHESIZER_ID})
 public class SerperWebSearchTool implements AgentTool {
 
     public static final String TYPE_SEARCH = "search";
@@ -69,7 +73,7 @@ public class SerperWebSearchTool implements AgentTool {
     SecretVault vault;
 
     private String getApiKey() {
-        return vault.retrieveSystemKey("AMSHA_TOOLS_SERPER_API_KEY")
+        return vault.retrieveSystemKey(VaultConstants.TOOLS_SERPER_API_KEY)
                 .map(vk -> {
                     try (vk) {
                         return new String(vk.get(), StandardCharsets.UTF_8);
@@ -136,7 +140,7 @@ public class SerperWebSearchTool implements AgentTool {
     @Override
     public boolean isEnabled() {
         // Invariant: Use existence check instead of decryption during startup/init.
-        if (vault.systemKeyExists("AMSHA_TOOLS_SERPER_API_KEY")) {
+        if (vault.systemKeyExists(VaultConstants.TOOLS_SERPER_API_KEY)) {
             return true;
         }
         return configApiKey != null && !configApiKey.isBlank() && !"none".equalsIgnoreCase(configApiKey);
@@ -266,7 +270,7 @@ public class SerperWebSearchTool implements AgentTool {
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(endpoint)
-                .header("Content-Type", "application/json")
+                .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
                 .header("X-API-KEY", getApiKey())
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .timeout(Duration.ofSeconds(15))

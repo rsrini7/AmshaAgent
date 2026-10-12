@@ -14,8 +14,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.util.HttpConstants;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.OnboardingDraftDto;
 import com.amsha.persistence.api.OnboardingDraftState;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -74,15 +76,15 @@ final class OnboardingResourceHelper {
      * duplicating header parsing logic across resource endpoints.
      */
     static boolean isInternal(SecurityContext securityContext, HttpServerRequest request, String internalApiKey) {
-        if (securityContext != null && securityContext.isUserInRole("internal")) {
+        if (securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL)) {
             return true;
         }
-        String auth = request != null ? request.getHeader("Authorization") : null;
+        String auth = request != null ? request.getHeader(HttpProtocol.HEADER_AUTHORIZATION) : null;
         if (auth == null && request != null) {
-            auth = request.getHeader("X-Amsha-API-Key");
+            auth = request.getHeader(HttpConstants.X_AMSHA_API_KEY);
         }
-        if (auth != null && auth.startsWith("Bearer ")) {
-            auth = auth.substring(7);
+        if (auth != null && auth.startsWith(HttpProtocol.AUTH_SCHEME_BEARER)) {
+            auth = auth.substring(HttpProtocol.AUTH_SCHEME_BEARER.length());
         }
         if (auth == null || auth.isBlank() || internalApiKey == null || internalApiKey.isBlank()) {
             return false;

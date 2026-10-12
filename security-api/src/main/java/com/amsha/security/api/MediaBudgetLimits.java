@@ -3,6 +3,7 @@ package com.amsha.security.api;
 import java.util.Set;
 
 import com.amsha.channel.api.AttachmentType;
+import com.amsha.channel.api.MediaTypes;
 
 /**
  * Standard configuration constants and MIME validation limits for governed media ingestion.
@@ -31,15 +32,15 @@ public final class MediaBudgetLimits {
 
     /** Strict allowlist of permitted MIME types for media downloads. */
     public static final Set<String> ALLOWED_MIME_TYPES = Set.of(
-            "image/png",
-            "image/jpeg",
-            "image/webp",
-            "image/gif",
-            "application/pdf",
-            "audio/mpeg",
-            "audio/wav",
-            "audio/ogg",
-            "audio/webm");
+            MediaTypes.PNG,
+            MediaTypes.JPEG,
+            MediaTypes.WEBP,
+            MediaTypes.GIF,
+            MediaTypes.PDF,
+            MediaTypes.MPEG,
+            MediaTypes.WAV,
+            MediaTypes.OGG,
+            MediaTypes.WEBM);
 
     /**
      * Resolves the maximum permitted byte size for the specified attachment type.

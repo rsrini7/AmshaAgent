@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.List;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.selfevolve.api.ExtractedMemory;
 import com.amsha.selfevolve.api.MemoryRecordType;
 import com.amsha.selfevolve.store.ExtractedMemoryStorePort;
@@ -19,7 +20,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Uses JDBI with ON CONFLICT DO NOTHING for DB-enforced deduplication.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresExtractedMemoryStore implements ExtractedMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresExtractedMemoryStore.class);

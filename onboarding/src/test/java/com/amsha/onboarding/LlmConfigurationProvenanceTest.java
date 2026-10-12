@@ -104,9 +104,12 @@ class LlmConfigurationProvenanceTest {
                 "groq",
                 false,
                 Map.of(
-                        "AMSHA_GROQ_API_KEY", "env-key",
-                        "AMSHA_GROQ_MODEL", "env-model",
-                        "AMSHA_GROQ_BASE_URL", "https://env.example/v1"));
+                        "AMSHA_GROQ_API_KEY",
+                        "env-key",
+                        "AMSHA_GROQ_MODEL",
+                        "env-model",
+                        "AMSHA_GROQ_BASE_URL",
+                        "https://env.example/v1"));
         when(provenance.providerCatalog.descriptor("groq")).thenReturn(Optional.of(requiredDescriptor("groq")));
 
         LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
@@ -123,9 +126,7 @@ class LlmConfigurationProvenanceTest {
         LlmConfigurationProvenance provenance = provenanceFor(
                 "generic-openai",
                 false,
-                Map.of(
-                        "AMSHA_GENERIC_OPENAI_API_KEY", "env-key",
-                        "AMSHA_GENERIC_OPENAI_MODEL", "env-model"));
+                Map.of("AMSHA_GENERIC_OPENAI_API_KEY", "env-key", "AMSHA_GENERIC_OPENAI_MODEL", "env-model"));
         when(provenance.providerCatalog.descriptor("generic-openai"))
                 .thenReturn(Optional.of(requiredDescriptor("generic-openai")));
 
@@ -421,9 +422,12 @@ class LlmConfigurationProvenanceTest {
                 "sarvam",
                 false,
                 Map.of(
-                        "AMSHA_SARVAM_API_KEY", "sarvam-key",
-                        "AMSHA_SARVAM_MODEL", "sarvam-105b",
-                        "AMSHA_SARVAM_BASE_URL", "https://api.sarvam.ai/v1"));
+                        "AMSHA_SARVAM_API_KEY",
+                        "sarvam-key",
+                        "AMSHA_SARVAM_MODEL",
+                        "sarvam-105b",
+                        "AMSHA_SARVAM_BASE_URL",
+                        "https://api.sarvam.ai/v1"));
         when(provenance.providerCatalog.descriptor("sarvam")).thenReturn(Optional.of(requiredDescriptor("sarvam")));
 
         LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
@@ -443,9 +447,12 @@ class LlmConfigurationProvenanceTest {
                 "opencode",
                 false,
                 Map.of(
-                        "AMSHA_OPENCODE_API_KEY", "opencode-key",
-                        "AMSHA_OPENCODE_MODEL", "deepseek-v4-flash-free",
-                        "AMSHA_OPENCODE_BASE_URL", "https://opencode.ai/zen/v1"));
+                        "AMSHA_OPENCODE_API_KEY",
+                        "opencode-key",
+                        "AMSHA_OPENCODE_MODEL",
+                        "deepseek-v4-flash-free",
+                        "AMSHA_OPENCODE_BASE_URL",
+                        "https://opencode.ai/zen/v1"));
         when(provenance.providerCatalog.descriptor("opencode")).thenReturn(Optional.of(requiredDescriptor("opencode")));
 
         LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
@@ -465,9 +472,12 @@ class LlmConfigurationProvenanceTest {
                 "huggingface",
                 false,
                 Map.of(
-                        "AMSHA_HUGGINGFACE_API_KEY", "hf_key_123",
-                        "AMSHA_HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct",
-                        "AMSHA_HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1"));
+                        "AMSHA_HUGGINGFACE_API_KEY",
+                        "hf_key_123",
+                        "AMSHA_HUGGINGFACE_MODEL",
+                        "meta-llama/Llama-3.3-70B-Instruct",
+                        "AMSHA_HUGGINGFACE_BASE_URL",
+                        "https://router.huggingface.co/v1"));
         when(provenance.providerCatalog.descriptor("huggingface"))
                 .thenReturn(Optional.of(requiredDescriptor("huggingface")));
 
@@ -488,9 +498,12 @@ class LlmConfigurationProvenanceTest {
                 "mistral",
                 false,
                 Map.of(
-                        "AMSHA_MISTRAL_API_KEY", "mistral_key_123",
-                        "AMSHA_MISTRAL_MODEL", "codestral-latest",
-                        "AMSHA_MISTRAL_BASE_URL", "https://api.mistral.ai/v1"));
+                        "AMSHA_MISTRAL_API_KEY",
+                        "mistral_key_123",
+                        "AMSHA_MISTRAL_MODEL",
+                        "codestral-latest",
+                        "AMSHA_MISTRAL_BASE_URL",
+                        "https://api.mistral.ai/v1"));
         when(provenance.providerCatalog.descriptor("mistral")).thenReturn(Optional.of(requiredDescriptor("mistral")));
 
         LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
@@ -510,9 +523,12 @@ class LlmConfigurationProvenanceTest {
                 "cloudflare",
                 false,
                 Map.of(
-                        "AMSHA_CLOUDFLARE_API_KEY", "cf_key_123",
-                        "AMSHA_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                        "AMSHA_CLOUDFLARE_BASE_URL", "https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1"));
+                        "AMSHA_CLOUDFLARE_API_KEY",
+                        "cf_key_123",
+                        "AMSHA_CLOUDFLARE_MODEL",
+                        "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                        "AMSHA_CLOUDFLARE_BASE_URL",
+                        "https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1"));
         when(provenance.providerCatalog.descriptor("cloudflare"))
                 .thenReturn(Optional.of(requiredDescriptor("cloudflare")));
 
@@ -533,9 +549,12 @@ class LlmConfigurationProvenanceTest {
                 "cohere",
                 false,
                 Map.of(
-                        "AMSHA_COHERE_API_KEY", "cohere_key_123",
-                        "AMSHA_COHERE_MODEL", "command-r-08-2024",
-                        "AMSHA_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1"));
+                        "AMSHA_COHERE_API_KEY",
+                        "cohere_key_123",
+                        "AMSHA_COHERE_MODEL",
+                        "command-r-08-2024",
+                        "AMSHA_COHERE_BASE_URL",
+                        "https://api.cohere.ai/compatibility/v1"));
         when(provenance.providerCatalog.descriptor("cohere")).thenReturn(Optional.of(requiredDescriptor("cohere")));
 
         LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
@@ -555,11 +574,14 @@ class LlmConfigurationProvenanceTest {
                 "cloudflare",
                 false,
                 Map.of(
-                        "AMSHA_CLOUDFLARE_API_KEY", "cf_key_123",
-                        "AMSHA_CLOUDFLARE_ACCOUNT_ID", "acc_456",
-                        "AMSHA_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                        "AMSHA_CLOUDFLARE_API_KEY",
+                        "cf_key_123",
+                        "AMSHA_CLOUDFLARE_ACCOUNT_ID",
+                        "acc_456",
+                        "AMSHA_CLOUDFLARE_MODEL",
+                        "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
                         "AMSHA_CLOUDFLARE_BASE_URL",
-                                "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"));
+                        "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"));
         when(provenance.providerCatalog.descriptor("cloudflare"))
                 .thenReturn(Optional.of(requiredDescriptor("cloudflare")));
 
@@ -577,10 +599,12 @@ class LlmConfigurationProvenanceTest {
                 "cloudflare",
                 false,
                 Map.of(
-                        "AMSHA_CLOUDFLARE_API_KEY", "cf_key_123",
-                        "AMSHA_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                        "AMSHA_CLOUDFLARE_API_KEY",
+                        "cf_key_123",
+                        "AMSHA_CLOUDFLARE_MODEL",
+                        "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
                         "AMSHA_CLOUDFLARE_BASE_URL",
-                                "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"));
+                        "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1"));
         when(provenance.providerCatalog.descriptor("cloudflare"))
                 .thenReturn(Optional.of(requiredDescriptor("cloudflare")));
 
@@ -597,9 +621,12 @@ class LlmConfigurationProvenanceTest {
                 "codex",
                 false,
                 Map.of(
-                        "AMSHA_CODEX_API_KEY", "test-codex-key",
-                        "AMSHA_CODEX_MODEL", "gpt-5.6-luna",
-                        "AMSHA_CODEX_BASE_URL", "http://127.0.0.1:8787/v1"));
+                        "AMSHA_CODEX_API_KEY",
+                        "test-codex-key",
+                        "AMSHA_CODEX_MODEL",
+                        "gpt-5.6-luna",
+                        "AMSHA_CODEX_BASE_URL",
+                        "http://127.0.0.1:8787/v1"));
         when(provenance.providerCatalog.descriptor("codex")).thenReturn(Optional.of(requiredDescriptor("codex")));
 
         LlmConfigurationProvenance.Resolution resolution = provenance.resolve();
@@ -617,9 +644,7 @@ class LlmConfigurationProvenanceTest {
         LlmConfigurationProvenance provenance = provenanceFor(
                 "codex",
                 false,
-                Map.of(
-                        "AMSHA_CODEX_API_KEY", "test-codex-key",
-                        "AMSHA_CODEX_BASE_URL", "http://127.0.0.1:8787/v1"));
+                Map.of("AMSHA_CODEX_API_KEY", "test-codex-key", "AMSHA_CODEX_BASE_URL", "http://127.0.0.1:8787/v1"));
         when(provenance.providerCatalog.descriptor("codex")).thenReturn(Optional.of(requiredDescriptor("codex")));
 
         LlmConfigurationProvenance.Resolution resolution = provenance.resolve();

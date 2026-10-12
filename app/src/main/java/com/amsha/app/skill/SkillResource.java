@@ -22,6 +22,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.skill.SkillRegistry;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.SkillDto;
 import com.amsha.persistence.api.SkillStorePort;
 import com.amsha.skills.SkillDefinitionParser;
@@ -175,7 +176,7 @@ public class SkillResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

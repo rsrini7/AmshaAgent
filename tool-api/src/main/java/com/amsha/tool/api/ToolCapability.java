@@ -9,46 +9,46 @@ import io.quarkus.qute.TemplateData;
 
 @TemplateData
 public enum ToolCapability {
-    GITHUB("github", ToolCategory.INTERNAL, "Read-only access to GitHub repositories and resources"),
+    GITHUB(ToolNames.GITHUB, ToolCategory.INTERNAL, "Read-only access to GitHub repositories and resources"),
 
-    SCHEDULE_TASK("schedule_task", ToolCategory.INTERNAL, "Schedule future or continuous background tasks"),
+    SCHEDULE_TASK(ToolNames.SCHEDULE_TASK, ToolCategory.INTERNAL, "Schedule future or continuous background tasks"),
 
-    MANAGE_SCHEDULE("manage_schedule", ToolCategory.INTERNAL, "Manage (list/delete) existing scheduled tasks"),
+    MANAGE_SCHEDULE(ToolNames.MANAGE_SCHEDULE, ToolCategory.INTERNAL, "Manage (list/delete) existing scheduled tasks"),
 
     RECALL_MEMORY_SEARCH(
-            "recall_memory_search",
+            ToolNames.RECALL_MEMORY_SEARCH,
             ToolCategory.DATABASE,
             "Exact search across preserved conversation history (raw messages, code, errors)"),
 
     ARCHIVAL_MEMORY_SEARCH(
-            "archival_memory_search",
+            ToolNames.ARCHIVAL_MEMORY_SEARCH,
             ToolCategory.DATABASE,
             "Semantic search across long-term archival knowledge (typed chunks, patterns, facts, preferences)"),
 
     CORE_MEMORY_READ(
-            "core_memory_read",
+            ToolNames.CORE_MEMORY_READ,
             ToolCategory.DATABASE,
             "Read core memory blocks (user profile, active task, constraints, project context, preferences)"),
 
     CORE_MEMORY_APPEND(
-            "core_memory_append",
+            ToolNames.CORE_MEMORY_APPEND,
             ToolCategory.DATABASE,
             "Append or create a core memory block with CAS versioning (5 writes/minute)"),
 
     CORE_MEMORY_REPLACE(
-            "core_memory_replace",
+            ToolNames.CORE_MEMORY_REPLACE,
             ToolCategory.DATABASE,
             "Replace a core memory block with CAS versioning (5 writes/minute)"),
 
     ARCHIVAL_MEMORY_INSERT(
-            "archival_memory_insert",
+            ToolNames.ARCHIVAL_MEMORY_INSERT,
             ToolCategory.DATABASE,
             "Insert a knowledge chunk into long-term archival memory (approval-gated, 10 inserts/hour)"),
 
-    BROWSER_NAVIGATE("browser_navigate", ToolCategory.NETWORK, "Headless browser navigation (Playwright)"),
+    BROWSER_NAVIGATE(ToolNames.BROWSER_NAVIGATE, ToolCategory.NETWORK, "Headless browser navigation (Playwright)"),
 
     SANDBOX_EXEC(
-            "sandbox_exec",
+            ToolNames.SANDBOX_EXEC,
             ToolCategory.COMPUTE,
             "Execute code in an isolated sandbox. "
                     + "REQUIRED: 'code' (string), 'language' (one of: python, python3, bash, node, java, go). "
@@ -63,7 +63,7 @@ public enum ToolCapability {
                     + "Keep your JSON payload under 2000 characters to prevent max_tokens truncation. For short snippets, use a compact single-line form without newlines."),
 
     HOST_EXEC(
-            "host_exec",
+            ToolNames.HOST_EXEC,
             ToolCategory.COMPUTE,
             "Execute a command directly on the host (bypassing the Podman sandbox). "
                     + "REQUIRED: 'code' (string), 'language' (one of: bash, java). "
@@ -79,44 +79,46 @@ public enum ToolCapability {
                     + "Do not rely on truncated short ps output for host process inspection."),
 
     DELEGATE_TO_AGENT(
-            "garuda",
+            ToolNames.DELEGATE_TO_AGENT,
             ToolCategory.INTERNAL,
             "Garuda - The divine vahana (vehicle) of Vishnu. Use Garuda to dispatch tasks to domain expert sub-agents. "
                     + "REQUIRED: 'agent' (one of: shiva, brahma, saraswati, brihaspati, dattatreya, ganesha, kartikeya, lakshmi, durga, kali, parvati, coordinator), 'goal' (string task description)."),
 
-    INGEST_DOCUMENT("ingest_document", ToolCategory.DATABASE, "Ingest a document into the RAG knowledge base"),
+    INGEST_DOCUMENT(ToolNames.INGEST_DOCUMENT, ToolCategory.DATABASE, "Ingest a document into the RAG knowledge base"),
 
     MANAGE_CHECKLIST(
-            "manage_checklist",
+            ToolNames.MANAGE_CHECKLIST,
             ToolCategory.DATABASE,
             "Manage a project checklist to track multi-step execution progress."),
 
     REGISTER_MCP_SERVER(
-            "register_mcp_server",
+            ToolNames.REGISTER_MCP_SERVER,
             ToolCategory.INTERNAL,
             "Dynamically register a new MCP server (HTTP or STDIO) into the agent's toolbelt."),
 
     WEB_SEARCH_BRAVE(
-            "brave_web_search", ToolCategory.NETWORK, "Search the web for real-time information using the Brave API."),
+            ToolNames.WEB_SEARCH_BRAVE,
+            ToolCategory.NETWORK,
+            "Search the web for real-time information using the Brave API."),
 
     WEB_SEARCH_SERPER(
-            "serper_web_search",
+            ToolNames.WEB_SEARCH_SERPER,
             ToolCategory.NETWORK,
             "Search the web for real-time Google results using the Serper API. "
                     + "Prefer this when AMSHA_TOOLS_SERPER_API_KEY is set (2500 free calls)."),
 
     AGENT_TASK(
-            "agent_task",
+            ToolNames.AGENT_TASK,
             ToolCategory.DATABASE,
             "Create, list, update, and transition markdown-based agent task files."),
 
     WEB_FETCH(
-            "web_fetch",
+            ToolNames.WEB_FETCH,
             ToolCategory.NETWORK,
             "Fetch a URL and return its content as plain text (lightweight HTTP GET)."),
 
     SELF_EVOLVE_REFLECT(
-            "self_evolve_reflect",
+            ToolNames.SELF_EVOLVE_REFLECT,
             ToolCategory.INTERNAL,
             "Trigger self-evolution directive synthesis. Analyzes extracted memory patterns and synthesizes "
                     + "behavioral directives to improve future agent behavior. "

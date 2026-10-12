@@ -15,6 +15,9 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
 
+import com.amsha.channel.api.MediaTypes;
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.audio.AudioTranscriptionPort;
@@ -70,8 +73,8 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
             @ConfigProperty(name = "amsha.stt.timeout", defaultValue = DEFAULT_TIMEOUT) Duration configuredTimeout,
             @ConfigProperty(name = "amsha.stt.max-bytes", defaultValue = "26214400") long maxBytes,
             @ConfigProperty(name = "amsha.stt.max-transcript-chars", defaultValue = "12000") int maxTranscriptChars,
-            @ConfigProperty(name = "AMSHA_OMLX_API_KEY", defaultValue = "not-needed") String apiKey,
-            @ConfigProperty(name = "AMSHA_OMLX_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
+            @ConfigProperty(name = ConfigKeys.OMLX_API_KEY, defaultValue = "not-needed") String apiKey,
+            @ConfigProperty(name = ConfigKeys.OMLX_BASE_URL, defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
                     String baseUrl,
             @ConfigProperty(name = "amsha.stt.ffmpeg-path", defaultValue = "ffmpeg") String ffmpegPath) {
         this.governedTransport = governedTransport;
@@ -180,12 +183,12 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
         byte[] body = multipartBody(boundary, audio, mimeType, request);
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(transcriptionEndpoint()))
                 .timeout(timeout)
-                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .header("Accept", "application/json")
+                .header(HttpProtocol.HEADER_CONTENT_TYPE, "multipart/form-data; boundary=" + boundary)
+                .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
                 .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/amsha)")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body));
         if (apiKey != null && !apiKey.isBlank() && !"not-needed".equalsIgnoreCase(apiKey.trim())) {
-            builder.header("Authorization", "Bearer " + apiKey.trim());
+            builder.header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + apiKey.trim());
         }
         return builder.build();
     }
@@ -227,10 +230,10 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
         }
         String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
         return switch (normalized) {
-            case "audio/mpeg", "audio/mp3" -> "audio.mp3";
-            case "audio/wav", "audio/x-wav", "audio/wave" -> "audio.wav";
-            case "audio/ogg", "audio/opus", "application/ogg" -> "audio.ogg";
-            case "audio/webm", "video/webm" -> "audio.webm";
+            case MediaTypes.MPEG, MediaTypes.MP3 -> "audio.mp3";
+            case MediaTypes.WAV, MediaTypes.X_WAV, MediaTypes.WAVE -> "audio.wav";
+            case MediaTypes.OGG, MediaTypes.OPUS, MediaTypes.APPLICATION_OGG -> "audio.ogg";
+            case MediaTypes.WEBM, MediaTypes.VIDEO_WEBM -> "audio.webm";
             default -> "audio.bin";
         };
     }
@@ -289,16 +292,16 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
         }
         String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
         return switch (normalized) {
-            case "audio/mpeg",
-                    "audio/mp3",
-                    "audio/wav",
-                    "audio/x-wav",
-                    "audio/wave",
-                    "audio/ogg",
-                    "audio/opus",
-                    "application/ogg",
-                    "audio/webm",
-                    "video/webm" -> true;
+            case MediaTypes.MPEG,
+                    MediaTypes.MP3,
+                    MediaTypes.WAV,
+                    MediaTypes.X_WAV,
+                    MediaTypes.WAVE,
+                    MediaTypes.OGG,
+                    MediaTypes.OPUS,
+                    MediaTypes.APPLICATION_OGG,
+                    MediaTypes.WEBM,
+                    MediaTypes.VIDEO_WEBM -> true;
             default -> false;
         };
     }

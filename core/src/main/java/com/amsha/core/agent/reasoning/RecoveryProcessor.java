@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.tools.LanguageIds;
 import com.amsha.core.util.TextPatternUtils;
 import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -193,10 +194,10 @@ public class RecoveryProcessor {
         if (rawLanguage == null) return null;
         String language = rawLanguage.trim().toLowerCase(Locale.ROOT);
         return switch (language) {
-            case "python3" -> "python";
-            case "sh" -> "bash";
-            case "javascript", "js" -> "node";
-            case "java", "python", "bash", "node", "go" -> language;
+            case LanguageIds.PYTHON3 -> LanguageIds.PYTHON;
+            case LanguageIds.SH -> LanguageIds.BASH;
+            case LanguageIds.JAVASCRIPT, LanguageIds.JS -> LanguageIds.NODE;
+            case LanguageIds.JAVA, LanguageIds.PYTHON, LanguageIds.BASH, LanguageIds.NODE, LanguageIds.GO -> language;
             default -> null;
         };
     }

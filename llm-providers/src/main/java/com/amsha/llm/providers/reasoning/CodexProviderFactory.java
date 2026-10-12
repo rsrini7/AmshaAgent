@@ -11,6 +11,7 @@ import java.util.Optional;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
@@ -37,13 +38,13 @@ public class CodexProviderFactory implements AgentChatModelProvider {
     @Inject
     GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "amsha.llm.codex.api-key")
+    @ConfigProperty(name = LlmConfigKeys.CODEX_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "amsha.llm.codex.base-url", defaultValue = ModelDefaults.DEFAULT_CODEX_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.CODEX_BASE_URL, defaultValue = ModelDefaults.DEFAULT_CODEX_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.llm.codex.model", defaultValue = ModelDefaults.DEFAULT_CODEX_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.CODEX_MODEL, defaultValue = ModelDefaults.DEFAULT_CODEX_MODEL)
     String modelName;
 
     @Override

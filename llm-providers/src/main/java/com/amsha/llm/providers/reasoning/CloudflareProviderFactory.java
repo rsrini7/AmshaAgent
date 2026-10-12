@@ -8,10 +8,12 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
@@ -30,16 +32,16 @@ public class CloudflareProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "amsha.llm.cloudflare.api-key")
+    @ConfigProperty(name = LlmConfigKeys.CLOUDFLARE_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "amsha.llm.cloudflare.account-id")
+    @ConfigProperty(name = LlmConfigKeys.CLOUDFLARE_ACCOUNT_ID)
     Optional<String> accountId;
 
-    @ConfigProperty(name = "amsha.llm.cloudflare.base-url", defaultValue = ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.CLOUDFLARE_BASE_URL, defaultValue = ModelDefaults.DEFAULT_CLOUDFLARE_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.llm.cloudflare.model", defaultValue = ModelDefaults.DEFAULT_CLOUDFLARE_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.CLOUDFLARE_MODEL, defaultValue = ModelDefaults.DEFAULT_CLOUDFLARE_MODEL)
     String modelName;
 
     @Override
@@ -75,11 +77,11 @@ public class CloudflareProviderFactory implements AgentChatModelProvider {
         if (baseUrl != null && baseUrl.contains("{account_id}")) {
             String accId = accountId
                     .filter(id -> !id.isBlank())
-                    .or(() -> Optional.ofNullable(System.getProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID"))
+                    .or(() -> Optional.ofNullable(System.getProperty(ConfigKeys.CLOUDFLARE_ACCOUNT_ID))
                             .filter(id -> !id.isBlank()))
-                    .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.cloudflare.account-id"))
+                    .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.CLOUDFLARE_ACCOUNT_ID))
                             .filter(id -> !id.isBlank()))
-                    .or(() -> Optional.ofNullable(System.getenv("AMSHA_CLOUDFLARE_ACCOUNT_ID"))
+                    .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.CLOUDFLARE_ACCOUNT_ID))
                             .filter(id -> !id.isBlank()))
                     .orElseThrow(
                             () -> new IllegalStateException(
@@ -130,11 +132,11 @@ public class CloudflareProviderFactory implements AgentChatModelProvider {
 
     private ChatModel createModel(String model) {
         String key = apiKey.filter(k -> !k.isBlank())
-                .or(() -> Optional.ofNullable(System.getProperty("AMSHA_CLOUDFLARE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getProperty(ConfigKeys.CLOUDFLARE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.cloudflare.api-key"))
+                .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.CLOUDFLARE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getenv("AMSHA_CLOUDFLARE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.CLOUDFLARE_API_KEY))
                         .filter(k -> !k.isBlank()))
                 .orElseThrow(
                         () -> new IllegalStateException("Cloudflare Workers AI requires AMSHA_CLOUDFLARE_API_KEY"));

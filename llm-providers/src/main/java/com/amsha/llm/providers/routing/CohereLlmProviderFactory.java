@@ -7,6 +7,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.RoutingChatModelProvider;
@@ -35,13 +37,13 @@ public class CohereLlmProviderFactory implements RoutingChatModelProvider {
         String apiKey = config.apiKey()
                 .filter(k -> !k.isBlank())
                 .or(() -> ConfigProvider.getConfig()
-                        .getOptionalValue("amsha.llm.cohere.api-key", String.class)
+                        .getOptionalValue(LlmConfigKeys.COHERE_API_KEY, String.class)
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getProperty("AMSHA_COHERE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getProperty(ConfigKeys.COHERE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.cohere.api-key"))
+                .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.COHERE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getenv("AMSHA_COHERE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.COHERE_API_KEY))
                         .filter(k -> !k.isBlank()))
                 .orElseThrow(
                         () -> new IllegalStateException("Cohere provider requires an API key (AMSHA_COHERE_API_KEY)"));

@@ -296,10 +296,10 @@ public class ParallelToolCallCollapser {
      * distinct work. Unknown tools fall back to full-parameter equality.
      */
     private static final Map<String, List<String>> IDENTITY_KEYS = Map.of(
-            "serper_web_search", List.of("query", "q"),
-            "brave_web_search", List.of("query", "q"),
-            "web_fetch", List.of("url", "link", "uri"),
-            "browser_navigate", List.of("url", "targetUrl", "uri", "link"));
+            ToolCapability.WEB_SEARCH_SERPER.toolName(), List.of("query", "q"),
+            ToolCapability.WEB_SEARCH_BRAVE.toolName(), List.of("query", "q"),
+            ToolCapability.WEB_FETCH.toolName(), List.of("url", "link", "uri"),
+            ToolCapability.BROWSER_NAVIGATE.toolName(), List.of("url", "targetUrl", "uri", "link"));
 
     private String identityKeyOf(String toolName, Map<String, Object> params) {
         for (String candidate : IDENTITY_KEYS.getOrDefault(toolName, List.of())) {

@@ -34,8 +34,10 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.ActiveWorkspaceContext;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.BootstrapStateStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.SessionCatalogStore;
 import com.amsha.security.http.GovernedTransportMetrics;
 
@@ -63,7 +65,7 @@ public class DbConsoleResource {
     private static final int MAX_ROWS = 100;
     private static final int DEFAULT_ROWS = 50;
 
-    @ConfigProperty(name = "amsha.persistence.backend", defaultValue = "sqlite")
+    @ConfigProperty(name = PersistenceBackend.PROPERTY, defaultValue = PersistenceBackend.SQLITE)
     String runtimeBackend;
 
     @Inject
@@ -109,7 +111,7 @@ public class DbConsoleResource {
         String rawSql = request.sql();
         String queryHash = DbResultMapper.hashQuery(rawSql);
 
-        if ("fs".equalsIgnoreCase(runtimeBackend) || "filesystem".equalsIgnoreCase(runtimeBackend)) {
+        if (PersistenceBackend.isFilesystem(runtimeBackend)) {
             try {
                 recordMandatoryAudit(
                         callerUserId,
@@ -480,7 +482,7 @@ public class DbConsoleResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

@@ -10,6 +10,7 @@ public final class HttpConstants {
 
     public static final String X_AMSHA_API_KEY = "X-Amsha-API-Key";
     public static final String COOKIE_AMSHA_API_KEY = "AMSHA_API_KEY";
+    public static final String COOKIE_SESSION_ID = "AMSHA_SESSION_ID";
 
     /**
      * Returns whether a host represents the local machine. This is used only

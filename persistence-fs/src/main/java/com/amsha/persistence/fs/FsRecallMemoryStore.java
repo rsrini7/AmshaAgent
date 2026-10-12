@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.RecallMemoryStorePort;
 import com.amsha.persistence.api.RecallMessageDto;
 import com.amsha.persistence.api.RecallSearchQuery;
@@ -30,7 +31,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @TieredBackend("fs")
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsRecallMemoryStore implements RecallMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(FsRecallMemoryStore.class);

@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.core.agent.reasoning.ArchivalContextCache;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.Fts5QueryUtil;
 import com.amsha.memory.config.TieredMemoryConfig;
@@ -26,6 +27,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
@@ -49,11 +51,17 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "archival_memory_search",
+        capabilityId = ToolNames.ARCHIVAL_MEMORY_SEARCH,
         description = "Searches long-term archival knowledge for patterns, facts, preferences, and code snippets. "
                 + "Use this when you need to recall previously stored knowledge (e.g., 'what patterns have we used', "
                 + "'project conventions', 'user preferences'). Returns typed chunks with confidence scores.",
-        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
+        defaultRoles = {
+            AgentRoleEnum.ARCHITECT_ID,
+            AgentRoleEnum.COORDINATOR_ID,
+            AgentRoleEnum.RESEARCHER_ID,
+            AgentRoleEnum.SYNTHESIZER_ID,
+            AgentRoleEnum.CODER_ID
+        })
 public class ArchivalMemorySearchTool implements AgentTool {
 
     private static final String PARAM_QUERY = "query";

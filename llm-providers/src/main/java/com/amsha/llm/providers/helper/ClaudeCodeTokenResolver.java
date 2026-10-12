@@ -8,6 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.oauth.ClaudeCodeOAuthTokenExtractor;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -97,9 +100,9 @@ public class ClaudeCodeTokenResolver {
 
         return Optional.ofNullable(tokenExtractor)
                 .flatMap(ClaudeCodeOAuthTokenExtractor::extractToken)
-                .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.claude-code.api-key"))
+                .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.CLAUDE_CODE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getenv("AMSHA_CLAUDE_CODE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.CLAUDE_CODE_API_KEY))
                         .filter(k -> !k.isBlank()))
                 .orElseThrow(
                         () -> new IllegalStateException(
@@ -135,7 +138,7 @@ public class ClaudeCodeTokenResolver {
         if (!actorUserId.equals(receipt.approvedByUserId())) {
             throw new IllegalStateException("Operation grant actor mismatch");
         }
-        if (!ApprovalReceiptIssuer.oauthExchangeSessionId("claude-code", sessionId)
+        if (!ApprovalReceiptIssuer.oauthExchangeSessionId(ModelDefaults.PROVIDER_CLAUDE_CODE, sessionId)
                 .equals(receipt.sessionId())) {
             throw new IllegalStateException("Operation grant session mismatch");
         }

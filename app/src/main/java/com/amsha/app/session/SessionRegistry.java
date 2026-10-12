@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.pipeline.SessionIdResolver;
 import com.amsha.persistence.api.SessionCatalogEntry;
 import com.amsha.persistence.api.SessionCatalogStore;
@@ -47,7 +48,7 @@ public class SessionRegistry implements SessionIdResolver {
                 channelType.toLowerCase(Locale.ROOT),
                 channelId,
                 newSessionId,
-                "coordinator",
+                AgentRoleEnum.COORDINATOR_ID,
                 "",
                 Instant.now(),
                 Instant.now(),

@@ -12,6 +12,7 @@ import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
@@ -30,13 +31,15 @@ public class HuggingFaceProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "amsha.llm.huggingface.api-key")
+    @ConfigProperty(name = LlmConfigKeys.HUGGINGFACE_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "amsha.llm.huggingface.base-url", defaultValue = ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL)
+    @ConfigProperty(
+            name = LlmConfigKeys.HUGGINGFACE_BASE_URL,
+            defaultValue = ModelDefaults.DEFAULT_HUGGINGFACE_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.llm.huggingface.model", defaultValue = ModelDefaults.DEFAULT_HUGGINGFACE_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.HUGGINGFACE_MODEL, defaultValue = ModelDefaults.DEFAULT_HUGGINGFACE_MODEL)
     String modelName;
 
     @Override

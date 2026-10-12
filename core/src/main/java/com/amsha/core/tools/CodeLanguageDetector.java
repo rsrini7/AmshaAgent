@@ -21,7 +21,13 @@ public class CodeLanguageDetector {
 
     private static final Pattern FS_ILLEGAL_CHARS = Pattern.compile("[:<>\"\\\\|?*]");
 
-    public static final List<String> SUPPORTED_LANGUAGES = List.of("java", "python", "python3", "go", "node", "bash");
+    public static final List<String> SUPPORTED_LANGUAGES = List.of(
+            LanguageIds.JAVA,
+            LanguageIds.PYTHON,
+            LanguageIds.PYTHON3,
+            LanguageIds.GO,
+            LanguageIds.NODE,
+            LanguageIds.BASH);
 
     public static final String SUPPORTED_LANGUAGES_HINT = "'java', 'go', 'python', 'bash', 'node'";
 
@@ -52,9 +58,9 @@ public class CodeLanguageDetector {
 
     public List<String> buildCommand(String lang, String code) {
         return switch (lang) {
-            case "python", "python3" -> List.of(resolvePythonExecutable(), "-c", code);
-            case "bash" -> List.of("bash", "-c", code);
-            case "node" -> List.of("node", "-e", code);
+            case LanguageIds.PYTHON, LanguageIds.PYTHON3 -> List.of(resolvePythonExecutable(), "-c", code);
+            case LanguageIds.BASH -> List.of(LanguageIds.BASH, "-c", code);
+            case LanguageIds.NODE -> List.of(LanguageIds.NODE, "-e", code);
             default ->
                 throw new IllegalArgumentException(
                         "Unsupported language '" + lang + "'. Only Java, Python, Go, Node, and Bash are supported.");
@@ -62,7 +68,7 @@ public class CodeLanguageDetector {
     }
 
     public String resolvePythonExecutable() {
-        return resolveExecutable(IS_WINDOWS ? "python" : "python3", configuredPythonExe);
+        return resolveExecutable(IS_WINDOWS ? LanguageIds.PYTHON : LanguageIds.PYTHON3, configuredPythonExe);
     }
 
     public String resolveJavaExecutable() {
@@ -73,11 +79,11 @@ public class CodeLanguageDetector {
                 if (Files.exists(javaExe)) return javaExe.toString();
             }
         }
-        return resolveExecutable("java", configuredJavaExe);
+        return resolveExecutable(LanguageIds.JAVA, configuredJavaExe);
     }
 
     public String resolveGoExecutable() {
-        return resolveExecutable("go", configuredGoExe);
+        return resolveExecutable(LanguageIds.GO, configuredGoExe);
     }
 
     private static final int MAX_FS_NAME_LENGTH = 200;

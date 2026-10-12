@@ -15,6 +15,7 @@ import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.MdcKeys;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
 import com.amsha.persistence.api.LlmConnectionDto;
@@ -59,7 +60,7 @@ public class ProfileRouteCandidateBuilder {
     @Inject
     BeanManager beanManager;
 
-    @ConfigProperty(name = "amsha.llm.profile-routing.enabled", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.PROFILE_ROUTING_ENABLED, defaultValue = "false")
     boolean profileRoutingEnabled;
 
     private Optional<ChatModelCreationPort> findCreationPort() {

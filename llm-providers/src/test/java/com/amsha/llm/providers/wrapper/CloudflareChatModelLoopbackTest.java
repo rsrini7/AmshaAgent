@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
@@ -210,7 +211,7 @@ class CloudflareChatModelLoopbackTest {
 
     @Test
     void testCloudflareAccountScopedTemplateUrlSubstitutionContract() {
-        System.setProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID", "acc-scoped-xyz987");
+        System.setProperty(ConfigKeys.CLOUDFLARE_ACCOUNT_ID, "acc-scoped-xyz987");
         try {
             server.createContext(
                     "/client/v4/accounts/acc-scoped-xyz987/ai/v1/chat/completions",
@@ -241,13 +242,13 @@ class CloudflareChatModelLoopbackTest {
             assertEquals("/client/v4/accounts/acc-scoped-xyz987/ai/v1/chat/completions", req.path());
             assertEquals("Bearer cf-token-scoped", req.authorizationHeader());
         } finally {
-            System.clearProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID");
+            System.clearProperty(ConfigKeys.CLOUDFLARE_ACCOUNT_ID);
         }
     }
 
     @Test
     void testCloudflareAccountIdSanitizationAndUrlNormalization() {
-        System.setProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID", "acc-scoped-xyz987/ai/v1");
+        System.setProperty(ConfigKeys.CLOUDFLARE_ACCOUNT_ID, "acc-scoped-xyz987/ai/v1");
         try {
             server.createContext(
                     "/client/v4/accounts/acc-scoped-xyz987/ai/v1/chat/completions",
@@ -277,7 +278,7 @@ class CloudflareChatModelLoopbackTest {
             RecordedRequest req = recordedRequests.getLast();
             assertEquals("/client/v4/accounts/acc-scoped-xyz987/ai/v1/chat/completions", req.path());
         } finally {
-            System.clearProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID");
+            System.clearProperty(ConfigKeys.CLOUDFLARE_ACCOUNT_ID);
         }
     }
 

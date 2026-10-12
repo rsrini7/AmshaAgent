@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.ArchivalSearchQuery;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.sqlite.jdbi.ArchivalMemoryJdbiDao;
 
@@ -26,7 +27,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @TieredBackend("sqlite")
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteArchivalMemoryStore implements ArchivalMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteArchivalMemoryStore.class);

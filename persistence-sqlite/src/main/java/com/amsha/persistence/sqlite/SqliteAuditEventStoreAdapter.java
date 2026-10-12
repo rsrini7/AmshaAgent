@@ -11,6 +11,7 @@ import java.util.UUID;
 import com.amsha.common.util.TemporalUtils;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.AuditJdbiDao;
 
 import org.jboss.logging.Logger;
@@ -21,7 +22,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteAuditEventStoreAdapter implements AuditEventStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteAuditEventStoreAdapter.class);

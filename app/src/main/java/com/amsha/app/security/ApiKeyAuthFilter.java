@@ -28,6 +28,7 @@ import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.util.HttpConstants;
 import com.amsha.core.util.MdcKeys;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.WebSessionDto;
 import com.amsha.persistence.api.WebSessionStorePort;
@@ -148,7 +149,7 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
 
     private boolean trySessionAuth(
             ContainerRequestContext requestContext, String finalPath, String method, String ip, long startTime) {
-        Cookie sessionCookie = requestContext.getCookies().get("AMSHA_SESSION_ID");
+        Cookie sessionCookie = requestContext.getCookies().get(HttpConstants.COOKIE_SESSION_ID);
         String sessionToken = null;
         if (sessionCookie != null && !sessionCookie.getValue().isBlank()) {
             sessionToken = sessionCookie.getValue();
@@ -283,7 +284,8 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         }
 
         String userId = apiKeyRegistry.getKeyName(apiKey);
-        boolean isInternalUiKey = apiKeyRegistry.hasRole(apiKey, "OWNER") || apiKeyRegistry.hasRole(apiKey, "internal");
+        boolean isInternalUiKey = apiKeyRegistry.hasRole(apiKey, AccessRoles.OWNER)
+                || apiKeyRegistry.hasRole(apiKey, AccessRoles.INTERNAL);
         boolean isReadOnlyPolling =
                 "GET".equals(method) && POLL_LIKE_PATHS.stream().anyMatch(finalPath::startsWith);
         boolean isWebSocketTokenRequest = "POST".equals(method) && "/chat/ws-token".equals(finalPath);
@@ -353,10 +355,10 @@ public class ApiKeyAuthFilter implements ContainerRequestFilter {
         boolean hasRole = memberships.stream()
                 .filter(m -> "ACTIVE".equalsIgnoreCase(m.status()))
                 .anyMatch(m -> m.role().equalsIgnoreCase(role));
-        if (!hasRole && "internal".equalsIgnoreCase(role)) {
+        if (!hasRole && AccessRoles.INTERNAL.equalsIgnoreCase(role)) {
             hasRole = memberships.stream()
                     .filter(m -> "ACTIVE".equalsIgnoreCase(m.status()))
-                    .anyMatch(m -> m.role().equalsIgnoreCase("OWNER"));
+                    .anyMatch(m -> m.role().equalsIgnoreCase(AccessRoles.OWNER));
         }
         return hasRole;
     }

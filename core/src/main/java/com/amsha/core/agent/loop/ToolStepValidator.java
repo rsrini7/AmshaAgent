@@ -73,7 +73,7 @@ public class ToolStepValidator {
         // Coordinator-Github Redirect
         if (isCoordinatorGithubViolation(context, toolName, step)) {
             return StepDecision.proceedWithFailures(
-                    redirectToDelegate(step, context.sessionId(), "researcher"), consecutiveFailures);
+                    redirectToDelegate(step, context.sessionId(), AgentRoleEnum.RESEARCHER_ID), consecutiveFailures);
         }
 
         // Specialist Tool Redirection
@@ -138,7 +138,7 @@ public class ToolStepValidator {
 
         if (ToolCapability.SANDBOX_EXEC.toolName().equals(toolName)) {
             return StepDecision.proceedWithFailures(
-                    redirectToDelegate(step, context.sessionId(), "coder"), consecutiveFailures);
+                    redirectToDelegate(step, context.sessionId(), AgentRoleEnum.CODER_ID), consecutiveFailures);
         }
 
         // Coordinator lacks research tools, but researcher HAS them - only redirect coordinator for these
@@ -147,7 +147,8 @@ public class ToolStepValidator {
                     || ToolCapability.WEB_SEARCH_SERPER.toolName().equals(toolName)
                     || ToolCapability.BROWSER_NAVIGATE.toolName().equals(toolName)) {
                 return StepDecision.proceedWithFailures(
-                        redirectToDelegate(step, context.sessionId(), "researcher"), consecutiveFailures);
+                        redirectToDelegate(step, context.sessionId(), AgentRoleEnum.RESEARCHER_ID),
+                        consecutiveFailures);
             }
         }
 

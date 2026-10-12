@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
@@ -30,13 +31,13 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "AMSHA_NVIDIA_API_KEY")
+    @ConfigProperty(name = ConfigKeys.NVIDIA_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_NVIDIA_BASE_URL", defaultValue = ModelDefaults.DEFAULT_NVIDIA_BASE_URL)
+    @ConfigProperty(name = ConfigKeys.NVIDIA_BASE_URL, defaultValue = ModelDefaults.DEFAULT_NVIDIA_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_NVIDIA_MODEL", defaultValue = ModelDefaults.DEFAULT_NVIDIA_MODEL)
+    @ConfigProperty(name = ConfigKeys.NVIDIA_MODEL, defaultValue = ModelDefaults.DEFAULT_NVIDIA_MODEL)
     String modelName;
 
     @Override
@@ -68,7 +69,7 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Nvidia requires AMSHA_NVIDIA_API_KEY"));
         String cleanKey = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
         List<MultiModelChatModel.ModelEntry> entries =
-                ChatModelFactory.buildMultiModelEntries(cleanKey, modelName, "nvidia", (k, m) -> {
+                ChatModelFactory.buildMultiModelEntries(cleanKey, modelName, ModelDefaults.PROVIDER_NVIDIA, (k, m) -> {
                     ChatModel raw = new NvidiaMessageSanitizer(ChatModelFactory.createOpenAi(
                             baseUrl,
                             k,
@@ -78,10 +79,11 @@ public class NvidiaProviderFactory implements AgentChatModelProvider {
                             agentConfig.maxRetries(),
                             agentConfig.temperature(),
                             agentConfig.logHttp()));
-                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("nvidia", m);
+                    MultimodalCapability cap =
+                            MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_NVIDIA, m);
                     return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
                 });
         if (entries.size() == 1) return entries.get(0).model();
-        return new MultiModelChatModel("nvidia", entries, 5);
+        return new MultiModelChatModel(ModelDefaults.PROVIDER_NVIDIA, entries, 5);
     }
 }

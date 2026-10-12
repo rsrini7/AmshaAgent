@@ -8,6 +8,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.LlmProviderDescriptor;
 import com.amsha.llm.api.LlmProviderOnboardingAdapter;
 import com.amsha.llm.api.ModelDefaults;
@@ -46,10 +48,11 @@ public class LlmConfigurationProvenance {
     private static final Map<String, EnvironmentSpec> ENVIRONMENT_SPECS = Map.ofEntries(
             Map.entry(
                     ModelDefaults.PROVIDER_GROQ,
-                    new EnvironmentSpec("AMSHA_GROQ_MODEL", "AMSHA_GROQ_BASE_URL", "AMSHA_GROQ_API_KEY")),
+                    new EnvironmentSpec(ConfigKeys.GROQ_MODEL, ConfigKeys.GROQ_BASE_URL, ConfigKeys.GROQ_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_OPENAI,
-                    new EnvironmentSpec("AMSHA_OPENAI_MODEL", "AMSHA_OPENAI_BASE_URL", "AMSHA_OPENAI_API_KEY")),
+                    new EnvironmentSpec(
+                            ConfigKeys.OPENAI_MODEL, ConfigKeys.OPENAI_BASE_URL, ConfigKeys.OPENAI_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_OLLAMA,
                     new EnvironmentSpec(
@@ -59,62 +62,79 @@ public class LlmConfigurationProvenance {
             Map.entry(
                     ModelDefaults.PROVIDER_CLAUDE_CODE,
                     new EnvironmentSpec(
-                            "AMSHA_CLAUDE_CODE_MODEL", "AMSHA_CLAUDE_CODE_BASE_URL", "AMSHA_CLAUDE_CODE_API_KEY")),
+                            ConfigKeys.CLAUDE_CODE_MODEL,
+                            ConfigKeys.CLAUDE_CODE_BASE_URL,
+                            ConfigKeys.CLAUDE_CODE_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_OPENROUTER,
                     new EnvironmentSpec(
-                            "AMSHA_OPENROUTER_MODEL", "AMSHA_OPENROUTER_BASE_URL", "AMSHA_OPENROUTER_API_KEY")),
+                            ConfigKeys.OPENROUTER_MODEL,
+                            ConfigKeys.OPENROUTER_BASE_URL,
+                            ConfigKeys.OPENROUTER_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_NVIDIA,
-                    new EnvironmentSpec("AMSHA_NVIDIA_MODEL", "AMSHA_NVIDIA_BASE_URL", "AMSHA_NVIDIA_API_KEY")),
+                    new EnvironmentSpec(
+                            ConfigKeys.NVIDIA_MODEL, ConfigKeys.NVIDIA_BASE_URL, ConfigKeys.NVIDIA_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_CEREBRAS,
-                    new EnvironmentSpec("AMSHA_CEREBRAS_MODEL", "AMSHA_CEREBRAS_BASE_URL", "AMSHA_CEREBRAS_API_KEY")),
+                    new EnvironmentSpec(
+                            ConfigKeys.CEREBRAS_MODEL, ConfigKeys.CEREBRAS_BASE_URL, ConfigKeys.CEREBRAS_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_SARVAM,
-                    new EnvironmentSpec("AMSHA_SARVAM_MODEL", "AMSHA_SARVAM_BASE_URL", "AMSHA_SARVAM_API_KEY")),
+                    new EnvironmentSpec(
+                            ConfigKeys.SARVAM_MODEL, ConfigKeys.SARVAM_BASE_URL, ConfigKeys.SARVAM_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_OPENCODE,
-                    new EnvironmentSpec("AMSHA_OPENCODE_MODEL", "AMSHA_OPENCODE_BASE_URL", "AMSHA_OPENCODE_API_KEY")),
+                    new EnvironmentSpec(
+                            ConfigKeys.OPENCODE_MODEL, ConfigKeys.OPENCODE_BASE_URL, ConfigKeys.OPENCODE_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_HUGGINGFACE,
                     new EnvironmentSpec(
-                            "AMSHA_HUGGINGFACE_MODEL", "AMSHA_HUGGINGFACE_BASE_URL", "AMSHA_HUGGINGFACE_API_KEY")),
+                            ConfigKeys.HUGGINGFACE_MODEL,
+                            ConfigKeys.HUGGINGFACE_BASE_URL,
+                            ConfigKeys.HUGGINGFACE_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_MISTRAL,
-                    new EnvironmentSpec("AMSHA_MISTRAL_MODEL", "AMSHA_MISTRAL_BASE_URL", "AMSHA_MISTRAL_API_KEY")),
+                    new EnvironmentSpec(
+                            ConfigKeys.MISTRAL_MODEL, ConfigKeys.MISTRAL_BASE_URL, ConfigKeys.MISTRAL_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_CLOUDFLARE,
                     new EnvironmentSpec(
-                            "AMSHA_CLOUDFLARE_MODEL", "AMSHA_CLOUDFLARE_BASE_URL", "AMSHA_CLOUDFLARE_API_KEY")),
+                            ConfigKeys.CLOUDFLARE_MODEL,
+                            ConfigKeys.CLOUDFLARE_BASE_URL,
+                            ConfigKeys.CLOUDFLARE_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_COHERE,
-                    new EnvironmentSpec("AMSHA_COHERE_MODEL", "AMSHA_COHERE_BASE_URL", "AMSHA_COHERE_API_KEY")),
+                    new EnvironmentSpec(
+                            ConfigKeys.COHERE_MODEL, ConfigKeys.COHERE_BASE_URL, ConfigKeys.COHERE_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_CODEX,
-                    new EnvironmentSpec("AMSHA_CODEX_MODEL", "AMSHA_CODEX_BASE_URL", "AMSHA_CODEX_API_KEY")),
+                    new EnvironmentSpec(ConfigKeys.CODEX_MODEL, ConfigKeys.CODEX_BASE_URL, ConfigKeys.CODEX_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_AGY,
-                    new EnvironmentSpec("AMSHA_AGY_MODEL", "AMSHA_AGY_BASE_URL", "AMSHA_AGY_API_KEY")),
+                    new EnvironmentSpec(ConfigKeys.AGY_MODEL, ConfigKeys.AGY_BASE_URL, ConfigKeys.AGY_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_KIMCHI,
-                    new EnvironmentSpec("AMSHA_KIMCHI_MODEL", "AMSHA_KIMCHI_BASE_URL", "AMSHA_KIMCHI_API_KEY")),
+                    new EnvironmentSpec(
+                            ConfigKeys.KIMCHI_MODEL, ConfigKeys.KIMCHI_BASE_URL, ConfigKeys.KIMCHI_API_KEY)),
             Map.entry(
                     ModelDefaults.PROVIDER_FOUNDRY,
-                    new EnvironmentSpec("AMSHA_FOUNDRY_MODEL", "AMSHA_FOUNDRY_BASE_URL", "")),
+                    new EnvironmentSpec(ConfigKeys.FOUNDRY_MODEL, ConfigKeys.FOUNDRY_BASE_URL, "")),
             Map.entry(
                     ModelDefaults.PROVIDER_GEMINI,
-                    new EnvironmentSpec("AMSHA_GEMINI_MODEL", "", "AMSHA_GEMINI_API_KEY")),
-            Map.entry(ModelDefaults.PROVIDER_OMLX, new EnvironmentSpec("AMSHA_OMLX_MODEL", "AMSHA_OMLX_BASE_URL", "")),
+                    new EnvironmentSpec(ConfigKeys.GEMINI_MODEL, "", ConfigKeys.GEMINI_API_KEY)),
+            Map.entry(
+                    ModelDefaults.PROVIDER_OMLX,
+                    new EnvironmentSpec(ConfigKeys.OMLX_MODEL, ConfigKeys.OMLX_BASE_URL, "")),
             Map.entry(
                     ModelDefaults.PROVIDER_LLAMACPP,
-                    new EnvironmentSpec("AMSHA_LLAMACPP_MODEL", "AMSHA_LLAMACPP_BASE_URL", "")),
+                    new EnvironmentSpec(ConfigKeys.LLAMACPP_MODEL, ConfigKeys.LLAMACPP_BASE_URL, "")),
             Map.entry(
                     ModelDefaults.PROVIDER_GENERIC_OPENAI,
                     new EnvironmentSpec(
-                            "AMSHA_GENERIC_OPENAI_MODEL",
-                            "AMSHA_GENERIC_OPENAI_BASE_URL",
-                            "AMSHA_GENERIC_OPENAI_API_KEY")),
+                            ConfigKeys.GENERIC_OPENAI_MODEL,
+                            ConfigKeys.GENERIC_OPENAI_BASE_URL,
+                            ConfigKeys.GENERIC_OPENAI_API_KEY)),
             Map.entry(ModelDefaults.PROVIDER_INFINITE_LOOP, new EnvironmentSpec("", "", "")));
 
     @Inject
@@ -138,10 +158,10 @@ public class LlmConfigurationProvenance {
     @Inject
     Config config;
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
     String configuredProvider;
 
-    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.VAULT_PRIORITY, defaultValue = "false")
     boolean vaultPriority;
 
     /** Returns the current effective provider/model/base URL and non-secret credential state. */
@@ -177,8 +197,8 @@ public class LlmConfigurationProvenance {
         boolean kimchi = ModelDefaults.PROVIDER_KIMCHI.equals(normalizedProvider);
         boolean cloudflare = ModelDefaults.PROVIDER_CLOUDFLARE.equals(normalizedProvider);
         if (cloudflare && effectiveBaseUrl.contains("{account_id}")) {
-            Optional<String> accountId =
-                    configValue("AMSHA_CLOUDFLARE_ACCOUNT_ID").or(() -> configValue("amsha.llm.cloudflare.account-id"));
+            Optional<String> accountId = configValue(ConfigKeys.CLOUDFLARE_ACCOUNT_ID)
+                    .or(() -> configValue(LlmConfigKeys.CLOUDFLARE_ACCOUNT_ID));
             if (accountId.isPresent() && !accountId.get().isBlank()) {
                 effectiveBaseUrl =
                         effectiveBaseUrl.replace("{account_id}", accountId.get().trim());
@@ -205,7 +225,7 @@ public class LlmConfigurationProvenance {
                 && (!ModelDefaults.PROVIDER_GENERIC_OPENAI.equals(normalizedProvider) || !effectiveBaseUrl.isBlank())
                 && (!cloudflare || !effectiveBaseUrl.contains("{account_id}"))
                 && (!ModelDefaults.PROVIDER_INFINITE_LOOP.equals(normalizedProvider)
-                        || hasConfiguredEnvironmentValue("AMSHA_INFINITE_LOOP_LLM_PROVIDERS"));
+                        || hasConfiguredEnvironmentValue(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS));
 
         return new Resolution(
                 normalizedProvider,
@@ -223,7 +243,7 @@ public class LlmConfigurationProvenance {
     }
 
     private boolean configuredProviderIsExplicitlySet() {
-        ConfigValue providerValue = config().getConfigValue("amsha.llm.provider");
+        ConfigValue providerValue = config().getConfigValue(LlmConfigKeys.PROVIDER);
         String sourceName = providerValue.getSourceName();
         if (sourceName == null || sourceName.isBlank()) {
             return false;

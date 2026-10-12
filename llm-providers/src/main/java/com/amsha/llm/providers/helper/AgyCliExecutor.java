@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalRequests;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,7 +49,7 @@ public final class AgyCliExecutor {
 
         String userHome = System.getProperty("user.home", "");
         if (!userHome.isBlank()) {
-            Path localBin = Path.of(userHome, ".local", "bin", "agy");
+            Path localBin = Path.of(userHome, ".local", "bin", ModelDefaults.PROVIDER_AGY);
             if (Files.isExecutable(localBin)) {
                 return localBin;
             }
@@ -57,7 +58,7 @@ public final class AgyCliExecutor {
         String pathEnv = System.getenv("PATH");
         if (pathEnv != null) {
             for (String dir : pathEnv.split(File.pathSeparator)) {
-                Path candidate = Path.of(dir, "agy");
+                Path candidate = Path.of(dir, ModelDefaults.PROVIDER_AGY);
                 if (Files.isExecutable(candidate)) {
                     return candidate;
                 }
@@ -107,7 +108,7 @@ public final class AgyCliExecutor {
                 sb.append("System Instructions:\n").append(sys.text()).append("\n\n");
             } else if (msg instanceof UserMessage usr) {
                 sb.append("User: ")
-                        .append(MultimodalRequests.textOf(usr, "agy"))
+                        .append(MultimodalRequests.textOf(usr, ModelDefaults.PROVIDER_AGY))
                         .append("\n\n");
             } else if (msg instanceof AiMessage ai
                     && ai.text() != null

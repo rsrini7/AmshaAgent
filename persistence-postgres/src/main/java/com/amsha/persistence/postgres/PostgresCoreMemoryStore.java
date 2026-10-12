@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.CoreMemoryStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.api.VersionConflictException;
 import com.amsha.persistence.postgres.jdbi.CoreMemoryJdbiDao;
@@ -22,7 +23,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @TieredBackend("postgres")
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresCoreMemoryStore implements CoreMemoryStorePort {
 
     private final Jdbi jdbi;

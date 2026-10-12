@@ -19,6 +19,10 @@
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-channel-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-core</artifactId>
     </dependency>
     <dependency>

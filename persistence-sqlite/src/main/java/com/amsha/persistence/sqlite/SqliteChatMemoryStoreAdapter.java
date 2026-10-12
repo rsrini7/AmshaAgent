@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.ChatMemoryDto;
 import com.amsha.persistence.api.ChatMemoryStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.ChatMemoryJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
@@ -18,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteChatMemoryStoreAdapter implements ChatMemoryStorePort {
 
     private final Jdbi jdbi;

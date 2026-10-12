@@ -27,6 +27,7 @@ import com.amsha.channel.api.hitl.ApprovalNotifier;
 import com.amsha.channel.api.hitl.ApprovalOutcome;
 import com.amsha.channel.api.hitl.ApprovalResult;
 import com.amsha.channel.api.preference.UserPreferenceService;
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -228,7 +229,7 @@ public class TelegramCallbackHandler {
                             HttpRequest.newBuilder()
                                     .uri(URI.create("https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"))
                                     .timeout(Duration.ofSeconds(5))
-                                    .header("Content-Type", "application/json")
+                                    .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
                                     .POST(HttpRequest.BodyPublishers.ofString(body))
                                     .build(),
                             HttpResponse.BodyHandlers.discarding())

@@ -16,7 +16,9 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -213,13 +215,13 @@ public class ClaudeCodeOAuthTokenExtractor {
     }
 
     private Optional<String> extractTokenFromEnvironment() {
-        return Optional.ofNullable(System.getenv("AMSHA_CLAUDE_CODE_API_KEY"))
+        return Optional.ofNullable(System.getenv(ConfigKeys.CLAUDE_CODE_API_KEY))
                 .filter(k -> !k.isBlank())
                 .or(() -> Optional.ofNullable(System.getenv("CLAUDE_CODE_OAUTH_TOKEN"))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getProperty("AMSHA_CLAUDE_CODE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getProperty(ConfigKeys.CLAUDE_CODE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.claude-code.api-key"))
+                .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.CLAUDE_CODE_API_KEY))
                         .filter(k -> !k.isBlank()));
     }
 }

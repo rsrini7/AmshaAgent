@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
@@ -265,7 +266,7 @@ public class GovernedTransportService {
             String approvalToken) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofMillis(GovernedHttpClient.DEFAULT_READ_TIMEOUT_MS))
-                .header("Accept", "application/json, text/plain, */*")
+                .header(HttpProtocol.HEADER_ACCEPT, "application/json, text/plain, */*")
                 .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/amsha)")
                 .GET()
                 .build();
@@ -322,8 +323,8 @@ public class GovernedTransportService {
         }
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofMillis(GovernedHttpClient.DEFAULT_READ_TIMEOUT_MS))
-                .header("Content-Type", contentType)
-                .header("Accept", "application/json")
+                .header(HttpProtocol.HEADER_CONTENT_TYPE, contentType)
+                .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
                 .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/amsha)")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();

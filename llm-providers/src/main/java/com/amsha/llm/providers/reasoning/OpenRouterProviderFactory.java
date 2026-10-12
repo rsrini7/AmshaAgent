@@ -8,10 +8,12 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
@@ -29,19 +31,19 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "AMSHA_OPENROUTER_API_KEY")
+    @ConfigProperty(name = ConfigKeys.OPENROUTER_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_OPENROUTER_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OPENROUTER_BASE_URL)
+    @ConfigProperty(name = ConfigKeys.OPENROUTER_BASE_URL, defaultValue = ModelDefaults.DEFAULT_OPENROUTER_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_OPENROUTER_MODEL", defaultValue = ModelDefaults.DEFAULT_OPENROUTER_MODEL)
+    @ConfigProperty(name = ConfigKeys.OPENROUTER_MODEL, defaultValue = ModelDefaults.DEFAULT_OPENROUTER_MODEL)
     String modelName;
 
-    @ConfigProperty(name = "amsha.llm.openrouter.site-url", defaultValue = "https://github.com/rsrini7/amsha")
+    @ConfigProperty(name = LlmConfigKeys.OPENROUTER_SITE_URL, defaultValue = "https://github.com/rsrini7/amsha")
     String siteUrl;
 
-    @ConfigProperty(name = "amsha.llm.openrouter.app-name", defaultValue = "Amsha Agent")
+    @ConfigProperty(name = LlmConfigKeys.OPENROUTER_APP_NAME, defaultValue = "Amsha Agent")
     String appName;
 
     @Override
@@ -73,7 +75,7 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
         String key =
                 apiKey.orElseThrow(() -> new IllegalStateException("OpenRouter requires AMSHA_OPENROUTER_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
-                key, overrideModel != null ? overrideModel : modelName, "openrouter", (k, m) -> {
+                key, overrideModel != null ? overrideModel : modelName, ModelDefaults.PROVIDER_OPENROUTER, (k, m) -> {
                     ChatModel raw = ChatModelFactory.withOpenRouterHeaders(
                                     ChatModelFactory.openAiBuilder(
                                             baseUrl,
@@ -88,10 +90,11 @@ public class OpenRouterProviderFactory implements AgentChatModelProvider {
                                     siteUrl,
                                     appName)
                             .build();
-                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openrouter", m);
+                    MultimodalCapability cap =
+                            MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_OPENROUTER, m);
                     return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
                 });
         if (entries.size() == 1) return entries.get(0).model();
-        return new MultiModelChatModel("openrouter", entries, 5);
+        return new MultiModelChatModel(ModelDefaults.PROVIDER_OPENROUTER, entries, 5);
     }
 }

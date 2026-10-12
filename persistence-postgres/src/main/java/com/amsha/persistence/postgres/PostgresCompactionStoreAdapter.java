@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CompactionSummaryDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.postgres.jdbi.CompactionJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
@@ -18,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresCompactionStoreAdapter implements CompactionStorePort {
 
     private final Jdbi jdbi;

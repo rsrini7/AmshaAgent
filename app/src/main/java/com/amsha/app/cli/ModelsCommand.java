@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.localml.onnx.LocalAudioTranscoder;
 
 /**
@@ -124,7 +125,7 @@ public class ModelsCommand implements Runnable {
 
         private static void checkFfmpegNotice() {
             String configuredFfmpeg =
-                    System.getProperty("amsha.stt.ffmpeg-path", System.getenv("AMSHA_STT_FFMPEG_PATH"));
+                    System.getProperty("amsha.stt.ffmpeg-path", System.getenv(ConfigKeys.STT_FFMPEG_PATH));
             if (!LocalAudioTranscoder.isFfmpegAvailable(configuredFfmpeg)) {
                 System.out.println();
                 System.out.println("  ⚠️  Notice: ffmpeg was not detected on your system.");

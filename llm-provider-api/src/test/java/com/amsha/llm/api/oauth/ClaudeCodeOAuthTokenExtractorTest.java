@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -253,7 +255,7 @@ class ClaudeCodeOAuthTokenExtractorTest {
 
     @Test
     void extractToken_fallbackToSystemProperties() {
-        String orig1 = System.getProperty("AMSHA_CLAUDE_CODE_API_KEY");
+        String orig1 = System.getProperty(ConfigKeys.CLAUDE_CODE_API_KEY);
         String orig2 = System.getProperty("amsha.llm.claude-code.api-key");
         String origOs = System.getProperty("os.name");
         String origHome = System.getProperty("user.home");
@@ -262,23 +264,23 @@ class ClaudeCodeOAuthTokenExtractorTest {
             System.setProperty("user.home", tempDir.resolve("empty_home").toString());
 
             // Test AMSHA_CLAUDE_CODE_API_KEY
-            System.setProperty("AMSHA_CLAUDE_CODE_API_KEY", "claude-sys-prop-key-1");
+            System.setProperty(ConfigKeys.CLAUDE_CODE_API_KEY, "claude-sys-prop-key-1");
             System.clearProperty("amsha.llm.claude-code.api-key");
             Optional<String> t1 = extractor.extractToken();
             assertTrue(t1.isPresent());
             assertEquals("claude-sys-prop-key-1", t1.get());
 
             // Test amsha.llm.claude-code.api-key
-            System.clearProperty("AMSHA_CLAUDE_CODE_API_KEY");
+            System.clearProperty(ConfigKeys.CLAUDE_CODE_API_KEY);
             System.setProperty("amsha.llm.claude-code.api-key", "claude-sys-prop-key-2");
             Optional<String> t2 = extractor.extractToken();
             assertTrue(t2.isPresent());
             assertEquals("claude-sys-prop-key-2", t2.get());
         } finally {
             if (orig1 != null) {
-                System.setProperty("AMSHA_CLAUDE_CODE_API_KEY", orig1);
+                System.setProperty(ConfigKeys.CLAUDE_CODE_API_KEY, orig1);
             } else {
-                System.clearProperty("AMSHA_CLAUDE_CODE_API_KEY");
+                System.clearProperty(ConfigKeys.CLAUDE_CODE_API_KEY);
             }
             if (orig2 != null) {
                 System.setProperty("amsha.llm.claude-code.api-key", orig2);
@@ -298,11 +300,11 @@ class ClaudeCodeOAuthTokenExtractorTest {
     void extractToken_allCandidateFilesystemPaths() throws IOException {
         String origOs = System.getProperty("os.name");
         String origHome = System.getProperty("user.home");
-        String orig1 = System.getProperty("AMSHA_CLAUDE_CODE_API_KEY");
+        String orig1 = System.getProperty(ConfigKeys.CLAUDE_CODE_API_KEY);
         String orig2 = System.getProperty("amsha.llm.claude-code.api-key");
         try {
             System.setProperty("os.name", "Linux");
-            System.clearProperty("AMSHA_CLAUDE_CODE_API_KEY");
+            System.clearProperty(ConfigKeys.CLAUDE_CODE_API_KEY);
             System.clearProperty("amsha.llm.claude-code.api-key");
 
             String[][] relPaths = {
@@ -327,7 +329,7 @@ class ClaudeCodeOAuthTokenExtractorTest {
             }
         } finally {
             if (orig1 != null) {
-                System.setProperty("AMSHA_CLAUDE_CODE_API_KEY", orig1);
+                System.setProperty(ConfigKeys.CLAUDE_CODE_API_KEY, orig1);
             }
             if (orig2 != null) {
                 System.setProperty("amsha.llm.claude-code.api-key", orig2);
@@ -345,19 +347,19 @@ class ClaudeCodeOAuthTokenExtractorTest {
     void extractToken_macKeychainLookup() {
         String origOs = System.getProperty("os.name");
         String origHome = System.getProperty("user.home");
-        String orig1 = System.getProperty("AMSHA_CLAUDE_CODE_API_KEY");
+        String orig1 = System.getProperty(ConfigKeys.CLAUDE_CODE_API_KEY);
         String orig2 = System.getProperty("amsha.llm.claude-code.api-key");
         try {
             System.setProperty("os.name", "Mac OS X");
             System.setProperty(
                     "user.home", tempDir.resolve("empty_home_keychain").toString());
-            System.clearProperty("AMSHA_CLAUDE_CODE_API_KEY");
+            System.clearProperty(ConfigKeys.CLAUDE_CODE_API_KEY);
             System.clearProperty("amsha.llm.claude-code.api-key");
 
             extractor.extractToken();
         } finally {
             if (orig1 != null) {
-                System.setProperty("AMSHA_CLAUDE_CODE_API_KEY", orig1);
+                System.setProperty(ConfigKeys.CLAUDE_CODE_API_KEY, orig1);
             }
             if (orig2 != null) {
                 System.setProperty("amsha.llm.claude-code.api-key", orig2);

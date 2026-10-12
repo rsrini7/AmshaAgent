@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.task.TaskFile;
@@ -21,6 +22,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import io.quarkus.arc.Unremovable;
@@ -33,10 +35,10 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 @ApplicationScoped
 @ToolMetadata(
-        capabilityId = "agent_task",
+        capabilityId = ToolNames.AGENT_TASK,
         description = "Create, list, update, and transition agent task files. "
                 + "Tasks are stored as Markdown files with YAML frontmatter.",
-        defaultRoles = {"coordinator", "synthesizer", "researcher"})
+        defaultRoles = {AgentRoleEnum.COORDINATOR_ID, AgentRoleEnum.SYNTHESIZER_ID, AgentRoleEnum.RESEARCHER_ID})
 public class AgentTaskTool implements AgentTool {
 
     @Inject

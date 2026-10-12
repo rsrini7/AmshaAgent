@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.VectorIndexCompatibility;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
@@ -24,7 +25,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 /** SQLite persistence and compatibility gate for durable vector namespaces. */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteVectorIndexMetadataAdapter implements VectorIndexMetadataPort {
 
     private static final Logger log = Logger.getLogger(SqliteVectorIndexMetadataAdapter.class);

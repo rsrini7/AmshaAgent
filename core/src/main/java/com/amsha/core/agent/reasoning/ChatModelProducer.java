@@ -19,6 +19,7 @@ import com.amsha.core.config.CoreSpiResolutionValidator;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.security.api.SecretVault;
@@ -60,10 +61,10 @@ public class ChatModelProducer {
             Map.entry(ModelDefaults.PROVIDER_GEMINI, ModelDefaults.DEFAULT_GEMINI_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GENERIC_OPENAI, ""));
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
     String provider;
 
-    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.VAULT_PRIORITY, defaultValue = "false")
     boolean vaultPriority;
 
     @Inject
@@ -142,9 +143,9 @@ public class ChatModelProducer {
             if (vaultProv.isPresent()) {
                 try (VaultKey pKey = vaultProv.get()) {
                     String vp = new String(pKey.get(), StandardCharsets.UTF_8).trim();
-                    if ("ollama".equalsIgnoreCase(vp)
-                            || "omlx".equalsIgnoreCase(vp)
-                            || "llamacpp".equalsIgnoreCase(vp)) {
+                    if (ModelDefaults.PROVIDER_OLLAMA.equalsIgnoreCase(vp)
+                            || ModelDefaults.PROVIDER_OMLX.equalsIgnoreCase(vp)
+                            || ModelDefaults.PROVIDER_LLAMACPP.equalsIgnoreCase(vp)) {
                         effectiveProv = vp;
                         log.infof("ChatModelProducer: using vault provider=%s model=%s", effectiveProv, model);
                     }

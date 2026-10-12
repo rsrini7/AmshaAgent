@@ -9,6 +9,7 @@ import java.util.Objects;
 import com.amsha.mcp.bridge.McpToolBridge;
 import com.amsha.mcp.bridge.McpToolRequest;
 import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolNames;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkiverse.mcp.server.Tool;
@@ -25,14 +26,16 @@ public class McpToolsBean {
     @Inject
     ObjectMapper objectMapper;
 
-    @Tool(name = "github", description = "Execute GitHub operations (search, pull, comment)")
+    @Tool(name = ToolNames.GITHUB, description = "Execute GitHub operations (search, pull, comment)")
     public String github(String operation, String paramsJson) {
         McpToolRequest req = new McpToolRequest(
                 ToolCapability.GITHUB.toolName(), paramsJson, requestOpt.isResolvable() ? requestOpt.get() : null);
         return bridge.executeTool(req);
     }
 
-    @Tool(name = "recall_memory_search", description = "Search exact conversation history (messages, code, errors)")
+    @Tool(
+            name = ToolNames.RECALL_MEMORY_SEARCH,
+            description = "Search exact conversation history (messages, code, errors)")
     public String recallMemorySearch(String query) {
         McpToolRequest req = new McpToolRequest(
                 ToolCapability.RECALL_MEMORY_SEARCH.toolName(),
@@ -42,7 +45,7 @@ public class McpToolsBean {
     }
 
     @Tool(
-            name = "archival_memory_search",
+            name = ToolNames.ARCHIVAL_MEMORY_SEARCH,
             description = "Semantic search across long-term knowledge (patterns, facts, preferences, project context)")
     public String archivalMemorySearch(String query) {
         McpToolRequest req = new McpToolRequest(

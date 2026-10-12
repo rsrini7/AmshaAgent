@@ -26,6 +26,7 @@ import com.amsha.app.security.ApiKeyRegistry;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.util.HttpConstants;
 import com.amsha.persistence.api.WebSessionDto;
 import com.amsha.persistence.api.WebSessionStorePort;
 
@@ -63,7 +64,7 @@ public class SessionResource {
     @POST
     @Path("/rotate")
     public Response rotateSession() {
-        Cookie incomingSessionCookie = httpHeaders.getCookies().get("AMSHA_SESSION_ID");
+        Cookie incomingSessionCookie = httpHeaders.getCookies().get(HttpConstants.COOKIE_SESSION_ID);
         String sessionToken = incomingSessionCookie != null ? incomingSessionCookie.getValue() : null;
         if (sessionToken == null || sessionToken.isBlank()) {
             return Response.status(Response.Status.UNAUTHORIZED)
@@ -120,7 +121,7 @@ public class SessionResource {
 
         boolean secureCookie = "https".equalsIgnoreCase(uriInfo.getBaseUri().getScheme());
 
-        NewCookie sessionCookie = new NewCookie.Builder("AMSHA_SESSION_ID")
+        NewCookie sessionCookie = new NewCookie.Builder(HttpConstants.COOKIE_SESSION_ID)
                 .value(newToken)
                 .path("/")
                 .maxAge(3600 * 24 * 7)

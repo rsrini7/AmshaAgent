@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 
 import java.time.Duration;
 
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.RoutingChatModelProvider;
@@ -33,7 +34,7 @@ public class CodexLlmProviderFactory implements RoutingChatModelProvider {
     @Inject
     GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "amsha.llm.log-http", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.LOG_HTTP, defaultValue = "false")
     boolean logHttp;
 
     @Override

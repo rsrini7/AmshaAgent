@@ -30,6 +30,7 @@ import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.event.DomainEventBus;
+import com.amsha.core.util.HttpConstants;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.onboarding.dto.NetworkProfilePolicyDto;
 import com.amsha.onboarding.dto.NetworkProfileUpdateRequest;
@@ -37,6 +38,7 @@ import com.amsha.onboarding.dto.PromptUpdateRequest;
 import com.amsha.onboarding.dto.ProviderUpdateRequest;
 import com.amsha.onboarding.dto.SettingsDto;
 import com.amsha.onboarding.dto.VoiceSettingsUpdateRequest;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.OnboardingDraftDto;
@@ -106,9 +108,9 @@ public class SettingsResource {
         if (securityContext.getUserPrincipal() != null) {
             return securityContext.getUserPrincipal().getName();
         }
-        String headerKey = httpHeaders.getHeaderString("X-Amsha-API-Key");
+        String headerKey = httpHeaders.getHeaderString(HttpConstants.X_AMSHA_API_KEY);
         if (headerKey != null && headerKey.equals(internalApiKey)) {
-            return "internal";
+            return AccessRoles.INTERNAL;
         }
         return null;
     }
@@ -119,7 +121,7 @@ public class SettingsResource {
 
     @GET
     @Operation(summary = "Get current system settings and LLM configuration")
-    public SettingsDto getSettings(@HeaderParam("X-Amsha-API-Key") String key) {
+    public SettingsDto getSettings(@HeaderParam(HttpConstants.X_AMSHA_API_KEY) String key) {
         String owner = requireOwner();
         if (owner == null) {
             throw new WebApplicationException(Response.status(Response.Status.UNAUTHORIZED)
@@ -154,7 +156,8 @@ public class SettingsResource {
     @Path("/voice")
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Update user voice and speech output mode preferences")
-    public Response updateVoice(@HeaderParam("X-Amsha-API-Key") String key, VoiceSettingsUpdateRequest req) {
+    public Response updateVoice(
+            @HeaderParam(HttpConstants.X_AMSHA_API_KEY) String key, VoiceSettingsUpdateRequest req) {
         String owner = requireOwner();
         if (owner == null) {
             return Response.status(401)
@@ -181,7 +184,7 @@ public class SettingsResource {
     @GET
     @Path("/prompt")
     @Operation(summary = "Get the full system prompt from vault")
-    public Response getPrompt(@HeaderParam("X-Amsha-API-Key") String key) {
+    public Response getPrompt(@HeaderParam(HttpConstants.X_AMSHA_API_KEY) String key) {
         String owner = requireOwner();
         if (owner == null) {
             return Response.status(401)
@@ -196,7 +199,7 @@ public class SettingsResource {
     @Path("/provider")
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Open an EDIT_PROFILE draft for provider change (no direct vault write)")
-    public Response updateProvider(@HeaderParam("X-Amsha-API-Key") String key, ProviderUpdateRequest req) {
+    public Response updateProvider(@HeaderParam(HttpConstants.X_AMSHA_API_KEY) String key, ProviderUpdateRequest req) {
         String owner = requireOwner();
         if (owner == null) {
             return Response.status(401)
@@ -258,7 +261,7 @@ public class SettingsResource {
     @Path("/connection-network-profile")
     @Operation(summary = "Get the network profile for a connection in the active draft or committed configuration")
     public Response getConnectionNetworkProfile(
-            @HeaderParam("X-Amsha-API-Key") String key,
+            @HeaderParam(HttpConstants.X_AMSHA_API_KEY) String key,
             @QueryParam("connectionIndex") @DefaultValue("-1") int connectionIndex) {
         String owner = requireOwner();
         if (owner == null) {
@@ -294,7 +297,7 @@ public class SettingsResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Persist a per-connection network profile into the owner's active draft")
     public Response updateConnectionNetworkProfile(
-            @HeaderParam("X-Amsha-API-Key") String key, NetworkProfileUpdateRequest req) {
+            @HeaderParam(HttpConstants.X_AMSHA_API_KEY) String key, NetworkProfileUpdateRequest req) {
         String owner = requireOwner();
         if (owner == null) {
             return Response.status(401)
@@ -426,7 +429,7 @@ public class SettingsResource {
     @Path("/prompt")
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Update the global system prompt (legacy compatibility read/write)")
-    public Response updatePrompt(@HeaderParam("X-Amsha-API-Key") String key, PromptUpdateRequest req) {
+    public Response updatePrompt(@HeaderParam(HttpConstants.X_AMSHA_API_KEY) String key, PromptUpdateRequest req) {
         String owner = requireOwner();
         if (owner == null) {
             return Response.status(401)
@@ -452,7 +455,7 @@ public class SettingsResource {
     @POST
     @Path("/reset")
     @Operation(summary = "Scoped deactivation: discard the owner's active draft (no blind key deletion)")
-    public Response reset(@HeaderParam("X-Amsha-API-Key") String key) {
+    public Response reset(@HeaderParam(HttpConstants.X_AMSHA_API_KEY) String key) {
         String owner = requireOwner();
         if (owner == null) {
             return Response.status(401)

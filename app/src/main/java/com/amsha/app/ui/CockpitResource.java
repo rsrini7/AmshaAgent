@@ -23,6 +23,7 @@ import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.ExecutionRunSummaryDto;
 import com.amsha.persistence.api.ExecutionTraceDto;
 import com.amsha.persistence.api.ExecutionTraceStorePort;
@@ -241,6 +242,6 @@ public class CockpitResource {
     }
 
     boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 }

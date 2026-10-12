@@ -17,6 +17,7 @@ import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
 import com.amsha.persistence.api.McpConnectionToolPolicyDto;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
@@ -24,7 +25,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 /** Filesystem implementation of durable, non-secret MCP connection metadata. */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsMcpConnectionStoreAdapter implements McpConnectionStorePort {
 
     private static final String DOMAIN = "mcp-connections";

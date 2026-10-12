@@ -8,6 +8,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.amsha.common.config.ConfigKeys;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -21,7 +23,7 @@ class AppBootstrapTest {
         System.clearProperty("KEY_C");
         System.clearProperty("KEY_D");
         System.clearProperty("KEY_E");
-        System.clearProperty("AMSHA_LLM_PROVIDER");
+        System.clearProperty(ConfigKeys.LLM_PROVIDER);
         System.clearProperty("AMSHA_LLM_CONTEXT_WINDOW");
         System.clearProperty("AMSHA_LLM_COMPACT_PROMPT_ENABLED");
         System.clearProperty("AMSHA_LLM_STRUCTURED_OUTPUT_MODE");
@@ -74,7 +76,7 @@ class AppBootstrapTest {
 
     @Test
     void testValidateLlmConfig_doesNotOverrideSystemProperties(@TempDir Path tempDir) throws Exception {
-        System.setProperty("AMSHA_LLM_PROVIDER", "cerebras");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "cerebras");
         System.setProperty("AMSHA_LLM_CONTEXT_WINDOW", "8192");
 
         Path envFile = tempDir.resolve(".env");
@@ -88,7 +90,7 @@ class AppBootstrapTest {
 
     @Test
     void testValidateLlmConfig_doesNotSetDefaultsForMissingValues(@TempDir Path tempDir) throws Exception {
-        System.setProperty("AMSHA_LLM_PROVIDER", "groq");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "groq");
         // Ensure these are blank so the validator would warn
         System.setProperty("AMSHA_LLM_COMPACT_PROMPT_ENABLED", "");
         System.setProperty("AMSHA_LLM_STRUCTURED_OUTPUT_MODE", "");

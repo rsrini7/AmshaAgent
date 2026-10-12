@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.lang.reflect.Method;
 import java.util.List;
 
+import com.amsha.common.config.ConfigKeys;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -63,7 +65,7 @@ class CliUtilsTest {
         for (String k : PER_PROVIDER_KEYS) System.clearProperty(k);
         for (String k : TELEGRAM_KEYS) System.clearProperty(k);
         for (String k : OPTIONAL_TOOL_KEYS) System.clearProperty(k);
-        System.clearProperty("AMSHA_LLM_PROVIDER");
+        System.clearProperty(ConfigKeys.LLM_PROVIDER);
         System.clearProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS");
         System.clearProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
         System.clearProperty("AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS");
@@ -382,7 +384,7 @@ class CliUtilsTest {
         setAllVars();
         String[] providers = {"openrouter", "openai", "gemini", "nvidia", "cerebras", "omlx", "ollama"};
         for (String p : providers) {
-            System.setProperty("AMSHA_LLM_PROVIDER", p);
+            System.setProperty(ConfigKeys.LLM_PROVIDER, p);
             // Should not throw and should handle provider resolution
             List<VarSpec> missing = CliUtils.getMissingVarSpecs(new String[] {});
             assertNotNull(missing);
@@ -435,7 +437,7 @@ class CliUtilsTest {
         for (String k : TELEGRAM_KEYS) System.setProperty(k, "test-value-123");
         for (String k : OPTIONAL_TOOL_KEYS) System.setProperty(k, "test-value-123");
         // Provider key
-        System.setProperty("AMSHA_GROQ_API_KEY", "gsk_test123");
+        System.setProperty(ConfigKeys.GROQ_API_KEY, "gsk_test123");
         // Default slot providers (groq for compaction/classifier, ollama for embedding)
         // already covered by the COMPACTION_GROQ / CLASSIFIER_GROQ / embedding keys
         // in PER_PROVIDER_KEYS — nothing else to do.

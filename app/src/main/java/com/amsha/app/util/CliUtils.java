@@ -7,6 +7,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
+import com.amsha.security.api.VaultConstants;
+
 /**
  * Pre-boot CLI utilities for Amsha Agent.
  *
@@ -45,7 +49,7 @@ public class CliUtils {
      */
     private static final VarSpec[] CORE_VARS = {
         new VarSpec(
-                "AMSHA_VAULT_PEPPER",
+                VaultConstants.VAULT_PEPPER,
                 "Secret pepper for the credential vault (>=32 random characters).",
                 "Generate one with:",
                 "  Linux/macOS:  openssl rand -base64 32",
@@ -53,7 +57,7 @@ public class CliUtils {
                 "Then add:  AMSHA_VAULT_PEPPER=<generated value>",
                 "WARNING: Never change this after first boot - it decrypts your stored secrets."),
         new VarSpec(
-                "AMSHA_AUDIT_HMAC_KEY",
+                VaultConstants.AUDIT_HMAC_KEY,
                 "HMAC key for the audit log integrity chain (>=32 random characters).",
                 "Generate one with:",
                 "  Linux/macOS:  openssl rand -base64 32",
@@ -61,21 +65,21 @@ public class CliUtils {
                 "Then add:  AMSHA_AUDIT_HMAC_KEY=<generated value>",
                 "WARNING: Never change this after first boot - it signs your audit trail."),
         new VarSpec(
-                "AMSHA_API_KEYS_INTERNAL",
+                VaultConstants.API_KEYS_INTERNAL,
                 "Bearer token for Amsha Agent's REST API (used in Authorization: Bearer <token> header).",
                 "Generate a strong random key with:",
                 "  Linux/macOS:  openssl rand -base64 32",
                 "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
                 "Then add:  AMSHA_API_KEYS_INTERNAL=<generated value>"),
         new VarSpec(
-                "AMSHA_API_KEYS_CI",
+                VaultConstants.API_KEYS_CI,
                 "CI/CD API key for pipeline smoke tests (read-only).",
                 "Generate a strong random key with:",
                 "  Linux/macOS:  openssl rand -base64 32",
                 "  Windows:      [Convert]::ToBase64String((1..32 | %{[byte](Get-Random -Max 256)}))",
                 "Then add:  AMSHA_API_KEYS_CI=<generated value>"),
         new VarSpec(
-                "AMSHA_AUTH_HMAC_KEY",
+                VaultConstants.AUTH_HMAC_KEY,
                 "HMAC key for user session and invitation token integrity (>=32 random characters).",
                 "Generate one with:",
                 "  Linux/macOS:  openssl rand -base64 32",
@@ -87,7 +91,7 @@ public class CliUtils {
     /** Required for attach mode (hard) and validated for serve mode (soft). */
     private static final VarSpec[] TELEGRAM_VARS = {
         new VarSpec(
-                "TELEGRAM_BOT_TOKEN",
+                ConfigKeys.TELEGRAM_BOT_TOKEN,
                 "Telegram bot token from @BotFather.",
                 "1. Open Telegram and message @BotFather",
                 "2. Send /newbot and follow the prompts",
@@ -119,23 +123,26 @@ public class CliUtils {
         List<VarSpec> missing = new ArrayList<>();
 
         // 1. LLM Primary Key first
-        String llmProvider = Optional.ofNullable(System.getenv("AMSHA_LLM_PROVIDER"))
-                .orElseGet(() -> System.getProperty("AMSHA_LLM_PROVIDER", "groq"))
+        String llmProvider = Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER))
+                .orElseGet(() -> System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ))
                 .toLowerCase(Locale.ROOT);
         VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(llmProvider);
         if (providerKeySpec != null && !isSet(providerKeySpec.key())) missing.add(providerKeySpec);
 
         // 1b. Per-slot API keys for compaction / intent-classifier / embedding.
         // Each infinite-loop provider list selects the first entry for key resolution.
-        String compactionProvider = ProviderKeySpecs.firstProvider(Optional.ofNullable(
-                        System.getenv("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS"))
-                .orElseGet(() -> System.getProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", "groq,ollama")));
-        String classifierProvider = ProviderKeySpecs.firstProvider(Optional.ofNullable(
-                        System.getenv("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS"))
-                .orElseGet(() -> System.getProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "groq,ollama")));
+        String compactionProvider = ProviderKeySpecs.firstProvider(
+                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS))
+                        .orElseGet(() -> System.getProperty(
+                                ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, "groq,ollama")));
+        String classifierProvider = ProviderKeySpecs.firstProvider(
+                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS))
+                        .orElseGet(() -> System.getProperty(
+                                ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, "groq,ollama")));
         String embeddingProvider = ProviderKeySpecs.firstProvider(
-                Optional.ofNullable(System.getenv("AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS"))
-                        .orElseGet(() -> System.getProperty("AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS", "ollama")));
+                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS))
+                        .orElseGet(() -> System.getProperty(
+                                ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS, ModelDefaults.PROVIDER_OLLAMA)));
 
         VarSpec compactionKeySpec = ProviderKeySpecs.compactionKeySpecFor(compactionProvider);
         if (compactionKeySpec != null && !isSet(compactionKeySpec.key())) missing.add(compactionKeySpec);
@@ -156,9 +163,9 @@ public class CliUtils {
             }
         }
 
-        if (!isSet("AMSHA_TOOLS_GITHUB_TOKEN") && !isExplicitOptOut("AMSHA_TOOLS_GITHUB_TOKEN")) {
+        if (!isSet(VaultConstants.TOOLS_GITHUB_TOKEN) && !isExplicitOptOut(VaultConstants.TOOLS_GITHUB_TOKEN)) {
             missing.add(new VarSpec(
-                    "AMSHA_TOOLS_GITHUB_TOKEN",
+                    VaultConstants.TOOLS_GITHUB_TOKEN,
                     "Optional GitHub Personal Access Token (classic or fine-grained).",
                     "Recommended for searching and managing code in GitHub repositories.",
                     "1. Go to https://github.com/settings/tokens",
@@ -166,18 +173,18 @@ public class CliUtils {
                     "3. Add:  AMSHA_TOOLS_GITHUB_TOKEN=ghp_your_key_here"));
         }
 
-        if (!isSet("AMSHA_TOOLS_SERPER_API_KEY") && !isExplicitOptOut("AMSHA_TOOLS_SERPER_API_KEY")) {
+        if (!isSet(VaultConstants.TOOLS_SERPER_API_KEY) && !isExplicitOptOut(VaultConstants.TOOLS_SERPER_API_KEY)) {
             missing.add(new VarSpec(
-                    "AMSHA_TOOLS_SERPER_API_KEY",
+                    VaultConstants.TOOLS_SERPER_API_KEY,
                     "Optional Serper.dev API key for Google Search integration.",
                     "1. Sign up at https://serper.dev - 2,500 free searches",
                     "2. Copy your API key",
                     "3. Add:  AMSHA_TOOLS_SERPER_API_KEY=your_key_here"));
         }
 
-        if (!isSet("AMSHA_TOOLS_BRAVE_API_KEY") && !isExplicitOptOut("AMSHA_TOOLS_BRAVE_API_KEY")) {
+        if (!isSet(VaultConstants.TOOLS_BRAVE_API_KEY) && !isExplicitOptOut(VaultConstants.TOOLS_BRAVE_API_KEY)) {
             missing.add(new VarSpec(
-                    "AMSHA_TOOLS_BRAVE_API_KEY",
+                    VaultConstants.TOOLS_BRAVE_API_KEY,
                     "Optional Brave Search API key.",
                     "1. Sign up at https://api.search.brave.com",
                     "2. Create an API key",
@@ -222,9 +229,9 @@ public class CliUtils {
             if (!isSet(spec.key())) missing.add(spec);
         }
 
-        String llmProvider = Optional.ofNullable(System.getenv("AMSHA_LLM_PROVIDER"))
+        String llmProvider = Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER))
                 .map(String::toLowerCase)
-                .orElse("groq");
+                .orElse(ModelDefaults.PROVIDER_GROQ);
         VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(llmProvider);
         if (providerKeySpec != null && !isSet(providerKeySpec.key())) {
             missing.add(providerKeySpec);
@@ -300,7 +307,7 @@ public class CliUtils {
     private static void warnTelegramIfPartial() {
         String val = System.getProperty("AMSHA_TELEGRAM_ENABLED", System.getenv("AMSHA_TELEGRAM_ENABLED"));
         boolean enabled = "true".equalsIgnoreCase(val);
-        boolean hasToken = isSet("TELEGRAM_BOT_TOKEN");
+        boolean hasToken = isSet(ConfigKeys.TELEGRAM_BOT_TOKEN);
         boolean hasUserIds = isSet("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
         boolean hasUsers = isSet("AMSHA_TELEGRAM_ALLOWED_USERS");
 
@@ -322,7 +329,7 @@ public class CliUtils {
         // Case 1: explicitly enabled
         if (enabled) {
             List<String> missingKeys = new ArrayList<>();
-            if (!hasToken) missingKeys.add("TELEGRAM_BOT_TOKEN");
+            if (!hasToken) missingKeys.add(ConfigKeys.TELEGRAM_BOT_TOKEN);
             if (!hasUserIds) missingKeys.add("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
             if (!hasUsers) missingKeys.add("AMSHA_TELEGRAM_ALLOWED_USERS");
             if (!missingKeys.isEmpty()) {

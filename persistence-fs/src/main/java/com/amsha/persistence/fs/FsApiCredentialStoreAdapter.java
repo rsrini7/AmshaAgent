@@ -8,13 +8,14 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsApiCredentialStoreAdapter implements ApiCredentialStorePort {
 
     private static final String DOMAIN = "api-credentials";

@@ -17,6 +17,7 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.util.Optional;
 
 import com.amsha.channel.api.ChannelServices;
+import com.amsha.core.util.HttpConstants;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
@@ -26,7 +27,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 @RunOnVirtualThread
 public class WsAuthResource {
 
-    private static final String COOKIE_API_KEY = "AMSHA_API_KEY";
+    private static final String COOKIE_API_KEY = HttpConstants.COOKIE_AMSHA_API_KEY;
 
     @Inject
     ChannelServices channelServices;
@@ -41,7 +42,7 @@ public class WsAuthResource {
     SecurityContext securityContext;
 
     @POST
-    public WsTokenResponse issueToken(@HeaderParam("X-Amsha-API-Key") String apiKey) {
+    public WsTokenResponse issueToken(@HeaderParam(HttpConstants.X_AMSHA_API_KEY) String apiKey) {
         String resolvedKey = apiKey;
         if (resolvedKey == null || resolvedKey.isBlank()) {
             Cookie apiCookie = httpHeaders.getCookies().get(COOKIE_API_KEY);

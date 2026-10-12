@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.llm.api.ModelDefaults;
@@ -130,9 +131,9 @@ public class KimchiResponsesChatModel implements ChatModel {
             HttpRequest.Builder httpReqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(endpoint))
                     .timeout(timeout)
-                    .header("Content-Type", "application/json")
+                    .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
                     .header("User-Agent", KIMCHI_USER_AGENT)
-                    .header("Accept", "text/event-stream")
+                    .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_TEXT_EVENT_STREAM)
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
 
             applyAuthHeaders(httpReqBuilder, token);
@@ -166,7 +167,7 @@ public class KimchiResponsesChatModel implements ChatModel {
         // zeroed here; see clearSecret() for the zeroing lifecycle on disposal. new String(tokenChars)
         // copies the chars (does not retain the backing array), and no immutable copy is retained by
         // this method beyond the transient Authorization header value required at the HTTP boundary.
-        builder.header("Authorization", "Bearer " + new String(tokenChars));
+        builder.header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + new String(tokenChars));
     }
 
     /**
@@ -275,9 +276,10 @@ public class KimchiResponsesChatModel implements ChatModel {
                 if (line.isEmpty() || line.startsWith(":")) {
                     continue;
                 }
-                if (line.startsWith("data:")) {
-                    String data = line.substring(5).trim();
-                    if ("[DONE]".equals(data)) {
+                if (line.startsWith(HttpProtocol.SSE_DATA_PREFIX)) {
+                    String data = line.substring(HttpProtocol.SSE_DATA_PREFIX.length())
+                            .trim();
+                    if (HttpProtocol.SSE_DONE.equals(data)) {
                         break;
                     }
                     try {

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -133,7 +134,7 @@ public class PlaywrightMcpHelper {
      */
     private static String toMcpToolName(String action) {
         return switch (action) {
-            case "navigate", "extract_text" -> "browser_navigate";
+            case "navigate", "extract_text" -> ToolCapability.BROWSER_NAVIGATE.toolName();
             case "screenshot" -> "browser_take_screenshot";
             case "click" -> "browser_click";
             case "fill" -> "browser_type";

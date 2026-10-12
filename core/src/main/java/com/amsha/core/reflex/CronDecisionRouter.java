@@ -12,6 +12,7 @@ import com.amsha.core.agent.loop.AgentLoop;
 import com.amsha.core.agent.loop.CronRunResultMapper;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.domain.model.AgentCronRecord;
@@ -188,7 +189,7 @@ public class CronDecisionRouter {
                 return cp.get().getAgentRole();
             }
         }
-        return cron != null && cron.getExecutionRole() != null ? cron.getExecutionRole() : "researcher";
+        return cron != null && cron.getExecutionRole() != null ? cron.getExecutionRole() : AgentRoleEnum.RESEARCHER_ID;
     }
 
     private AgentCron resolveCronJob(String cronId, String cronSessionId) {

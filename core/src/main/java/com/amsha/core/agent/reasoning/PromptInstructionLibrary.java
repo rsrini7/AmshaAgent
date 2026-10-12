@@ -7,6 +7,7 @@ import java.util.List;
 
 import com.amsha.core.agent.reasoning.prompt.PromptConstants;
 import com.amsha.core.agent.reasoning.prompt.PromptRegistry;
+import com.amsha.tool.api.ToolCapability;
 
 /**
  * Repository of large system prompt instruction blocks.
@@ -460,8 +461,8 @@ public class PromptInstructionLibrary {
         sb.append(
                 "   multiple facts, combine them ALL into a single call (e.g. text=\"user_name=Srini, user_alias=Vasan\").\n");
         sb.append("   Parallel or batched ingest_document calls are a CRITICAL ORCHESTRATION FAILURE.\n");
-        boolean hasHost = available.contains("host_exec");
-        String execTool = hasHost ? "host_exec" : "sandbox_exec";
+        boolean hasHost = available.contains(ToolCapability.HOST_EXEC.toolName());
+        String execTool = hasHost ? ToolCapability.HOST_EXEC.toolName() : ToolCapability.SANDBOX_EXEC.toolName();
         sb.append(
                 "5. If the user explicitly asks to \"execute\" or \"run\" code or needs research (e.g. \"execute and share result\", \"research and demo\"):\n");
         sb.append("   - If you have `" + execTool + "` AND have the info, use it DIRECTLY.\n");
@@ -477,7 +478,7 @@ public class PromptInstructionLibrary {
         sb.append(
                 "7. Use `recall_memory_search` for exact past-session text. Use `archival_memory_search` for semantic knowledge (patterns, facts, preferences).\n");
         sb.append(selfEvolveDirectiveRules()).append('\n');
-        if (available.contains("browser_navigate")) {
+        if (available.contains(ToolCapability.BROWSER_NAVIGATE.toolName())) {
             sb.append(
                     "8. URL retrieval order: search first for open-ended research; for each exact URL, use `browser_navigate` first, then `web_fetch` only if browser navigation fails, then one alternative search if both fail. Never invent URLs.\n");
         }

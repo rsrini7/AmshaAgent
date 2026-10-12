@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.amsha.app.cli.ModelInstaller.ModelCatalogEntry;
 import com.amsha.app.cli.ModelInstaller.ModelFileSpec;
 import com.amsha.app.cli.ModelInstaller.ModelStatus;
+import com.amsha.common.config.ConfigKeys;
 import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -59,8 +60,8 @@ class ModelInstallerTest {
     private static final String FILE_NAME = "model.onnx";
 
     private static final String MODEL_ROOT_PROPERTY = "amsha.onnx.model-root";
-    private static final String DATA_DIR_PROPERTY = "AMSHA_DATA_DIR";
-    private static final String MODEL_ROOT_ENV = "AMSHA_ONNX_MODEL_ROOT";
+    private static final String DATA_DIR_PROPERTY = ConfigKeys.DATA_DIR;
+    private static final String MODEL_ROOT_ENV = ConfigKeys.ONNX_MODEL_ROOT;
 
     private HttpServer server;
     private String baseUrl;

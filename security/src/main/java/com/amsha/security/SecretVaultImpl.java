@@ -14,6 +14,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SecretStorePort;
@@ -338,7 +339,8 @@ public class SecretVaultImpl implements SecretVault {
         Optional<WorkspaceMembershipDto> membership = identityStore.findMembership(workspaceId, actorUserId);
         boolean authorized = membership
                 .map(m -> "ACTIVE".equalsIgnoreCase(m.status())
-                        && ("OWNER".equalsIgnoreCase(m.role()) || "ADMIN".equalsIgnoreCase(m.role())))
+                        && (AccessRoles.OWNER.equalsIgnoreCase(m.role())
+                                || AccessRoles.ADMIN.equalsIgnoreCase(m.role())))
                 .orElse(false);
         if (!authorized) {
             throw new SecurityException(

@@ -38,6 +38,7 @@ import com.amsha.core.config.DecisionProviderConfig;
 import com.amsha.core.config.DecisionProviderGovernance;
 import com.amsha.core.config.DecisionProviderSelector;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.persistence.api.AccessRoles;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -311,7 +312,7 @@ public class DecisionAdminResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

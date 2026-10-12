@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.AdvisoryLockPort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.postgres.jdbi.LockJdbiDao;
 
 import org.jboss.logging.Logger;
@@ -21,7 +22,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresAdvisoryLockAdapter implements AdvisoryLockPort {
 
     private static final Logger log = Logger.getLogger(PostgresAdvisoryLockAdapter.class);

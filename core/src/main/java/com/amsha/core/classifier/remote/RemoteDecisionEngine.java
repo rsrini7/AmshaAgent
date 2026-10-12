@@ -19,6 +19,7 @@ import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.classifier.api.RedactionPolicy;
 import com.amsha.classifier.api.RemoteDecisionProvider;
 import com.amsha.classifier.api.StateProjectionPolicy;
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.core.classifier.selfhosted.StateProjectionRedactor;
 import com.amsha.core.classifier.wire.SystemOneWireMapper;
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -297,11 +298,13 @@ public final class RemoteDecisionEngine implements DecisionEngine, RemoteDecisio
         Duration effectiveTimeout = calculateTimeout(request.timeout(), config.timeout());
         HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(config.endpoint())
                 .timeout(effectiveTimeout)
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
+                .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
+                .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody));
 
-        config.optionalApiKey().ifPresent(key -> reqBuilder.header("Authorization", "Bearer " + key));
+        config.optionalApiKey()
+                .ifPresent(key ->
+                        reqBuilder.header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + key));
         HttpRequest httpRequest = reqBuilder.build();
 
         GovernedHttpClient.Builder clientBuilder = GovernedHttpClient.builder(outboundPolicyService)

@@ -10,6 +10,7 @@ import java.util.Locale;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.AuditSchemaPort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Jdbi;
@@ -24,7 +25,7 @@ import io.quarkus.runtime.StartupEvent;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresAuditSchemaEnforcer implements AuditSchemaPort {
 
     private final Jdbi jdbi;

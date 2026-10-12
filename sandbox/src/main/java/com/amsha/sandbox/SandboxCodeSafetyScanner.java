@@ -5,6 +5,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import com.amsha.core.tools.LanguageIds;
+
 /**
  * Scans sandbox code for destructive or dangerous patterns before execution.
  * Applied regardless of isolation strategy - direct execution is especially vulnerable.
@@ -73,7 +75,7 @@ public final class SandboxCodeSafetyScanner {
             pattern("execa"));
 
     private static final Map<String, List<Pattern>> LANG_PATTERNS = Map.of(
-            "python",
+            LanguageIds.PYTHON,
                     List.of(
                             pattern("shutil\\.rmtree"),
                             pattern("os\\.remove\\s*\\("),
@@ -82,7 +84,7 @@ public final class SandboxCodeSafetyScanner {
                             pattern("pathlib.*\\.rmdir\\s*\\("),
                             pattern("os\\.system\\s*\\("),
                             pattern("subprocess\\.(run|call|Popen|check_output)")),
-            "python3",
+            LanguageIds.PYTHON3,
                     List.of(
                             pattern("shutil\\.rmtree"),
                             pattern("os\\.remove\\s*\\("),
@@ -91,15 +93,15 @@ public final class SandboxCodeSafetyScanner {
                             pattern("pathlib.*\\.rmdir\\s*\\("),
                             pattern("os\\.system\\s*\\("),
                             pattern("subprocess\\.(run|call|Popen|check_output)")),
-            "java",
+            LanguageIds.JAVA,
                     List.of(
                             pattern("Runtime\\.getRuntime\\(\\)\\.exec"),
                             pattern("new\\s+ProcessBuilder"),
                             pattern("Files\\.delete\\s*\\("),
                             pattern("FileUtils\\.delete(Directory|Recursive|Force)?")),
-            "go", List.of(pattern("exec\\.Command"), pattern("os\\.Remove(All)?\\s*\\(")),
-            "node", NODE_PATTERNS,
-            "javascript", NODE_PATTERNS);
+            LanguageIds.GO, List.of(pattern("exec\\.Command"), pattern("os\\.Remove(All)?\\s*\\(")),
+            LanguageIds.NODE, NODE_PATTERNS,
+            LanguageIds.JAVASCRIPT, NODE_PATTERNS);
 
     /**
      * Returns the first blocked pattern found in the code, or null if clean.

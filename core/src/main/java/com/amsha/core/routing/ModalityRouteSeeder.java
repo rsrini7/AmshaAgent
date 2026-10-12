@@ -11,6 +11,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmConnectionSecretRefDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
@@ -90,7 +92,6 @@ public class ModalityRouteSeeder {
     static final String DEFAULT_TARGET = "DEFAULT";
     static final String ACTIVE_STATE = "ACTIVE";
     static final String SLOT_API_KEY = "api_key";
-    static final String PROVIDER_OMLX = "omlx";
     static final String CONN_ID = "omlx-modality-shared";
     static final String PROFILE_TEXT_ID = "modality-text-ornith";
     static final String PROFILE_IMAGE_ID = "modality-image-qwen";
@@ -120,7 +121,7 @@ public class ModalityRouteSeeder {
     private final SecretVault vault;
     private final LlmProfileStorePort profileStore;
 
-    @ConfigProperty(name = "amsha.llm.profile-routing.enabled", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.PROFILE_ROUTING_ENABLED, defaultValue = "false")
     boolean profileRoutingEnabled;
 
     @ConfigProperty(name = "amsha.llm.modality-route-seeder.enabled", defaultValue = "false")
@@ -203,7 +204,7 @@ public class ModalityRouteSeeder {
                     SYSTEM_SCOPE,
                     "system",
                     "Shared OMLX modality connection (text/image)",
-                    PROVIDER_OMLX,
+                    ModelDefaults.PROVIDER_OMLX,
                     "default",
                     null,
                     "API_KEY",
@@ -217,7 +218,7 @@ public class ModalityRouteSeeder {
             log.infof(
                     TAG + "Created shared OMLX connection %s (provider=%s, state=%s)",
                     CONN_ID,
-                    PROVIDER_OMLX,
+                    ModelDefaults.PROVIDER_OMLX,
                     ACTIVE_STATE);
             return;
         }

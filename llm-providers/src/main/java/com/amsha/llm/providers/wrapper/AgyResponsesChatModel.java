@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.llm.api.ModelDefaults;
@@ -173,8 +174,8 @@ public class AgyResponsesChatModel implements ChatModel {
             HttpRequest.Builder httpReqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(endpoint))
                     .timeout(timeout)
-                    .header("Content-Type", "application/json")
-                    .header("Accept", "text/event-stream")
+                    .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
+                    .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_TEXT_EVENT_STREAM)
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
             applyAuthHeaders(httpReqBuilder, token);
 
@@ -315,11 +316,11 @@ public class AgyResponsesChatModel implements ChatModel {
     }
 
     private void processSseLine(String line, SseAccumulator acc) throws Exception {
-        if (!line.startsWith("data:")) {
+        if (!line.startsWith(HttpProtocol.SSE_DATA_PREFIX)) {
             return;
         }
-        String data = line.substring(5).trim();
-        if (data.isEmpty() || "[DONE]".equals(data)) {
+        String data = line.substring(HttpProtocol.SSE_DATA_PREFIX.length()).trim();
+        if (data.isEmpty() || HttpProtocol.SSE_DONE.equals(data)) {
             return;
         }
 
@@ -426,10 +427,10 @@ public class AgyResponsesChatModel implements ChatModel {
             return;
         }
         String tokenStr = new String(tokenChars).trim();
-        if (tokenStr.startsWith("Bearer ")) {
-            builder.header("Authorization", tokenStr);
+        if (tokenStr.startsWith(HttpProtocol.AUTH_SCHEME_BEARER)) {
+            builder.header(HttpProtocol.HEADER_AUTHORIZATION, tokenStr);
         } else {
-            builder.header("Authorization", "Bearer " + tokenStr);
+            builder.header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + tokenStr);
         }
     }
 

@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.ExternalUserProfile;
@@ -169,7 +170,7 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
             Map<?, ?> userInfo = httpClient
                     .target(userinfoUrl.orElse(""))
                     .request(MediaType.APPLICATION_JSON_TYPE)
-                    .header("Authorization", "Bearer " + accessToken)
+                    .header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + accessToken)
                     .get(Map.class);
 
             String sub = (String) userInfo.get("sub");

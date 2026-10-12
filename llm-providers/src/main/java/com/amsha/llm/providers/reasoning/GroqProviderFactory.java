@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
@@ -29,13 +30,13 @@ public class GroqProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "AMSHA_GROQ_API_KEY")
+    @ConfigProperty(name = ConfigKeys.GROQ_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_GROQ_BASE_URL", defaultValue = ModelDefaults.DEFAULT_GROQ_BASE_URL)
+    @ConfigProperty(name = ConfigKeys.GROQ_BASE_URL, defaultValue = ModelDefaults.DEFAULT_GROQ_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_GROQ_MODEL", defaultValue = ModelDefaults.DEFAULT_GROQ_MODEL)
+    @ConfigProperty(name = ConfigKeys.GROQ_MODEL, defaultValue = ModelDefaults.DEFAULT_GROQ_MODEL)
     String modelName;
 
     @Override
@@ -66,7 +67,7 @@ public class GroqProviderFactory implements AgentChatModelProvider {
     private ChatModel createModel(String model) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Groq requires AMSHA_GROQ_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries =
-                ChatModelFactory.buildMultiModelEntries(key, model, "groq", (k, m) -> {
+                ChatModelFactory.buildMultiModelEntries(key, model, ModelDefaults.PROVIDER_GROQ, (k, m) -> {
                     ChatModel raw = ChatModelFactory.createOpenAi(
                             baseUrl,
                             k,
@@ -76,10 +77,11 @@ public class GroqProviderFactory implements AgentChatModelProvider {
                             agentConfig.maxRetries(),
                             agentConfig.temperature(),
                             agentConfig.logHttp());
-                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("groq", m);
+                    MultimodalCapability cap =
+                            MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_GROQ, m);
                     return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
                 });
         if (entries.size() == 1) return entries.get(0).model();
-        return new MultiModelChatModel("groq", entries, 5);
+        return new MultiModelChatModel(ModelDefaults.PROVIDER_GROQ, entries, 5);
     }
 }

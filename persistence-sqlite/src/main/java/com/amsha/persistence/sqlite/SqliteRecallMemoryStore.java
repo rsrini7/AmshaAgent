@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.RecallMemoryStorePort;
 import com.amsha.persistence.api.RecallMessageDto;
 import com.amsha.persistence.api.RecallSearchQuery;
@@ -20,7 +21,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @TieredBackend("sqlite")
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteRecallMemoryStore implements RecallMemoryStorePort {
 
     private final Jdbi jdbi;

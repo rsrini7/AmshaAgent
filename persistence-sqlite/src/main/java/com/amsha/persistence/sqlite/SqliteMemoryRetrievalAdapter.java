@@ -18,6 +18,7 @@ import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.PersistenceScopeProbe;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
@@ -32,7 +33,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Merges FTS5 keyword results and sqlite-vec vector results using Reciprocal Rank Fusion (RRF).
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
     private static final double RRF_K = 60.0;

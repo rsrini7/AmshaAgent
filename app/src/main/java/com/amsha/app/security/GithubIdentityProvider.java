@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.ExternalUserProfile;
@@ -103,7 +104,7 @@ public class GithubIdentityProvider implements ExternalIdentityProvider {
             Map<?, ?> userProfile = httpClient
                     .target("https://api.github.com/user")
                     .request(MediaType.APPLICATION_JSON_TYPE)
-                    .header("Authorization", "token " + accessToken)
+                    .header(HttpProtocol.HEADER_AUTHORIZATION, "token " + accessToken)
                     .get(Map.class);
 
             Object idObj = userProfile.get("id");
@@ -123,7 +124,7 @@ public class GithubIdentityProvider implements ExternalIdentityProvider {
                 List<?> emails = httpClient
                         .target("https://api.github.com/user/emails")
                         .request(MediaType.APPLICATION_JSON_TYPE)
-                        .header("Authorization", "token " + accessToken)
+                        .header(HttpProtocol.HEADER_AUTHORIZATION, "token " + accessToken)
                         .get(List.class);
 
                 for (Object item : emails) {

@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalRequests;
@@ -37,7 +38,7 @@ public final class FoundryCliExecutor {
     }
 
     public static Path resolveCliPath() {
-        String customExe = System.getenv("AMSHA_FOUNDRY_EXE");
+        String customExe = System.getenv(ConfigKeys.FOUNDRY_EXE);
         if (customExe != null && !customExe.isBlank()) {
             Path p = Path.of(customExe);
             if (Files.isExecutable(p)) {
@@ -51,7 +52,7 @@ public final class FoundryCliExecutor {
             if (Files.isExecutable(homebrewBin)) {
                 return homebrewBin;
             }
-            Path localBin = Path.of(userHome, ".local", "bin", "foundry");
+            Path localBin = Path.of(userHome, ".local", "bin", ModelDefaults.PROVIDER_FOUNDRY);
             if (Files.isExecutable(localBin)) {
                 return localBin;
             }
@@ -60,7 +61,7 @@ public final class FoundryCliExecutor {
         String pathEnv = System.getenv("PATH");
         if (pathEnv != null) {
             for (String dir : pathEnv.split(File.pathSeparator)) {
-                Path candidate = Path.of(dir, "foundry");
+                Path candidate = Path.of(dir, ModelDefaults.PROVIDER_FOUNDRY);
                 if (Files.isExecutable(candidate)) {
                     return candidate;
                 }
@@ -84,7 +85,7 @@ public final class FoundryCliExecutor {
                 sb.append("System Instructions:\n").append(sys.text()).append("\n\n");
             } else if (msg instanceof UserMessage usr) {
                 sb.append("User: ")
-                        .append(MultimodalRequests.textOf(usr, "foundry"))
+                        .append(MultimodalRequests.textOf(usr, ModelDefaults.PROVIDER_FOUNDRY))
                         .append("\n\n");
             } else if (msg instanceof AiMessage ai) {
                 if (ai.text() != null && !ai.text().isBlank()) {

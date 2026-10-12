@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.amsha.app.security.ApiKeyRegistry;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.ExternalIdentityDto;
@@ -27,7 +28,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 final class IdentityResourceHelper {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final Set<String> ALLOWED_ROLES = Set.of("OWNER", "ADMIN", "MEMBER");
+    private static final Set<String> ALLOWED_ROLES = Set.of(AccessRoles.OWNER, AccessRoles.ADMIN, AccessRoles.MEMBER);
 
     private IdentityResourceHelper() {}
 
@@ -73,13 +74,15 @@ final class IdentityResourceHelper {
                     .build();
         }
         String normalizedRole = requestedRole.toUpperCase(Locale.ROOT);
-        if ("OWNER".equals(normalizedRole) && !"OWNER".equals(callerRole)) {
+        if (AccessRoles.OWNER.equals(normalizedRole) && !AccessRoles.OWNER.equals(callerRole)) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity(new IdentityResource.ErrorResponse(
                             "FORBIDDEN", "Only workspace owners can invite new owners."))
                     .build();
         }
-        if (!"OWNER".equals(callerRole) && !"ADMIN".equals(normalizedRole) && !"MEMBER".equals(normalizedRole)) {
+        if (!AccessRoles.OWNER.equals(callerRole)
+                && !AccessRoles.ADMIN.equals(normalizedRole)
+                && !AccessRoles.MEMBER.equals(normalizedRole)) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity(new IdentityResource.ErrorResponse(
                             "FORBIDDEN", "You cannot invite a user with a role higher than yours."))
@@ -90,14 +93,14 @@ final class IdentityResourceHelper {
 
     static Response validateMemberRemoval(
             String callerRole, WorkspaceMembershipDto targetMembership, List<WorkspaceMembershipDto> workspaceMembers) {
-        if ("ADMIN".equals(callerRole) && "OWNER".equals(targetMembership.role())) {
+        if (AccessRoles.ADMIN.equals(callerRole) && AccessRoles.OWNER.equals(targetMembership.role())) {
             return Response.status(Response.Status.FORBIDDEN)
                     .entity(new IdentityResource.ErrorResponse("FORBIDDEN", "Admins cannot remove workspace owners."))
                     .build();
         }
-        if ("OWNER".equals(targetMembership.role())) {
+        if (AccessRoles.OWNER.equals(targetMembership.role())) {
             long ownerCount = workspaceMembers.stream()
-                    .filter(m -> "OWNER".equals(m.role()) && "ACTIVE".equals(m.status()))
+                    .filter(m -> AccessRoles.OWNER.equals(m.role()) && "ACTIVE".equals(m.status()))
                     .count();
             if (ownerCount <= 1) {
                 return Response.status(Response.Status.BAD_REQUEST)

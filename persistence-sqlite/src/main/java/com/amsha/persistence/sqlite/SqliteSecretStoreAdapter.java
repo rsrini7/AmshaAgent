@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.Optional;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.SecretDto;
 import com.amsha.persistence.api.SecretStorePort;
 import com.amsha.persistence.sqlite.jdbi.SecretJdbiDao;
@@ -16,7 +17,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteSecretStoreAdapter implements SecretStorePort {
 
     private final Jdbi jdbi;

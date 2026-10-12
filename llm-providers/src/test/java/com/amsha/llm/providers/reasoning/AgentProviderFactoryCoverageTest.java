@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ModelDefaults;
@@ -133,7 +134,7 @@ class AgentProviderFactoryCoverageTest {
 
     @Test
     void cloudflareFallsBackToSystemPropertiesForTheAccountId() throws Exception {
-        String property = "AMSHA_CLOUDFLARE_ACCOUNT_ID";
+        String property = ConfigKeys.CLOUDFLARE_ACCOUNT_ID;
         String previous = System.getProperty(property);
         CloudflareProviderFactory factory = new CloudflareProviderFactory();
         initializeFields(factory);
@@ -157,7 +158,7 @@ class AgentProviderFactoryCoverageTest {
     void cloudflareRejectsAnUnresolvableAccountId() throws Exception {
         // The ladder ends in System.getenv, which is not settable from a test; skip rather than assert
         // against whatever the ambient environment happens to hold.
-        assumeTrue(System.getenv("AMSHA_CLOUDFLARE_ACCOUNT_ID") == null, "env account ID is set on this machine");
+        assumeTrue(System.getenv(ConfigKeys.CLOUDFLARE_ACCOUNT_ID) == null, "env account ID is set on this machine");
 
         CloudflareProviderFactory factory = new CloudflareProviderFactory();
         initializeFields(factory);
