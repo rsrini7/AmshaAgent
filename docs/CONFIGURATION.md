@@ -236,7 +236,7 @@ routing, tool authorization, HITL decisions, or retry budgets. See
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED` | `false` | Enable the low-risk typed intent decision pilot router |
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW` | `0.50` | Lower review-band threshold; below it a judgment falls back to the deterministic default |
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH` | `0.85` | Upper review-band threshold; at or above it direct routing may apply |
-| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS` | `500` | Per-evaluation deadline for the intent decision router |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS` | `50000` | Per-evaluation deadline for the intent decision router |
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED` | `false` | Activation gate: candidate calibration on live traffic formally approved |
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED` | `false` | Activation gate: cost ceiling and latency budget formally approved |
 | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | *(unset)* | Activation gate: accountable rollout **and rollback** owner (a person or team, not a status). **No closed set of values** — the only rule enforced is non-blank (`IntentDecisionRouter.isActivationGateApproved()`), so any placeholder opens the gate; leave unset when no owner is assigned. When both approval booleans are true and this value looks like a placeholder, `ActivationGateReadiness` logs one advisory `WARN` at startup — it never rejects or normalises the value |
@@ -271,7 +271,7 @@ host (`omlx`), or a hosted API (`typesafe`).
 | `AMSHA_DECISION_{PROVIDER}_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint; the lane is derived from its host |
 | `AMSHA_DECISION_{PROVIDER}_MODEL` | *(per slot)* | Decision model to request — **required for a remote provider, optional for a self-hosted one** (blank = the server picks its own checkpoint and the field is omitted) |
 | `AMSHA_DECISION_{PROVIDER}_API_KEY` | *(unset)* | Direct provider API key, following the same environment-backed convention as other Amsha providers; blank means no key is configured |
-| `AMSHA_DECISION_{PROVIDER}_TIMEOUT` | `PT5S` for Typesafe; `PT30S` for self-hosted providers | Provider request timeout; the registered decision deadline may cap it |
+| `AMSHA_DECISION_{PROVIDER}_TIMEOUT` | `PT50S` | Provider request timeout; the registered decision deadline may cap it |
 | `AMSHA_DECISION_{PROVIDER}_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered; belongs to the model — CLM requires `PROSE` |
 
 Declared providers: `typesafe`, `clm`, `laya`, `kev`, `omlx`.

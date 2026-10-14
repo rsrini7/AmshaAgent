@@ -39,7 +39,7 @@ class DecisionDefinitionRegistryTest {
 
     private static DecisionDefinitionRegistry productionRegistry() {
         // The values the production bean is constructed with by default.
-        return new DecisionDefinitionRegistry(0.50, 0.85, 500L);
+        return new DecisionDefinitionRegistry(0.50, 0.85, 50_000L);
     }
 
     @Test
@@ -82,7 +82,7 @@ class DecisionDefinitionRegistryTest {
         assertTrue(
                 definition.allowedProviders().contains(ProviderCategory.REMOTE),
                 "the definition mirrors the intent envelope, which admits remote providers");
-        assertEquals(Duration.ofMillis(500L), definition.timeout());
+        assertEquals(Duration.ofMillis(50_000L), definition.timeout());
 
         assertEquals(1, decision.questions().size(), "the tool-risk decision asks exactly one question");
         QuestionSpec question = decision.questions().getFirst();
@@ -147,6 +147,6 @@ class DecisionDefinitionRegistryTest {
 
         DecisionDefinition definition = registry.find(INTENT_ID).orElseThrow().definition();
         assertEquals(new ReviewBand(0.50, 0.85), definition.reviewBand(), "an inverted band clamps to the defaults");
-        assertEquals(Duration.ofMillis(500L), definition.timeout(), "a non-positive deadline clamps to the default");
+        assertEquals(Duration.ofMillis(50_000L), definition.timeout(), "a non-positive deadline clamps to the default");
     }
 }

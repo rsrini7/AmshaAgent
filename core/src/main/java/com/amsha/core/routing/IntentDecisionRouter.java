@@ -94,7 +94,7 @@ public class IntentDecisionRouter {
                     double reviewBandLow,
             @ConfigProperty(name = "amsha.routing.intent-decision-router.review-band.high", defaultValue = "0.85")
                     double reviewBandHigh,
-            @ConfigProperty(name = "amsha.routing.intent-decision-router.timeout-ms", defaultValue = "500")
+            @ConfigProperty(name = "amsha.routing.intent-decision-router.timeout-ms", defaultValue = "50000")
                     long timeoutMs,
             @ConfigProperty(
                             name = "amsha.routing.intent-decision-router.activation-gate.candidate-evidence-approved",

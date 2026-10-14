@@ -985,7 +985,7 @@ Sketches, not code. Values are the shipped defaults; `_<ID>_` is a provider id (
           endpoint: "${AMSHA_DECISION_TYPESAFE_ENDPOINT:https://api.typesafe.ai/v1/systemone}"
           model: "${AMSHA_DECISION_TYPESAFE_MODEL:jev-latest}"
           api-key: "${AMSHA_DECISION_TYPESAFE_API_KEY:}"
-          timeout: ${AMSHA_DECISION_TYPESAFE_TIMEOUT:PT5S}
+          timeout: ${AMSHA_DECISION_TYPESAFE_TIMEOUT:PT50S}
           wire-profile: ${AMSHA_DECISION_TYPESAFE_WIRE_PROFILE:JSON_OBJECT}
           governance:
             data-location: "${AMSHA_DECISION_TYPESAFE_GOVERNANCE_DATA_LOCATION:}"

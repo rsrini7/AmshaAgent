@@ -45,8 +45,11 @@ public class DecisionEvidenceCorpusRegistry {
     /** Directory holding the shipped corpora, relative to the classpath root. */
     public static final String RESOURCE_DIR = "decision-evidence";
 
+    /** Default version selected by the evidence endpoint when its query parameter is omitted. */
+    public static final String DEFAULT_VERSION = "2";
+
     /** The versions this build ships. A new corpus is a new entry here plus its resource. */
-    static final int[] REGISTERED_VERSIONS = {1};
+    static final int[] REGISTERED_VERSIONS = {1, 2};
 
     /** Upper bound on a corpus file, so a corrupt or hostile resource cannot exhaust memory. */
     static final int MAX_CORPUS_BYTES = 1_000_000;

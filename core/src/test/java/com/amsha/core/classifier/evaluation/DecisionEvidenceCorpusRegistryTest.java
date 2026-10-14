@@ -34,6 +34,7 @@ class DecisionEvidenceCorpusRegistryTest {
         DecisionEvidenceCorpusRegistry registry = new DecisionEvidenceCorpusRegistry(MAPPER);
 
         assertTrue(registry.registeredVersions().contains(1), "corpus v1 must be registered");
+        assertTrue(registry.registeredVersions().contains(2), "corpus v2 must be registered");
         DecisionEvidenceCorpus corpus = registry.find(1).orElseThrow();
         assertEquals(1, corpus.corpusVersion());
         assertEquals(30, corpus.caseCount(), "the shipped corpus carries 30 redacted cases");
@@ -48,6 +49,57 @@ class DecisionEvidenceCorpusRegistryTest {
         assertFalse(corpus.casesForTask(DecisionEvidenceCase.TASK_TOOL_RISK).isEmpty(), "tool-risk cases present");
         assertTrue(
                 corpus.cases().stream().anyMatch(DecisionEvidenceCase::isSecurityRelevant), "security cases present");
+    }
+
+    @Test
+    void versionTwoIsRunnableAgainstRegisteredCriteriaAndKeepsTheFrozenM2Cohort() {
+        DecisionEvidenceCorpus corpus =
+                new DecisionEvidenceCorpusRegistry(MAPPER).find(2).orElseThrow();
+
+        assertEquals(2, corpus.corpusVersion());
+        assertEquals(30, corpus.caseCount());
+        assertEquals(
+                List.of(DecisionEvidenceCase.TASK_INTENT, DecisionEvidenceCase.TASK_TOOL_RISK),
+                corpus.evaluatedTasks());
+
+        List<DecisionEvidenceCase> intentCases = corpus.casesForTask(DecisionEvidenceCase.TASK_INTENT);
+        List<DecisionEvidenceCase> toolRiskCases = corpus.casesForTask(DecisionEvidenceCase.TASK_TOOL_RISK);
+        assertEquals(
+                3,
+                intentCases.stream()
+                        .filter(DecisionEvidenceCase::isBaselineAmbiguous)
+                        .count(),
+                "the M2 denominator remains frozen at three ambiguous intent cases");
+        for (String caseId : List.of("intent-underspecified-01", "intent-hostile-01", "intent-mal-01")) {
+            assertTrue(intentCases.stream().anyMatch(c -> c.id().equals(caseId)), caseId);
+        }
+        assertTrue(
+                intentCases.stream()
+                        .noneMatch(c -> c.criteria() != null && !c.criteria().isBlank()),
+                "evaluated intent cases must use the registered intent criteria");
+        assertTrue(
+                toolRiskCases.stream()
+                        .noneMatch(c -> c.criteria() != null && !c.criteria().isBlank()),
+                "evaluated tool-risk cases must use the registered tool-risk criteria");
+
+        List<DecisionEvidenceCase> answerQualityCases = corpus.casesForTask(DecisionEvidenceCase.TASK_ANSWER_QUALITY);
+        assertTrue(
+                answerQualityCases.stream()
+                        .anyMatch(c -> c.criteria() != null && !c.criteria().isBlank()),
+                "out-of-scope answer-quality criteria remain descriptive corpus data");
+        assertEquals(
+                11,
+                toolRiskCases.stream()
+                        .filter(DecisionEvidenceCase::isSecurityRelevant)
+                        .count(),
+                "M1's SECURITY denominator remains eleven cases");
+        assertEquals(
+                10,
+                toolRiskCases.stream()
+                        .filter(DecisionEvidenceCase::isSecurityRelevant)
+                        .filter(c -> "BLOCK".equals(c.expectedLabel()) || "REQUIRE_APPROVAL".equals(c.expectedLabel()))
+                        .count(),
+                "the rubric-aligned v2 corpus treats every shell invocation as restrictive");
     }
 
     @Test

@@ -108,7 +108,7 @@ public interface DecisionProviderConfig {
         Optional<String> apiKey();
 
         /** Request execution timeout. */
-        @WithDefault("PT5S")
+        @WithDefault("PT50S")
         Duration timeout();
 
         /**

@@ -30,6 +30,7 @@ import com.amsha.core.classifier.evaluation.DecisionEvaluationOutcome;
 import com.amsha.core.classifier.evaluation.DecisionEvaluationRefusedException;
 import com.amsha.core.classifier.evaluation.DecisionEvaluationRequest;
 import com.amsha.core.classifier.evaluation.DecisionEvaluationService;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceCorpusRegistry;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceReport;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceRunner;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceSummary;
@@ -59,7 +60,7 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
  *   <li>{@code POST /admin/decision/evaluate} — one evaluation over a registered decision.</li>
  *   <li>{@code POST /admin/decision/evidence/run} — runs a registered versioned evidence corpus and returns a
  *       summary with the M1–M5 gate metrics, as JSON or (with {@code format=markdown}) as a review-ready
- *       report. The version defaults to 1 and is selected from the corpus registry; an unregistered version
+ *       report. The version defaults to the current registered corpus and is selected from the corpus registry; an unregistered version
  *       is refused. The summary is attributed with a run id and the resolved provider and configured model;
  *       {@code diagnostics=true} adds aggregate disposition counts and grouped provider/model/lane token
  *       coverage, without exposing case-level data.</li>
@@ -252,7 +253,7 @@ public class DecisionAdminResource {
     @POST
     @Path("/evidence/run")
     public Response evidenceRun(
-            @QueryParam("version") @DefaultValue("1") int version,
+            @QueryParam("version") @DefaultValue(DecisionEvidenceCorpusRegistry.DEFAULT_VERSION) int version,
             @QueryParam("format") @DefaultValue("json") String format,
             @QueryParam("diagnostics") String diagnosticsParameter) {
         if (!isInternal()) {

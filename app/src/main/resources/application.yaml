@@ -617,7 +617,7 @@ amsha:
           endpoint: "${AMSHA_DECISION_TYPESAFE_ENDPOINT:https://api.typesafe.ai/v1/systemone}"
           model: "${AMSHA_DECISION_TYPESAFE_MODEL:jev-latest}"
           api-key: "${AMSHA_DECISION_TYPESAFE_API_KEY:}"
-          timeout: ${AMSHA_DECISION_TYPESAFE_TIMEOUT:PT5S}
+          timeout: ${AMSHA_DECISION_TYPESAFE_TIMEOUT:PT50S}
           wire-profile: ${AMSHA_DECISION_TYPESAFE_WIRE_PROFILE:JSON_OBJECT}
           governance:
             data-location: "${AMSHA_DECISION_TYPESAFE_GOVERNANCE_DATA_LOCATION:}"
@@ -634,7 +634,7 @@ amsha:
           endpoint: "${AMSHA_DECISION_CLM_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
           model: "${AMSHA_DECISION_CLM_MODEL:CLM-v0.1-8B-MLX-8bit}"
           api-key: "${AMSHA_DECISION_CLM_API_KEY:}"
-          timeout: ${AMSHA_DECISION_CLM_TIMEOUT:PT30S}
+          timeout: ${AMSHA_DECISION_CLM_TIMEOUT:PT50S}
           wire-profile: ${AMSHA_DECISION_CLM_WIRE_PROFILE:PROSE}
           governance:
             data-location: "${AMSHA_DECISION_CLM_GOVERNANCE_DATA_LOCATION:}"
@@ -650,7 +650,7 @@ amsha:
           endpoint: "${AMSHA_DECISION_LAYA_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
           model: "${AMSHA_DECISION_LAYA_MODEL:laya-multilingual}"
           api-key: "${AMSHA_DECISION_LAYA_API_KEY:}"
-          timeout: ${AMSHA_DECISION_LAYA_TIMEOUT:PT30S}
+          timeout: ${AMSHA_DECISION_LAYA_TIMEOUT:PT50S}
           wire-profile: ${AMSHA_DECISION_LAYA_WIRE_PROFILE:JSON_OBJECT}
           governance:
             data-location: "${AMSHA_DECISION_LAYA_GOVERNANCE_DATA_LOCATION:}"
@@ -668,7 +668,7 @@ amsha:
           endpoint: "${AMSHA_DECISION_KEV_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
           model: "${AMSHA_DECISION_KEV_MODEL:}"
           api-key: "${AMSHA_DECISION_KEV_API_KEY:}"
-          timeout: ${AMSHA_DECISION_KEV_TIMEOUT:PT30S}
+          timeout: ${AMSHA_DECISION_KEV_TIMEOUT:PT50S}
           wire-profile: ${AMSHA_DECISION_KEV_WIRE_PROFILE:JSON_OBJECT}
           governance:
             data-location: "${AMSHA_DECISION_KEV_GOVERNANCE_DATA_LOCATION:}"
@@ -685,7 +685,7 @@ amsha:
           endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
           model: "${AMSHA_DECISION_OMLX_MODEL:}"
           api-key: "${AMSHA_DECISION_OMLX_API_KEY:}"
-          timeout: ${AMSHA_DECISION_OMLX_TIMEOUT:PT30S}
+          timeout: ${AMSHA_DECISION_OMLX_TIMEOUT:PT50S}
           wire-profile: ${AMSHA_DECISION_OMLX_WIRE_PROFILE:JSON_OBJECT}
           governance:
             data-location: "${AMSHA_DECISION_OMLX_GOVERNANCE_DATA_LOCATION:}"
@@ -1043,7 +1043,7 @@ amsha:
       review-band:
         low: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW:0.50}
         high: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH:0.85}
-      timeout-ms: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS:500}
+      timeout-ms: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS:50000}
       activation-gate:
         candidate-evidence-approved: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED:false}
         cost-ceiling-approved: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED:false}

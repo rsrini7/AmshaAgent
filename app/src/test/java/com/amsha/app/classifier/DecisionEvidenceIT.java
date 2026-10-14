@@ -26,7 +26,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.common.QuarkusTestResource;
@@ -44,21 +43,6 @@ import io.quarkus.test.junit.TestProfile;
 class DecisionEvidenceIT {
 
     private static final String INTERNAL = "key-internal-changeme";
-
-    /**
-     * The shipped corpus is refused by the evidence path until it is re-scoped to v2.
-     *
-     * <p>Five of its cases carry case-level criteria that this path never sends to the provider — the shadow
-     * comparison harness appends that text to the goal/message, {@code DecisionEvidenceRunner} does not — so
-     * their expected labels are not achievable here and measuring M1/M2 on them would score the prompt
-     * difference rather than the model. The runner now refuses such a corpus outright
-     * ({@code CORPUS_NOT_MEASURABLE}) rather than silently ignoring the field, so every test below that
-     * requires a completed 200 run is blocked until the re-scope lands. Their assertions are deliberately
-     * kept intact: they are the acceptance criteria for corpus v2.
-     */
-    private static final String BLOCKED_ON_CORPUS_V2 =
-            "blocked on the corpus-v2 re-scope: the shipped corpus carries case-level criteria the evidence "
-                    + "path does not deliver, so DecisionEvidenceRunner refuses it (CORPUS_NOT_MEASURABLE)";
 
     @Inject
     Instance<DecisionEngine> decisionEngines;
@@ -79,12 +63,14 @@ class DecisionEvidenceIT {
     }
 
     @Test
-    void theEvidenceRunIsRefusedUntilTheCorpusIsRescoped() {
+    void theHistoricalVersionOneIsRefusedWithoutEgress() {
         // This is the guard that forces the corpus-v2 re-scope. It must fail closed rather than silently drop
         // the field: five shipped cases were calibrated with case-level criteria this path never sends, so a
         // run here would score the prompt difference rather than the model. The refusal is a 409 (the request
-        // is well-formed; the shipped artifact and this path's prompt are in conflict) and it must not egress.
+        // Version 1 remains available for historical reproduction but its evaluated cases still carry
+        // criteria that the evidence request does not send, so it must refuse before provider egress.
         given().header(HttpConstants.X_AMSHA_API_KEY, INTERNAL)
+                .queryParam("version", 1)
                 .post("/api/v1/admin/decision/evidence/run")
                 .then()
                 .statusCode(409)
@@ -94,7 +80,6 @@ class DecisionEvidenceIT {
     }
 
     @Test
-    @Disabled(BLOCKED_ON_CORPUS_V2)
     void runsTheRegisteredCorpusAndReturnsOnlyAggregateEvidence() throws IOException {
         String json = given().header(HttpConstants.X_AMSHA_API_KEY, INTERNAL)
                 .post("/api/v1/admin/decision/evidence/run")
@@ -104,7 +89,7 @@ class DecisionEvidenceIT {
                 .asString();
         JsonNode summary = new ObjectMapper().readTree(json);
 
-        assertEquals(1, summary.get("corpusVersion").asInt());
+        assertEquals(2, summary.get("corpusVersion").asInt());
         assertEquals(30, summary.get("caseCount").asInt());
         assertEquals(
                 Set.of("corpusVersion", "attribution", "caseCount", "m1", "m2", "m3", "m4", "m5"), fieldNames(summary));
@@ -114,7 +99,6 @@ class DecisionEvidenceIT {
     }
 
     @Test
-    @Disabled(BLOCKED_ON_CORPUS_V2)
     void attributesEveryRunWithItsRunIdProviderAndConfiguredModel() throws IOException {
         String json = given().header(HttpConstants.X_AMSHA_API_KEY, INTERNAL)
                 .post("/api/v1/admin/decision/evidence/run")
@@ -132,7 +116,6 @@ class DecisionEvidenceIT {
     }
 
     @Test
-    @Disabled(BLOCKED_ON_CORPUS_V2)
     void twoRunsAreDistinguishableByTheirRunId() {
         // The endpoint re-runs the corpus per request and M4's p95 is wall-clock, so two responses are
         // separate measurements. Without distinct run identifiers they could not be told apart.
@@ -145,7 +128,6 @@ class DecisionEvidenceIT {
     }
 
     @Test
-    @Disabled(BLOCKED_ON_CORPUS_V2)
     void aggregateDiagnosticsAreOptInAndExposeNoCaseLevelData() throws IOException {
         String defaultJson = given().header(HttpConstants.X_AMSHA_API_KEY, INTERNAL)
                 .post("/api/v1/admin/decision/evidence/run")
@@ -217,7 +199,6 @@ class DecisionEvidenceIT {
     }
 
     @Test
-    @Disabled(BLOCKED_ON_CORPUS_V2)
     void rendersTheSummaryAsAPayloadFreeMarkdownReport() throws IOException {
         String markdown = given().header(HttpConstants.X_AMSHA_API_KEY, INTERNAL)
                 .queryParam("format", "markdown")
@@ -240,7 +221,7 @@ class DecisionEvidenceIT {
 
         Path evidenceDir = resolveEvidenceDir();
         Files.createDirectories(evidenceDir);
-        Path report = evidenceDir.resolve("decision_evidence_report_v1.md");
+        Path report = evidenceDir.resolve("decision_evidence_report_v2.md");
         Files.writeString(report, markdown, StandardCharsets.UTF_8);
         assertTrue(Files.exists(report), "the evidence report artifact is written");
     }

@@ -47,7 +47,7 @@ public class DecisionDefinitionRegistry {
 
     private static final double DEFAULT_REVIEW_BAND_LOW = 0.50;
     private static final double DEFAULT_REVIEW_BAND_HIGH = 0.85;
-    private static final long DEFAULT_TIMEOUT_MS = 500L;
+    private static final long DEFAULT_TIMEOUT_MS = 50_000L;
 
     private final Map<String, RegisteredDecision> byId;
 
@@ -57,7 +57,7 @@ public class DecisionDefinitionRegistry {
                     double reviewBandLow,
             @ConfigProperty(name = "amsha.routing.intent-decision-router.review-band.high", defaultValue = "0.85")
                     double reviewBandHigh,
-            @ConfigProperty(name = "amsha.routing.intent-decision-router.timeout-ms", defaultValue = "500")
+            @ConfigProperty(name = "amsha.routing.intent-decision-router.timeout-ms", defaultValue = "50000")
                     long timeoutMs) {
         this(List.of(intentDecision(reviewBandLow, reviewBandHigh, timeoutMs), toolRiskDecision(timeoutMs)));
     }

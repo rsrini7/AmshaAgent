@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 /**
- * Exercises the runner end to end against the shipped corpus-v1 (loaded from the classpath) and a canned
+ * Exercises the runner end to end against the shipped corpus-v2 (loaded from the classpath) and a canned
  * evaluator, so the request-shaping, the per-case projection, and the M1–M5 metric maths are all checked
  * without any provider egress.
  */
@@ -41,13 +41,14 @@ class DecisionEvidenceRunnerTest {
     private static final String MODEL = "jev-1.13.0";
 
     private DecisionEvidenceRunner runnerWith(DecisionEvidenceRunner.EvaluationFn evaluator) {
-        return runnerWith(evaluator, measurableShippedCorpus());
+        return runnerWith(evaluator, loadShippedCorpus());
     }
 
     private DecisionEvidenceRunner runnerWith(
             DecisionEvidenceRunner.EvaluationFn evaluator, DecisionEvidenceCorpus corpus) {
         ObjectMapper mapper = strictMapper();
-        DecisionEvidenceCorpusRegistry corpusRegistry = new DecisionEvidenceCorpusRegistry(Map.of(1, corpus));
+        DecisionEvidenceCorpusRegistry corpusRegistry =
+                new DecisionEvidenceCorpusRegistry(Map.of(corpus.corpusVersion(), corpus));
         DecisionPriceScheduleRegistry priceRegistry = new DecisionPriceScheduleRegistry(Map.of());
         DecisionProviderConfig config = Mockito.mock(DecisionProviderConfig.class);
         Mockito.when(config.slots()).thenReturn(Map.of());
@@ -59,62 +60,29 @@ class DecisionEvidenceRunnerTest {
     }
 
     private DecisionEvidenceCorpus loadShippedCorpus() {
-        return loadCorpus(strictMapper());
+        return loadCorpus(strictMapper(), 2);
     }
 
     private DecisionEvidenceCorpus loadCorpus(ObjectMapper mapper) {
-        try (InputStream is = getClass().getResourceAsStream("/decision-evidence/corpus-v1.json")) {
+        return loadCorpus(mapper, 2);
+    }
+
+    private DecisionEvidenceCorpus loadHistoricalCorpus() {
+        return loadCorpus(strictMapper(), 1);
+    }
+
+    private DecisionEvidenceCorpus loadCorpus(ObjectMapper mapper, int version) {
+        String resource = "/decision-evidence/corpus-v" + version + ".json";
+        try (InputStream is = getClass().getResourceAsStream(resource)) {
             if (is == null) {
-                throw new IllegalStateException("shipped corpus-v1.json is not on the classpath");
+                throw new IllegalStateException("shipped corpus-v" + version + ".json is not on the classpath");
             }
             return mapper.readValue(is, DecisionEvidenceCorpus.class);
         } catch (Exception ex) {
-            throw new IllegalStateException("could not load corpus-v1 from the classpath", ex);
+            throw new IllegalStateException("could not load corpus-v" + version + " from the classpath", ex);
         }
     }
 
-    /**
-     * The shipped corpus with every case's criteria text removed.
-     *
-     * <p>The runner refuses the shipped corpus as-is: five of its cases were calibrated with case-level
-     * criteria that this path never sends to the provider (the shadow comparison harness appends that text
-     * to the goal/message; the evidence path does not), so their expected labels are not measurable here.
-     * Until the corpus is re-scoped to v2, these behaviour tests run the criteria-free projection of it.
-     * The projection is metric-identical — the path never delivered the criteria, so removing it cannot
-     * move a gate — and it keeps every assertion below anchored to the real shipped cases.
-     */
-    private DecisionEvidenceCorpus measurableShippedCorpus() {
-        DecisionEvidenceCorpus shipped = loadShippedCorpus();
-        return new DecisionEvidenceCorpus(
-                shipped.corpusVersion(),
-                shipped.description(),
-                shipped.provenance(),
-                shipped.baseline(),
-                shipped.evaluatedTasks(),
-                shipped.redactionReview(),
-                shipped.governance(),
-                shipped.cases().stream()
-                        .map(DecisionEvidenceRunnerTest::withoutCriteria)
-                        .toList());
-    }
-
-    private static DecisionEvidenceCase withoutCriteria(DecisionEvidenceCase c) {
-        return new DecisionEvidenceCase(
-                c.id(),
-                c.task(),
-                c.partition(),
-                c.expectedLabel(),
-                c.acceptableLabels(),
-                c.riskCategory(),
-                c.baselineAmbiguity(),
-                c.ambiguityRationale(),
-                null,
-                c.options(),
-                c.input(),
-                c.notes());
-    }
-
-    /** Every tool-risk case resolves to LOW_RISK (the worst case) and intent cases abstain. */
     private DecisionEvaluationOutcome lowRiskOpinion() {
         Map<String, String> answers = Map.of(DecisionToolRiskShadowClassifier.TOOL_RISK_KEY.name(), "LOW_RISK");
         DecisionMetadata metadata = new DecisionMetadata(PROVIDER, MODEL, Duration.ofMillis(10), 100L, 10L);
@@ -145,14 +113,14 @@ class DecisionEvidenceRunnerTest {
                         ? lowRiskOpinion()
                         : abstain();
 
-        DecisionEvidenceSummary summary = runnerWith(worstCase).run(1, "tester");
+        DecisionEvidenceSummary summary = runnerWith(worstCase).run(2, "tester");
 
         assertEquals(30, summary.caseCount());
-        // M1: 11 SECURITY tool-risk cases; 9 of them should block/escalate, all resolved LOW_RISK. The cohort
+        // M1: 11 SECURITY tool-risk cases; 10 rubric-aligned restrictive cases all resolve LOW_RISK.
         // is now complete — every SECURITY case is evaluable — so M1 reports its real rate rather than an
         // incomplete-evidence failure.
         assertEquals(11, summary.m1().denominator());
-        assertEquals(9, summary.m1().numerator());
+        assertEquals(10, summary.m1().numerator());
         assertEquals(false, summary.m1().passed());
         assertTrue(summary.m1().note().contains("Evaluated 11/11"), summary.m1().note());
         // M2: all three ambiguous intent cases are evaluated (intent-mal-01 carries a usable message), and the
@@ -190,7 +158,7 @@ class DecisionEvidenceRunnerTest {
                         ? lowRiskOpinion()
                         : abstain();
 
-        DecisionEvidenceSummary summary = runnerWith(worstCase).run(1, "tester");
+        DecisionEvidenceSummary summary = runnerWith(worstCase).run(2, "tester");
 
         List<DecisionEvidenceCaseResult> excluded = summary.results().stream()
                 .filter(DecisionEvidenceCaseResult::skippedNoDecision)
@@ -213,7 +181,7 @@ class DecisionEvidenceRunnerTest {
                         ? lowRiskOpinion()
                         : abstain();
 
-        DecisionEvidenceSummary aggregateOnly = runnerWith(worstCase).run(1, "tester");
+        DecisionEvidenceSummary aggregateOnly = runnerWith(worstCase).run(2, "tester");
 
         String runId = aggregateOnly.attribution().runId();
         assertTrue(runId != null && !runId.isBlank(), "every run must carry its own identifier");
@@ -225,7 +193,7 @@ class DecisionEvidenceRunnerTest {
         assertFalse(aggregateOnly.diagnosticsIncluded());
         assertEquals(null, aggregateOnly.diagnostics());
 
-        DecisionEvidenceSummary withDiagnostics = runnerWith(worstCase).run(1, "tester", true);
+        DecisionEvidenceSummary withDiagnostics = runnerWith(worstCase).run(2, "tester", true);
 
         assertTrue(withDiagnostics.diagnosticsIncluded());
         DecisionEvidenceDiagnostics diagnostics = withDiagnostics.diagnostics();
@@ -253,8 +221,8 @@ class DecisionEvidenceRunnerTest {
                         ? lowRiskOpinion()
                         : abstain();
 
-        String first = runnerWith(worstCase).run(1, "tester").attribution().runId();
-        String second = runnerWith(worstCase).run(1, "tester").attribution().runId();
+        String first = runnerWith(worstCase).run(2, "tester").attribution().runId();
+        String second = runnerWith(worstCase).run(2, "tester").attribution().runId();
 
         assertNotEquals(first, second, "two runs of the same corpus must not share a run identifier");
     }
@@ -282,19 +250,19 @@ class DecisionEvidenceRunnerTest {
         assertTrue(inconsistent.evaluatesTask(answerQuality.task()));
         DecisionEvidenceRunner runner = runnerWith((request, actor) -> abstain(), inconsistent);
 
-        DecisionEvaluationRefusedException thrown =
-                assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(1, "tester"));
+        DecisionEvaluationRefusedException thrown = assertThrows(
+                DecisionEvaluationRefusedException.class, () -> runner.run(shipped.corpusVersion(), "tester"));
         assertTrue(thrown.getMessage().contains("no decision is registered"), thrown.getMessage());
     }
 
     @Test
-    void theShippedCorpusIsRefusedWhileItsCasesCarryUndeliveredCriteria() {
+    void historicalVersionOneIsRefusedWhileEvaluatedCasesCarryUndeliveredCriteria() {
         // Five shipped cases carry case-level criteria that the evidence path never sends (the shadow
         // comparison harness appends it to the goal/message; DecisionEvaluationRequest carries state and
         // options, not policy). Measuring M1/M2 on them would score that prompt difference rather than the
         // model, so the run is refused outright rather than silently ignoring the field. This guard is what
         // forces the versioned re-scope; it must keep failing closed until the corpus is re-scoped.
-        DecisionEvidenceRunner runner = runnerWith((request, actor) -> abstain(), loadShippedCorpus());
+        DecisionEvidenceRunner runner = runnerWith((request, actor) -> abstain(), loadHistoricalCorpus());
 
         DecisionEvaluationRefusedException thrown =
                 assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(1, "tester"));
@@ -320,7 +288,7 @@ class DecisionEvidenceRunnerTest {
                     : abstain();
         };
 
-        runnerWith(capture).run(1, "tester");
+        runnerWith(capture).run(2, "tester");
 
         DecisionEvaluationRequest intentRequest = captured.stream()
                 .filter(r -> IntentDecisionRouter.DECISION_ID.equals(r.decisionId()))
