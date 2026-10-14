@@ -684,9 +684,11 @@ amsha:
         # usable once something on this port actually exposes the System One
         # route (e.g. a wrapper around a decision model). Leave it disabled
         # until then.
+        # OMLX's OpenAI-compatible base URL is /v1, but it does not implement
+        # the System One request contract this decision slot sends.
         omlx:
           enabled: ${AMSHA_DECISION_OMLX_ENABLED:false}
-          endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
+          endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1}"
           model: "${AMSHA_DECISION_OMLX_MODEL:}"
           api-key: "${AMSHA_DECISION_OMLX_API_KEY:}"
           timeout: ${AMSHA_DECISION_OMLX_TIMEOUT:PT5S}
