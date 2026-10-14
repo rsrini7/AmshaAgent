@@ -340,7 +340,7 @@ Issue 07 evaluates activation gates for the low-risk ambiguous intent routing pi
 
 * **Pre-Activation Gate Evaluation & Evidence Disposition**:
   * **Empirical Candidate Calibration**: Missing. Issue 04 measured only the existing deterministic baseline across 30 curated test cases; candidate models were illustrative simulations explicitly flagged as `N/A (Synthetic)`. Issues 05 and 06 established wire/SSRF contracts against local stubs. No candidate model has been empirically calibrated against live production intent traffic, false specialist route distributions, or prompt drift.
-  * **Empirical Abstention & False-Allow Rates**: Measured on the versioned corpus, but still failing the activation bars: latest M1 is 1/11 (required 0), and M2 is 1/3 (required below 1%).
+  * **Empirical Abstention & False-Allow Rates**: The 2026-10-10 versioned-corpus run measured M1 1/11 (required 0) and M2 1/3 (required below 1%); see current per-lane results in §8.2.
   * **Target Latency & Cost Ceilings**: No formal per-query cost ceiling or p95 SLA has been authorized by the Amsha Architecture Committee.
   * **Rollout Ownership**: Unassigned.
   * **Gate Disposition**: In accordance with the pre-activation gate policy, active candidate routing is **NOT ACTIVATED**. The active pilot is recorded as **Deferred**.
@@ -410,14 +410,14 @@ being required to decide.
 
 ### 8.2 Current status: activation remains deferred
 
-| Gate | Required evidence | Status (2026-10-10) | Accountable |
+| Gate | Required evidence | Status (2026-10-14) | Accountable |
 |---|---|---|---|
 | Protocol | First-party vendor documentation, re-verified within a review window **once one is in force** (8.5), plus all conformance cases passing | **MET** — contract re-verified against `docs.typesafe.ai` 2026-10-01; codec corrected to the real `POST /v1/systemone` shape. **No review window is currently in force**, so this evidence does not lapse until the cadence is confirmed | Amsha Architecture Committee |
-| Governance | Approved retention, training use, residency, isolation, secrets, egress | **UNMET** — TypeSafe retention/residency undeclared; training-use is refused outright by `RemoteProviderConfig` | Amsha Architecture Committee |
-| Quality | M1 exactly zero and M2 below 1% on the versioned corpus, per lane (8.3) | **UNMET — measured on the current candidate.** Fresh native run 2026-10-10 (`typesafe` / `jev-latest`, REMOTE): 25 evaluated, 5 skipped; **M1 1/11** (required 0), **M2 1/3** (required <1%), **M3 4/25** (reported; no threshold). The aggregate-only artifact does not expose which case contributed to M2. This run followed the rubric and `NO_OPINION` changes, so those changes are measured; they improved the observed M1/M2 counts versus prior attributed runs but did not close either gate. That run predates the corpus-criteria refusal (§7.8), so it is not reproducible until corpus v2 is approved and frozen. | Amsha Architecture Committee; model owner still to be designated |
-| Operations | Latency/cost ceilings, monitoring with drift alerting, kill switch, named owner, rollback rehearsal | **UNMET.** The remote p95 in the 2026-10-10 run was **503.95 ms**, 3.95 ms over the 500 ms budget; this is the second >500 ms result among six recorded measurements. `DecisionLatencyBudget` measures and alerts on budget status; it does not hard-block calls. M5 remains **0/25 priced**: the rate, source, effective date, and approved cost ceiling are missing. `DecisionDriftMonitor` and the configuration rollback switch exist; named rollout/rollback owners and a recorded rollback rehearsal are still missing. | Amsha Architecture Committee |
+| Governance | Approved retention, training use, residency, isolation, secrets, egress | **UNMET — approval record absent.** The current OMLX run confirms governance fields were declared, but no review/approval record closes local data handling, retention, residency, isolation, secret and egress controls. TypeSafe retention/residency remain undeclared if a hosted candidate is retained; remote config refuses training-use | Amsha Architecture Committee |
+| Quality | M1 exactly zero and M2 below 1% on a versioned corpus, per lane (8.3) | **UNMET — current local candidate measured.** Fresh native corpus-v2 run on 2026-10-14 (`omlx` / `clef-flash-oQ4e`, SELF_HOSTED): 25 evaluated and 5 skipped; **M1 2/11** (required 0, failed), **M2 0/3** (required <1%, passed), **M3 12/25** (reported; no threshold). The payload-free aggregate does not identify M1 cases. Quality remains unmet on M1 | Amsha Architecture Committee; model owner still to be designated |
+| Operations | Latency/cost ceilings, monitoring drift alerting, kill switch, named owner, rollback rehearsal | **UNMET.** Current local p95 is **842.75 ms** against the **50 ms** self-hosted budget. M5 remains **0/25 priced** with no approved cost ceiling. `DecisionLatencyBudget` reports budget status but does not hard-block; `DecisionDriftMonitor` and the configuration rollback switch exist. Named rollout/rollback owners and a recorded rollback rehearsal are still missing | Amsha Architecture Committee |
 
-The default-off evaluation path is implemented and has now exercised the real hosted candidate on the rebuilt native binary. The 2026-10-10 corpus run measured the revised rubric and `NO_OPINION` option: M1 1/11, M2 1/3, M3 4/25, remote p95 503.95 ms, and 0/25 decisions priced. This is measured failure, not an implementation gap or missing evidence. Production routing remains disabled because Quality, Governance, and Operations are not closed: M1 and M2 exceed their limits; provider retention/residency terms remain undeclared; the latest p95 exceeds budget; pricing and an approved cost ceiling are absent; and accountable owners plus rollback rehearsal are not recorded. The evaluation ADR permits this non-routing evidence run, not production activation.
+The default-off evaluation path is implemented, and the fresh local run confirms it called `omlx` / `clef-flash-oQ4e` through the non-routing evidence path. It reports M1 2/11 (failed), M2 0/3 (passed), M3 12/25, local p95 842.75 ms against 50 ms, and M5 0/25 priced. Production routing remains disabled: Quality still fails on M1 and Operations fails on M4/M5; Governance review, a reviewed cost basis and ceiling, named rollout/rollback owners, and a recorded rollback rehearsal remain open. The evaluation ADR permits this non-routing evidence run and does not authorize production activation.
 **On fixtures.** §2 of the
 [integration plan](../../research/Jev-Provider-Integration-Plan-2026.md) records why this gate is worded
 strictly: the previous adapter was roughly one-third conformant while its fixtures were green, because
@@ -516,10 +516,10 @@ with a date and a disposition:
   force**: the cadence is a proposal awaiting Committee confirmation, so no review window has begun
   and this trigger is inert. See the open item below.
 
-Last reviewed: **2026-10-10**. Disposition: **remain Deferred** — Protocol MET; Governance, Quality and
-Operations UNMET (8.2). The Quality trigger fired on 2026-10-09, when the corpus runner produced the first
-credentialed candidate evidence; the review it prompted is recorded in the 8.2 table, and the disposition
-is unchanged because the measured M1/M2 **fail** rather than pass.
+Last reviewed: **2026-10-14**. Disposition: **remain Deferred** — Protocol MET; Governance, Quality and
+Operations UNMET (8.2). The review trigger fired on 2026-10-14 after the local corpus-v2 run measured
+M1 2/11 (failed), M2 0/3 (passed), and M4 842.75 ms against the 50 ms self-hosted budget. M5 remains
+unpriced. The 2026-10-10 hosted run remains historical; no promotion approval or production routing is recorded.
 
 **Open item — the review cadence is unconfirmed.** The 90-day cadence above is a proposal, not
 policy. Recording that here rather than quietly assuming it removes a circular dependency: §8.2

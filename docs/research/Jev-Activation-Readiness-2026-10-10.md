@@ -1,6 +1,6 @@
 # JEV decision plane — activation readiness disposition (updated 2026-10-14)
 
-> **Current status (2026-10-14).** The explicit non-routing evaluation path ran the full in-scope v2 corpus against OMLX: 25 evaluated, five answer-quality cases skipped, zero refused, and zero transform errors. M1 is **2/11** (required 0, failed); M2 is **0/3** (required below 1%, passed); M3 recorded **12/25** abstentions (48%, no threshold); M4 local p95 is **776.60 ms** against a **50 ms** self-hosted budget (failed); M5 is **0/25 priced** because the schedule is empty. Production activation remains **Deferred**: M1 and M4 fail, and governance, pricing/ceiling, and operations approvals remain open. The 2026-10-10 remote run below is historical, not the current result.
+> **Current status (2026-10-14, fresh live run).** The audited evaluation path ran all 30 corpus-v2 records against local `omlx / clef-flash-oQ4e`: 25 evaluated, 5 skipped, 0 refused, and 0 transform errors. M1 **2/11** (required 0, failed); M2 **0/3** (required below 1%, passed); M3 **12/25** (48%, reported; no threshold); M4 p95 **842.75 ms** vs **50 ms** (failed); M5 **0/25 priced** (no approved ceiling). Production activation remains **Deferred**.
 
 This record incorporates the fresh native corpus run completed 2026-10-10 after the tool-risk rubric and intent-abstention changes. Run `cd5beb45-d2de-495c-af59-e977c4f0133d` used `typesafe` / `jev-latest` on the REMOTE lane and evaluated 25 hosted decisions (5 corpus cases skipped). The safe aggregate is `.scratch/decision-corpus-attributed/run-4-20261010T174231Z/summary.json`.
 
@@ -28,15 +28,15 @@ activate production routing).
 
 ## 2. Observation-by-observation disposition
 
-The dated 2026-10-10 values in this table are retained as a historical snapshot. The latest local corpus-v2 results are recorded in §6.6 and supersede those values for current M1/M2/M4 status.
+The dated 2026-10-10 values in this table are historical; the latest local corpus-v2 results are recorded in §6.7 and supersede those values for current M1/M2/M4 status.
 
 | # | Observation | Status | What is actually missing | Owner | Closes when |
 |---|---|---|---|---|---|
-| 1 | **Quality** — candidate quality | **UNMET — measured, still failing** | Historical 2026-10-10 run: M1 **1/11** (bar exactly 0); M2 **1/3** (bar <1%); M3 4/25 (no threshold); M4 p95 **503.95 ms** (budget 500 ms); M5 **0/25 priced**. This run follows the latest rubric and abstention changes. Its aggregate-only evidence does not disclose which M2 case failed. Earlier artifacts remain historical; do not use their case attribution as the latest diagnosis. | Committee; candidate/model owner still unassigned | A candidate lane passes M1=0 and M2<1% with a fresh payload-free corpus report; resolve M4 before activation |
-| 2 | **M5 pricing** — 0/25 priced; rate, source, effective date, ceiling | **UNMET — value, not mechanism** | Three **provider-sourced facts** — the per-(`typesafe`, `jev-latest`) rate, its published **source**, and its **effective date** — plus one **Committee value**: the cost ceiling per 1,000 decisions. The mechanism is complete; `price-schedule-v1.json` ships `entries: []` by design | Provider (rate, source, effective date) and Amsha Architecture Committee (ceiling) | `entries[]` carries a sourced, dated rate **and** `cost-ceiling-approved` is set |
-| 3 | **Governance** — TypeSafe retention + residency | **UNMET — external/legal** | TypeSafe's published retention, residency, isolation and deletion terms. `RemoteProviderConfig` already **refuses** training-use outright, so only the declarations are missing | Amsha Architecture Committee | The declarations are recorded and reviewed. This may fail **permanently** — ADR §8.6 then requires narrowing to the self-hosted lane or closing the plane |
-| 4 | **Operations** — latency, cost, alerting, owner, rollback | **UNMET — some mechanisms exist, approvals and evidence do not** | Recorded 2026-10-10 p95 is 503.95 ms (3.95 ms over budget); two of six recorded p95 measurements exceed 500 ms. `DecisionDriftMonitor` and `DecisionLatencyBudget` are implemented, but the budget monitor does not hard-block. Still missing a priced schedule with source/effective date, approved ceiling, named rollout and rollback owners, and recorded rollback rehearsal. | Amsha Architecture Committee | Latest candidate stays within the authorized latency budget and every listed operational approval/evidence item is recorded |
-| 5 | **Docs** — §8.2 vs the Oct 9 artifacts | **FIXED** | — | — | Done in this pass (§1) |
+| 1 | **Quality** — candidate quality | **UNMET — measured, still failing** | Latest local corpus-v2 run on 2026-10-14 (`omlx` / `clef-flash-oQ4e`): 25 evaluated, 5 skipped; M1 **2/11** (required 0, failed), M2 **0/3** (required <1%, passed), M3 **12/25** (reported; no threshold), M4 p95 **842.75 ms** (50 ms local budget; failed), M5 **0/25 priced**. The payload-free aggregate does not identify M1 cases. | Amsha Architecture Committee; candidate/model owner still unassigned | A candidate lane passes M1=0 and M2<1% on a fresh payload-free report; resolve M4 before activation |
+| 2 | **M5 pricing** — 0/25 priced; rate, source, effective date, ceiling | **UNMET — value and scope need approval** | The current `omlx` / `clef-flash-oQ4e` lane has no price-schedule entry. Record a reviewed cost basis and source/effective date, including whether local compute costs are in scope, plus a Committee-approved ceiling per 1,000 decisions. A zero inference charge needs its own sourced, dated entry. If TypeSafe remains a candidate, it needs its own provider-sourced rate entry. | Candidate/model owner (cost basis and source) and Amsha Architecture Committee (scope and ceiling) | The selected lane has a sourced, dated price entry and `cost-ceiling-approved` is set |
+| 3 | **Governance** — candidate data handling | **UNMET — approval record absent** | The live OMLX status showed governance declarations present, but there is no review/approval record for location, retention, training-use, isolation, secrets, and egress controls. If TypeSafe remains a hosted candidate, its retention/residency terms are still undeclared; remote config refuses training-use. | Amsha Architecture Committee | The selected lane's declarations are recorded and reviewed; otherwise narrow or close the hosted path under ADR §8.6 |
+| 4 | **Operations** — latency, cost, alerting, owner, rollback | **UNMET — some mechanisms exist, approvals and evidence do not** | Latest local p95 is **842.75 ms** against the 50 ms self-hosted budget. `DecisionDriftMonitor` and the configuration rollback switch exist; `DecisionLatencyBudget` does not hard-block. M5 is unpriced and no ceiling is approved. Named rollout/rollback owners and a recorded rollback rehearsal are still missing. | Amsha Architecture Committee | Latest candidate meets its authorized latency budget and all listed operating approvals/evidence are recorded |
+| 5 | **Docs** — parent ADR current status | **UPDATED** | §8.2 and §8.5 now reflect the 2026-10-14 local run and remain Deferred pending the open gates | — | — | Synchronized in this pass |
 
 Two of the verdict's notes are worth recording explicitly:
 
@@ -73,7 +73,7 @@ exits in exactly one of two directions, and both are recorded human decisions:
 
 | Artifact | What it shows |
 |---|---|
-| `.scratch/decision-corpus-omlx-2026-10-14/summary.json` | Latest full corpus-v2 local run: OMLX / `clef-flash-oQ4e`, 25 evaluated; M1 2/11, M2 0/3, M3 12/25 abstentions, M4 776.60 ms, M5 0/25 priced. Aggregate-only; no case labels |
+| `.scratch/decision-corpus-omlx-2026-10-14/summary.json` | Earlier local corpus-v2 run (2026-10-14, 18:26): OMLX / `clef-flash-oQ4e`, 25 evaluated; M1 2/11, M2 0/3, M3 12/25 abstentions, M4 776.60 ms, M5 0/25 priced. Aggregate-only; no case labels |
 | `.scratch/decision-corpus-attributed/run-4-20261010T174231Z/summary.json` | Historical remote run `cd5beb45-d2de-495c-af59-e977c4f0133d`: 25 hosted decisions; M1 1/11, M2 1/3, M3 4/25, M4 503.95 ms, M5 0/25 priced. Aggregate-only; no case labels |
 | `.scratch/decision-corpus-run-2026-10-09/corpus-report.md` | **earlier measurement A**: corpus v1, 30 cases / 25 evaluated / 5 excluded; M1 3/11, M2 2/3, M3 0/25, M4 407.49 ms, M5 unpriced |
 | `.scratch/decision-corpus-attributed/run-1-default.json` | **attributed run 1**, `aaf4ca94…`: M1 2/11, M2 2/3, M3 3/25, **M4 502.58 ms — breach**, M5 unpriced |
@@ -208,7 +208,7 @@ This re-scope changes no registered decision criteria, does not register a produ
 latest local results are recorded below; M1 and M4 still fail, while governance, pricing,
 and operations approvals remain outstanding.
 
-### 6.6 Full local corpus-v2 evaluation (2026-10-14)
+### 6.6 Earlier full local corpus-v2 evaluation (2026-10-14, 18:26)
 
 The native evaluation run used provider `omlx`, configured model `clef-flash-oQ4e`, and the `SELF_HOSTED` lane. It completed all 30 corpus records: 25 intent/tool-risk cases were evaluated and five answer-quality cases were explicitly skipped. The run had zero refused cases and zero transform errors. Provider usage reported 25 evaluated decisions.
 
@@ -226,3 +226,23 @@ the request timeout would not change the M4 result.
 | M5 priced decisions | 0/25 | Unpriced; price schedule is empty |
 
 The aggregate is payload-free and contains no case labels. This run confirms that the corpus-v2 path can invoke the local model across its full in-scope corpus; it does not meet the M1 or M4 gates and does not activate production routing.
+
+### 6.7 Fresh live corpus-v2 evaluation (2026-10-14)
+
+A read-only provider-status request confirmed the running service selected `omlx` / `clef-flash-oQ4e`, with evaluation enabled and the declared governance configuration present. I then invoked the internal-only, audited `/api/v1/admin/decision/evidence/run?version=2` path. It returned run ID `174465e3-1647-45bd-86a4-d81f8204854d` for the 30-record corpus; the metric denominators show 25 evaluated decisions. The payload-free aggregate snapshot is `.scratch/decision-corpus-omlx-2026-10-14/summary-live-174465e3.json`. No prompts, completions, or credentials were recorded here.
+
+| Metric | Fresh result | Gate |
+|---|---:|---|
+| M1 false allows | 2/11 (18.18%) | Failed; required 0 |
+| M2 ambiguous routing errors | 0/3 (0%) | Passed; required below 1% |
+| M3 abstentions | 12/25 (48%) | Reported; no threshold |
+| M4 self-hosted p95 | 842.75 ms vs 50 ms budget | Failed |
+| M5 priced decisions | 0/25 | Unpriced; no approved ceiling |
+
+This live run confirms that the current service invokes the local decision model through the evaluation path. The 50-second provider request timeout is separate from the 50-millisecond M4 latency budget; increasing the former does not satisfy the latter. Production decision routing remains **Deferred**.
+
+### 6.8 M1 interpretation and next diagnostic
+
+`DecisionEvidenceSummary.computeM1` counts `tool-risk` records marked `SECURITY` with expected `BLOCK` or `REQUIRE_APPROVAL`, where a model opinion passes through `ToolRiskDecisionPolicy` and resolves to `ALLOW`. The run's 2/11 are two outcomes counted by that exact rule; all 11 SECURITY records were evaluated. The runner supplies no existing deterministic resolution for this measurement, so the candidate is assessed without baseline masking.
+
+The endpoint keeps per-case `DecisionEvidenceCaseResult` data internal (`results` is `@JsonIgnore`) and returns aggregate metrics. This run therefore cannot identify the two contributing cases or distinguish among projection, rubric, model, decoding, and policy causes. Keep the M1 rule and corpus fixed. Diagnose at the `DecisionEvidenceRunner` boundary in an isolated local debugger or test harness, inspecting only corpus case IDs, expected/observed closed labels, and resolved policy action. Keep projected state, prompts, provider responses, and credentials out of logs and artifacts. Make a cause-based change, add a focused regression test, then rerun corpus v2.
