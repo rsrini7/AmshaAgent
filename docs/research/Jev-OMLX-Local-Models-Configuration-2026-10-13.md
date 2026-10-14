@@ -1,6 +1,6 @@
 # Jev Decision Models on Local OMLX (2026-10-13)
 
-## Follow-up verification (2026-10-14)
+## Follow-up probe on OMLX 0.7.0 (2026-10-14)
 
 After aligning the OMLX decision endpoint default to `http://127.0.0.1:8000/v1` in
 `.env.example` and `application.yaml`, I queried the authenticated OMLX catalog.
@@ -16,7 +16,24 @@ The ignored root `.env` currently enables evaluation but selects `typesafe`. I d
 not call Amsha's evidence endpoint, since it would use that selected provider;
 the two requests above were synthetic probes sent directly to local OMLX.
 
-## Recommendation
+## Manual-load diagnosis on OMLX 0.7.1.dev1 (2026-10-14)
+
+The later OMLX Desktop upgrade and manual load attempts distinguish three separate states: a model can be downloaded, fail to load into a runtime, or load and accept decision requests. **Download status `COMPLETED` only confirms that the files are present.** In the OMLX Model Manager, the two earlier artifacts still showed `Not loaded`:
+
+| Model | OMLX type/status | Observed load result | Diagnosis |
+|---|---|---|---|
+| `sahilchachra/Laya-TypedDecisions-MXFP8` | `EMBEDDING / Not loaded` | OMLX returned HTTP 500: `Received 283 parameters not in model`. It reclaimed memory after the failure. | This is a model-parameter/architecture mismatch, not an out-of-memory event or an inference timeout. The model card describes a ModernBERT encoder artifact; the separate typed-decision head is not included. Having decision-related weights in the repository name does not make it a complete System One model. |
+| `mlx-community/CLM-v0.1-8B-MLX-8bit` | `LLM / Not loaded` | A matching CLM load exception was not present in the warning/error log entries captured for this check. | The model card describes a feature-extraction encoder with `lm_head` removed and a custom `clm_mlx` engine. That is not a standard text-generation model. The observed task type and artifact format point to a runtime/loader mismatch, but the exact CLM exception remains unconfirmed. |
+
+These manual-load outcomes were observed on OMLX Desktop `0.7.1.dev1`. The current upstream OMLX `main` System One loader lists Clef, OpenJev, and Decision 3.0 families and does not list CLM or Laya. Its decision runtime is built around a Qwen3.5 backbone. This supports the model-format diagnosis, but the upstream source links below describe `main`; they are not a version-pinned audit of the installed development build. See OMLX's [model discovery](https://github.com/jundot/omlx/blob/main/omlx/model_discovery.py), [decision runtime](https://github.com/jundot/omlx/blob/main/omlx/models/decision.py), and [API documentation](https://github.com/jundot/omlx/blob/main/README.md), along with the [CLM model card](https://huggingface.co/mlx-community/CLM-v0.1-8B-MLX-8bit) and [Laya model card](https://huggingface.co/sahilchachra/Laya-TypedDecisions-MXFP8).
+
+By comparison, `Jundot/clef-flash-oQ4e` loaded and was invoked through Amsha's explicit, non-routing evaluation path: corpus v2 evaluated 25 in-scope cases through the OMLX provider. The aggregate is recorded in [`summary.json`](../../.scratch/decision-corpus-omlx-2026-10-14/summary.json). This proves that the updated OMLX endpoint can serve that supported decision model; it does not prove CLM or Laya compatibility.
+
+**Triage for the next model attempt:** record the OMLX version, exact repository/model ID, Model Manager task type, download status, load status, and the single redacted load exception with its timestamp. Keep load success separate from a successful `/v1/systemone` request and from Amsha provider invocation. For CLM, capture the OMLX log entry during a fresh manual load before assigning a precise root cause. Do not treat the 50-second request timeout as a remedy for a model that fails at load time.
+
+**Current recommendation:** stop retrying these same CLM and Laya artifacts through OMLX's built-in loader. Use an OMLX model recognized as a decision model (the tested Clef model is one option), or build a serving adapter that implements the missing model-specific loading and System One decision contract. The production Jev decision plane remains Deferred; the successful corpus call was explicit evaluation only.
+
+## Historical recommendation for OMLX 0.7.0
 
 Do not configure Amsha to send the two downloaded artifacts directly to the current
 local OMLX server. The OMLX app reports version **0.7.0, build 2987**, listening on
