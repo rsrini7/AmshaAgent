@@ -677,18 +677,12 @@ amsha:
             tenant-isolation: ${AMSHA_DECISION_KEV_GOVERNANCE_TENANT_ISOLATION:true}
             projection-allow-list: "${AMSHA_DECISION_KEV_GOVERNANCE_PROJECTION_ALLOW_LIST:}"
             cost-ceiling-per-thousand: "${AMSHA_DECISION_KEV_GOVERNANCE_COST_CEILING_PER_THOUSAND:}"
-        # omlx / LM Studio host — a local RUNTIME, not a model: `model` names
-        # whichever decision checkpoint is loaded into it (blank by default,
-        # exactly like AMSHA_OMLX_MODEL above). These runtimes serve
-        # /v1/chat/completions, NOT /v1/systemone, so this slot only becomes
-        # usable once something on this port actually exposes the System One
-        # route (e.g. a wrapper around a decision model). Leave it disabled
-        # until then.
-        # OMLX's OpenAI-compatible base URL is /v1, but it does not implement
-        # the System One request contract this decision slot sends.
+        # OMLX decision requests use the System One route, separate from the regular OpenAI LLM base.
+        # Keep AMSHA_OMLX_BASE_URL at /v1; this endpoint must end in /v1/systemone.
+        # OMLX 0.7.1.dev1+ serves loaded decision models through this route.
         omlx:
           enabled: ${AMSHA_DECISION_OMLX_ENABLED:false}
-          endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1}"
+          endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
           model: "${AMSHA_DECISION_OMLX_MODEL:}"
           api-key: "${AMSHA_DECISION_OMLX_API_KEY:}"
           timeout: ${AMSHA_DECISION_OMLX_TIMEOUT:PT5S}

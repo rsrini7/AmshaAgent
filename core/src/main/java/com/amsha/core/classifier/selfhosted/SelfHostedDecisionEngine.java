@@ -54,6 +54,9 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final Duration SHUTDOWN_DRAIN_TIMEOUT = Duration.ofSeconds(2);
+    private static final String LOOPBACK_TOKEN_HEADER = "X-Amsha-Loopback-Token";
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
 
     private final SelfHostedProviderConfig config;
     private final HttpClient httpClient;
@@ -232,7 +235,12 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
                 .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody));
 
-        config.optionalLoopbackToken().ifPresent(token -> reqBuilder.header("X-Amsha-Loopback-Token", token));
+        config.optionalLoopbackToken().ifPresent(token -> {
+            switch (config.credentialHeaderStyle()) {
+                case AMSHA_LOOPBACK_TOKEN -> reqBuilder.header(LOOPBACK_TOKEN_HEADER, token);
+                case AUTHORIZATION_BEARER -> reqBuilder.header(AUTHORIZATION_HEADER, BEARER_PREFIX + token);
+            }
+        });
 
         HttpRequest httpRequest = reqBuilder.build();
         try {

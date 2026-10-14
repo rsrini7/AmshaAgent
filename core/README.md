@@ -298,8 +298,10 @@ LLM provider id names the endpoint that receives `/v1/chat/completions`. `model`
 | `amsha.decision.providers.slots.<id>.wire-profile` | `AMSHA_DECISION_<ID>_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered. Belongs to the **model**: a CLM model requires `PROSE`. |
 
 Declared slots: `typesafe` (`jev-latest`, remote), `clm` (`clm-latest`, `PROSE`), `laya` (`laya-multilingual`),
-`kev` (blank model — a self-hosted server picks its own), `omlx` (blank model — a local runtime that must serve
-`/v1/systemone`, which omlx/LM Studio do not).
+`kev` (blank model — a self-hosted server picks its own), and `omlx` (blank model — OMLX 0.7.1.dev1 or later
+with a loaded decision model). OMLX uses `/v1/systemone` for decisions; its regular LLM base URL stays `/v1`.
+The OMLX slot sends Bearer authentication when `AMSHA_DECISION_OMLX_API_KEY` is configured. Other self-hosted
+slots continue to use `X-Amsha-Loopback-Token`.
 
 **Fail-closed resolution.** `DecisionProviderSelector` derives the lane from the endpoint host — the literal
 `127.0.0.1` selects the self-hosted lane, anything else the remote lane — and refuses `localhost`, `::1`, and

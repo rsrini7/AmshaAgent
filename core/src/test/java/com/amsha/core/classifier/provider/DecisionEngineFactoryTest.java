@@ -1,6 +1,7 @@
 package com.amsha.core.classifier.provider;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -14,6 +15,7 @@ import java.util.Optional;
 
 import com.amsha.core.classifier.remote.RemoteDecisionEngine;
 import com.amsha.core.classifier.selfhosted.SelfHostedDecisionEngine;
+import com.amsha.core.classifier.selfhosted.SelfHostedProviderConfig;
 import com.amsha.core.classifier.wire.WireProfile;
 import com.amsha.core.config.DecisionGovernanceFixture;
 import com.amsha.core.config.DecisionProviderConfig;
@@ -52,6 +54,19 @@ class DecisionEngineFactoryTest {
                 DecisionGovernanceFixture.valid(),
                 Optional.empty())) {
             assertInstanceOf(SelfHostedDecisionEngine.class, handle.engine());
+        }
+    }
+
+    @Test
+    void configuresOmlxToUseBearerAuthentication() {
+        try (var handle = create(
+                selected("omlx", Lane.SELF_HOSTED, LOOPBACK, "Jundot/clef-flash-oQ4e", WireProfile.JSON_OBJECT),
+                DecisionGovernanceFixture.valid(),
+                Optional.of(credential()))) {
+            var engine = assertInstanceOf(SelfHostedDecisionEngine.class, handle.engine());
+            assertEquals(
+                    SelfHostedProviderConfig.CredentialHeaderStyle.AUTHORIZATION_BEARER,
+                    engine.config().credentialHeaderStyle());
         }
     }
 

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,6 +52,7 @@ class SelfHostedDecisionEngineContractTest {
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final AtomicReference<String> lastReceivedRequestBody = new AtomicReference<>();
     private final AtomicReference<String> lastReceivedAuthHeader = new AtomicReference<>();
+    private final AtomicReference<String> lastReceivedAuthorizationHeader = new AtomicReference<>();
     private volatile int responseStatus = 200;
     private volatile String responseBody = "{}";
     private volatile long responseDelayMs = 0;
@@ -65,6 +67,7 @@ class SelfHostedDecisionEngineContractTest {
                 byte[] requestBytes = exchange.getRequestBody().readAllBytes();
                 lastReceivedRequestBody.set(new String(requestBytes, StandardCharsets.UTF_8));
                 lastReceivedAuthHeader.set(exchange.getRequestHeaders().getFirst("X-Amsha-Loopback-Token"));
+                lastReceivedAuthorizationHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
 
                 if (responseDelayMs > 0) {
                     try {
@@ -395,6 +398,29 @@ class SelfHostedDecisionEngineContractTest {
             assertInstanceOf(DecisionResult.NoOpinion.class, result);
             assertEquals(NoOpinionReason.DISABLED, ((DecisionResult.NoOpinion) result).reason());
         }
+    }
+
+    @Test
+    void sendsBearerAuthorizationWhenConfigured() {
+        var projection = StateProjectionPolicy.of(Set.of("user_message"), RedactionPolicy.DEFAULT);
+        var config = SelfHostedProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .timeout(Duration.ofSeconds(2))
+                .loopbackToken("bearer-test-token")
+                .credentialHeaderStyle(SelfHostedProviderConfig.CredentialHeaderStyle.AUTHORIZATION_BEARER)
+                .defaultProjectionPolicy(projection)
+                .build();
+
+        try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
+            var requestBuilder = DecisionRequest.builder("dec.auth.test", 1, "{\"user_message\":\"hello\"}");
+            requestBuilder.registerChoice("intent_role_choice", "choose one", List.of("coder", "researcher"));
+            engine.evaluate(requestBuilder.build());
+        }
+
+        assertNotNull(lastReceivedRequestBody.get());
+        assertEquals("Bearer bearer-test-token", lastReceivedAuthorizationHeader.get());
+        assertNull(lastReceivedAuthHeader.get());
     }
 
     @Test

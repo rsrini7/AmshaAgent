@@ -49,6 +49,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public final class DecisionEngineFactory {
 
+    private static final String OMLX_PROVIDER_ID = "omlx";
+
     private DecisionEngineFactory() {}
 
     /**
@@ -182,6 +184,7 @@ public final class DecisionEngineFactory {
                 .modelId(selected.model())
                 .wireProfile(selected.wireProfile())
                 .loopbackToken(credentialText)
+                .credentialHeaderStyle(credentialHeaderStyle(selected.providerId()))
                 .timeout(selected.timeout())
                 .defaultProjectionPolicy(governance.projectionPolicy())
                 .build();
@@ -197,6 +200,13 @@ public final class DecisionEngineFactory {
      * requires a {@code String}, so a {@code String} is unavoidable at the transport boundary, and the
      * only defence is to keep it as short-lived as possible.
      */
+    private static SelfHostedProviderConfig.CredentialHeaderStyle credentialHeaderStyle(String providerId) {
+        if (OMLX_PROVIDER_ID.equals(providerId)) {
+            return SelfHostedProviderConfig.CredentialHeaderStyle.AUTHORIZATION_BEARER;
+        }
+        return SelfHostedProviderConfig.CredentialHeaderStyle.AMSHA_LOOPBACK_TOKEN;
+    }
+
     private static String decode(byte[] credential) {
         return new String(credential, StandardCharsets.UTF_8);
     }

@@ -15,6 +15,7 @@ import com.amsha.core.classifier.wire.WireProfile;
  * @param enabled whether the provider is enabled (defaults to false; disabled by default)
  * @param endpoint HTTP/HTTPS endpoint URI (strictly validated to 127.0.0.1)
  * @param loopbackToken optional bearer token or authentication header value for loopback communication
+ * @param credentialHeaderStyle header format used when the token is present
  * @param modelId optional model identifier for the System One {@code model} field. Blank by default:
  *     a self-hosted server selects its own checkpoint, and sending a hosted vendor's alias would
  *     mislead it. Set this only to pin a specific self-hosted model.
@@ -29,15 +30,22 @@ public record SelfHostedProviderConfig(
         boolean enabled,
         URI endpoint,
         String loopbackToken,
+        CredentialHeaderStyle credentialHeaderStyle,
         String modelId,
         WireProfile wireProfile,
         Duration timeout,
         StateProjectionPolicy defaultProjectionPolicy) {
 
+    public enum CredentialHeaderStyle {
+        AMSHA_LOOPBACK_TOKEN,
+        AUTHORIZATION_BEARER
+    }
+
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(5);
 
     public SelfHostedProviderConfig {
         Objects.requireNonNull(endpoint, "endpoint");
+        Objects.requireNonNull(credentialHeaderStyle, "credentialHeaderStyle");
         Objects.requireNonNull(timeout, "timeout");
         if (timeout.isNegative() || timeout.isZero()) {
             throw new IllegalArgumentException("timeout must be positive, got: " + timeout);
@@ -74,6 +82,7 @@ public record SelfHostedProviderConfig(
         // real port is whichever the loopback wrapper binds.
         private URI endpoint = URI.create("http://127.0.0.1:8088/v1/systemone");
         private String loopbackToken = null;
+        private CredentialHeaderStyle credentialHeaderStyle = CredentialHeaderStyle.AMSHA_LOOPBACK_TOKEN;
         private String modelId = null;
         private WireProfile wireProfile = WireProfile.JSON_OBJECT;
         private Duration timeout = DEFAULT_TIMEOUT;
@@ -100,6 +109,11 @@ public record SelfHostedProviderConfig(
             return this;
         }
 
+        public Builder credentialHeaderStyle(CredentialHeaderStyle credentialHeaderStyle) {
+            this.credentialHeaderStyle = Objects.requireNonNull(credentialHeaderStyle, "credentialHeaderStyle");
+            return this;
+        }
+
         public Builder modelId(String modelId) {
             this.modelId = modelId;
             return this;
@@ -122,7 +136,14 @@ public record SelfHostedProviderConfig(
 
         public SelfHostedProviderConfig build() {
             return new SelfHostedProviderConfig(
-                    enabled, endpoint, loopbackToken, modelId, wireProfile, timeout, defaultProjectionPolicy);
+                    enabled,
+                    endpoint,
+                    loopbackToken,
+                    credentialHeaderStyle,
+                    modelId,
+                    wireProfile,
+                    timeout,
+                    defaultProjectionPolicy);
         }
     }
 }
