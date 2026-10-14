@@ -294,7 +294,7 @@ LLM provider id names the endpoint that receives `/v1/chat/completions`. `model`
 | `amsha.decision.providers.slots.<id>.endpoint` | `AMSHA_DECISION_<ID>_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint. The governance lane is derived from its host. |
 | `amsha.decision.providers.slots.<id>.model` | `AMSHA_DECISION_<ID>_MODEL` | *(per slot)* | The decision model to request. **Required for a remote slot; optional for a self-hosted one**, where blank means "the server picks its own checkpoint" and the field is omitted from the request. |
 | `amsha.decision.providers.slots.<id>.api-key` | `AMSHA_DECISION_<ID>_API_KEY` | `""` | Direct provider key, following the same environment-backed convention as other Amsha providers. |
-| `amsha.decision.providers.slots.<id>.timeout` | `AMSHA_DECISION_<ID>_TIMEOUT` | `PT5S` | Request execution timeout. |
+| `amsha.decision.providers.slots.<id>.timeout` | `AMSHA_DECISION_<ID>_TIMEOUT` | `PT5S` for Typesafe; `PT30S` for self-hosted providers | Provider request timeout; the registered decision deadline may cap it. |
 | `amsha.decision.providers.slots.<id>.wire-profile` | `AMSHA_DECISION_<ID>_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered. Belongs to the **model**: a CLM model requires `PROSE`. |
 
 Declared slots: `typesafe` (`jev-latest`, remote), `clm` (`clm-latest`, `PROSE`), `laya` (`laya-multilingual`),

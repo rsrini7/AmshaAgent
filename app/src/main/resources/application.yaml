@@ -631,10 +631,10 @@ amsha:
         # silently rather than failing loudly — hence PROSE below.
         clm:
           enabled: ${AMSHA_DECISION_CLM_ENABLED:false}
-          endpoint: "${AMSHA_DECISION_CLM_ENDPOINT:http://127.0.0.1:8700/v1/systemone}"
-          model: "${AMSHA_DECISION_CLM_MODEL:clm-latest}"
+          endpoint: "${AMSHA_DECISION_CLM_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
+          model: "${AMSHA_DECISION_CLM_MODEL:CLM-v0.1-8B-MLX-8bit}"
           api-key: "${AMSHA_DECISION_CLM_API_KEY:}"
-          timeout: ${AMSHA_DECISION_CLM_TIMEOUT:PT5S}
+          timeout: ${AMSHA_DECISION_CLM_TIMEOUT:PT30S}
           wire-profile: ${AMSHA_DECISION_CLM_WIRE_PROFILE:PROSE}
           governance:
             data-location: "${AMSHA_DECISION_CLM_GOVERNANCE_DATA_LOCATION:}"
@@ -650,7 +650,7 @@ amsha:
           endpoint: "${AMSHA_DECISION_LAYA_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
           model: "${AMSHA_DECISION_LAYA_MODEL:laya-multilingual}"
           api-key: "${AMSHA_DECISION_LAYA_API_KEY:}"
-          timeout: ${AMSHA_DECISION_LAYA_TIMEOUT:PT5S}
+          timeout: ${AMSHA_DECISION_LAYA_TIMEOUT:PT30S}
           wire-profile: ${AMSHA_DECISION_LAYA_WIRE_PROFILE:JSON_OBJECT}
           governance:
             data-location: "${AMSHA_DECISION_LAYA_GOVERNANCE_DATA_LOCATION:}"
@@ -665,10 +665,10 @@ amsha:
         # the request then leaves the field out and the server picks its own.
         kev:
           enabled: ${AMSHA_DECISION_KEV_ENABLED:false}
-          endpoint: "${AMSHA_DECISION_KEV_ENDPOINT:http://127.0.0.1:3000/v1/systemone}"
+          endpoint: "${AMSHA_DECISION_KEV_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
           model: "${AMSHA_DECISION_KEV_MODEL:}"
           api-key: "${AMSHA_DECISION_KEV_API_KEY:}"
-          timeout: ${AMSHA_DECISION_KEV_TIMEOUT:PT5S}
+          timeout: ${AMSHA_DECISION_KEV_TIMEOUT:PT30S}
           wire-profile: ${AMSHA_DECISION_KEV_WIRE_PROFILE:JSON_OBJECT}
           governance:
             data-location: "${AMSHA_DECISION_KEV_GOVERNANCE_DATA_LOCATION:}"
@@ -685,7 +685,7 @@ amsha:
           endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
           model: "${AMSHA_DECISION_OMLX_MODEL:}"
           api-key: "${AMSHA_DECISION_OMLX_API_KEY:}"
-          timeout: ${AMSHA_DECISION_OMLX_TIMEOUT:PT5S}
+          timeout: ${AMSHA_DECISION_OMLX_TIMEOUT:PT30S}
           wire-profile: ${AMSHA_DECISION_OMLX_WIRE_PROFILE:JSON_OBJECT}
           governance:
             data-location: "${AMSHA_DECISION_OMLX_GOVERNANCE_DATA_LOCATION:}"

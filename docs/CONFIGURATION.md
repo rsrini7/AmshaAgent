@@ -271,7 +271,7 @@ host (`omlx`), or a hosted API (`typesafe`).
 | `AMSHA_DECISION_{PROVIDER}_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint; the lane is derived from its host |
 | `AMSHA_DECISION_{PROVIDER}_MODEL` | *(per slot)* | Decision model to request — **required for a remote provider, optional for a self-hosted one** (blank = the server picks its own checkpoint and the field is omitted) |
 | `AMSHA_DECISION_{PROVIDER}_API_KEY` | *(unset)* | Direct provider API key, following the same environment-backed convention as other Amsha providers; blank means no key is configured |
-| `AMSHA_DECISION_{PROVIDER}_TIMEOUT` | `PT5S` | Request execution timeout |
+| `AMSHA_DECISION_{PROVIDER}_TIMEOUT` | `PT5S` for Typesafe; `PT30S` for self-hosted providers | Provider request timeout; the registered decision deadline may cap it |
 | `AMSHA_DECISION_{PROVIDER}_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered; belongs to the model — CLM requires `PROSE` |
 
 Declared providers: `typesafe`, `clm`, `laya`, `kev`, `omlx`.
