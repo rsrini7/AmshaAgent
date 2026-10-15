@@ -35,6 +35,7 @@ import com.amsha.core.classifier.DecisionIntentShadowClassifier;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.classifier.shadow.DecisionShadowComparisonHarness.CandidateType;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
@@ -237,7 +238,12 @@ class DecisionShadowEvaluationIT {
         DecisionToolRiskShadowClassifier toolRiskClassifier =
                 new DecisionToolRiskShadowClassifier(toolRiskEngine, mapper, true);
         ToolRiskShadowContext ctx = new ToolRiskShadowContext(
-                "coder", AutonomyLevel.FULL, "execute_shell", Map.of("cmd", "rm -rf /"), "delete root");
+                "coder",
+                AutonomyLevel.FULL,
+                "execute_shell",
+                ToolOperation.EXECUTE_SHELL,
+                Map.of("cmd", "rm -rf /"),
+                "delete root");
         ClassifierResult<ToolRiskPrediction> riskResult = toolRiskClassifier.classify(ctx);
         assertInstanceOf(ClassifierResult.Opinion.class, riskResult);
         assertEquals(ToolRiskPrediction.BLOCK, ((ClassifierResult.Opinion<ToolRiskPrediction>) riskResult).value());

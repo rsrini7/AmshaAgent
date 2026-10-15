@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 /**
  * Minimum immutable context exposed only after deterministic policy provisionally allows a tool.
@@ -18,6 +19,7 @@ public record PostPolicyToolContext(
         String agentRole,
         AutonomyLevel autonomyLevel,
         String toolName,
+        ToolOperation requiredOperation,
         Map<String, Object> parameters,
         String goal,
         boolean toolInvokedInTurn) {
@@ -26,6 +28,7 @@ public record PostPolicyToolContext(
         agentRole = requireNonBlank(agentRole, "agentRole");
         Objects.requireNonNull(autonomyLevel, "autonomyLevel");
         toolName = requireNonBlank(toolName, "toolName");
+        Objects.requireNonNull(requiredOperation, "requiredOperation");
         parameters = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(parameters, "parameters")));
         goal = Objects.requireNonNullElse(goal, "");
     }
@@ -34,7 +37,8 @@ public record PostPolicyToolContext(
     @Override
     public String toString() {
         return "PostPolicyToolContext[agentRole=" + agentRole + ", autonomyLevel=" + autonomyLevel + ", toolName="
-                + toolName + ", parameterCount=" + parameters.size() + ", toolInvokedInTurn=" + toolInvokedInTurn
+                + toolName + ", requiredOperation=" + requiredOperation + ", parameterCount=" + parameters.size()
+                + ", toolInvokedInTurn=" + toolInvokedInTurn
                 + "]";
     }
 

@@ -2,34 +2,27 @@
 
 ## Key result
 
-OMLX 0.7.0, which is running locally, does not expose `POST /v1/systemone`. The local probe recorded `GET /v1/models` listing catalog IDs, followed by `POST /v1/systemone` returning 404 with no decision model loaded. A model showing up in the downloaded catalog does not prove that OMLX can run its decision interface. See the [local probe record](./Jev-OMLX-Local-Models-Configuration-2026-10-13.md).
+OMLX 0.7.0 did not expose `POST /v1/systemone` in the local probe recorded on that version: `GET /v1/models` listed catalog IDs, then `POST /v1/systemone` returned 404. A downloaded model appearing in the catalog did not prove that this older server could run the decision interface. See the [0.7.0 local probe record](./Jev-OMLX-Local-Models-Configuration-2026-10-13.md).
 
-OMLX's `0.7.1.dev1` release adds the System One route and documents Clef and OpenJev decision models. It is the latest release listed upstream as of this research date, but it is a development release after stable 0.7.0. Upgrade to this or a later release before trying these models.
+OMLX 0.7.1.dev1 adds the System One route and documents Clef OpenJev decision models. That development release is installed locally. The 2026-10-15 probe below confirms that its route exists and is authentication-gated; it supersedes the 0.7.0 route finding.
 
 ## Model options
 
-For a smaller OMLX-native System One model, start with [`Jundot/clef-flash-oQ4e`](https://huggingface.co/Jundot/clef-flash-oQ4e). It is a 9B, 4-bit MLX checkpoint with the joint decision head included, about 6.28 GB on disk, and an Apache-2.0 license. Its model card says OMLX serves it with `POST /v1/systemone`.
+For a smaller OMLX-native System One model, use [`Jundot/clef-flash-oQ4e`](https://huggingface.co/Jundot/clef-flash-oQ4e). It is a 9B, 4-bit MLX checkpoint with the joint decision head included, about 6.28 GB on disk, and an Apache-2.0 license. The model card says OMLX serves it with `POST /v1/systemone`.
 
-If you want the OpenJev family specifically, use [`openjev/openjev-MLX-4bit`](https://huggingface.co/openjev/openjev-MLX-4bit). It is a 27B, text-only, 4-bit MLX model with a 15.1 GB download. Its weights use CC BY-NC 4.0, so commercial use needs a separate license.
+For the OpenJev family, [`openjev/openjev-MLX-4bit`](https://huggingface.co/openjev/openjev-MLX-4bit) is a 27B, text-only, 4-bit MLX model with a 15.1 GB download. Its weights use CC BY-NC 4.0, so commercial use needs a separate license. Runtime memory exceeds checkpoint size, so available unified memory may limit either option. OMLX has a native OpenJev loader; the model card's `helper/shim.py` instructions are for its reference server, not OMLX's native path.
 
-Runtime memory will exceed checkpoint size, so available unified memory may limit either option. OMLX has its own native OpenJev loader and readout. The `helper/shim.py` instructions on the OpenJev model card are for its reference server; they are not needed for OMLX's native path.
+The small and mid-size artifacts previously tried are not equivalent:
 
-## Why the earlier attempts failed
-
-- OMLX 0.7.0 has no System One route, even though its model catalog can list downloaded model IDs.
-- OMLX 0.7.1.dev1 documents Clef and OpenJev, not CLM or Laya. Its model discovery recognizes OpenJev as a Qwen3.5 checkpoint with an OpenJev model name or helper directory.
-- The [CLM MLX artifact](https://huggingface.co/mlx-community/CLM-v0.1-8B-MLX-8bit) uses CLM-specific pooling/projection code; it is not a regular chat checkpoint supported by OMLX's decision loader.
-- The [Laya TypedDecisions MXFP8 artifact](https://huggingface.co/sahilchachra/Laya-TypedDecisions-MXFP8) is an encoder artifact; the decision head and serving implementation are separate.
+- The [CLM MLX artifact](https://huggingface.co/mlx-community/CLM-v0.1-8B-MLX-8bit) uses CLM-specific pooling and projection code; it is not a regular chat checkpoint supported by OMLX's decision loader.
+- The [Laya TypedDecisions MXFP8 artifact](https://huggingface.co/sahilchachra/Laya-TypedDecisions-MXFP8) is an encoder artifact; serving its decision head requires a separate implementation.
 - `jevoma4362/EuroLLM-1.7B-Instruct-mlx-4Bit` is published by a Hugging Face account named `jevoma4362`, but its [model card](https://huggingface.co/jevoma4362/EuroLLM-1.7B-Instruct-mlx-4Bit) identifies it as EuroLLM Instruct, not an OpenJev decision model.
 
-## Suggested configuration path
+## Compatibility status
 
-1. Update OMLX to 0.7.1.dev1 or a later release that retains the Clef/OpenJev loader and `/v1/systemone` route.
-2. Add one of the model IDs above to OMLX. Let it detect the decision model, or select model type `decision` if the UI requires it.
-3. Keep the shared OMLX OpenAI base URL as `http://127.0.0.1:8000/v1` in `.env.example` and `application.yaml`. OMLX's System One request URL on the updated server is `http://127.0.0.1:8000/v1/systemone`.
-4. For Amsha's explicit evaluation provider, configure the full System One URL as the decision endpoint. The evaluation path remains opt-in, internal-only, audited-before-egress, and non-routing; it does not activate the deferred production decision plane. Check authentication-header compatibility before connecting a protected OMLX instance, because Amsha's self-hosted transport uses its loopback-token header.
+On the installed OMLX 0.7.1.dev1 server, the 2026-10-15 local probe returned 401 for `POST /v1/systemone` and 404 for `POST /v1`. Controls returned 404 for a definitely unknown route and 401 for `POST /v1/chat/completions`; `GET /v1/models` returned 405 to POST. This distinguishes an existing, authentication-gated System One route from an unknown path. The previous claim that 0.7.1.dev1 lacks `/v1/systemone` was incorrect.
 
-I did not install the development OMLX release or call its new route, so that upstream path is source-verified but not runtime-verified in this workspace. The local OMLX 0.7.0 failure is confirmed.
+The OMLX decision endpoint default is `http://127.0.0.1:8000/v1/systemone`. The route probe establishes that the route exists, not that Amsha's client authentication succeeds. OMLX's OpenAI surface expects Bearer authentication, while Amsha's self-hosted loopback lane sends `X-Amsha-Loopback-Token`; verify this auth contract with a real evaluation before enabling the slot. The evaluation path remains disabled by default, and this endpoint setting does not activate production routing.
 
 ## Sources
 

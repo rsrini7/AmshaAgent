@@ -67,6 +67,8 @@ Available tasks:
 
 The task identifier is exactly `intent`, `tool_risk`, or `answer_quality`.
 
+Tool-risk inputs require the canonical `required_operation` value from `ToolOperation`; the trainer rejects missing or invalid values. The JSON renderer keeps runtime field order and recursively sorts object keys inside `parameters` while preserving array order. Seed rows remain pending human review and are not a release dataset.
+
 ## Automated release-candidate pipeline
 
 The supported end-to-end path is:

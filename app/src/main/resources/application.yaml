@@ -591,7 +591,8 @@ amsha:
     #     — the state projection redactor fails closed without an allow-list, and
     #     inventing one from the question handles is exactly the widening the
     #     control exists to prevent. It is a comma-separated list of the top-level
-    #     `state` field names permitted to leave the process.
+    #     `state` field names permitted to leave the process. Tool-risk evaluation requires the
+    #     camel-case `requiredOperation` key to be included in the operator's allow-list.
     #   * `data-location` is the provider-confirmed country/region where submitted state is
     #     processed or stored, required on REMOTE lanes. Get it from account terms or the
     #     provider's data-processing agreement; do not infer it from the endpoint or guess.
@@ -677,9 +678,9 @@ amsha:
             tenant-isolation: ${AMSHA_DECISION_KEV_GOVERNANCE_TENANT_ISOLATION:true}
             projection-allow-list: "${AMSHA_DECISION_KEV_GOVERNANCE_PROJECTION_ALLOW_LIST:}"
             cost-ceiling-per-thousand: "${AMSHA_DECISION_KEV_GOVERNANCE_COST_CEILING_PER_THOUSAND:}"
-        # OMLX decision requests use the System One route, separate from the regular OpenAI LLM base.
-        # Keep AMSHA_OMLX_BASE_URL at /v1; this endpoint must end in /v1/systemone.
-        # OMLX 0.7.1.dev1+ serves loaded decision models through this route.
+        # OMLX 0.7.1.dev1 supports POST /v1/systemone. OMLX's OpenAI API expects
+        # Bearer auth while Amsha's loopback client sends X-Amsha-Loopback-Token;
+        # verify authentication compatibility before enabling this slot.
         omlx:
           enabled: ${AMSHA_DECISION_OMLX_ENABLED:false}
           endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"

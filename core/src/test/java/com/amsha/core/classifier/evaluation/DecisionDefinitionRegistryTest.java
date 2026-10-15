@@ -18,6 +18,7 @@ import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.classifier.api.RetentionPolicy;
 import com.amsha.classifier.api.ReviewBand;
 import com.amsha.classifier.api.ToolRiskDecisionPolicy;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.routing.IntentDecisionRouter;
 
@@ -69,6 +70,7 @@ class DecisionDefinitionRegistryTest {
 
         assertEquals(TOOL_RISK_ID, definition.decisionId());
         assertEquals(DecisionToolRiskShadowClassifier.SCHEMA_VERSION, definition.schemaVersion());
+        assertTrue(definition.stateProjection().contains(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD));
         assertEquals(DecisionPrimitive.CHOICE, definition.primitive());
         assertEquals(
                 ToolRiskDecisionPolicy.DEFAULT_REVIEW_BAND,
@@ -86,6 +88,7 @@ class DecisionDefinitionRegistryTest {
 
         assertEquals(1, decision.questions().size(), "the tool-risk decision asks exactly one question");
         QuestionSpec question = decision.questions().getFirst();
+        assertTrue(question.criteria().contains(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD));
         assertEquals(DecisionToolRiskShadowClassifier.TOOL_RISK_KEY.name(), question.handle());
         assertEquals(DecisionPrimitive.CHOICE, question.kind());
         assertEquals(

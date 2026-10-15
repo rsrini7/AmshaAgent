@@ -19,8 +19,8 @@ DEFAULT_MODEL_ROOT = PROJECT_ROOT / "data" / "models"
 WARMUP_PROBES = {
     "intent": ["Research the current API documentation.", "Fix the parser regression."],
     "tool_risk": [
-        '{"classifier":"tool_risk","agent_role":"coordinator","autonomy":"SUPERVISED","tool_name":"core_memory_read","goal":"read profile","parameters":{"block_key":"user_profile"}}',
-        '{"classifier":"tool_risk","agent_role":"coordinator","autonomy":"SUPERVISED","tool_name":"sandbox_exec","goal":"run command","parameters":{"code":"date"}}',
+        '{"classifier":"tool_risk","agent_role":"coordinator","autonomy":"SUPERVISED","tool_name":"core_memory_read","required_operation":"READ_FS","goal":"read profile","parameters":{"block_key":"user_profile"}}',
+        '{"classifier":"tool_risk","agent_role":"coordinator","autonomy":"SUPERVISED","tool_name":"sandbox_exec","required_operation":"EXECUTE_SHELL","goal":"run command","parameters":{"code":"date"}}',
     ],
     "answer_quality": [
         '{"classifier":"answer_quality","agent_role":"coordinator","goal":"answer clearly","answer":"The requested result is ready.","tool_invoked_in_turn":false}',

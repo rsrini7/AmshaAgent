@@ -375,6 +375,8 @@ class DistributionWrapperContractTest(unittest.TestCase):
         self.assertIn("DecisionEvaluationDisabledPathIT", executable_lines)
         self.assertIn("DecisionEvaluationPathIT", executable_lines)
         self.assertIn("decision-evidence/corpus-v1.json is not present on the classpath", executable_lines)
+        self.assertIn("decision-evidence/corpus-v3.json is not present on the classpath", executable_lines)
+        self.assertIn("Decision-evidence corpus v3 loaded:", executable_lines)
         self.assertIn(
             "decision-evidence/price-schedule-v1.json is not present on the classpath",
             executable_lines,

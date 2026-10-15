@@ -13,6 +13,7 @@ import com.amsha.classifier.api.ToolRiskAction;
 import com.amsha.classifier.api.ToolRiskPrediction;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,13 @@ class OnnxClassifierEnableClassifyIT {
         assertTrue(runtimeControl.setEnabled(Classifier.TOOL_RISK, true).accepted());
 
         ClassifierResult<ToolRiskAction> result = interceptor.evaluate(new PostPolicyToolContext(
-                "coder", AutonomyLevel.FULL, "sandbox_exec", Map.of("language", "java"), "run", false));
+                "coder",
+                AutonomyLevel.FULL,
+                "sandbox_exec",
+                ToolOperation.EXECUTE_SHELL,
+                Map.of("language", "java"),
+                "run",
+                false));
 
         assertInstanceOf(ClassifierResult.Opinion.class, result);
         assertEquals(ToolRiskAction.REQUIRE_APPROVAL, ((ClassifierResult.Opinion<?>) result).value());

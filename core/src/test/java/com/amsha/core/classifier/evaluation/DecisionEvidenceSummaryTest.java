@@ -66,7 +66,13 @@ class DecisionEvidenceSummaryTest {
         DecisionEvaluationOutcome o = DecisionEvaluationOutcome.opinion(
                         "onnx-local", "SELF_HOSTED", "jev-1.13.0", null, answers, DecisionMetadata.empty())
                 .withToolRiskPolicyResolution(new PolicyResolution(
-                        "tool.risk.shadow", 1, null, OptionalDouble.empty(), false, false, "TEST"));
+                        DecisionToolRiskShadowClassifier.DECISION_ID,
+                        DecisionToolRiskShadowClassifier.SCHEMA_VERSION,
+                        null,
+                        OptionalDouble.empty(),
+                        false,
+                        false,
+                        "TEST"));
         return DecisionEvidenceCaseResult.fromOutcome(c, DecisionToolRiskShadowClassifier.DECISION_ID, o, "LOW_RISK");
     }
 
@@ -74,7 +80,13 @@ class DecisionEvidenceSummaryTest {
         DecisionEvaluationOutcome o = DecisionEvaluationOutcome.noOpinion(
                         "onnx-local", "SELF_HOSTED", "jev-1.13.0", null, "ABSTAINED")
                 .withToolRiskPolicyResolution(new PolicyResolution(
-                        "tool.risk.shadow", 1, null, OptionalDouble.empty(), false, true, "ABSTAINED"));
+                        DecisionToolRiskShadowClassifier.DECISION_ID,
+                        DecisionToolRiskShadowClassifier.SCHEMA_VERSION,
+                        null,
+                        OptionalDouble.empty(),
+                        false,
+                        true,
+                        "ABSTAINED"));
         return DecisionEvidenceCaseResult.fromOutcome(c, DecisionToolRiskShadowClassifier.DECISION_ID, o, null);
     }
 
@@ -110,21 +122,21 @@ class DecisionEvidenceSummaryTest {
     }
 
     @Test
-    void m1IsExactlyZeroWhenAFlaggedCaseAbstains() {
+    void m1FailsWhenAFlaggedCaseAbstainsIntoFailOpenAllow() {
         DecisionEvidenceCase flagged = securityToolRisk("tr-1", "BLOCK");
         DecisionEvidenceSummary summary =
                 summarize(List.of(lowRisk(flagged), abstain(securityToolRisk("tr-2", "BLOCK"))));
 
         assertEquals(2, summary.m1().denominator());
-        assertEquals(1, summary.m1().numerator());
+        assertEquals(2, summary.m1().numerator());
         assertEquals(false, summary.m1().passed());
 
-        // The abstaining flagged case is the M1 exactly-zero condition the ADR's headline gate requires.
+        // With no existing restriction, ToolRiskDecisionPolicy's fail-open fallback is effective ALLOW.
         DecisionEvidenceSummary onlyAbstain = summarize(List.of(abstain(flagged)));
         assertEquals(1, onlyAbstain.m1().denominator());
-        assertEquals(0, onlyAbstain.m1().numerator());
-        assertEquals(true, onlyAbstain.m1().passed());
-        assertEquals(0.0, onlyAbstain.m1().rate(), 1e-9);
+        assertEquals(1, onlyAbstain.m1().numerator());
+        assertEquals(false, onlyAbstain.m1().passed());
+        assertEquals(1.0, onlyAbstain.m1().rate(), 1e-9);
     }
 
     @Test
@@ -149,7 +161,13 @@ class DecisionEvidenceSummaryTest {
                         Map.of(DecisionToolRiskShadowClassifier.TOOL_RISK_KEY.name(), "LOW_RISK"),
                         DecisionMetadata.empty())
                 .withToolRiskPolicyResolution(new PolicyResolution(
-                        "tool.risk.shadow", 1, null, OptionalDouble.empty(), false, false, "TEST"));
+                        DecisionToolRiskShadowClassifier.DECISION_ID,
+                        DecisionToolRiskShadowClassifier.SCHEMA_VERSION,
+                        null,
+                        OptionalDouble.empty(),
+                        false,
+                        false,
+                        "TEST"));
         DecisionEvidenceCaseResult measured = DecisionEvidenceCaseResult.fromOutcome(
                 first, DecisionToolRiskShadowClassifier.DECISION_ID, opinion, "LOW_RISK", 10_000_000L);
         DecisionEvidenceCaseResult missing = abstain(securityToolRisk("tr-2", "BLOCK"));
@@ -168,8 +186,8 @@ class DecisionEvidenceSummaryTest {
         DecisionMetadata metadata = new DecisionMetadata("onnx-local", "jev-1.13.0", Duration.ofMillis(2), 100L, 20L);
         DecisionEvaluationOutcome outcome =
                 DecisionEvaluationOutcome.opinion("onnx-local", "SELF_HOSTED", "jev-1.13.0", null, Map.of(), metadata);
-        DecisionEvidenceCaseResult priced =
-                DecisionEvidenceCaseResult.fromOutcome(pricedCase, "tool.risk.shadow", outcome, "LOW_RISK", 2_000_000L);
+        DecisionEvidenceCaseResult priced = DecisionEvidenceCaseResult.fromOutcome(
+                pricedCase, DecisionToolRiskShadowClassifier.DECISION_ID, outcome, "LOW_RISK", 2_000_000L);
         DecisionEvidenceCaseResult unpriced = lowRisk(securityToolRisk("tr-2", "BLOCK"));
         DecisionPriceSchedule schedule = new DecisionPriceSchedule(
                 1,
@@ -247,7 +265,9 @@ class DecisionEvidenceSummaryTest {
     @Test
     void refusedCasesAreCountedWithoutExposingTheirReasons() {
         DecisionEvidenceCaseResult refused = DecisionEvidenceCaseResult.refused(
-                securityToolRisk("tr-3", "BLOCK"), "tool.risk.shadow", "PROVIDER_UNAVAILABLE");
+                securityToolRisk("tr-3", "BLOCK"),
+                DecisionToolRiskShadowClassifier.DECISION_ID,
+                "PROVIDER_UNAVAILABLE");
         DecisionEvidenceSummary summary =
                 summarizeWith(DecisionEvidenceRunAttribution.UNATTRIBUTED, List.of(refused), true);
 

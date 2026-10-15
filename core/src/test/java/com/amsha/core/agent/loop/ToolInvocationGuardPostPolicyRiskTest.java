@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import com.amsha.classifier.api.Choice;
@@ -97,6 +98,7 @@ class ToolInvocationGuardPostPolicyRiskTest {
 
     @Test
     void postPolicyRiskRequireApprovalPausesForApprovalAndEmitsTelemetry() {
+        AtomicReference<ToolOperation> observedOperation = new AtomicReference<>();
         PostPolicyToolRiskInterceptor interceptor = new PostPolicyToolRiskInterceptor() {
             @Override
             public int priority() {
@@ -105,6 +107,7 @@ class ToolInvocationGuardPostPolicyRiskTest {
 
             @Override
             public ClassifierResult<ToolRiskAction> evaluate(PostPolicyToolContext context) {
+                observedOperation.set(context.requiredOperation());
                 return new ClassifierResult.Opinion<>(ToolRiskAction.REQUIRE_APPROVAL, 0.9f, "rule-hitl");
             }
         };
@@ -122,6 +125,7 @@ class ToolInvocationGuardPostPolicyRiskTest {
                 List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, decision);
+        assertEquals(ToolOperation.READ_FS, observedOperation.get());
 
         Counter counter = meterRegistry.find(DecisionTelemetry.METRIC_NAME).counter();
         assertNotNull(counter, "Decision telemetry metric must be recorded");

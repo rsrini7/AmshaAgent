@@ -44,6 +44,7 @@ import com.amsha.core.classifier.ClassifierShadowDispatcher;
 import com.amsha.core.classifier.DecisionTelemetry;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -71,7 +72,13 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 class ClassifierLifecyclePolicyBoundaryIT {
 
     private static final PostPolicyToolContext SAMPLE_CONTEXT = new PostPolicyToolContext(
-            "coder", AutonomyLevel.FULL, "sandbox_exec", Map.of("cmd", "echo test"), "run command", false);
+            "coder",
+            AutonomyLevel.FULL,
+            "sandbox_exec",
+            ToolOperation.EXECUTE_SHELL,
+            Map.of("cmd", "echo test"),
+            "run command",
+            false);
 
     private SimpleMeterRegistry meterRegistry;
     private OnnxClassifierRuntimeControl runtimeControl;

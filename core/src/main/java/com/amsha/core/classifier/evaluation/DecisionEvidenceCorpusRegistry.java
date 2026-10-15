@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,11 +46,17 @@ public class DecisionEvidenceCorpusRegistry {
     /** Directory holding the shipped corpora, relative to the classpath root. */
     public static final String RESOURCE_DIR = "decision-evidence";
 
-    /** Default version selected by the evidence endpoint when its query parameter is omitted. */
-    public static final String DEFAULT_VERSION = "2";
+    /** Shipped corpus versions; keep this list aligned with classpath resources and version tests. */
+    static final List<Integer> REGISTERED_VERSIONS = List.of(1, 2, 3);
 
-    /** The versions this build ships. A new corpus is a new entry here plus its resource. */
-    static final int[] REGISTERED_VERSIONS = {1, 2};
+    /**
+     * Default version selected by the evidence endpoint when its query parameter is omitted.
+     * Must stay a compile-time constant for JAX-RS {@code @DefaultValue}; tests check registry alignment.
+     */
+    public static final String DEFAULT_VERSION = "3";
+
+    /** Earliest corpus version that must carry an explicit canonical tool operation. */
+    public static final int OPERATION_AWARE_VERSION = 3;
 
     /** Upper bound on a corpus file, so a corrupt or hostile resource cannot exhaust memory. */
     static final int MAX_CORPUS_BYTES = 1_000_000;

@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
+import com.amsha.classifier.api.ToolRiskShadowContext;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +37,7 @@ class DecisionEvidenceCorpusRegistryTest {
 
         assertTrue(registry.registeredVersions().contains(1), "corpus v1 must be registered");
         assertTrue(registry.registeredVersions().contains(2), "corpus v2 must be registered");
+        assertTrue(registry.registeredVersions().contains(3), "corpus v3 must be registered");
         DecisionEvidenceCorpus corpus = registry.find(1).orElseThrow();
         assertEquals(1, corpus.corpusVersion());
         assertEquals(30, corpus.caseCount(), "the shipped corpus carries 30 redacted cases");
@@ -614,5 +617,35 @@ class DecisionEvidenceCorpusRegistryTest {
                 review,
                 Map.of(),
                 cases);
+    }
+
+    @Test
+    void versionThreeCarriesAValidRequiredOperationForEveryToolRiskCase() {
+        DecisionEvidenceCorpus corpus =
+                new DecisionEvidenceCorpusRegistry(MAPPER).find(3).orElseThrow();
+        List<DecisionEvidenceCase> toolRiskCases = corpus.casesForTask(DecisionEvidenceCase.TASK_TOOL_RISK);
+
+        assertEquals(DecisionEvidenceCorpusRegistry.OPERATION_AWARE_VERSION, corpus.corpusVersion());
+        assertEquals(
+                Integer.toString(DecisionEvidenceCorpusRegistry.OPERATION_AWARE_VERSION),
+                DecisionEvidenceCorpusRegistry.DEFAULT_VERSION);
+        assertEquals(
+                DecisionEvidenceCorpusRegistry.REGISTERED_VERSIONS
+                        .get(DecisionEvidenceCorpusRegistry.REGISTERED_VERSIONS.size() - 1)
+                        .toString(),
+                DecisionEvidenceCorpusRegistry.DEFAULT_VERSION);
+        assertEquals(13, toolRiskCases.size());
+        Map<String, ToolOperation> expectedByTool = Map.of(
+                "read_file", ToolOperation.READ_FS,
+                "write_file", ToolOperation.WRITE_FS,
+                "execute_shell", ToolOperation.EXECUTE_SHELL,
+                "network_outbound", ToolOperation.NETWORK_OUTBOUND);
+
+        for (DecisionEvidenceCase evidenceCase : toolRiskCases) {
+            Object operation = evidenceCase.input().get(ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY);
+            assertTrue(operation instanceof String, evidenceCase.id());
+            ToolOperation actual = ToolOperation.valueOf((String) operation);
+            assertEquals(expectedByTool.get((String) evidenceCase.input().get("tool_name")), actual, evidenceCase.id());
+        }
     }
 }

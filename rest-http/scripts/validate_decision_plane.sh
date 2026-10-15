@@ -485,19 +485,20 @@ if [ -z "$LOG_FILE" ] || [ ! -r "$LOG_FILE" ]; then
   skip "AMSHA_VALIDATION_LOG_FILE is unavailable; run via the distribution launcher to inspect startup resource logs"
 else
   info "JEV-17: Shipped decision-evidence corpus and price schedule load in artifact"
-  MISSING_CORPUS=$(grep -cF 'decision-evidence/corpus-v1.json is not present on the classpath' "$LOG_FILE" || true)
-  MISSING_SCHEDULE=$(grep -cF 'decision-evidence/price-schedule-v1.json is not present on the classpath' "$LOG_FILE" || true)
-  LOADED_CORPUS=$(grep -cF 'Decision-evidence corpus v1 loaded:' "$LOG_FILE" || true)
-  LOADED_SCHEDULE=$(grep -cF 'Decision price schedule v1 loaded:' "$LOG_FILE" || true)
-  if [ "$MISSING_CORPUS" -gt 0 ] || [ "$MISSING_SCHEDULE" -gt 0 ]; then
-    fail_detail "decision-evidence resources are missing from this artifact (corpus missing x$MISSING_CORPUS, price schedule missing x$MISSING_SCHEDULE); see ADR-jev-decision-plane"
-  elif [ "$LOADED_CORPUS" -gt 0 ] && [ "$LOADED_SCHEDULE" -gt 0 ]; then
-    ok_detail "corpus and price schedule loaded at startup"
+  MISSING_CORPUS=$(grep -cF "decision-evidence/corpus-v1.json is not present on the classpath" "$LOG_FILE" || true)
+  MISSING_DEFAULT_CORPUS=$(grep -cF "decision-evidence/corpus-v3.json is not present on the classpath" "$LOG_FILE" || true)
+  MISSING_SCHEDULE=$(grep -cF "decision-evidence/price-schedule-v1.json is not present on the classpath" "$LOG_FILE" || true)
+  LOADED_CORPUS=$(grep -cF "Decision-evidence corpus v1 loaded:" "$LOG_FILE" || true)
+  LOADED_DEFAULT_CORPUS=$(grep -cF "Decision-evidence corpus v3 loaded:" "$LOG_FILE" || true)
+  LOADED_SCHEDULE=$(grep -cF "Decision price schedule v1 loaded:" "$LOG_FILE" || true)
+  if [ "$MISSING_CORPUS" -gt 0 ] || [ "$MISSING_DEFAULT_CORPUS" -gt 0 ] || [ "$MISSING_SCHEDULE" -gt 0 ]; then
+    fail_detail "decision-evidence resources missing from artifact (corpus v1 x$MISSING_CORPUS, default corpus v3 x$MISSING_DEFAULT_CORPUS, price schedule x$MISSING_SCHEDULE); see ADR-jev-decision-plane"
+  elif [ "$LOADED_CORPUS" -gt 0 ] && [ "$LOADED_DEFAULT_CORPUS" -gt 0 ] && [ "$LOADED_SCHEDULE" -gt 0 ]; then
+    ok_detail "corpus v1, default corpus v3, and price schedule loaded at startup"
   else
-    fail_detail "startup log does not prove both decision-evidence registries loaded (corpus x$LOADED_CORPUS, price schedule x$LOADED_SCHEDULE)"
+    fail_detail "startup log does not prove all decision-evidence resources loaded (corpus v1 x$LOADED_CORPUS, default corpus v3 x$LOADED_DEFAULT_CORPUS, price schedule x$LOADED_SCHEDULE)"
   fi
 fi
-
 # JEV-18 response-contract assertions run in DecisionEvidenceIT with its loopback provider fixture.
 # This shell validator deliberately makes no evaluation request or provider call.
 echo ""

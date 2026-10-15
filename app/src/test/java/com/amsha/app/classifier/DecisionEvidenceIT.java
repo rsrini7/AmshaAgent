@@ -89,7 +89,7 @@ class DecisionEvidenceIT {
                 .asString();
         JsonNode summary = new ObjectMapper().readTree(json);
 
-        assertEquals(2, summary.get("corpusVersion").asInt());
+        assertEquals(3, summary.get("corpusVersion").asInt());
         assertEquals(30, summary.get("caseCount").asInt());
         assertEquals(
                 Set.of("corpusVersion", "attribution", "caseCount", "m1", "m2", "m3", "m4", "m5"), fieldNames(summary));
@@ -195,7 +195,8 @@ class DecisionEvidenceIT {
                 .queryParam("version", 999)
                 .post("/api/v1/admin/decision/evidence/run")
                 .then()
-                .statusCode(400);
+                .statusCode(409)
+                .body("error", equalTo("CORPUS_NOT_MEASURABLE"));
     }
 
     @Test

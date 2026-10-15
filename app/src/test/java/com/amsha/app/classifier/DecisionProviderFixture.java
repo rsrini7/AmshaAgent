@@ -67,8 +67,10 @@ public class DecisionProviderFixture implements QuarkusTestResourceLifecycleMana
                 Map.entry("amsha.decision.providers.slots.laya.enabled", "true"),
                 Map.entry("amsha.decision.providers.slots.laya.endpoint", "http://127.0.0.1:" + port + "/v1/systemone"),
                 Map.entry("amsha.decision.providers.slots.laya.model", "laya-multilingual"),
+                Map.entry("amsha.decision.providers.slots.laya.api-key", ""),
                 Map.entry("amsha.decision.providers.slots.laya.governance.data-location", "SELF_HOSTED_LOCAL"),
-                Map.entry("amsha.decision.providers.slots.laya.governance.projection-allow-list", "user_message"));
+                Map.entry(
+                        "amsha.decision.providers.slots.laya.governance.projection-allow-list", projectionAllowList()));
     }
 
     @Override
@@ -96,6 +98,11 @@ public class DecisionProviderFixture implements QuarkusTestResourceLifecycleMana
     /** The last request body the fixture received, or {@code null} when it has received none. */
     public static String lastBody() {
         return LAST_BODY.get();
+    }
+
+    /** Projection used by the active integration scenario. */
+    protected String projectionAllowList() {
+        return "user_message,requiredOperation";
     }
 
     /** Clears the recorded call count and body. */

@@ -32,6 +32,8 @@ import com.amsha.classifier.api.QuestionKey;
 import com.amsha.classifier.api.RedactionPolicy;
 import com.amsha.classifier.api.Score;
 import com.amsha.classifier.api.StateProjectionPolicy;
+import com.amsha.classifier.api.ToolRiskShadowContext;
+import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.classifier.wire.WireProfile;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -140,6 +142,65 @@ class SelfHostedDecisionEngineContractTest {
             assertEquals("laya-multilingual", opinion.metadata().modelId());
             assertEquals(296L, opinion.metadata().inputTokens());
             assertEquals(20L, opinion.metadata().outputTokens());
+        }
+    }
+
+    @Test
+    void toolRiskProjectionRefusesToSendWhenRequiredOperationIsNotAllowListed() {
+        responseStatus = 200;
+        responseBody = """
+                {"answers":{"risk":{"type":"choice","choice":"LOW_RISK","confidence":0.94}}}
+                """;
+        var config = SelfHostedProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(Set.of("agentRole"), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
+            var requestBuilder = DecisionRequest.builder(DecisionToolRiskShadowClassifier.DECISION_ID, 1, """
+                    {"agentRole":"coder","requiredOperation":"NETWORK_OUTBOUND"}
+                    """);
+            requestBuilder.registerChoice("risk", "Classify tool risk", List.of("LOW_RISK", "BLOCK"));
+
+            DecisionResult result = engine.evaluate(requestBuilder.build());
+
+            DecisionResult.NoOpinion noOpinion = assertInstanceOf(DecisionResult.NoOpinion.class, result);
+            assertEquals(NoOpinionReason.INFERENCE_ERROR, noOpinion.reason());
+            assertTrue(noOpinion.detail().contains("requiredOperation"));
+            assertNull(lastReceivedRequestBody.get(), "The provider must not receive a request without the operation");
+        }
+    }
+
+    @Test
+    void toolRiskProjectionSendsRequiredOperationWhenAllowListed() throws Exception {
+        responseStatus = 200;
+        responseBody = """
+                {"answers":{"risk":{"type":"choice","choice":"LOW_RISK","confidence":0.94}}}
+                """;
+        var config = SelfHostedProviderConfig.builder()
+                .enabled(true)
+                .endpoint("http://127.0.0.1:" + port + "/v1/systemone")
+                .timeout(Duration.ofSeconds(2))
+                .defaultProjectionPolicy(StateProjectionPolicy.of(
+                        Set.of("agentRole", ToolRiskShadowContext.REQUIRED_OPERATION_FIELD), RedactionPolicy.DEFAULT))
+                .build();
+
+        try (var engine = new SelfHostedDecisionEngine(config, httpClient, mapper)) {
+            var requestBuilder = DecisionRequest.builder(DecisionToolRiskShadowClassifier.DECISION_ID, 1, """
+                    {"agentRole":"coder","requiredOperation":"NETWORK_OUTBOUND"}
+                    """);
+            requestBuilder.registerChoice("risk", "Classify tool risk", List.of("LOW_RISK", "BLOCK"));
+
+            DecisionResult result = engine.evaluate(requestBuilder.build());
+
+            assertInstanceOf(DecisionResult.Opinion.class, result);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> requestBody = mapper.readValue(lastReceivedRequestBody.get(), Map.class);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> projectedState = mapper.readValue((String) requestBody.get("state"), Map.class);
+            assertEquals("NETWORK_OUTBOUND", projectedState.get(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD));
         }
     }
 

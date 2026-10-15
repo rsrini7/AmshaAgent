@@ -19,7 +19,9 @@ import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.classifier.DecisionAnswerQualityShadowClassifier;
 import com.amsha.core.classifier.DecisionIntentShadowClassifier;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceToolOperationMapper;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -312,7 +314,8 @@ public class DecisionShadowComparisonHarness {
 
             ToolRiskShadowContext context;
             try {
-                context = new ToolRiskShadowContext(role, autonomy, tool, params, goal);
+                ToolOperation operation = requiredOperation(rawMap, tool);
+                context = new ToolRiskShadowContext(role, autonomy, tool, operation, params, goal);
             } catch (IllegalArgumentException _) {
                 return new CandidateOutcome(null, true, 0.0, elapsedMs(start), false, 0.0);
             }
@@ -361,6 +364,11 @@ public class DecisionShadowComparisonHarness {
             return new CandidateOutcome(op.value(), false, op.confidence(), elapsedMs(start), false, 0.0);
         }
         return new CandidateOutcome(null, true, 0.0, elapsedMs(start), false, 0.0);
+    }
+
+    private static ToolOperation requiredOperation(Map<String, Object> input, String toolName) {
+        return DecisionEvidenceToolOperationMapper.fromInputValue(
+                input.get(ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY), toolName, false);
     }
 
     private CandidateOutcome evaluateSelfHosted(ShadowTestCase tc) {

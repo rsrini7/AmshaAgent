@@ -16,9 +16,11 @@ import com.amsha.classifier.api.DecisionLatencyBudget;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.config.DecisionProviderConfig;
+import com.amsha.core.config.DecisionProviderGovernance;
 import com.amsha.core.config.DecisionProviderSelector;
 import com.amsha.core.routing.IntentDecisionRouter;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -131,7 +133,7 @@ public class DecisionEvidenceRunner {
         DecisionEvidenceCorpus corpus = corpusRegistry
                 .find(corpusVersion)
                 .orElseThrow(() -> new DecisionEvaluationRefusedException(
-                        DecisionRefusalReason.UNREGISTERED_DECISION,
+                        DecisionRefusalReason.CORPUS_NOT_MEASURABLE,
                         "No decision-evidence corpus is registered under version " + corpusVersion));
         // A corpus may only declare a task as evaluated if this runner can actually evaluate it. Without this
         // precondition, a corpus that declared a task with no registered decision would skip every one of that
@@ -145,16 +147,10 @@ public class DecisionEvidenceRunner {
                                 + "' as evaluated, but no decision is registered for that task");
             }
         }
-        // This path sends only the registered question criteria; it has no channel for a case's own criteria
-        // text (the request carries state and options, not policy). A corpus whose cases carry criteria was
-        // therefore calibrated against a prompt this path does not send — the shadow comparison harness
-        // appends that text to the goal/message, this runner does not — so its expected labels are not
-        // achievable here and measuring M1/M2 on it would score the prompt difference, not the model.
-        // Refuse the whole run rather than silently ignore the field: a partial run would be a scope change
-        // The evidence path sends only registered question criteria; it has no channel for a case's own criteria
-        // text (the request carries state and options, not policy). Refuse if an evaluated case depends on
-        // criteria this path does not send. Criteria on an explicitly excluded task do not affect this run
-        // because those cases are reported as skipped and never reach a provider.
+        // Evidence requests carry registered question criteria, not per-case criteria.
+        // Refuse evaluated cases that depend on criteria the request cannot carry.
+        // Excluded task cases remain skipped and do not affect measurability.
+
         List<String> criteriaBearing = corpus.cases().stream()
                 .filter(c -> corpus.evaluatesTask(c.task()))
                 .filter(c -> c.criteria() != null && !c.criteria().isBlank())
@@ -164,14 +160,16 @@ public class DecisionEvidenceRunner {
             throw new DecisionEvaluationRefusedException(
                     DecisionRefusalReason.CORPUS_NOT_MEASURABLE,
                     "Corpus " + corpusVersion + " carries case-level criteria on " + criteriaBearing.size()
-                            + " case(s) " + criteriaBearing + ", but the evidence path delivers only the registered"
-                            + " question criteria. Those cases were calibrated against a prompt this path does not"
-                            + " send, so their expected labels are not measurable here. Review the corpus version"
-                            + " before running it.");
+                            + " case(s) " + criteriaBearing
+                            + ", but the evidence path delivers only registered question criteria. "
+                            + "These cases were calibrated against a prompt path this runner does not send, so their "
+                            + "expected labels are not measurable here. Review the corpus version before running it.");
         }
+        validateRequiredOperations(corpus);
+        validateRequiredOperationProjection(corpus);
         List<DecisionEvidenceCaseResult> results = new ArrayList<>();
-        for (DecisionEvidenceCase c : corpus.cases()) {
-            results.add(evaluateCase(c, actorUserId, corpus));
+        for (DecisionEvidenceCase evidenceCase : corpus.cases()) {
+            results.add(evaluateCase(evidenceCase, actorUserId, corpus));
         }
         return DecisionEvidenceSummary.summarize(
                 corpusVersion,
@@ -183,7 +181,7 @@ public class DecisionEvidenceRunner {
                 includeDiagnostics);
     }
 
-    /** A fresh identifier for one run; two runs of the same corpus must be distinguishable. */
+    /** Returns a unique identifier for this evidence run. */
     private static String newRunId() {
         return UUID.randomUUID().toString();
     }
@@ -227,7 +225,7 @@ public class DecisionEvidenceRunner {
         String stateJson;
         Map<String, List<String>> options;
         try {
-            stateJson = buildStateJson(c, decisionId);
+            stateJson = buildStateJson(c, decisionId, corpus.corpusVersion());
             options = choiceOptionsFor(c);
         } catch (RuntimeException _) {
             return DecisionEvidenceCaseResult.transformError(c, decisionId, "evidence state transformation failed");
@@ -258,9 +256,9 @@ public class DecisionEvidenceRunner {
         return idx >= 0 ? value.substring(0, idx) : value;
     }
 
-    private String buildStateJson(DecisionEvidenceCase c, String decisionId) {
+    private String buildStateJson(DecisionEvidenceCase c, String decisionId, int corpusVersion) {
         if (DecisionToolRiskShadowClassifier.DECISION_ID.equals(decisionId)) {
-            return buildToolRiskState(c);
+            return buildToolRiskState(c, corpusVersion);
         }
         Object message = c.input().get("message");
         if (!(message instanceof String s) || s.isBlank()) {
@@ -277,7 +275,7 @@ public class DecisionEvidenceRunner {
         }
     }
 
-    private String buildToolRiskState(DecisionEvidenceCase c) {
+    private String buildToolRiskState(DecisionEvidenceCase c, int corpusVersion) {
         Map<String, Object> input = c.input();
         String agentRole = asText(input, "agent_role");
         String toolName = asText(input, "tool_name");
@@ -286,15 +284,61 @@ public class DecisionEvidenceRunner {
             throw new IllegalArgumentException("tool-risk case '" + c.id()
                     + "' has no usable autonomy level (expected a value parseable to AutonomyLevel)");
         }
+        ToolOperation requiredOperation = requiredOperationFor(c, corpusVersion);
         Object rawParams = input.get("parameters");
         Map<String, Object> parameters = rawParams instanceof Map<?, ?> m ? castParameters(m) : Map.of();
-        ToolRiskShadowContext context =
-                new ToolRiskShadowContext(agentRole, autonomy, toolName, parameters, asTextOrEmpty(input, "goal"));
+        ToolRiskShadowContext context = new ToolRiskShadowContext(
+                agentRole, autonomy, toolName, requiredOperation, parameters, asTextOrEmpty(input, "goal"));
         try {
             return mapper.writeValueAsString(context);
         } catch (JsonProcessingException ex) {
             throw new IllegalArgumentException("could not serialize tool-risk context for case '" + c.id() + "'", ex);
         }
+    }
+
+    private static void validateRequiredOperations(DecisionEvidenceCorpus corpus) {
+        for (DecisionEvidenceCase evidenceCase : corpus.casesForTask(DecisionEvidenceCase.TASK_TOOL_RISK)) {
+            if (!corpus.evaluatesTask(evidenceCase.task())) {
+                continue;
+            }
+            try {
+                requiredOperationFor(evidenceCase, corpus.corpusVersion());
+            } catch (IllegalArgumentException refusal) {
+                throw new DecisionEvaluationRefusedException(
+                        DecisionRefusalReason.CORPUS_NOT_MEASURABLE,
+                        "Corpus " + corpus.corpusVersion() + " has no usable required operation for case '"
+                                + evidenceCase.id() + "' (" + refusal.getMessage()
+                                + "); no provider egress was performed");
+            }
+        }
+    }
+
+    /** Refuses tool-risk evidence when the selected provider would project away the operation field. */
+    private void validateRequiredOperationProjection(DecisionEvidenceCorpus corpus) {
+        if (!corpus.evaluatesTask(DecisionEvidenceCase.TASK_TOOL_RISK)) {
+            return;
+        }
+        DecisionProviderSelector.Selection selection = DecisionProviderSelector.select(providerConfig);
+        if (!(selection instanceof DecisionProviderSelector.Selection.Selected selected)) {
+            return;
+        }
+        DecisionProviderConfig.Slot slot = providerConfig.slots().get(selected.providerId());
+        DecisionProviderGovernance governance =
+                DecisionProviderGovernance.of(selected.providerId(), slot.governance(), selected.lane());
+        if (!governance.projectionAllowList().contains(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD)) {
+            throw new DecisionEvaluationRefusedException(
+                    DecisionRefusalReason.CORPUS_NOT_MEASURABLE,
+                    "Decision provider '" + selected.providerId() + "' projection allow-list omits '"
+                            + ToolRiskShadowContext.REQUIRED_OPERATION_FIELD
+                            + "'; tool-risk evidence cannot measure this corpus. No provider egress performed");
+        }
+    }
+
+    private static ToolOperation requiredOperationFor(DecisionEvidenceCase evidenceCase, int corpusVersion) {
+        return DecisionEvidenceToolOperationMapper.fromInputValue(
+                evidenceCase.input().get(ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY),
+                asText(evidenceCase.input(), "tool_name"),
+                corpusVersion >= DecisionEvidenceCorpusRegistry.OPERATION_AWARE_VERSION);
     }
 
     @SuppressWarnings("unchecked")

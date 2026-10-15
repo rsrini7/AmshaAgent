@@ -13,6 +13,7 @@ import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.classifier.api.PostPolicyToolContext;
 import com.amsha.classifier.api.ToolRiskAction;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +22,13 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 class PostPolicyToolRiskDispatcherTest {
 
     private static final PostPolicyToolContext CONTEXT = new PostPolicyToolContext(
-            "coder", AutonomyLevel.FULL, "sandbox_exec", Map.of("language", "java"), "run code", false);
+            "coder",
+            AutonomyLevel.FULL,
+            "sandbox_exec",
+            ToolOperation.EXECUTE_SHELL,
+            Map.of("language", "java"),
+            "run code",
+            false);
 
     @Test
     void noImplementationReturnsMissingModelNoOpinion() {

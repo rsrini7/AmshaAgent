@@ -9,17 +9,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.classifier.api.DecisionMetadata;
 import com.amsha.classifier.api.IntentPolicyResolution;
 import com.amsha.classifier.api.StateProjectionPolicy;
 import com.amsha.classifier.api.ToolRiskDecisionPolicy.PolicyResolution;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.classifier.selfhosted.StateProjectionRedactor;
+import com.amsha.core.classifier.wire.WireProfile;
 import com.amsha.core.config.DecisionProviderConfig;
 import com.amsha.core.routing.IntentDecisionRouter;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -30,7 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 /**
- * Exercises the runner end to end against the shipped corpus-v2 (loaded from the classpath) and a canned
+ * Exercises the runner end to end against the shipped corpus-v3 (loaded from the classpath) and a canned
  * evaluator, so the request-shaping, the per-case projection, and the M1–M5 metric maths are all checked
  * without any provider egress.
  */
@@ -39,6 +44,44 @@ class DecisionEvidenceRunnerTest {
     private static final String LANE = "SELF_HOSTED";
     private static final String PROVIDER = "onnx-local";
     private static final String MODEL = "jev-1.13.0";
+
+    private DecisionEvidenceCorpus withInput(
+            DecisionEvidenceCorpus source, String targetId, Map<String, Object> input, List<String> evaluatedTasks) {
+        List<DecisionEvidenceCase> cases = new ArrayList<>(source.cases().size());
+        boolean replaced = false;
+        for (DecisionEvidenceCase evidenceCase : source.cases()) {
+            if (targetId.equals(evidenceCase.id())) {
+                cases.add(new DecisionEvidenceCase(
+                        evidenceCase.id(),
+                        evidenceCase.task(),
+                        evidenceCase.partition(),
+                        evidenceCase.expectedLabel(),
+                        evidenceCase.acceptableLabels(),
+                        evidenceCase.riskCategory(),
+                        evidenceCase.baselineAmbiguity(),
+                        evidenceCase.ambiguityRationale(),
+                        evidenceCase.criteria(),
+                        evidenceCase.options(),
+                        input,
+                        evidenceCase.notes()));
+                replaced = true;
+            } else {
+                cases.add(evidenceCase);
+            }
+        }
+        if (!replaced) {
+            throw new IllegalArgumentException("target case was not present in corpus");
+        }
+        return new DecisionEvidenceCorpus(
+                source.corpusVersion(),
+                source.description(),
+                source.provenance(),
+                source.baseline(),
+                evaluatedTasks,
+                source.redactionReview(),
+                source.governance(),
+                cases);
+    }
 
     private DecisionEvidenceRunner runnerWith(DecisionEvidenceRunner.EvaluationFn evaluator) {
         return runnerWith(evaluator, loadShippedCorpus());
@@ -60,11 +103,11 @@ class DecisionEvidenceRunnerTest {
     }
 
     private DecisionEvidenceCorpus loadShippedCorpus() {
-        return loadCorpus(strictMapper(), 2);
+        return loadCorpus(strictMapper(), 3);
     }
 
     private DecisionEvidenceCorpus loadCorpus(ObjectMapper mapper) {
-        return loadCorpus(mapper, 2);
+        return loadCorpus(mapper, 3);
     }
 
     private DecisionEvidenceCorpus loadHistoricalCorpus() {
@@ -89,7 +132,7 @@ class DecisionEvidenceRunnerTest {
         return DecisionEvaluationOutcome.opinion(PROVIDER, LANE, MODEL, null, answers, metadata)
                 .withToolRiskPolicyResolution(new PolicyResolution(
                         DecisionToolRiskShadowClassifier.DECISION_ID,
-                        1,
+                        DecisionToolRiskShadowClassifier.SCHEMA_VERSION,
                         null,
                         OptionalDouble.empty(),
                         false,
@@ -107,13 +150,56 @@ class DecisionEvidenceRunnerTest {
     }
 
     @Test
+    void refusesToolRiskEvidenceBeforeEgressWhenProjectionOmitsRequiredOperation() {
+        DecisionProviderConfig config = Mockito.mock(DecisionProviderConfig.class);
+        DecisionProviderConfig.Slot slot = Mockito.mock(DecisionProviderConfig.Slot.class);
+        DecisionProviderConfig.Slot.Governance governance = Mockito.mock(DecisionProviderConfig.Slot.Governance.class);
+        Mockito.when(config.selected()).thenReturn(Optional.of("omlx"));
+        Mockito.when(config.slots()).thenReturn(Map.of("omlx", slot));
+        Mockito.when(slot.enabled()).thenReturn(true);
+        Mockito.when(slot.endpoint()).thenReturn(Optional.of("http://127.0.0.1:8000/v1/systemone"));
+        Mockito.when(slot.model()).thenReturn(Optional.of("clef-flash-oQ4e"));
+        Mockito.when(slot.apiKey()).thenReturn(Optional.empty());
+        Mockito.when(slot.timeout()).thenReturn(Duration.ofSeconds(50));
+        Mockito.when(slot.wireProfile()).thenReturn(WireProfile.JSON_OBJECT);
+        Mockito.when(slot.governance()).thenReturn(governance);
+        Mockito.when(governance.dataLocation()).thenReturn(Optional.empty());
+        Mockito.when(governance.retentionWindow()).thenReturn(Duration.ZERO);
+        Mockito.when(governance.allowTrainingUse()).thenReturn(false);
+        Mockito.when(governance.tenantIsolation()).thenReturn(true);
+        Mockito.when(governance.projectionAllowList())
+                .thenReturn(Optional.of(List.of("agentRole", "autonomyLevel", "toolName", "parameters", "goal")));
+        Mockito.when(governance.costCeilingPerThousand()).thenReturn(Optional.empty());
+
+        AtomicInteger providerCalls = new AtomicInteger();
+        DecisionEvidenceCorpus corpus = loadShippedCorpus();
+        DecisionEvidenceRunner runner = new DecisionEvidenceRunner(
+                (request, actor) -> {
+                    providerCalls.incrementAndGet();
+                    return abstain();
+                },
+                new DecisionEvidenceCorpusRegistry(Map.of(corpus.corpusVersion(), corpus)),
+                new DecisionPriceScheduleRegistry(Map.of()),
+                strictMapper(),
+                config);
+
+        DecisionEvaluationRefusedException refusal =
+                assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(3, "reviewer"));
+
+        assertEquals(DecisionRefusalReason.CORPUS_NOT_MEASURABLE, refusal.reason());
+        assertTrue(refusal.getMessage().contains("requiredOperation"));
+        assertTrue(refusal.getMessage().contains("No provider egress performed"));
+        assertEquals(0, providerCalls.get(), "a missing projected operation must be refused before egress");
+    }
+
+    @Test
     void runsEveryShippedCaseAndMeasuresTheGates() {
         DecisionEvidenceRunner.EvaluationFn worstCase =
                 (request, actor) -> DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())
                         ? lowRiskOpinion()
                         : abstain();
 
-        DecisionEvidenceSummary summary = runnerWith(worstCase).run(2, "tester");
+        DecisionEvidenceSummary summary = runnerWith(worstCase).run(3, "tester");
 
         assertEquals(30, summary.caseCount());
         // M1: 11 SECURITY tool-risk cases; 10 rubric-aligned restrictive cases all resolve LOW_RISK.
@@ -158,7 +244,7 @@ class DecisionEvidenceRunnerTest {
                         ? lowRiskOpinion()
                         : abstain();
 
-        DecisionEvidenceSummary summary = runnerWith(worstCase).run(2, "tester");
+        DecisionEvidenceSummary summary = runnerWith(worstCase).run(3, "tester");
 
         List<DecisionEvidenceCaseResult> excluded = summary.results().stream()
                 .filter(DecisionEvidenceCaseResult::skippedNoDecision)
@@ -181,7 +267,7 @@ class DecisionEvidenceRunnerTest {
                         ? lowRiskOpinion()
                         : abstain();
 
-        DecisionEvidenceSummary aggregateOnly = runnerWith(worstCase).run(2, "tester");
+        DecisionEvidenceSummary aggregateOnly = runnerWith(worstCase).run(3, "tester");
 
         String runId = aggregateOnly.attribution().runId();
         assertTrue(runId != null && !runId.isBlank(), "every run must carry its own identifier");
@@ -193,7 +279,7 @@ class DecisionEvidenceRunnerTest {
         assertFalse(aggregateOnly.diagnosticsIncluded());
         assertEquals(null, aggregateOnly.diagnostics());
 
-        DecisionEvidenceSummary withDiagnostics = runnerWith(worstCase).run(2, "tester", true);
+        DecisionEvidenceSummary withDiagnostics = runnerWith(worstCase).run(3, "tester", true);
 
         assertTrue(withDiagnostics.diagnosticsIncluded());
         DecisionEvidenceDiagnostics diagnostics = withDiagnostics.diagnostics();
@@ -221,8 +307,8 @@ class DecisionEvidenceRunnerTest {
                         ? lowRiskOpinion()
                         : abstain();
 
-        String first = runnerWith(worstCase).run(2, "tester").attribution().runId();
-        String second = runnerWith(worstCase).run(2, "tester").attribution().runId();
+        String first = runnerWith(worstCase).run(3, "tester").attribution().runId();
+        String second = runnerWith(worstCase).run(3, "tester").attribution().runId();
 
         assertNotEquals(first, second, "two runs of the same corpus must not share a run identifier");
     }
@@ -275,7 +361,11 @@ class DecisionEvidenceRunnerTest {
     @Test
     void anUnregisteredCorpusVersionIsRefused() {
         DecisionEvidenceRunner runner = runnerWith((request, actor) -> abstain());
-        assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(999, "tester"));
+        DecisionEvaluationRefusedException refusal =
+                assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(999, "tester"));
+
+        assertEquals(DecisionRefusalReason.CORPUS_NOT_MEASURABLE, refusal.reason());
+        assertTrue(refusal.getMessage().contains("999"));
     }
 
     @Test
@@ -288,7 +378,7 @@ class DecisionEvidenceRunnerTest {
                     : abstain();
         };
 
-        runnerWith(capture).run(2, "tester");
+        runnerWith(capture).run(3, "tester");
 
         DecisionEvaluationRequest intentRequest = captured.stream()
                 .filter(r -> IntentDecisionRouter.DECISION_ID.equals(r.decisionId()))
@@ -316,5 +406,187 @@ class DecisionEvidenceRunnerTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> redactor.projectAndRedact("Please implement a thread-safe LRU cache in Java", policy));
+    }
+
+    @Test
+    void everyToolRiskRequestCarriesCanonicalOperations() throws Exception {
+        List<DecisionEvaluationRequest> captured = new ArrayList<>();
+        DecisionEvidenceRunner.EvaluationFn capture = (request, actor) -> {
+            captured.add(request);
+            return DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())
+                    ? lowRiskOpinion()
+                    : abstain();
+        };
+
+        runnerWith(capture).run(3, "tester");
+
+        List<JsonNode> states = new ArrayList<>();
+        for (DecisionEvaluationRequest request : captured) {
+            if (DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())) {
+                states.add(strictMapper().readTree(request.stateJson()));
+            }
+        }
+        assertEquals(13, states.size());
+        List<String> operations = new ArrayList<>();
+        for (JsonNode state : states) {
+            assertTrue(state.hasNonNull(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD));
+            String operation =
+                    state.get(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD).asText();
+            assertFalse(operation.isBlank());
+            operations.add(operation);
+        }
+        assertTrue(operations.contains("EXECUTE_SHELL"));
+        assertTrue(operations.contains("NETWORK_OUTBOUND"));
+    }
+
+    @Test
+    void aVersionThreeCorpusMissingAnOperationIsRefusedBeforeEgress() throws Exception {
+        DecisionEvidenceCorpus shipped = loadShippedCorpus();
+        List<DecisionEvidenceCase> incompleteCases =
+                new ArrayList<>(shipped.cases().size());
+        for (DecisionEvidenceCase evidenceCase : shipped.cases()) {
+            if (!"toolrisk-dup-01".equals(evidenceCase.id())) {
+                incompleteCases.add(evidenceCase);
+                continue;
+            }
+            Map<String, Object> input = new LinkedHashMap<>(evidenceCase.input());
+            input.remove(ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY);
+            incompleteCases.add(new DecisionEvidenceCase(
+                    evidenceCase.id(),
+                    evidenceCase.task(),
+                    evidenceCase.partition(),
+                    evidenceCase.expectedLabel(),
+                    evidenceCase.acceptableLabels(),
+                    evidenceCase.riskCategory(),
+                    evidenceCase.baselineAmbiguity(),
+                    evidenceCase.ambiguityRationale(),
+                    evidenceCase.criteria(),
+                    evidenceCase.options(),
+                    input,
+                    evidenceCase.notes()));
+        }
+        DecisionEvidenceCorpus incomplete = new DecisionEvidenceCorpus(
+                shipped.corpusVersion(),
+                shipped.description(),
+                shipped.provenance(),
+                shipped.baseline(),
+                shipped.evaluatedTasks(),
+                shipped.redactionReview(),
+                shipped.governance(),
+                incompleteCases);
+        List<DecisionEvaluationRequest> egress = new ArrayList<>();
+        DecisionEvidenceRunner runner = runnerWith(
+                (request, actor) -> {
+                    egress.add(request);
+                    return abstain();
+                },
+                incomplete);
+
+        DecisionEvaluationRefusedException refusal =
+                assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(3, "tester"));
+
+        assertEquals(DecisionRefusalReason.CORPUS_NOT_MEASURABLE, refusal.reason());
+        assertTrue(egress.isEmpty(), "an incomplete corpus must be rejected before provider egress");
+    }
+
+    @Test
+    void invalidOperationValueIsRefusedBeforeEgress() throws Exception {
+        DecisionEvidenceCorpus shipped = loadShippedCorpus();
+        DecisionEvidenceCase target = shipped.cases().stream()
+                .filter(evidenceCase -> "toolrisk-dup-01".equals(evidenceCase.id()))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> input = new LinkedHashMap<>(target.input());
+        input.put(ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY, "NOT_AN_OPERATION");
+        DecisionEvidenceCorpus invalid = withInput(shipped, target.id(), input, shipped.evaluatedTasks());
+        List<DecisionEvaluationRequest> egress = new ArrayList<>();
+        DecisionEvidenceRunner runner = runnerWith(
+                (request, actor) -> {
+                    egress.add(request);
+                    return abstain();
+                },
+                invalid);
+
+        DecisionEvaluationRefusedException refusal =
+                assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(3, "tester"));
+
+        assertEquals(DecisionRefusalReason.CORPUS_NOT_MEASURABLE, refusal.reason());
+        assertTrue(refusal.getMessage().contains("invalid required operation"));
+        assertTrue(egress.isEmpty(), "invalid operation metadata must be refused before provider egress");
+    }
+
+    @Test
+    void unknownLegacyToolNameIsRefusedBeforeEgress() throws Exception {
+        DecisionEvidenceCorpus shipped = loadCorpus(strictMapper(), 2);
+        DecisionEvidenceCase target = shipped.cases().stream()
+                .filter(evidenceCase -> "toolrisk-dup-01".equals(evidenceCase.id()))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> input = new LinkedHashMap<>(target.input());
+        input.put("tool_name", "custom:unmapped");
+        DecisionEvidenceCorpus invalid = withInput(shipped, target.id(), input, shipped.evaluatedTasks());
+        List<DecisionEvaluationRequest> egress = new ArrayList<>();
+        DecisionEvidenceRunner runner = runnerWith(
+                (request, actor) -> {
+                    egress.add(request);
+                    return abstain();
+                },
+                invalid);
+
+        DecisionEvaluationRefusedException refusal =
+                assertThrows(DecisionEvaluationRefusedException.class, () -> runner.run(2, "tester"));
+
+        assertEquals(DecisionRefusalReason.CORPUS_NOT_MEASURABLE, refusal.reason());
+        assertTrue(refusal.getMessage().contains("unmapped legacy tool name"));
+        assertTrue(egress.isEmpty(), "unmapped legacy operation must be refused before provider egress");
+    }
+
+    @Test
+    void excludedToolRiskCasesDoNotBlockAnIntentOnlyCorpus() throws Exception {
+        DecisionEvidenceCorpus shipped = loadShippedCorpus();
+        DecisionEvidenceCase target = shipped.cases().stream()
+                .filter(evidenceCase -> "toolrisk-dup-01".equals(evidenceCase.id()))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> input = new LinkedHashMap<>(target.input());
+        input.put(ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY, "NOT_AN_OPERATION");
+        DecisionEvidenceCorpus intentOnly =
+                withInput(shipped, target.id(), input, List.of(DecisionEvidenceCase.TASK_INTENT));
+        List<DecisionEvaluationRequest> egress = new ArrayList<>();
+        DecisionEvidenceRunner runner = runnerWith(
+                (request, actor) -> {
+                    egress.add(request);
+                    return abstain();
+                },
+                intentOnly);
+
+        runner.run(3, "tester");
+
+        assertTrue(egress.stream()
+                .noneMatch(request -> DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())));
+    }
+
+    @Test
+    void legacyCorpusVersionsMapKnownToolNamesToRequiredOperations() throws Exception {
+        List<DecisionEvaluationRequest> captured = new ArrayList<>();
+        DecisionEvidenceRunner.EvaluationFn capture = (request, actor) -> {
+            captured.add(request);
+            return DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())
+                    ? lowRiskOpinion()
+                    : abstain();
+        };
+        DecisionEvidenceRunner runner = runnerWith(capture, loadCorpus(strictMapper(), 2));
+
+        runner.run(2, "tester");
+
+        List<JsonNode> toolRiskStates = new ArrayList<>();
+        for (DecisionEvaluationRequest request : captured) {
+            if (DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())) {
+                toolRiskStates.add(strictMapper().readTree(request.stateJson()));
+            }
+        }
+        assertEquals(13, toolRiskStates.size());
+        assertTrue(
+                toolRiskStates.stream().allMatch(state -> state.has(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD)));
     }
 }

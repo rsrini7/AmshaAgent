@@ -27,6 +27,7 @@ import com.amsha.classifier.api.RemoteDecisionProvider;
 import com.amsha.classifier.api.ToolRiskPrediction;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Assertions;
@@ -160,7 +161,12 @@ class DecisionShadowClassifierTest {
         var blockClassifier = new DecisionToolRiskShadowClassifier(blockEngine, mapper, true);
 
         ToolRiskShadowContext blockContext = new ToolRiskShadowContext(
-                "coder", AutonomyLevel.FULL, "execute_shell", Map.of("cmd", "rm -rf /"), "clean disk");
+                "coder",
+                AutonomyLevel.FULL,
+                "execute_shell",
+                ToolOperation.EXECUTE_SHELL,
+                Map.of("cmd", "rm -rf /"),
+                "clean disk");
 
         ClassifierResult<ToolRiskPrediction> blockResult = blockClassifier.classify(blockContext);
         assertInstanceOf(ClassifierResult.Opinion.class, blockResult);
@@ -207,7 +213,12 @@ class DecisionShadowClassifierTest {
         var allowClassifier = new DecisionToolRiskShadowClassifier(allowEngine, mapper, true);
 
         ToolRiskShadowContext context = new ToolRiskShadowContext(
-                "coder", AutonomyLevel.FULL, "read_file", Map.of("path", "README.md"), "view doc");
+                "coder",
+                AutonomyLevel.FULL,
+                "read_file",
+                ToolOperation.READ_FS,
+                Map.of("path", "README.md"),
+                "view doc");
 
         ClassifierResult<ToolRiskPrediction> result = allowClassifier.classify(context);
         assertInstanceOf(ClassifierResult.NoOpinion.class, result);
@@ -277,8 +288,8 @@ class DecisionShadowClassifierTest {
                 .withRuleId("rule-allow")
                 .build();
         var toolRiskClassifier = new DecisionToolRiskShadowClassifier(allowEngine, mapper, true);
-        ToolRiskShadowContext riskCtx =
-                new ToolRiskShadowContext("coder", AutonomyLevel.FULL, "read_file", Map.of("path", "file.txt"), "read");
+        ToolRiskShadowContext riskCtx = new ToolRiskShadowContext(
+                "coder", AutonomyLevel.FULL, "read_file", ToolOperation.READ_FS, Map.of("path", "file.txt"), "read");
         ClassifierResult<ToolRiskPrediction> riskResult = toolRiskClassifier.classify(riskCtx);
         assertInstanceOf(ClassifierResult.NoOpinion.class, riskResult);
         assertEquals(

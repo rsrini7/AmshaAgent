@@ -9,11 +9,15 @@ Pure SPI contracts for shadow classifiers **and the Jev decision plane** in Amsh
 | Type | Purpose |
 |---|---|
 | `ShadowClassifier` | Base SPI for pluggable shadow classifiers |
-| `ToolRiskShadowClassifier` (+ `ToolRiskShadowContext`, `ToolRiskPrediction`, `ToolRiskAction`) | Pre-tool-boundary risk elevation signals (`ALLOW`/`ESCALATE`/`DENY` style actions) |
+| `ToolRiskShadowClassifier` (+ `ToolRiskShadowContext`, `ToolRiskPrediction`, `ToolRiskAction`) | Pre-tool-boundary risk elevation signals (`REQUIRE_APPROVAL` or `BLOCK`) |
 | `AnswerQualityShadowClassifier` (+ `AnswerQualityShadowContext`, `AnswerQualityPrediction`, `AnswerQualityAction`) | Post-answer quality signals; may consume one retry only before a tool boundary |
 | `IntentShadowClassifier` | Intent shadow classification for routing hints |
 | `PostPolicyToolContext` | Input context for post-policy tool risk evaluation |
 | `ClassifierResult` | Uniform result wrapper with confidence and provenance |
+
+## Tool-risk operation context
+
+`ToolRiskShadowContext` and `PostPolicyToolContext` carry the canonical `ToolOperation` selected by the deterministic tool registry. Classifiers should use `requiredOperation` as the operation category; `toolName` remains the concrete tool identifier. The decision guard's mandatory HITL behavior remains authoritative.
 
 ## Jev Decision Plane Seam
 

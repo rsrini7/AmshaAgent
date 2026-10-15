@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -111,12 +112,32 @@ public class OnnxToolRiskShadowClassifier implements ToolRiskShadowClassifier {
             input.put("agent_role", context.agentRole());
             input.put("autonomy", context.autonomyLevel().name());
             input.put("tool_name", context.toolName());
+            input.put(
+                    ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY,
+                    context.requiredOperation().name());
             input.put("goal", context.goal());
-            input.put("parameters", new TreeMap<>(context.parameters()));
+            input.put("parameters", canonicalize(context.parameters()));
             return classifier.apply(objectMapper.writeValueAsString(input));
         } catch (JsonProcessingException | RuntimeException e) {
             return new ClassifierResult.NoOpinion<>(NoOpinionReason.INFERENCE_ERROR);
         }
+    }
+
+    private static Object canonicalize(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            TreeMap<String, Object> sorted = new TreeMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!(entry.getKey() instanceof String key)) {
+                    throw new IllegalArgumentException("tool parameters must use string keys");
+                }
+                sorted.put(key, canonicalize(entry.getValue()));
+            }
+            return sorted;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(OnnxToolRiskShadowClassifier::canonicalize).toList();
+        }
+        return value;
     }
 
     /**

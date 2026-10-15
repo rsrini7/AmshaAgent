@@ -58,6 +58,9 @@ public class TestDataCollectionService {
         input.put("agent_role", sanitizeText(context.agentRole()));
         input.put("autonomy", sanitizeText(context.autonomyLevel().name()));
         input.put("tool_name", sanitizeText(context.toolName()));
+        input.put(
+                ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY,
+                sanitizeText(context.requiredOperation().name()));
         input.put("goal", sanitizeText(context.goal()));
 
         input.set("parameters", sanitizeNode(mapper.valueToTree(new TreeMap<>(context.parameters()))));

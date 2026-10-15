@@ -1,5 +1,6 @@
 package com.amsha.core.classifier.selfhosted;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,6 +9,7 @@ import java.util.Set;
 
 import com.amsha.classifier.api.RedactionPolicy;
 import com.amsha.classifier.api.StateProjectionPolicy;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +57,24 @@ class StateProjectionRedactorTest {
         assertFalse(projectedJson.contains("do-not-leak"));
         assertFalse(projectedJson.contains("session_auth_token"));
         assertFalse(projectedJson.contains("secret-session-abc"));
+    }
+
+    @Test
+    void operationFieldPassesProjectionOnlyWhenExplicitlyAllowListed() throws Exception {
+        String rawState = """
+                {"agentRole":"coder","requiredOperation":"NETWORK_OUTBOUND"}
+                """;
+        StateProjectionPolicy includeOperation =
+                StateProjectionPolicy.ofDefault(Set.of("agentRole", ToolRiskShadowContext.REQUIRED_OPERATION_FIELD));
+        StateProjectionPolicy excludeOperation = StateProjectionPolicy.ofDefault(Set.of("agentRole"));
+
+        var included = mapper.readTree(redactor.projectAndRedact(rawState, includeOperation));
+        var excluded = mapper.readTree(redactor.projectAndRedact(rawState, excludeOperation));
+
+        assertEquals(
+                "NETWORK_OUTBOUND",
+                included.get(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD).asText());
+        assertFalse(excluded.has(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD));
     }
 
     @Test

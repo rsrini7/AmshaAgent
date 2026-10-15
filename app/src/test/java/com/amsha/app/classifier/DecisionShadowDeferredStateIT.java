@@ -15,6 +15,7 @@ import com.amsha.core.classifier.DecisionAnswerQualityShadowClassifier;
 import com.amsha.core.classifier.DecisionIntentShadowClassifier;
 import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 
@@ -52,7 +53,12 @@ class DecisionShadowDeferredStateIT {
     @Test
     void enabledToolRiskClassifierWithoutCandidateEngineReportsMissingModel() {
         ToolRiskShadowContext context = new ToolRiskShadowContext(
-                "coder", AutonomyLevel.FULL, "execute_shell", Map.of("cmd", "echo test"), "test");
+                "coder",
+                AutonomyLevel.FULL,
+                "execute_shell",
+                ToolOperation.EXECUTE_SHELL,
+                Map.of("cmd", "echo test"),
+                "test");
 
         assertMissingModel(toolRiskClassifier.classify(context));
     }

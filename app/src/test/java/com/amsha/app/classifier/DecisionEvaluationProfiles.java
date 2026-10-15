@@ -7,9 +7,8 @@ import io.quarkus.test.junit.QuarkusTestProfile;
 /**
  * Test profiles for the decision evaluation path.
  *
- * <p>They set only {@code amsha.decision.evaluation.enabled}; the provider slot itself comes from
- * {@link DecisionProviderFixture}, so the enabled and disabled cases differ by exactly the switch
- * under test.
+ * <p>The fixture supplies the loopback provider endpoint. Enabled evaluation profiles also pin
+ * the projection allow-list so evidence tests do not inherit a developer's local configuration.
  */
 public final class DecisionEvaluationProfiles {
 
@@ -19,7 +18,21 @@ public final class DecisionEvaluationProfiles {
     public static class EvaluationEnabled implements QuarkusTestProfile {
         @Override
         public Map<String, String> getConfigOverrides() {
-            return Map.of("amsha.decision.evaluation.enabled", "true");
+            return Map.of(
+                    "amsha.decision.evaluation.enabled",
+                    "true",
+                    "amsha.decision.providers.slots.laya.governance.projection-allow-list",
+                    "user_message,requiredOperation");
+        }
+    }
+
+    /** Enables evaluation with a projection that deliberately omits the tool operation. */
+    public static class EvaluationEnabledWithoutRequiredOperation implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                    "amsha.decision.evaluation.enabled", "true",
+                    "amsha.decision.providers.slots.laya.governance.projection-allow-list", "user_message");
         }
     }
 

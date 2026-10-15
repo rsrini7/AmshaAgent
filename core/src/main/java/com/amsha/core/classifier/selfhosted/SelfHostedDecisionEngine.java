@@ -24,7 +24,9 @@ import com.amsha.classifier.api.ProviderCategory;
 import com.amsha.classifier.api.RedactionPolicy;
 import com.amsha.classifier.api.SelfHostedDecisionProvider;
 import com.amsha.classifier.api.StateProjectionPolicy;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.common.http.HttpProtocol;
+import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
 import com.amsha.core.classifier.wire.SystemOneWireMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -183,6 +185,14 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
             return DecisionResult.NoOpinion.ofMalformedResponse(
                     request.decisionId(), request.schemaVersion(), null, "State projection or redaction failed");
         }
+        if (DecisionToolRiskShadowClassifier.DECISION_ID.equals(request.decisionId())
+                && !includesRequiredOperation(projectedStateJson)) {
+            return DecisionResult.NoOpinion.ofMalformedResponse(
+                    request.decisionId(),
+                    request.schemaVersion(),
+                    null,
+                    "Tool-risk state projection must include a nonblank requiredOperation");
+        }
 
         // 6. Map onto the System One wire contract. An unrepresentable question fails closed rather
         //    than emitting a request the provider would reject with 422. The profile comes from the
@@ -199,6 +209,16 @@ public final class SelfHostedDecisionEngine implements DecisionEngine, SelfHoste
                 DecisionResult.NoOpinion.ofMalformedResponse(
                         request.decisionId(), request.schemaVersion(), null, unrepresentable.reason());
         };
+    }
+
+    private boolean includesRequiredOperation(String projectedStateJson) {
+        try {
+            Map<String, Object> projectedState = mapper.readValue(projectedStateJson, MAP_TYPE);
+            Object requiredOperation = projectedState.get(ToolRiskShadowContext.REQUIRED_OPERATION_FIELD);
+            return requiredOperation instanceof String operation && !operation.isBlank();
+        } catch (JsonProcessingException _) {
+            return false;
+        }
     }
 
     private StateProjectionPolicy resolveProjectionPolicy(DecisionRequest request) {
