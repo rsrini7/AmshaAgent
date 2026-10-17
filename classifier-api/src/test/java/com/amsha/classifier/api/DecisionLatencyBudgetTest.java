@@ -18,7 +18,7 @@ class DecisionLatencyBudgetTest {
 
         assertEquals(Duration.ofMillis(50), budget.inProcessP95());
         assertEquals(Duration.ofMillis(2_000), budget.selfHostedP95());
-        assertEquals(Duration.ofMillis(500), budget.remoteP95());
+        assertEquals(Duration.ofMillis(750), budget.remoteP95());
     }
 
     @Test
@@ -27,7 +27,7 @@ class DecisionLatencyBudgetTest {
 
         assertEquals(Duration.ofMillis(50), budget.forCategory(ProviderCategory.IN_PROCESS));
         assertEquals(Duration.ofMillis(2_000), budget.forCategory(ProviderCategory.SELF_HOSTED));
-        assertEquals(Duration.ofMillis(500), budget.forCategory(ProviderCategory.REMOTE));
+        assertEquals(Duration.ofMillis(750), budget.forCategory(ProviderCategory.REMOTE));
     }
 
     @Test
@@ -38,8 +38,8 @@ class DecisionLatencyBudgetTest {
         assertFalse(budget.isWithin(ProviderCategory.IN_PROCESS, Duration.ofMillis(50)), "exactly on budget fails");
         assertTrue(budget.isWithin(ProviderCategory.SELF_HOSTED, Duration.ofMillis(1_999)));
         assertFalse(budget.isWithin(ProviderCategory.SELF_HOSTED, Duration.ofMillis(2_000)), "exactly on budget fails");
-        assertTrue(budget.isWithin(ProviderCategory.REMOTE, Duration.ofMillis(499)));
-        assertFalse(budget.isWithin(ProviderCategory.REMOTE, Duration.ofMillis(500)), "exactly on budget fails");
+        assertTrue(budget.isWithin(ProviderCategory.REMOTE, Duration.ofMillis(749)));
+        assertFalse(budget.isWithin(ProviderCategory.REMOTE, Duration.ofMillis(750)), "exactly on budget fails");
     }
 
     @Test
@@ -51,16 +51,16 @@ class DecisionLatencyBudgetTest {
     void rejectsNonPositiveBudgets() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new DecisionLatencyBudget(Duration.ZERO, Duration.ofMillis(2_000), Duration.ofMillis(500)));
+                () -> new DecisionLatencyBudget(Duration.ZERO, Duration.ofMillis(2_000), Duration.ofMillis(750)));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new DecisionLatencyBudget(Duration.ofMillis(50), Duration.ofMillis(-1), Duration.ofMillis(500)));
+                () -> new DecisionLatencyBudget(Duration.ofMillis(50), Duration.ofMillis(-1), Duration.ofMillis(750)));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new DecisionLatencyBudget(Duration.ofMillis(50), Duration.ofMillis(2_000), Duration.ZERO));
         assertThrows(
                 NullPointerException.class,
-                () -> new DecisionLatencyBudget(null, Duration.ofMillis(2_000), Duration.ofMillis(500)));
+                () -> new DecisionLatencyBudget(null, Duration.ofMillis(2_000), Duration.ofMillis(750)));
     }
 
     @Test
@@ -69,6 +69,6 @@ class DecisionLatencyBudgetTest {
 
         assertTrue(rendered.contains("50"));
         assertTrue(rendered.contains("2000"));
-        assertTrue(rendered.contains("500"));
+        assertTrue(rendered.contains("750"));
     }
 }

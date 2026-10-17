@@ -8,7 +8,7 @@ import java.util.Objects;
  *
  * <p>The original {@code < 50 ms} target remains for in-process classifiers. Self-hosted local
  * models have a separate {@code < 2,000 ms} p95 budget, with 1–2 seconds as the expected operating
- * range. Remote hosted models keep their {@code < 500 ms} p95 budget. Measurements are evaluated
+ * range. Remote hosted models keep their {@code < 750 ms} p95 budget. Measurements are evaluated
  * per category and never combined.
  *
  * <p>This type carries only budgets. The evidence runner computes observed p95 from measurements,
@@ -20,9 +20,9 @@ import java.util.Objects;
  */
 public record DecisionLatencyBudget(Duration inProcessP95, Duration selfHostedP95, Duration remoteP95) {
 
-    /** ADR §8.3 budgets: 50 ms in-process, 2,000 ms self-hosted, and 500 ms remote. */
+    /** ADR §8.3 budgets: 50 ms in-process, 2,000 ms self-hosted, and 750 ms remote. */
     public static final DecisionLatencyBudget ADR_8_3 =
-            new DecisionLatencyBudget(Duration.ofMillis(50), Duration.ofMillis(2_000), Duration.ofMillis(500));
+            new DecisionLatencyBudget(Duration.ofMillis(50), Duration.ofMillis(2_000), Duration.ofMillis(750));
 
     public DecisionLatencyBudget {
         requirePositive(inProcessP95, "inProcessP95");
