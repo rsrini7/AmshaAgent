@@ -115,10 +115,11 @@ class DecisionDriftMonitorTest {
 
         fill(monitor, LANE, 4, true, 0.9); // baseline
         for (int i = 0; i < 4; i++) {
-            monitor.observe(LANE, true, 0.9, Duration.ofMillis(80)); // 80 ms, above the 50 ms local budget
+            monitor.observe(
+                    LANE, true, 0.9, Duration.ofMillis(2_500)); // 2,500 ms, above the 2-second self-hosted model budget
         }
 
-        assertEquals(Duration.ofMillis(80).toNanos(), monitor.p95LatencyNanos(LANE));
+        assertEquals(Duration.ofMillis(2_500).toNanos(), monitor.p95LatencyNanos(LANE));
         assertTrue(monitor.checkLatency(LANE, ProviderCategory.SELF_HOSTED, DecisionLatencyBudget.ADR_8_3));
         assertTrue(monitor.alertEmitted(LANE));
     }
@@ -128,7 +129,7 @@ class DecisionDriftMonitorTest {
         DecisionDriftMonitor monitor = monitor(4);
         fill(monitor, LANE, 4, true, 0.9);
         for (int i = 0; i < 4; i++) {
-            monitor.observe(LANE, true, 0.9, Duration.ofMillis(80));
+            monitor.observe(LANE, true, 0.9, Duration.ofMillis(2_500));
         }
         assertTrue(monitor.checkLatency(LANE, ProviderCategory.SELF_HOSTED, DecisionLatencyBudget.ADR_8_3));
         assertTrue(monitor.alertEmitted(LANE, DecisionDriftMonitor.AlertKind.LATENCY));
@@ -213,7 +214,11 @@ class DecisionDriftMonitorTest {
         // A latency breach on the same lane is a distinct episode: it must still alert even though the
         // drift latch is already set. A single per-lane latch would silently swallow it.
         for (int i = 0; i < 4; i++) {
-            monitor.observe(LANE, true, 0.40, Duration.ofMillis(80)); // 80 ms, above the 50 ms local budget
+            monitor.observe(
+                    LANE,
+                    true,
+                    0.40,
+                    Duration.ofMillis(2_500)); // 2,500 ms, above the 2-second self-hosted model budget
         }
         assertTrue(monitor.checkLatency(LANE, ProviderCategory.SELF_HOSTED, DecisionLatencyBudget.ADR_8_3));
         assertTrue(monitor.alertEmitted(LANE, DecisionDriftMonitor.AlertKind.LATENCY));

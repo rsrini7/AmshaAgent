@@ -86,12 +86,12 @@ into a configurational one.
 | No production `DecisionEngine` bean | `Instance<DecisionEngine>` is unresolvable; engines are `final class`es with no CDI annotation | `IntentDecisionRouter.isEnabled()` remains false; explicit evaluation constructs a transient engine without activating production routing |
 | No production-routing caller for `DecisionProviderSelector` | `DecisionEvaluationService` uses `select(...)` only for explicit evaluation requests; the agent router does not | A `.env` change alone does not route agent decisions through the provider |
 | Credential input (updated 2026-10-09) | The initial `_API_KEY_REF` proposal required a matching SecretVault entry; the evaluation path now reads the direct key from bound config. | Set `AMSHA_DECISION_<ID>_API_KEY`; no vault provisioning is required. The source config String remains resident for process lifetime. |
-| Live provider evidence — both adapters have v3 results | OMLX corpus-v3 run `c075f48f-4916-4d6f-ac23-c48a5a669ac0` (`clef-flash-oQ4e`, SELF_HOSTED): 25 evaluated, 5 skipped, 0 refused, 0 transform errors; M1 0/11, M2 0/3, M3 3/25; M4 910.77 ms vs 50 ms; M5 0/25 priced. TypeSafe corpus-v3 run `dde09c51-6eae-4625-8c7a-1d742b99307f` (`jev-latest`, REMOTE): same counts; M1 0/11, M2 0/3, M3 3/25; M4 505.04 ms vs 500 ms; M5 0/25 priced. Payload-free aggregates are saved under `.scratch/decision-corpus-omlx-2026-10-16-v3/` and `.scratch/decision-corpus-typesafe-2026-10-17-v3/`. | Both lanes meet numeric M1/M2 thresholds. Committee M3 review is still required; both lanes exceed M4 and remain unpriced, so Quality review, Operations and Governance are not all closed |
+| Live provider evidence — both adapters have v3 results | OMLX corpus-v3 run `c075f48f-4916-4d6f-ac23-c48a5a669ac0` (`clef-flash-oQ4e`, SELF_HOSTED): 25 evaluated, 5 skipped, 0 refused, 0 transform errors; M1 0/11, M2 0/3, M3 3/25; M4 910.77 ms vs 2,000 ms (within self-hosted model budget); M5 0/25 priced. TypeSafe corpus-v3 run `dde09c51-6eae-4625-8c7a-1d742b99307f` (`jev-latest`, REMOTE): same counts; M1 0/11, M2 0/3, M3 3/25; M4 505.04 ms vs 500 ms; M5 0/25 priced. Payload-free aggregates are saved under `.scratch/decision-corpus-omlx-2026-10-16-v3/` and `.scratch/decision-corpus-typesafe-2026-10-17-v3/`. | Both lanes meet numeric M1/M2 thresholds. Committee M3 review is still required. OMLX meets its updated local-model M4 budget; TypeSafe exceeds its remote M4 budget by 5.04 ms. M5 remains unpriced on both lanes, so Operations remains open. |
 | Operation-aware risk context | Canonical `ToolOperation` is present in schema-2 JEV and ONNX contexts, and corpus v3 carries `requiredOperation`; both 2026-10-16 OMLX and 2026-10-17 TypeSafe runs evaluated it, with M1 0/11 on each lane. | Live evidence confirms the field reaches both providers and both meet M1; Committee M3 review and remaining activation gates stay open |
 | Provider governance approval | Current OMLX status reports governance declarations present, but no review/approval record closes the local lane's data handling and egress terms. TypeSafe retention/residency remain undeclared if the hosted lane is retained | Governance gate remains UNMET pending a recorded review of the selected lane |
-| Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded evaluation drift signals; `DecisionLatencyBudget` reports status but does not hard-block. OMLX p95 is 910.77 ms vs 50 ms; TypeSafe p95 is 505.04 ms vs 500 ms. M5 is unpriced on both lanes; named owners and rollback rehearsal are absent. | Operations gate remains UNMET pending an authorized latency result, approved cost basis/ceiling, named owners, and rollback evidence |
+| Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded evaluation drift signals; `DecisionLatencyBudget` reports status but does not hard-block. OMLX p95 is 910.77 ms vs 2,000 ms (within the accepted self-hosted model budget); TypeSafe p95 is 505.04 ms vs 500 ms. M5 is unpriced on both lanes; named owners and rollback rehearsal are absent. | Operations gate remains UNMET pending an authorized latency result, approved cost basis/ceiling, named owners, and rollback evidence |
 | Self-hosted authentication header | The direct key configures `SelfHostedProviderConfig.loopbackToken`; the engine sends `X-Amsha-Loopback-Token` | A service requiring `Authorization: Bearer` needs separate header support; use only with an endpoint configured for Amsha's loopback-token header |
-| Candidate evidence is real and current | The 2026-10-16/17 v3 runs confirm both providers were invoked through the audited evaluation path and meet M1/M2 thresholds; M3 is 3/25 per lane, and M4/M5 fail on both. | Both adapters have current numeric Quality results; Committee M3 review, Governance, Operations and production approval remain open |
+| Candidate evidence is real and current | The 2026-10-16/17 v3 runs confirm both providers were invoked through the audited evaluation path and meet M1/M2 thresholds; M3 is 3/25 per lane, and OMLX meets M4; TypeSafe exceeds its remote M4 budget by 5.04 ms; M5 remains unpriced on both lanes. | Both adapters have current numeric Quality results; Committee M3 review, Governance, Operations and production approval remain open |
 
 ### 1.3 The three independent locks (all must open, in order)
 
@@ -594,11 +594,7 @@ The remaining W5 detail below records the metric foundations as they were pinned
   recorded here because it is an assumption, not an invariant: if a future run can mix providers within a
   lane, the ceiling must be resolved per result (or the lane must be split), otherwise one provider's ceiling
   would be silently applied to another's costs.
-- **M4's budgets — pinned and landed (2026-10-07).** `DecisionLatencyBudget` (in `classifier-api`, beside
-  `ReviewBand` and `ProviderCategory`) carries the ADR's two per-lane p95 budgets — `ADR_8_3` = **50 ms**
-  local, **500 ms** remote — with `forCategory` mapping `IN_PROCESS`/`SELF_HOSTED` to the local budget and
-  `REMOTE` to the remote one, and `isWithin` applying the ADR's **strict** `<`. The lanes are never
-  combined; computing the observed p95 from a set of measurements stays the runner's job.
+- **M4 budgets — updated 2026-10-17.** `DecisionLatencyBudget` in `classifier-api` keeps three category-specific p95 budgets from ADR §8.3: **50 ms** for `IN_PROCESS`, **2,000 ms** for `SELF_HOSTED` local models (expected 1–2 seconds), and **500 ms** for `REMOTE` hosted models. `forCategory` maps each category separately and `isWithin` applies strict `<`; lanes are never combined. The evidence runner still computes p95 from observed measurements.
 - **Report writer — landed (2026-10-07).** `DecisionEvidenceReport.toMarkdown(summary)` renders aggregate metrics as a review-ready Markdown document with a gate table and per-lane M4/M5 tables. It contains no case IDs, labels, or case decisions. `/evidence/run` exposes it as `format=markdown` (`text/plain`).
   The artifact path remains the caller's concern (for example, a shell redirect); scripts and tests write to `.scratch/`. The renderer is pure and tested for aggregate-only output.
 - **Corpus scope is declared, not inferred — landed (2026-10-07).** The corpus now carries a top-level
@@ -845,16 +841,15 @@ production-engine key with W7 — not up front, because an env var with no reade
 
 ---
 
-## 6. The M4 conflict — resolved in the ADR
+## 6. M4 budgets — updated 2026-10-17
 
-**Resolved; no further action.** The parent ADR §8.3 now sets M4 **lane-specific** — **p95 < 50 ms for an
-in-process/self-hosted local lane** and **p95 < 500 ms for a remote hosted lane**, measured per lane and
-never combined. That reconciles the original single "< 50 ms" figure (written for the local intent pilot,
-and unreachable for a hosted provider) with the feature spec's provisional remote target, and the
-amendment is already in the staged parent ADR — it is not outstanding W8 work.
+The parent ADR §8.3 now distinguishes three execution categories, measured separately:
 
-Consequences: W5 reports M4 per lane against these two budgets, and no W4–W7 step depends on an open
-question here. The earlier draft of this section recommended the change; the recommendation was adopted.
+- **In-process classifiers:** p95 < 50 ms.
+- **Self-hosted local models:** p95 < 2,000 ms, with 1–2 seconds as the expected operating range. The project author accepted this ceiling on 2026-10-17 for local inference on available 64 GB unified-memory hardware.
+- **Remote hosted models:** p95 < 500 ms.
+
+The OMLX corpus-v3 p95 of 910.77 ms meets the accepted self-hosted budget. TypeSafe's 505.04 ms remains 5.04 ms over its remote budget. This changes the local-model M4 disposition; it does not close Operations while TypeSafe remains in scope, M5 is unpriced, and the owner and rollback rehearsal are unrecorded. `DecisionLatencyBudget.ADR_8_3` and `forCategory` carry these three budgets into future evidence and drift monitoring.
 
 ---
 

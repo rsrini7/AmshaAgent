@@ -761,9 +761,7 @@ The accepted W4 evaluation path is implemented. It permits credentialed requests
   path and nothing more. It does not move the parent ADR off `Deferred` and does not satisfy §8.4 steps 1–5.
 - The 2026-10-09 change replaces the former `API_KEY_REF` proposal with direct `AMSHA_DECISION_<ID>_API_KEY` configuration. The evaluation service consumes it and clears its request-owned byte copy; the source config String remains resident for the process lifetime.
 - The self-hosted lane sends `X-Amsha-Loopback-Token`, not `Authorization: Bearer`; use it only with a local endpoint configured to accept that header.
-- **M4 is reconciled** in the parent ADR §8.3 as a lane-specific budget: p95 < 50 ms for an
-  in-process/self-hosted local lane, p95 < 500 ms for a remote hosted lane. The earlier single
-  "< 50 ms" figure was written for the local intent pilot and is unreachable for a hosted provider.
+- **M4 is reconciled** in parent ADR §8.3 with three category-specific p95 budgets: < 50 ms for in-process classifiers, < 2,000 ms for self-hosted local models (expected 1–2 seconds), and < 500 ms for remote hosted models. The project author accepted the self-hosted budget on 2026-10-17 for local inference on available 64 GB unified-memory hardware. Budgets are measured per lane and never combined.
 
 Nothing in this update changes any gate's status. Quality remains UNMET until M1/M2 are measured;
 Governance remains UNMET until retention and residency are declared; Operations remains UNMET until

@@ -156,8 +156,8 @@ class DecisionEvidenceReportTest {
         String md = DecisionEvidenceReport.toMarkdown(summary());
 
         assertTrue(md.contains("## Latency (M4)"), md);
-        // 5 ms observed against the 50 ms local budget, all four samples measured.
-        assertTrue(md.contains("| " + LANE + " | 5.00 | 50.00 | yes | 4 | 4 |"), md);
+        // 5 ms observed against the 2,000 ms local budget, all four samples measured.
+        assertTrue(md.contains("| " + LANE + " | 5.00 | 2000.00 | yes | 4 | 4 |"), md);
         assertTrue(md.contains("## Cost per 1,000 (M5)"), md);
         // The shipped schedule is empty, so the lane is unpriced and no ceiling is assessable.
         assertTrue(md.contains("unpriced"), md);
