@@ -479,6 +479,17 @@ Remaining governance items, unchanged from §7.7:
 
 ### 8.4 The promotion procedure
 
+**Relative latency alerting.** `DecisionDriftMonitor` compares the current p95 with the first full baseline
+window and emits a separate payload-free `LATENCY_DRIFT` warning when current p95 reaches 2× baseline p95.
+With the default 64-observation window, both baseline and current windows must fill before it can alert. The
+baseline is fixed for that monitor lane until `reset(lane)`, `resetAll()`, or monitor recreation; it does
+not roll forward automatically. The relative warning precedes the absolute M4 alert only when the baseline
+p95 is below half the category budget. For the 2,000 ms self-hosted budget, that requires a baseline below
+1,000 ms. The OMLX corpus-v3 p95 of 910.77 ms would imply a 1,821.54 ms relative threshold (about 178 ms
+below the absolute ceiling) only if a comparable p95 characterized the monitor's baseline window; the
+corpus measurement is separate and is not the monitor baseline. This complements the absolute M4
+category-budget alert; neither alert changes a decision or enables routing.
+
 Promotion is a **recorded human decision**, not a code change. The order is deliberate, and each
 step is a precondition for the next:
 

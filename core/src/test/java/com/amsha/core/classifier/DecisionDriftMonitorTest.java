@@ -125,6 +125,30 @@ class DecisionDriftMonitorTest {
     }
 
     @Test
+    void aRelativeLatencyRegressionAlertsBelowTheAbsoluteBudgetAndClearsAfterRecovery() {
+        DecisionDriftMonitor monitor = monitor(4);
+        observeLatency(monitor, Duration.ofMillis(900), 4);
+        observeLatency(monitor, Duration.ofMillis(1_900), 4);
+
+        assertEquals(Duration.ofMillis(1_900).toNanos(), monitor.p95LatencyNanos(LANE));
+        assertFalse(monitor.checkLatency(LANE, ProviderCategory.SELF_HOSTED, DecisionLatencyBudget.ADR_8_3));
+        assertTrue(monitor.alertEmitted(LANE, DecisionDriftMonitor.AlertKind.LATENCY_DRIFT));
+        assertFalse(monitor.alertEmitted(LANE, DecisionDriftMonitor.AlertKind.LATENCY));
+
+        observeLatency(monitor, Duration.ofMillis(900), 4);
+        assertFalse(monitor.alertEmitted(LANE, DecisionDriftMonitor.AlertKind.LATENCY_DRIFT));
+    }
+
+    @Test
+    void aLatencyIncreaseBelowTwiceTheBaselineDoesNotTriggerRelativeAlert() {
+        DecisionDriftMonitor monitor = monitor(4);
+        observeLatency(monitor, Duration.ofMillis(1_000), 4);
+        observeLatency(monitor, Duration.ofMillis(1_900), 4);
+
+        assertFalse(monitor.alertEmitted(LANE, DecisionDriftMonitor.AlertKind.LATENCY_DRIFT));
+    }
+
+    @Test
     void aRecoveredLatencyBreachClearsItsAlertLatch() {
         DecisionDriftMonitor monitor = monitor(4);
         fill(monitor, LANE, 4, true, 0.9);
@@ -241,5 +265,11 @@ class DecisionDriftMonitorTest {
         assertThrows(IllegalArgumentException.class, () -> new DecisionDriftMonitor(4, Double.NaN, 0.20));
         assertThrows(IllegalArgumentException.class, () -> new DecisionDriftMonitor(4, 0.15, Double.POSITIVE_INFINITY));
         assertThrows(IllegalArgumentException.class, () -> new DecisionDriftMonitor(4, 1.01, 0.20));
+    }
+
+    private static void observeLatency(DecisionDriftMonitor monitor, Duration latency, int count) {
+        for (int i = 0; i < count; i++) {
+            monitor.observe(LANE, true, 0.9, latency);
+        }
     }
 }

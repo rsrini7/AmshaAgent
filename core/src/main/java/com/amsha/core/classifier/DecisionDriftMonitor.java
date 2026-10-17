@@ -32,10 +32,11 @@ import org.jboss.logging.Logger;
  * single evaluation reveals that; only the shape of a window of them does.
  *
  * <p><b>What "drift" means here.</b> The first {@code window} observations on a lane are the baseline.
- * Once the baseline is full, the most recent {@code window} observations are the current sample, and
- * drift is the absolute movement of either the mean confidence or the abstention rate between the two,
- * beyond a configured threshold. The comparison is deliberately on two coarse summary statistics rather
- * than a distribution test: the gate needs a stable, explainable alert, not a p-value.
+ * Once the baseline is full, the most recent {@code window} observations are the current sample. Drift
+ * alerts compare mean confidence and abstention rate across those windows; a separate latency-drift
+ * alert fires when current p95 reaches twice the baseline p95. The absolute category budget remains an
+ * independent latency alert. These coarse comparisons keep alerts stable and explainable without a
+ * distribution test.
  *
  * <p><b>Bounded by construction.</b> A lane keeps two fixed-size windows, so memory does not grow with
  * traffic; at most {@link #MAX_LANES} lanes are tracked, so a caller-supplied lane string cannot become
@@ -63,6 +64,9 @@ public class DecisionDriftMonitor {
     /** Default abstention-rate movement that counts as drift. */
     public static final double DEFAULT_ABSTENTION_THRESHOLD = 0.20;
 
+    /** Default multiple of baseline p95 that counts as latency drift. */
+    public static final double DEFAULT_LATENCY_DRIFT_RATIO = 2.0;
+
     /**
      * The distinct reasons this monitor emits a WARN. Each kind latches independently per lane, so one
      * kind's alert cannot hide another's: a drift alert and a latency breach on the same lane are two
@@ -70,6 +74,7 @@ public class DecisionDriftMonitor {
      */
     public enum AlertKind {
         DRIFT,
+        LATENCY_DRIFT,
         LATENCY,
         COST_CEILING
     }
@@ -119,6 +124,11 @@ public class DecisionDriftMonitor {
             return;
         }
         laneWindow.observe(opinion, confidence, latency);
+        if (laneWindow.latencyDrifted(DEFAULT_LATENCY_DRIFT_RATIO)) {
+            alertOnce(lane, AlertKind.LATENCY_DRIFT, latencyDriftMessage(lane, laneWindow));
+        } else {
+            clearAlert(lane, AlertKind.LATENCY_DRIFT);
+        }
         if (drifted(lane)) {
             alertOnce(lane, AlertKind.DRIFT, driftMessage(lane, laneWindow));
         } else {
@@ -280,6 +290,16 @@ public class DecisionDriftMonitor {
                 + ", current " + format(laneWindow.currentAbstentionRate()) + ")";
     }
 
+    private static String latencyDriftMessage(String lane, LaneWindow laneWindow) {
+        return "Decision latency drift detected on lane " + lane + ": current p95 "
+                + (laneWindow.p95LatencyNanos() / 1_000_000)
+                + "ms is at least "
+                + format(DEFAULT_LATENCY_DRIFT_RATIO)
+                + "x baseline p95 "
+                + (laneWindow.baselineP95LatencyNanos() / 1_000_000)
+                + "ms";
+    }
+
     private static String format(double value) {
         return String.format(Locale.ROOT, "%.3f", value);
     }
@@ -359,9 +379,26 @@ public class DecisionDriftMonitor {
             return abstentionRate(current);
         }
 
+        private synchronized long baselineP95LatencyNanos() {
+            return p95LatencyNanos(baseline);
+        }
+
         private synchronized long p95LatencyNanos() {
+            return p95LatencyNanos(current);
+        }
+
+        private synchronized boolean latencyDrifted(double ratioThreshold) {
+            if (!comparable()) {
+                return false;
+            }
+            long baselineP95 = p95LatencyNanos(baseline);
+            long currentP95 = p95LatencyNanos(current);
+            return baselineP95 > 0 && currentP95 >= baselineP95 * ratioThreshold;
+        }
+
+        private static long p95LatencyNanos(Deque<Observation> observations) {
             List<Long> measured = new ArrayList<>();
-            for (Observation observation : current) {
+            for (Observation observation : observations) {
                 if (observation.latencyNanos() != null) {
                     measured.add(observation.latencyNanos());
                 }
