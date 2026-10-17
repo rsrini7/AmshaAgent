@@ -38,9 +38,10 @@ The observation is correct and the code confirms it:
 2. **The intent router has a second, independent lock.** Even with an engine, direct routing needs
    `candidate-evidence-approved` **and** `cost-ceiling-approved` **and** a non-blank `rollout-owner`.
    All three are unset.
-3. **The ADR gate is the real blocker.** Governance, Quality and Operations are UNMET, and the ADR
-   requires remote TypeSafe calls to travel an **explicit orchestration path**, never the network-free
-   classifier SPIs.
+3. **The remaining ADR gates are the real blocker.** Corpus-v3 runs now show both adapters meet
+   numeric M1/M2 thresholds; the Committee M3 review is not recorded, and Governance and Operations
+   remain open. The ADR requires remote TypeSafe calls to travel an **explicit orchestration path**,
+   never the network-free classifier SPIs.
 
 The correct production answer is therefore **not** "wire the selector into a bean". It is a
 **two-capability** design:
@@ -85,19 +86,19 @@ into a configurational one.
 | No production `DecisionEngine` bean | `Instance<DecisionEngine>` is unresolvable; engines are `final class`es with no CDI annotation | `IntentDecisionRouter.isEnabled()` remains false; explicit evaluation constructs a transient engine without activating production routing |
 | No production-routing caller for `DecisionProviderSelector` | `DecisionEvaluationService` uses `select(...)` only for explicit evaluation requests; the agent router does not | A `.env` change alone does not route agent decisions through the provider |
 | Credential input (updated 2026-10-09) | The initial `_API_KEY_REF` proposal required a matching SecretVault entry; the evaluation path now reads the direct key from bound config. | Set `AMSHA_DECISION_<ID>_API_KEY`; no vault provisioning is required. The source config String remains resident for process lifetime. |
-| Live provider evidence — latest local run recorded, failing | 2026-10-15 corpus-v2 run against `omlx / clef-flash-oQ4e` (SELF_HOSTED): 25 evaluated, 5 skipped; M1 2/11, M2 0/3, M3 12/25, M4 775.42 ms p95, M5 0/25 priced. Separate per-case rerun identified `toolrisk-irrel-01` and `toolrisk-dup-01` as the two repeated M1 false allows. Safe artifacts: `.scratch/decision-corpus-omlx-2026-10-15/` | Quality remains UNMET; Operations remains UNMET on latency and pricing |
-| Operation-aware risk context | The guard already knows canonical `ToolOperation`; schema-2 JEV and ONNX contexts now pass it, and default corpus v3 carries it in every tool-risk case. Regression tests cover the request field and pre-egress refusal when v3 omits it. | Source change is implemented; the running binary still needs rebuild/restart and a live v3 run before claiming M1 improvement |
+| Live provider evidence — both adapters have v3 results | OMLX corpus-v3 run `c075f48f-4916-4d6f-ac23-c48a5a669ac0` (`clef-flash-oQ4e`, SELF_HOSTED): 25 evaluated, 5 skipped, 0 refused, 0 transform errors; M1 0/11, M2 0/3, M3 3/25; M4 910.77 ms vs 50 ms; M5 0/25 priced. TypeSafe corpus-v3 run `dde09c51-6eae-4625-8c7a-1d742b99307f` (`jev-latest`, REMOTE): same counts; M1 0/11, M2 0/3, M3 3/25; M4 505.04 ms vs 500 ms; M5 0/25 priced. Payload-free aggregates are saved under `.scratch/decision-corpus-omlx-2026-10-16-v3/` and `.scratch/decision-corpus-typesafe-2026-10-17-v3/`. | Both lanes meet numeric M1/M2 thresholds. Committee M3 review is still required; both lanes exceed M4 and remain unpriced, so Quality review, Operations and Governance are not all closed |
+| Operation-aware risk context | Canonical `ToolOperation` is present in schema-2 JEV and ONNX contexts, and corpus v3 carries `requiredOperation`; both 2026-10-16 OMLX and 2026-10-17 TypeSafe runs evaluated it, with M1 0/11 on each lane. | Live evidence confirms the field reaches both providers and both meet M1; Committee M3 review and remaining activation gates stay open |
 | Provider governance approval | Current OMLX status reports governance declarations present, but no review/approval record closes the local lane's data handling and egress terms. TypeSafe retention/residency remain undeclared if the hosted lane is retained | Governance gate remains UNMET pending a recorded review of the selected lane |
-| Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded evaluation drift signals; `DecisionLatencyBudget` reports status but does not hard-block. Current local p95 is 775.42 ms vs 50 ms; M5 is unpriced; named owners and rollback rehearsal are absent | Operations gate remains UNMET pending an eligible latency result, approved cost basis/ceiling, named owners, and rollback evidence |
+| Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded evaluation drift signals; `DecisionLatencyBudget` reports status but does not hard-block. OMLX p95 is 910.77 ms vs 50 ms; TypeSafe p95 is 505.04 ms vs 500 ms. M5 is unpriced on both lanes; named owners and rollback rehearsal are absent. | Operations gate remains UNMET pending an authorized latency result, approved cost basis/ceiling, named owners, and rollback evidence |
 | Self-hosted authentication header | The direct key configures `SelfHostedProviderConfig.loopbackToken`; the engine sends `X-Amsha-Loopback-Token` | A service requiring `Authorization: Bearer` needs separate header support; use only with an endpoint configured for Amsha's loopback-token header |
-| Candidate evidence is real and current | 2026-10-15 run confirms local model invocation through the audited evaluation path; per-case rerun reproduces two M1 failures | Evidence is current and attributable to candidate cases, but M1 and M4 fail; production activation remains Deferred |
+| Candidate evidence is real and current | The 2026-10-16/17 v3 runs confirm both providers were invoked through the audited evaluation path and meet M1/M2 thresholds; M3 is 3/25 per lane, and M4/M5 fail on both. | Both adapters have current numeric Quality results; Committee M3 review, Governance, Operations and production approval remain open |
 
 ### 1.3 The three independent locks (all must open, in order)
 
 ```
 Lock 1  Structural   no DecisionEngine bean        → IntentDecisionRouter.isEnabled() == false
 Lock 2  Gate         activation booleans false      → isActivationGateApproved() == false
-Lock 3  ADR          Status: Deferred, gates UNMET  → no production bean may be registered
+Lock 3  ADR          Status: Deferred; Committee review and Governance/Operations gates remain open  → no production bean may be registered
 ```
 
 Lock 1 and Lock 2 are code. Lock 3 is governance. **The evaluation path opens none of them** — it

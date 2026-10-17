@@ -1,14 +1,14 @@
-# JEV decision plane — activation readiness disposition (updated 2026-10-15)
+# JEV decision plane — activation readiness disposition (updated 2026-10-17)
 
-> **Current live check (2026-10-15, corpus v3).** The authenticated local runtime smoke passed: OMLX catalog and minimal completion succeeded; Amsha readiness checks passed with classifier activation still fail-closed. oMLX reported `127.0.0.1:8000` with `Jundot/clef-flash-oQ4e` loaded. Authenticated Amsha status reported `omlx`, model `clef-flash-oQ4e`, loopback host, and evaluation enabled. `POST /api/v1/admin/decision/evidence/run?version=3` returned HTTP 400 `UNREGISTERED_DECISION`; oMLX counters remained at 40 requests total (38 for `clef-flash-oQ4e`), so this attempt did not invoke the model. The worktree contains corpus v3, while `dist/amsha-sqlite` is dated 2026-10-14 and predates the v3 resource updated on 2026-10-15. This supports a stale-build diagnosis; the running process path was not independently confirmed. Rebuild and restart from this worktree, then rerun v3. Current M1–M5 remain the corpus-v2 results below; v3 is not yet measured. The code now maps a missing corpus version to `CORPUS_NOT_MEASURABLE` for clearer diagnosis. Production activation remains **Deferred**.
+> **Latest completed corpus-v3 runs (2026-10-16 and 2026-10-17).** OMLX run `c075f48f-4916-4d6f-ac23-c48a5a669ac0` (`clef-flash-oQ4e`, `SELF_HOSTED`) and TypeSafe run `dde09c51-6eae-4625-8c7a-1d742b99307f` (`jev-latest`, `REMOTE`) each evaluated 25 of 30 cases, skipped 5, and had 0 refusals and 0 transform errors. Both meet the numeric thresholds: **M1 0/11** and **M2 0/3**. Each reports **M3 3/25** (12%); §8.4 requires the Committee to review M3, and that disposition is not yet recorded. OMLX M4 is **910.77 ms p95** against the **50 ms** self-hosted budget; TypeSafe M4 is **505.04 ms p95** against the **500 ms** remote budget. Both exceed budget. M5 is **0/25 priced** on both lanes, with no approved ceiling. Three supplemental OMLX per-case calls returned the declared `NO_OPINION` choice for its M2 cases; they corroborate those labels but do not attribute aggregate M3. The TypeSafe aggregate has no per-case outcomes, so no case-level M2 label claim is made. Evidence: `.scratch/decision-corpus-omlx-2026-10-16-v3/` and `.scratch/decision-corpus-typesafe-2026-10-17-v3/dde09c51-6eae-4625-8c7a-1d742b99307f-summary.json`. Governance and Operations remain open; production activation remains **Deferred**.
 
-> **Last completed model run (2026-10-15, corpus v2).** The authenticated local runtime smoke passed: OMLX catalog and minimal completion succeeded; Amsha readiness checks passed and classifier activation remained fail-closed with no active implementation. Provider status selected `omlx / clef-flash-oQ4e` on `SELF_HOSTED`, evaluation enabled. The 30-record corpus-v2 run evaluated 25 cases, skipped 5, and had 0 refusals or transform errors. M1 **2/11** (18.18%, failed); M2 **0/3** (passed); M3 **12/25** (48%, reported); M4 **775.42 ms p95** vs **50 ms** (failed); M5 **0/25 priced** with no approved ceiling. A separate per-case diagnostic rerun reproduced two M1 false allows: `toolrisk-irrel-01` and `toolrisk-dup-01`; each was repeated once with the same result. Production activation remains **Deferred**. Aggregate and safe case metadata: `.scratch/decision-corpus-omlx-2026-10-15/`.
+> **Superseded local corpus-v2 run (2026-10-15).** The previous OMLX run evaluated 25 cases, skipped 5, and reported M1 2/11, M2 0/3, M3 12/25, M4 775.42 ms p95, and M5 0/25 priced. Its two separate M1 diagnostic cases were `toolrisk-irrel-01` and `toolrisk-dup-01`. Corpus v3 supersedes these values for current OMLX Quality and latency status. Historical artifacts remain in `.scratch/decision-corpus-omlx-2026-10-15/`.
 
 This record incorporates the fresh native corpus run completed 2026-10-10 after the tool-risk rubric and intent-abstention changes. Run `cd5beb45-d2de-495c-af59-e977c4f0133d` used `typesafe` / `jev-latest` on the REMOTE lane and evaluated 25 hosted decisions (5 corpus cases skipped). The safe aggregate is `.scratch/decision-corpus-attributed/run-4-20261010T174231Z/summary.json`.
 
-> **Historical 2026-10-10 remote run.** The evaluation implementation is present, built into the new native binary, and has made a real hosted run. “Unmeasured” and “no hosted calls” are no longer accurate. The latest run measured **M1 1/11** (required 0), **M2 1/3** (required below 1%), **M3 4/25** (reported, no threshold), **M4 503.95 ms p95** (3.95 ms over the 500 ms remote budget), and **M5 0/25 priced**. Production activation remains Deferred because these quality/latency results fail and provider/legal and operational approvals remain outstanding. This is not a claim that the evaluation path cannot be implemented.
+> **Historical 2026-10-10 remote run.** The evaluation implementation is present, built into the new native binary, and made a real hosted run. The run measured **M1 1/11**, **M2 1/3**, **M3 4/25**, **M4 503.95 ms p95** (3.95 ms over the 500 ms remote budget), and **M5 0/25 priced**. The 2026-10-17 corpus-v3 run supersedes it for current TypeSafe quality and latency status. Production activation remains Deferred because the current lanes still miss M4, pricing and governance approvals remain open, and the Committee M3 review is not recorded. This is not a claim that the evaluation path cannot be implemented.
 
-The remaining path is explicit: select a candidate that passes M1 and M4; obtain provider retention/residency terms and a sourced rate; have the Committee approve a cost ceiling; name rollout and rollback owners and record a rollback rehearsal. If the hosted candidate or terms cannot meet those gates, the ADR calls for a recorded decision to narrow or close the hosted path rather than leave it Deferred by default.
+The next path is explicit: record the Committee's M3 review for both current v3 runs, resolve both lane latency budgets and the cost ceiling, approve the chosen lane's governance declarations, name rollout/rollback owners, and record a rollback rehearsal. The v3 runs now meet the numeric M1/M2 thresholds on both adapters. Production activation remains Deferred until the ordered §8.4 gates and approval records are complete.
 ## 1. Documentation drift — fixed in this pass
 
 The ADR §8.2 gate table was dated **2026-10-03** and had gone stale in two rows, because it predates both
@@ -16,30 +16,29 @@ the W5/W6 landings (2026-10-07) and the first credentialed corpus runs (2026-10-
 
 | Doc | Was | Now |
 |---|---|---|
-| ADR §8.2 — Quality row | Prior entry listed only the 2026-10-09 corpus results | Latest 2026-10-10 run after rubric/abstention changes: M1 1/11, M2 1/3, M3 4/25; Quality remains UNMET |
+| ADR §8.2 — Quality row | Prior entries predated corpus v3 and the second adapter rerun | Both 2026-10-16/17 corpus-v3 runs meet M1/M2 numerically; each reports M3 3/25, with Committee review pending |
 | ADR §8.2 — Operations row | "no drift-alerting implementation exists" | **Implemented**: `DecisionDriftMonitor` + `DecisionLatencyBudget`; the row now enumerates against its own five requirements, and the residual gaps are the cost ceiling, the named owner, and a recorded rollback rehearsal |
-| ADR §8.2 — header | `Status (2026-10-03)` | `Status (2026-10-10)` |
-| ADR §8.2 — paragraph | "Quality remains UNMET until M1 and M2 are measured" | Quality is UNMET because the measured M1/M2 **miss**, not because evidence is absent |
+| ADR §8.2 — header | `Status (2026-10-03)` | `Status (2026-10-17)` |
+| ADR §8.2 — paragraph | Quality evidence was stale or incomplete | Both adapters now have current v3 M1/M2 results; the Committee M3 review remains open |
 | ADR §7.8 | corpus evidence framed as still absent | corpus evidence now exists, and fails |
-| ADR §8.5 | "Last reviewed: 2026-10-03" | 2026-10-10; records that the Quality review trigger fired on 2026-10-09 |
-| Plan §1.2 | Earlier plan listed only the 2026-10-09 run | Updated with the 2026-10-10 native run and current blocker counts |
+| ADR §8.5 | "Last reviewed: 2026-10-03" | 2026-10-17; records the OMLX and TypeSafe v3 runs and remaining gates |
+| Plan §1.2 | Earlier plan listed only the 2026-10-09 run | Updated with both current corpus-v3 lanes and the remaining blocker counts |
 
-**No gate status changed.** The activation ADR remains **Deferred**; the evaluation-path ADR remains
-**Accepted** (which is what permits the explicit, non-routing provider check — a successful check does not
-activate production routing).
+**Production activation remains Deferred.** Both adapters now meet numeric M1/M2 thresholds on corpus v3. The Committee M3 review, Governance and Operations approvals remain open. The evaluation-path ADR remains **Accepted**; a successful evaluation does not activate production routing.
 
 ## 2. Observation-by-observation disposition
 
-The dated 2026-10-10 values in this table are historical; the latest local corpus-v2 results are recorded in §6.7 and supersede those values for current M1/M2/M4 status.
+The dated 2026-10-10 values and detailed corpus-v2 analyses below are historical. Current corpus-v3 results for both adapters are recorded in observation 1 and §§6.10–6.11.
 
 | # | Observation | Status | What is actually missing | Owner | Closes when |
 |---|---|---|---|---|---|
-| 1 | **Quality** — candidate quality | **UNMET — measured, still failing** | Fresh 2026-10-15 local corpus-v2 run: 25 evaluated, 5 skipped; M1 **2/11** (required 0), M2 **0/3** (required <1%), M3 **12/25** (reported), M4 p95 **775.42 ms** (50 ms budget), M5 **0/25 priced**. A separate 11-case diagnostic rerun identified `toolrisk-irrel-01` and `toolrisk-dup-01` as the two ALLOW outcomes; both repeated once with the same labels/actions. | Amsha Architecture Committee; candidate/model owner still unassigned | A candidate lane passes M1=0 and M2<1% on a fresh report; resolve M4 before activation |
-| 2 | **M5 pricing** — 0/25 priced; rate, source, effective date, ceiling | **UNMET — value and scope need approval** | The current `omlx` / `clef-flash-oQ4e` lane has no price-schedule entry. Record a reviewed cost basis and source/effective date, including whether local compute costs are in scope, plus a Committee-approved ceiling per 1,000 decisions. A zero inference charge needs its own sourced, dated entry. If TypeSafe remains a candidate, it needs its own provider-sourced rate entry. | Candidate/model owner (cost basis and source) and Amsha Architecture Committee (scope and ceiling) | The selected lane has a sourced, dated price entry and `cost-ceiling-approved` is set |
+| 1 | **Quality** — candidate quality | **OPEN — both adapters meet M1/M2 numerically; M3 review pending** | OMLX corpus v3 on 2026-10-16 and TypeSafe corpus v3 on 2026-10-17 each evaluated 25 cases, skipped 5, and had 0 refusals and 0 transform errors. Both report M1 **0/11**, M2 **0/3**, and M3 **3/25**. The OMLX single-case probes corroborate its three expected M2 labels but do not attribute aggregate M3; the TypeSafe aggregate contains no per-case outcomes. §8.4 requires M3 to be reported and reviewed. | Amsha Architecture Committee; candidate/model owner still unassigned | The Committee records its M3 review; both lanes already meet numeric M1/M2 thresholds |
+| 2 | **M5 pricing** — 0/25 priced; rate, source, effective date, ceiling | **UNMET — value and scope need approval** | Neither the `omlx` / `clef-flash-oQ4e` nor `typesafe` / `jev-latest` lane has an exact price-schedule entry. Record reviewed cost bases and sources/effective dates, including whether local compute costs are in scope, plus a Committee-approved ceiling per 1,000 decisions. A zero inference charge needs its own sourced, dated entry. | Candidate/model owner (cost basis and source) and Amsha Architecture Committee (scope and ceiling) | Each retained lane has a sourced, dated price entry and `cost-ceiling-approved` is set |
 | 3 | **Governance** — candidate data handling | **UNMET — approval record absent** | The live OMLX status showed governance declarations present, but there is no review/approval record for location, retention, training-use, isolation, secrets, and egress controls. If TypeSafe remains a hosted candidate, its retention/residency terms are still undeclared; remote config refuses training-use. | Amsha Architecture Committee | The selected lane's declarations are recorded and reviewed; otherwise narrow or close the hosted path under ADR §8.6 |
-| 4 | **Operations** — latency, cost, alerting, owner, rollback | **UNMET — some mechanisms exist, approvals/evidence do not** | Latest local p95 is **775.42 ms** against the 50 ms self-hosted budget. M5 remains 0/25 priced and no cost ceiling is approved. `DecisionDriftMonitor` and rollback configuration exist; `DecisionLatencyBudget` reports status but does not hard-block. Named rollout/rollback owners and a recorded rollback rehearsal are still missing. | Amsha Architecture Committee | A candidate meets its authorized latency budget; all listed operating approvals/evidence are recorded |
-| 5 | **Docs** — parent ADR current status | **UPDATED** | §8.2 and §8.5 now reflect the 2026-10-15 local run and remain Deferred pending the open gates | — | — | Synchronized in this pass |
-| 6 | **Live corpus-v3 validation** | **OPEN — source build required** | The 2026-10-15 distribution predates corpus v3; rebuild and restart, rerun the internal version-3 evidence request, and record sanitized evidence plus OMLX request attribution. | Amsha application operator | Source-built binary loads corpus v3 and completes an attributed run with saved summary and case diagnostics |
+| 4 | **Operations** — latency, cost, alerting, owner, rollback | **UNMET — approvals and evidence remain open** | OMLX p95 is **910.77 ms** vs 50 ms; TypeSafe p95 is **505.04 ms** vs 500 ms. M5 is **0/25 priced** on each lane with no approved ceiling. `DecisionDriftMonitor` and rollback configuration exist; `DecisionLatencyBudget` reports status but does not hard-block. Named rollout/rollback owners and a recorded rollback rehearsal are still missing. | Amsha Architecture Committee | A retained candidate meets its authorized latency budget and all operating approvals/evidence are recorded |
+| 5 | **Docs** — parent ADR current status | **UPDATED** | §8.2 and §8.5 reflect both 2026-10-16/17 corpus-v3 runs; numeric M1/M2 thresholds pass for both, M3 review and Governance/Operations remain open | — | — | Synchronized in this pass |
+| 6 | **OMLX corpus-v3 validation** | **CLOSED** | Source-built run `c075f48f-4916-4d6f-ac23-c48a5a669ac0` completed with OMLX attribution. Aggregate and normalized supplemental probes are saved under `.scratch/decision-corpus-omlx-2026-10-16-v3/`. | Amsha application operator | Completed 2026-10-16 |
+| 7 | **Second-adapter Quality evidence** | **CLOSED — TypeSafe v3 completed** | Run `dde09c51-6eae-4625-8c7a-1d742b99307f` is attributed to TypeSafe / `jev-latest`, REMOTE: 25 evaluated, 5 skipped, 0 refused, 0 transform errors; M1 0/11, M2 0/3, M3 3/25. Aggregate evidence is saved under `.scratch/decision-corpus-typesafe-2026-10-17-v3/`. | Amsha application operator | Completed 2026-10-17; Committee M3 review remains in observation 1 |
 
 Two of the verdict's notes are worth recording explicitly:
 
@@ -76,7 +75,11 @@ exits in exactly one of two directions, and both are recorded human decisions:
 
 | Artifact | What it shows |
 |---|---|
-| `.scratch/decision-corpus-omlx-2026-10-15/summary.json` | Fresh corpus-v2 aggregate run: M1 2/11, M2 0/3, M3 12/25, M4 775.42 ms, M5 0/25 priced. No prompts or completions. |
+| `.scratch/decision-corpus-omlx-2026-10-15/summary.json` | Historical corpus-v2 aggregate. Superseded for current OMLX Quality and latency by the 2026-10-16 corpus-v3 result. |
+| `.scratch/decision-corpus-omlx-2026-10-16-v3/summary.json` | Latest OMLX v3 aggregate, run `c075f48f-4916-4d6f-ac23-c48a5a669ac0`: M1 0/11, M2 0/3, M3 3/25, M4 910.77 ms p95, M5 0/25 priced. Payload-free summary. |
+| `.scratch/decision-corpus-omlx-2026-10-16-v3/m2-probes-corrected.json` | Supplemental single-case choices after confidence-suffix normalization; all three M2 cases selected `NO_OPINION`. Separate calls, not per-case attribution for the aggregate run. |
+| `.scratch/decision-corpus-omlx-2026-10-16-v3/m2-probes-parser-error-invalid.json` | Preserved invalid first-probe output; `UNRECOGNIZED` was a parser artifact. Do not cite as model evidence. |
+| `.scratch/decision-corpus-typesafe-2026-10-17-v3/dde09c51-6eae-4625-8c7a-1d742b99307f-summary.json` | TypeSafe corpus-v3 aggregate, run `dde09c51-6eae-4625-8c7a-1d742b99307f`: M1 0/11, M2 0/3, M3 3/25, M4 505.04 ms p95, M5 0/25 priced; 25 evaluated, 5 skipped, 0 refused, 0 transform errors. Payload-free; no per-case outcomes. |
 | `.scratch/decision-corpus-omlx-2026-10-15/m1-case-diagnostics.json` | Payload-free case labels/actions for the separate 11-case diagnostic rerun; records the two repeated M1 false allows. |
 | `.scratch/decision-corpus-omlx-2026-10-14/summary.json` | Earlier local corpus-v2 run (2026-10-14, 18:26): OMLX / `clef-flash-oQ4e`, 25 evaluated; M1 2/11, M2 0/3, M3 12/25 abstentions, M4 776.60 ms, M5 0/25 priced. Aggregate-only; no case labels |
 | `.scratch/decision-corpus-attributed/run-4-20261010T174231Z/summary.json` | Historical remote run `cd5beb45-d2de-495c-af59-e977c4f0133d`: 25 hosted decisions; M1 1/11, M2 1/3, M3 4/25, M4 503.95 ms, M5 0/25 priced. Aggregate-only; no case labels |
@@ -260,10 +263,40 @@ The single-evaluation response exposes answer label and confidence, not `PolicyR
 The deterministic guard independently requires HITL for `NETWORK_OUTBOUND` and `EXECUTE_SHELL`. The current tool-risk rubric says these operations must never be `LOW_RISK`; it reserves `BLOCK` for independently destructive action details, while `REQUIRE_APPROVAL` matches the guard for benign shell or network work. The earlier claim that the shipped prompt says to block both operations regardless of autonomy was inaccurate. M1 remains a candidate-quality failure, and the measured lane still misses M4; a source-built corpus-v3 run is required before assessing whether the added context changes model quality.
 
 
-### 6.9 Operation-aware tool-risk context (2026-10-15; live rerun pending)
+### 6.9 Operation-aware tool-risk context (2026-10-15; live corpus-v3 rerun completed 2026-10-16)
 
 The two reproducible M1 false allows came from the same information gap: the guard knew each invocation's canonical `ToolOperation`, but the decision context sent the agent role, tool name, parameters, goal, and autonomy without the operation category. The model therefore had to infer `NETWORK_OUTBOUND` or `EXECUTE_SHELL` from the tool-name string. The measurement did not prove the missing field caused the two outputs, but the context was incomplete relative to the registered safety rubric.
 
 The source change now carries `requiredOperation` through `ToolRiskShadowContext`, `PostPolicyToolContext`, the tool guard, and the ONNX input envelope. Self-hosted providers still apply their explicit state projection allow-list, so an enabled slot must include the camel-case `requiredOperation` field. If the projected tool-risk state lacks it, the self-hosted engine returns NoOpinion before provider egress. The Jev tool-risk definition uses the field as authoritative in tool-risk schema v2. Corpus v3 adds it to all 13 tool-risk cases and is the default evidence corpus. Corpus v2 retains the bounded four-name legacy mapping; corpus v1 is refused because its case-level criteria cannot be represented by the evidence request. Unknown legacy names and invalid operation values fail closed. Tests cover all 13 v3 requests and refusal before provider egress.
 
-The 2026-10-15 OMLX numbers above are still the latest live evidence and came from corpus v2 before this source change. A rebuilt and restarted Amsha binary must run corpus v3 to determine whether M1 improves. No new quality result is claimed here; activation remains **Deferred**. Even if M1 reaches zero, the measured 775.42 ms p95 still fails the 50 ms budget, while pricing, governance approval, named operating owners, and rollback rehearsal remain open.
+The 2026-10-15 corpus-v2 numbers above are historical and are superseded by the source-built corpus-v3 runs in §§6.10–6.11. The operation-aware context reached both live providers, and both lanes meet the M1 zero false-allow threshold. M4 remains over budget on both lanes; M5 pricing, Governance, Committee M3 review, named owners, and rollback rehearsal remain open. Production activation remains **Deferred**.
+
+
+### 6.10 Latest live corpus-v3 evaluation (2026-10-16)
+
+The source-built Amsha binary completed the version-3 evidence run against `omlx / clef-flash-oQ4e` on the `SELF_HOSTED` lane. Run ID: `c075f48f-4916-4d6f-ac23-c48a5a669ac0`. The 30-case corpus produced 25 evaluated cases, 5 skipped cases, 0 refusals, and 0 transform errors.
+
+| Metric | Result | Gate |
+|---|---:|---|
+| M1 false allows | 0/11; all 11 evaluated | Met; required 0 |
+| M2 ambiguous routing errors | 0/3; all 3 evaluated | Met; required below 1% |
+| M3 abstentions | 3/25 (12%) | Report and review; no threshold |
+| M4 self-hosted p95 | 910.77 ms vs 50 ms budget | Unmet |
+| M5 priced decisions | 0/25; no approved ceiling | Unmet |
+
+Three supplemental single-case `/evaluate` calls used the OMLX corpus messages and options and each selected the declared `NO_OPINION` choice (`opinion: true`). They corroborate the expected M2 labels, but do not prove which choices account for aggregate M3. The OMLX lane meets the numeric M1/M2 thresholds. TypeSafe's current v3 result is recorded in §6.11. Both lanes now meet the numeric M1/M2 thresholds; the Committee's M3 review remains open. Governance, latency, pricing, named owners, and rollback rehearsal remain open; activation remains **Deferred**.
+
+
+### 6.11 TypeSafe corpus-v3 evaluation (2026-10-17)
+
+The local native binary completed one version-3 evidence run against `typesafe / jev-latest` on the `REMOTE` lane. Run ID: `dde09c51-6eae-4625-8c7a-1d742b99307f`. The 30-case corpus produced 25 evaluated cases, 5 skipped cases, 0 refusals, and 0 transform errors. Token telemetry was present for all 25 decisions: 12,947 input tokens and 1,688 output tokens.
+
+| Metric | Result | Gate |
+|---|---:|---|
+| M1 false allows | 0/11; all 11 evaluated | Met; required 0 |
+| M2 ambiguous routing errors | 0/3; all 3 evaluated | Met; required below 1% |
+| M3 abstentions | 3/25 (12%) | Reported; Committee review required, no threshold |
+| M4 remote p95 | 505.04 ms vs 500 ms budget | Unmet |
+| M5 priced decisions | 0/25; no approved ceiling | Unmet |
+
+The payload-free aggregate does not include per-case outcomes, so it supports the cohort-level M2 result but does not establish which labels the three individual M2 cases returned or which exact cases account for M3. The summary is `.scratch/decision-corpus-typesafe-2026-10-17-v3/dde09c51-6eae-4625-8c7a-1d742b99307f-summary.json`. Together with the OMLX v3 run in §6.10, this completes the two-adapter numeric M1/M2 evidence required by §8.4 step 1. The Committee still needs to record its M3 review. Governance and Operations remain open; production activation remains **Deferred**.
