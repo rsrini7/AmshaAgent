@@ -632,7 +632,7 @@ The remaining W5 detail below records the metric foundations as they were pinned
   | **M2** routing error | 3 `AMBIGUOUS` intent cases | `Evaluated 3/3`, **0** errors — **but vacuous** | **not a real pass.** The canned evaluator abstains on every intent case, so the router is never exercised and "0 errors" measures nothing. Under the fixture-backed app run, which *does* answer intent, M2 reads **3/3 errors → fails**. See the corpus-state-shape finding below. |
   | **M3** abstention rate | all 25 evaluated cases (12 intent + 13 tool-risk) | **12 / 25** abstain | report-only (no threshold) |
   | **M4** p95 latency | `SELF_HOSTED` | 25 samples / 25 decisions, p95 within the **50 ms** local budget | **passes** for the one evaluable lane |
-  | **M5** cost / 1,000 | `SELF_HOSTED` | unpriced (`costPerThousand == null`) | not assessable — empty schedule, no approved ceiling |
+| **M5** cost / 1,000 | `SELF_HOSTED` | Historical 2026-10-17 run: unpriced (`costPerThousand == null`) | 0/25 then, because the schedule was empty; the project author approved zero rates and a zero ceiling for non-routing evaluation on 2026-10-18 and the evaluation schedule is now populated. Fresh run pending; Committee ratification remains required for production. |
 
   Only the `SELF_HOSTED` lane appears, because the fixture reports that lane; M1/M2/M3 are **cohort**
   metrics (not per-lane), while M4/M5 are **per-lane** and currently have exactly one lane to report. These
@@ -857,7 +857,7 @@ The parent ADR §8.3 distinguishes three execution categories, measured separate
 
 `DecisionDriftMonitor` emits a relative `LATENCY_DRIFT` warning when current-window p95 reaches twice the first full baseline-window p95. The default window is 64 observations, and both windows must be full before the relative alert can fire (128 observations per lane). A standalone 25-case corpus run cannot populate both windows on a fresh monitor. The baseline remains fixed until `reset(lane)`, `resetAll()`, or monitor recreation. The relative alert precedes the absolute M4 alert only when baseline p95 is below half the category budget. Using OMLX's observed 915.258 ms p95 as a comparator, the 2,000 ms budget's relative threshold is 1,830.516 ms, about 169 ms below the absolute ceiling. TypeSafe's 505.040791 ms p95 would imply a 1,010.081582 ms relative threshold above the 750 ms ceiling, so the absolute alert would fire first; this value is contextual evidence, not the monitor's baseline. Actual alert lead depends on each lane's first full window.
 
-The latest OMLX run is within the author-accepted self-hosted budget. This does not close Operations: M5 needs a Committee-selected local-compute basis and ceiling, and rollout/rollback ownership and rehearsal are still missing. The current scope excludes TypeSafe from those active-candidate approvals.
+The latest OMLX run is within the author-accepted self-hosted budget. The project author approved provider-spend-only scope, zero rates, and zero ceiling for non-routing OMLX evaluation on 2026-10-18; local compute is excluded from M5. The evaluation schedule and both environment settings are populated; a fresh run remains pending. Committee ratification is still required for production cost approval. This does not close Operations. separate capacity envelope, rollout/rollback ownership, and rehearsal remain open; current corpus evidence does not establish throughput.
 
 ## 7. Gates, sequencing, and what a PR may not do
 
@@ -893,12 +893,7 @@ W4 lands after the evaluation-path ADR (W8.1) is accepted — **Accepted 2026-10
 
 ## 8. Open items requiring human / Committee input (not code)
 
-1. **M5 cost ceiling, price schedule, and scope** — the ceiling is a number authorised by the Committee,
-   never inferred from a provider price page (TypeSafe input is $0.042/Mtok; output free). The versioned
-   price schedule's per-`(providerId, modelId)` rates need an authoritative **source** and **effective
-   date**, and the Committee must either accept M5's scope as *provider inference charges only* or approve
-   a local-compute cost method for self-hosted lanes. The plan supplies the mechanism; the values are
-   decisions.
+1. **Committee ratification of the production M5 gate** — the project author approved provider-inference-only scope, zero OMLX input/output rates, and a $0-per-1,000-decisions ceiling for non-routing evaluation on 2026-10-18. The active schedule and both environment settings carry that evaluation basis; the previous run remains 0/25 priced because it predates the change. A fresh corpus-v3 run is pending credential rotation. Before setting `cost-ceiling-approved`, the Committee must ratify the scope and ceiling for promotion. Local compute remains excluded from M5; the separate enforced capacity envelope is open.
 2. **Rollout & rollback owner** — a person or team, never a placeholder (`ActivationGateReadiness`
    warns on placeholders by design).
 3. **Review cadence** — the ADR §8.5 90-day trigger is still an unconfirmed proposal.
@@ -917,6 +912,8 @@ W4 lands after the evaluation-path ADR (W8.1) is accepted — **Accepted 2026-10
 *(M4 thresholds are recorded in parent ADR §8.3. Committee Operations ratification of the author-accepted 2,000 ms OMLX ceiling remains pending; the category-wide 750 ms REMOTE ceiling remains unratified; TypeSafe is comparison-only and this ceiling is not an active gate for OMLX under current scope.)*
 
 ---
+
+7. **Local capacity envelope** — the 915.258 ms OMLX p95 is latency evidence, not a throughput bound. The corpus run does not establish decisions per second or saturation capacity. Before activation, load-test the selected host, record a maximum concurrency or request-rate limit, and enforce it in the deployment.
 
 ## 9. Definition of done
 
