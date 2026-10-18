@@ -889,7 +889,9 @@ Amsha uses **ONNX Runtime Java** (`1.27.0`) and **DJL Hugging Face Tokenizers** 
 
 ### Q: How do I configure and activate local ONNX RAG embeddings?
 
-Set the following environment variables in your `.env` or `dist/.env` file:
+Install the pinned MPNet bundle with `mise run models:install-mpnet` or the
+packaged binary's `models install mpnet` command. Then set the following
+environment variables in your `.env` or `dist/.env` file:
 
 ```env
 AMSHA_ONNX_ENABLED=true

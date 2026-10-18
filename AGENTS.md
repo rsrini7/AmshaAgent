@@ -76,8 +76,11 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   non-routing, and it is the only caller of the `DecisionEngineFactory` construction seam — constructing an
   engine for one evaluation is not registering one, so `Instance<DecisionEngine>` stays unsatisfiable and no
   activation switch opens. W4 and W5 have landed: the versioned corpus-backed `/evidence/run` endpoint
-  reports M1–M5 through the deterministic policy layer. The price schedule is intentionally empty until
-  rates are approved, so this work does not close the parent ADR's Quality or Operations gates.
+  reports M1–M5 through the deterministic policy layer. Both adapters meet the numeric M1/M2 thresholds and
+  M3 was reviewed on 2026-10-17, so Quality is closed. On 2026-10-18 the project author approved a zero-rate
+  OMLX schedule entry and a separate zero-per-1,000 ceiling for non-routing evaluation; a fresh M5 run is pending. Production Governance and
+  Operations remain open, including Committee ratification of the production cost ceiling. The parent ADR
+  stays Deferred and no production engine is registered.
   The path must stay off by default, internal-only, allow-listed, non-routing, and must NOT make
   `Instance<DecisionEngine>` resolvable (§27.6, §27.7).
 - After a successful tool result, the coordinator must emit `FINISH`; no subsequent

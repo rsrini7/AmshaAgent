@@ -225,8 +225,8 @@ Not needed on Windows - use `mvnw.cmd` instead of `./mvnw`.
 ### 5.1 Clone the Repository
 
 ```bash
-git clone https://github.com/rsrini7/Amsha Agent.git
-cd Amsha Agent
+git clone https://github.com/rsrini7/AmshaAgent.git
+cd AmshaAgent
 ```
 
 ### 5.2 Create .env
@@ -281,6 +281,15 @@ AMSHA_EMBEDDING_JINA_API_KEY=jina_your_key     # get from jina.ai
 AMSHA_EMBEDDING_JINA_MODEL=jina-embeddings-v5-text-nano
 AMSHA_EMBEDDING_JINA_BASE_URL=https://api.jina.ai/v1/
 AMSHA_EMBED_DIMENSIONS=768
+
+# Optional local ONNX embeddings: install the MPNet bundle first.
+# Use the exact bundle ID, space ID, and revision from its manifest. Its 768 dimensions match the shared value above.
+# Full setup: docs/ONNX_LOCAL_ML_GUIDE.md
+# AMSHA_ONNX_ENABLED=true
+# AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS=onnx
+# AMSHA_EMBEDDING_ONNX_MODEL=all-mpnet-base-v2-e8c3b32
+# AMSHA_EMBEDDING_ONNX_SPACE_ID=sentence-transformers/all-mpnet-base-v2
+# AMSHA_EMBEDDING_ONNX_SPACE_REVISION=e8c3b32edf5434bc2275fc9bab85f82640a19130
 
 # GitHub - optional, needed for researcher role GitHub tool
 GITHUB_TOKEN=ghp_your_token
@@ -987,7 +996,7 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `AMSHA_API_KEYS_INTERNAL` | ✅ | - | Bearer token for REST API (`Authorization: Bearer`). |
 | `AMSHA_AUTH_HMAC_KEY` | ✅ | - | Min 32 bytes for session, invitation, and API-credential digests. **Immutable after first boot.** |
 | `AMSHA_API_KEYS_CI` | Optional | - | CI/CD read-only API key. |
-| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | Optional | `ollama` | Comma-separated embedding providers (ollama, openai, jina, ...). |
+| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | Optional | `ollama` | Comma-separated embedding providers; `onnx` requires an installed and configured local model bundle. See the [ONNX Local ML guide](ONNX_LOCAL_ML_GUIDE.md). |
 | `AMSHA_EMBEDDING_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider embedding key (e.g. `AMSHA_EMBEDDING_JINA_API_KEY`). |
 | `AMSHA_EMBEDDING_<PROVIDER>_MODEL` | Optional | (per provider) | Per-provider embedding model (e.g. `AMSHA_EMBEDDING_JINA_MODEL`). |
 | `AMSHA_EMBEDDING_<PROVIDER>_BASE_URL` | Optional | (per provider) | Per-provider base URL (e.g. `AMSHA_EMBEDDING_OLLAMA_BASE_URL`). |

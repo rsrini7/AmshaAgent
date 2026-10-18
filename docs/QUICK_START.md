@@ -9,8 +9,8 @@
 ## 30-Second Setup (Dev Mode)
 
 ```bash
-git clone <repo>
-cd amsha
+git clone https://github.com/rsrini7/AmshaAgent.git
+cd AmshaAgent
 
 # Copy and configure .env
 cp .env.example .env
@@ -78,6 +78,15 @@ AMSHA_UI_SKIP_ONBOARDING=false
 Use a new data directory when the previous attempt already reached `CLAIMED`; do not delete an existing data directory implicitly. After rebuilding and packaging, start the native runner from `dist` with `./amsha-sqlite serve`, then open `http://localhost:8080`. The claim response must establish the `AMSHA_API_KEY` cookie. On local HTTP it is intentionally not `Secure`, including when the request arrives through IPv6 loopback (`http://[::1]`), so the browser can reuse it. An authenticated `/api/v1/onboarding/status` response should report `vaultPriority: true`.
 
 If the browser loses the owner cookie, `bootstrap/status` remains `CLAIMED` and onboarding status returns `401`; this is expected and prevents a second anonymous owner claim. Restore the owner credential or restart the test with a new data directory.
+
+## Optional local ONNX models
+
+Local embedding, reranking, and speech-to-text bundles are installed explicitly;
+the application does not fetch model files during inference. For example, install
+the MPNet embedding bundle with `mise run models:install-mpnet`, or use the
+packaged binary's `models install mpnet` command. Model files remain under
+gitignored `data/models/`. See the [ONNX Local ML guide](./ONNX_LOCAL_ML_GUIDE.md)
+for configuration, other model bundles, and vector-space compatibility requirements.
 
 ## Docker Compose
 

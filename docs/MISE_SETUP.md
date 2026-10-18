@@ -114,8 +114,8 @@ mise doctor       # diagnoses common setup issues
 
 ```bash
 # 1. Clone and enter
-git clone https://github.com/rsrini7/Amsha Agent.git
-cd Amsha Agent
+git clone https://github.com/rsrini7/AmshaAgent.git
+cd AmshaAgent
 
 # 2. Trust the config file
 mise trust --all

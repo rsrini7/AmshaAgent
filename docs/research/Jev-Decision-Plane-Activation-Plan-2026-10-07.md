@@ -97,7 +97,7 @@ into a configurational one.
 | Provider governance approval | OMLX governance declarations are present, but no review/approval record closes local data handling and egress terms. TypeSafe retention/residency remain undeclared, but TypeSafe is comparison evidence only under the 2026-10-18 scope decision. | Governance remains UNMET for the selected OMLX candidate pending a recorded review |
 | Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded signals, including absolute M4 budget alerts and relative p95 latency drift at 2× baseline. The project author accepted 2,000 ms SELF_HOSTED and category-wide 750 ms REMOTE budget; Committee ratification of the OMLX budget for production remains pending. Committee ratification of the category-wide 750 ms REMOTE ceiling remains pending; TypeSafe is comparison-only under current scope. OMLX cost basis/ceiling, named owner, and rollback evidence remain open. | Operations gate remains UNMET pending records |
 | Self-hosted authentication header | The direct key configures `SelfHostedProviderConfig.loopbackToken`; the engine sends `X-Amsha-Loopback-Token` | A service requiring `Authorization: Bearer` needs separate header support; use only with an endpoint configured for Amsha's loopback-token header |
-| Candidate evidence is real and current | Both adapters supplied corpus-v3 results on 2026-10-17; Quality is closed. OMLX / `clef-flash-oQ4e` is the sole active promotion candidate by project-author decision; TypeSafe / `jev-latest` is comparison evidence only. OMLX M4 is 915.258 ms vs the author-accepted 2,000 ms budget. M5 is unpriced for OMLX. | Committee scope confirmation, OMLX Governance, and Operations approvals remain open |
+| Candidate evidence is real and current | Both adapters supplied corpus-v3 results on 2026-10-17; Quality is closed. OMLX / `clef-flash-oQ4e` is the sole active promotion candidate by project-author decision; TypeSafe / `jev-latest` is comparison evidence only. OMLX M4 is 915.258 ms vs the author-accepted 2,000 ms budget. The 2026-10-17 OMLX summary reports M5 0/25 because it predates the schedule update; an author-approved zero-rate OMLX schedule entry and a separate zero-per-1,000 evaluation ceiling are now configured, and a fresh M5 run is pending. | Committee scope confirmation, OMLX Governance, and Operations approvals remain open |
 
 ### 1.3 The three independent locks (all must open, in order)
 
@@ -580,26 +580,10 @@ The remaining W5 detail below records the metric foundations as they were pinned
   specialist is the M2 error; a `UNAMBIGUOUS` case's correct label is its `expectedLabel` specialist, so
   resolving to a different one is the error. The runner compares the resolved label against
   `expectedLabel`/`acceptableLabels` for both, so the three ambiguous cases are fully specified.
-- **M5's mechanism — pinned and landed (2026-10-07); its rates remain a Committee value.** M5 must **not**
-  reuse the global LLM governance rates (`amsha.governance.price-per-1k-input`/`-output`): those are not
-  tied to the selected decision provider and model. `DecisionPriceSchedule` is a versioned schedule keyed
-  by the exact `(providerId, modelId)`, each `PriceEntry` carrying input/output USD rates, a `source`, and
-  an ISO-8601 `effectiveDate`; `DecisionPriceScheduleRegistry` loads
-  `decision-evidence/price-schedule-v<n>.json` from the classpath and fails closed without failing
-  startup, exactly as the corpus registry does. `PriceEntry.costUsd` returns **empty** when either token
-  count is absent, and `find` returns empty for an unpriced pair, so **unknown cost can never become
-  zero**; `costPerThousand(decisions, totalPricedUsd)` supplies the ratio, and the ceiling is the existing
-  per-slot `costCeilingPerThousand`, approved only once the Committee authorises it. The shipped schedule
-  v1 is **empty by design** — no rate is authorised yet, and each needs a published source and effective
-  date (§8). Scope is **provider inference charges only**; the self-hosted local-compute method remains
-  open (§8). The resource sits under `decision-evidence/**`, which the native-image include glob already
-  covers, so adding a schedule needs no extra native wiring.
-  **Per-lane ceiling source (design note):** `DecisionEvidenceSummary.computeM5` resolves each lane's ceiling
-  from the **first** result in that lane (`laneResults.get(0).providerId()`). That is exact today because the
-  runner selects a single provider per run, so a lane cannot currently hold more than one `providerId`. It is
-  recorded here because it is an assumption, not an invariant: if a future run can mix providers within a
-  lane, the ceiling must be resolved per result (or the lane must be split), otherwise one provider's ceiling
-  would be silently applied to another's costs.
+- **M5 mechanism — implemented 2026-10-07; evaluation schedule updated 2026-10-18.** M5 does not reuse the global LLM governance rates (`amsha.governance.price-per-1k-input` / `-output`), because those rates are not tied to the selected decision provider and model. `DecisionPriceSchedule` is versioned and keyed by the exact `(providerId, modelId)` pair; each entry carries input/output USD rates, a source, and an ISO-8601 effective date. `PriceEntry.costUsd` is empty when either token count is absent, and an unpriced pair remains unpriced rather than becoming zero.
+  `DecisionPriceScheduleRegistry` loads the versioned classpath resource and fails closed without failing startup. `costPerThousand` derives the aggregate price, while each provider slot supplies its own ceiling. The native-image resource include already covers `decision-evidence/**`, so schedule updates need no extra native wiring.
+  **Current non-routing evaluation basis.** On 2026-10-18 the project author approved provider-inference-spend-only scope for OMLX / `clef-flash-oQ4e`: zero input/output rates and a zero-per-1,000-decisions ceiling for non-routing evaluation. The schedule resource now contains the rate entry with its source and effective date; the provider configuration supplies the separate evaluation ceiling. Local energy, hardware, and maintenance are excluded from this evaluation M5 scope. A fresh corpus-v3 run after the schedule change is pending; the 2026-10-17 OMLX run remains historical evidence of 0/25 priced decisions. Committee ratification is still required before production cost approval. Missing token counters and provider/model pairs without an entry continue to report unpriced.
+  **Per-lane ceiling source (design note):** `DecisionEvidenceSummary.computeM5` resolves each lane's ceiling from the first result in that lane (`laneResults.get(0).providerId()`). This is exact today because the runner selects a single provider per run, so a lane cannot currently hold more than one `providerId`. If a future run mixes providers within a lane, resolve the ceiling per result or split the lane to avoid applying one provider's ceiling to another provider's cost.
 - **M4 budgets — updated 2026-10-17.** `DecisionLatencyBudget` in `classifier-api` keeps three category-specific p95 budgets from ADR §8.3: **50 ms** for `IN_PROCESS`, **2,000 ms** for `SELF_HOSTED` local models (expected 1–2 seconds), and **750 ms** for `REMOTE` hosted models. `forCategory` maps each category separately and `isWithin` applies strict `<`; lanes are never combined. The evidence runner still computes p95 from observed measurements.
 - **Report writer — landed (2026-10-07).** `DecisionEvidenceReport.toMarkdown(summary)` renders aggregate metrics as a review-ready Markdown document with a gate table and per-lane M4/M5 tables. It contains no case IDs, labels, or case decisions. `/evidence/run` exposes it as `format=markdown` (`text/plain`).
   The artifact path remains the caller's concern (for example, a shell redirect); scripts and tests write to `.scratch/`. The renderer is pure and tested for aggregate-only output.
@@ -703,25 +687,9 @@ The remaining W5 detail below records the metric foundations as they were pinned
   bounded by construction (two fixed-size windows per lane, `MAX_LANES` lanes) and it **never changes a
   decision** — the only component here that can affect an outcome is the cost guard. Latency is handled
   on the same component (`checkLatency` against `DecisionLatencyBudget.ADR_8_3` for the lane's category).
-- `DecisionCostGuard` answers the ceiling question and holds no reference to the egress path. The
-  measure is the mean cost of the last `window` **priced** decisions expressed per 1,000, assessed only
-  once the window is full — a ceiling is a property of a rate, and a rate needs a denominator. A
-  cumulative total was rejected: it would eventually exceed any ceiling no matter how cheap each
-  decision became, turning a cost guard into a shutdown timer. Unpriced decisions are not recorded, and
-  no approved ceiling means no breach.
-  **Consequence — this is a production-activation limitation, not a defect.** Because the guard records only
-  *priced* observations and assesses the ceiling only once a full window has accumulated, it is **not a
-  runtime spend barrier when no price is available**: with the shipped empty schedule (or any unpriced lane)
-  it never fires and egress is not prevented. The component that *does* fail closed on unknown cost is the
-  **M5 evidence gate**, which runs *before* activation, not at runtime. The W6 guard becomes a spend barrier
-  only once the Committee's price schedule and ceiling are populated (§8, items 1 and 6).
-- **Wiring.** `DecisionEvaluationService` now consults the ceiling *before* egress (on breach it returns
-  `NoOpinion(OVERLOAD_REJECTED)` — an outcome, not a refusal, because the provider is healthy and the
-  plane is merely not permitted to spend more) and observes *after* an answer (telemetry + drift +
-  latency + cost). The cost-ceiling announcement has a **single** source — `driftMonitor.alertCostCeiling`
-  — so a breach produces one latched WARN, not a latched one plus an unlatched duplicate from the
-  service. Observation is tolerant and cannot turn a good decision into a refusal. Both halves are inert
-  today: no ceiling is approved and the shipped price schedule is empty.
+- **`DecisionCostGuard` — rolling cost monitor, not a cumulative spend cap.** It retains a fixed-size window of priced decision costs and compares the mean cost per 1,000 decisions with the configured lane ceiling after the window fills. It does not accumulate invoice totals, and it cannot price a provider/model pair without an exact schedule entry.
+- **Current evaluation state.** The schedule contains the project-author-approved zero-rate OMLX / `clef-flash-oQ4e` entry and a zero-per-1,000 ceiling for non-routing evaluation. The 2026-10-17 summary predates that update and still reports 0/25 priced; a fresh corpus-v3 run is pending. Other provider/model pairs without an exact entry remain unpriced. Missing prices fail closed in the M5 evidence gate before activation.
+- **Evaluation wiring.** `DecisionEvaluationService` checks the configured ceiling before provider egress and observes priced results after the answer (telemetry, drift, absolute latency, and cost). An exceeded ceiling returns `NoOpinion(OVERLOAD_REJECTED)`. Production routing remains inert: the parent ADR is Deferred and its activation gates remain closed.
 - **Config:** `amsha.decision.drift.window` / `-confidence-threshold` / `-abstention-threshold` and
   `amsha.decision.cost.window`, in `application.yaml` and `.env.example` (regenerated into
   `app/src/main/resources/env-example`).
@@ -893,21 +861,15 @@ W4 lands after the evaluation-path ADR (W8.1) is accepted — **Accepted 2026-10
 
 ## 8. Open items requiring human / Committee input (not code)
 
-1. **Committee ratification of the production M5 gate** — the project author approved provider-inference-only scope, zero OMLX input/output rates, and a $0-per-1,000-decisions ceiling for non-routing evaluation on 2026-10-18. The active schedule and both environment settings carry that evaluation basis; the previous run remains 0/25 priced because it predates the change. A fresh corpus-v3 run is pending credential rotation. Before setting `cost-ceiling-approved`, the Committee must ratify the scope and ceiling for promotion. Local compute remains excluded from M5; the separate enforced capacity envelope is open.
+1. **Production M5 ratification** — the project author approved provider-inference-only scope, zero OMLX input/output rates, and a $0-per-1,000-decisions ceiling for non-routing evaluation on 2026-10-18. The schedule contains the OMLX evaluation entry; the 2026-10-17 run predates it, so fresh corpus-v3 M5 evidence is pending. Before setting `cost-ceiling-approved`, the Committee must ratify the scope and ceiling for promotion. Local compute remains excluded from M5; a separate enforced capacity envelope remains open.
 2. **Rollout & rollback owner** — a person or team, never a placeholder (`ActivationGateReadiness`
    warns on placeholders by design).
 3. **Review cadence** — the ADR §8.5 90-day trigger is still an unconfirmed proposal.
-4. **TypeSafe account + ZDR** — issue the key at `console.typesafe.ai/keys` and set `AMSHA_DECISION_TYPESAFE_API_KEY` in the ignored local `.env` (direct value, no `_REF` suffix),
-   and record the retention/residency declarations (ZDR is enterprise-only via `sales@typesafe.ai`).
+4. **TypeSafe remains comparison-only** — its saved corpus-v3 run is retained as comparison evidence under §8.6. Reopening it for promotion requires a new scope decision and reviewed first-party terms for retention, residency, and training use; no further hosted evaluation is needed for the current OMLX scope.
 5. **Corpus provenance and baseline classification** — who signs off that the versioned evidence corpus is
    representative, and who reviews the per-intent-case `AMBIGUOUS`/`UNAMBIGUOUS` classification against the
    pinned `amsha.deterministic.intent-baseline` v1 (M2's denominator depends on it).
-6. **Runtime spend barrier — W6 vs M5** — the W6 `DecisionCostGuard` is **not** a runtime egress barrier when
-   prices are absent: it records only *priced* observations and assesses a ceiling only after a full window,
-   so with the shipped empty schedule it never fires and does not prevent spend. If W6 is expected to be the
-   runtime spend barrier, that expectation needs (a) the populated price schedule from item 1 *and* (b) an
-   accepted behaviour for unpriced lanes; until then the only fail-closed cost check is M5's **evidence gate**,
-   which runs **before** activation, not at runtime.
+6. **Runtime spend semantics — W6 vs M5.** `DecisionCostGuard` evaluates priced decisions in a rolling window; it is not a cumulative invoice cap or a local-capacity limit. The OMLX / `clef-flash-oQ4e` zero-rate entry and zero-per-1,000 ceiling apply to non-routing evaluation. The saved OMLX summary predates the schedule update, so a fresh run is needed for runner-emitted M5 evidence. Other unmatched provider/model pairs remain unpriced. If production requires a hard spend barrier for unpriced pairs, define and approve that behavior explicitly; M5 separately fails closed on missing prices in activation evidence.
 
 *(M4 thresholds are recorded in parent ADR §8.3. Committee Operations ratification of the author-accepted 2,000 ms OMLX ceiling remains pending; the category-wide 750 ms REMOTE ceiling remains unratified; TypeSafe is comparison-only and this ceiling is not an active gate for OMLX under current scope.)*
 
@@ -917,10 +879,7 @@ W4 lands after the evaluation-path ADR (W8.1) is accepted — **Accepted 2026-10
 
 ## 9. Definition of done
 
-- **Evaluation path:** `AMSHA_DECISION_EVALUATION_ENABLED=true` + a configured TypeSafe slot with
-  governance declared produces a real, credentialed, allow-listed, redacted `POST /v1/systemone`
-  evaluation whose result is decoded and whose evidence is payload-free — **with no `DecisionEngine`
-  bean registered** and `IntentDecisionRouter.isEnabled()` still false.
+- **Evaluation path:** With `AMSHA_DECISION_EVALUATION_ENABLED=true`, a configured and governance-declared provider slot supports a real, credentialed, allow-listed, redacted evaluation through that provider's protocol and produces payload-free evidence. The evaluation constructs an engine for the call without registering a `DecisionEngine` bean; `IntentDecisionRouter.isEnabled()` remains false.
 - **Evidence:** M1–M5 reported per lane over a versioned corpus, M1 exactly zero measured end to end.
 - **Production activation (later):** one producer bean, one flag, gate values recorded after steps 1–4,
   rollback by configuration.
@@ -1149,7 +1108,7 @@ without registering one — so `Instance<DecisionEngine>` is still unsatisfied.
 | `classifier/evaluation/DecisionEvidenceCorpus.java`, `DecisionEvidenceCorpusRegistry.java`, `DecisionEvidenceCase.java` | The versioned corpus record, its validating loader (strict mapper, fails closed without failing startup) and the per-case record. |
 | `classifier/evaluation/DecisionPriceSchedule.java`, `DecisionPriceScheduleRegistry.java` | The versioned `(providerId, modelId)`-keyed price schedule. Unknown cost can never become zero. |
 | `core/src/main/resources/decision-evidence/corpus-v1.json` | 30 redacted cases across 9 partitions; declares `evaluatedTasks: ["intent","tool_risk"]` and the pinned `amsha.deterministic.intent-baseline` v1. |
-| `core/src/main/resources/decision-evidence/price-schedule-v1.json` | **Empty by design** — no rate is authorised yet. |
+| `core/src/main/resources/decision-evidence/price-schedule-v1.json` | Contains the project-author-approved zero-rate OMLX entry for non-routing evaluation, added 2026-10-18; Committee ratification remains required before production. |
 
 **New — `core`, W6 operations layer**
 
@@ -1181,19 +1140,4 @@ observation after an answer).
 `Instance<DecisionEngine>` stays unsatisfied, including the `format=markdown` report and the refusal of an
 unknown format).
 
-**Open at the end of W6:** M5's rates and ceiling (a Committee value — the shipped schedule is empty, which
-also keeps the W6 cost ceiling inert, and which is why the W6 `DecisionCostGuard` is **not** a runtime spend
-barrier today — see §8 item 6); and a **live** provider run of the corrected corpus (the fixture-backed
-runner test proves the metric maths, but no approved provider has been exercised end to end). The
-`toolrisk-mal-01` corpus-revision decision that was open above is now **resolved** — the case is
-representable, M1's cohort is complete at `Evaluated 11/11`, and corpus v1 no longer needs a revision to make
-the gate measurable. The main-code report writer is **landed** (`DecisionEvidenceReport`, exposed as
-`format=markdown`), so the only remaining W5 gap is a live run.
-
-**One open item is a *finding*, not a gap (2026-10-07): M2 now reads `3/3 → FAIL`.** The corpus-state-shape
-defect (above) had been suppressing the intent half of every run, so M2's earlier `0/3` "pass" measured
-nothing. With the defect fixed, the fixture-backed app run exercises the router and M2 fails — correctly,
-because the canned provider routes all three `AMBIGUOUS` cases to `coder` when their expected label is
-`NO_OPINION`. A reviewer reading the Quality-gate package will therefore see a **failing** routing gate where
-the plan previously recorded a pass; that is the honest reading and should be confirmed before any promotion
-discussion. M1 is unaffected and still `0/11 PASS`, which is by design (see the M1 note above).
+**W6 status.** The telemetry, drift monitor, and cost guard are implemented and wired into the non-routing evaluation path. OMLX / `clef-flash-oQ4e` has a project-author-approved zero-rate entry and zero-per-1,000 evaluation ceiling. The 2026-10-17 aggregate predates the schedule update, so a fresh corpus-v3 run is still needed for runner-emitted M5 evidence. The guard evaluates priced observations over its configured window; it is not a cumulative invoice cap or a local-capacity limit. Production activation remains Deferred pending Committee ratification, OMLX Governance, an enforced capacity envelope, an owner, and a rollback rehearsal. The corpus-v3 provider runs and aggregate report writer are complete; the historical `toolrisk-mal-01` representability issue was resolved, preserving a complete M1 cohort at 11/11.

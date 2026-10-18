@@ -312,7 +312,7 @@ the same cooldown timing.
 | `AMSHA_INFINITE_LOOP_LLM_PROVIDERS` | `omlx,groq,openrouter` | Comma-separated LLM providers (slot order) |
 | `AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS` | `groq,ollama` | Comma-separated compaction providers |
 | `AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | `groq,ollama` | Comma-separated classifier providers |
-| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers |
+| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers (slot order); `onnx` is available only with a verified local model bundle. See the [ONNX Local ML guide](ONNX_LOCAL_ML_GUIDE.md). |
 | `AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS` | `5` | Base cooldown between provider switches (s) |
 | `AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS` | `60` | Max cooldown (s) |
 | `AMSHA_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS` | `5` | Transient error cooldown (s) |
@@ -387,7 +387,7 @@ schema) and must match the model used by every active provider.
 
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers (slot order) |
+| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers (slot order); `onnx` is available only with a verified local model bundle. See the [ONNX Local ML guide](ONNX_LOCAL_ML_GUIDE.md). |
 | `AMSHA_EMBEDDING_OLLAMA_MODEL` | `nomic-embed-text:v1.5` | Ollama embedding model |
 | `AMSHA_EMBEDDING_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama base URL for embedding |
 | `AMSHA_EMBEDDING_JINA_API_KEY` | — | Jina AI API key |

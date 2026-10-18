@@ -158,7 +158,12 @@ For distribution environments where Python, `mise`, or repo scripts are not pres
 
 # Verify integrity of installed model files
 ./amsha models verify whisper
+./amsha models verify mpnet
 ```
+
+For MPNet's embedding-space settings and the RAG provider switch, follow the
+[ONNX Local ML guide](../docs/ONNX_LOCAL_ML_GUIDE.md#5-configuration-reference).
+The model bundle remains external to the application binary.
 
 Run `./mvnw -pl local-ml-onnx -Dtest=OnnxEmbeddingModelSmokeTest test` after
 installation to execute the JVM smoke test against the real bundle.

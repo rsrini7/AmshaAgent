@@ -4,6 +4,15 @@ Welcome to the Amsha Agent architecture, operator, and developer documentation.
 
 ---
 
+## Current implementation guides
+
+- [ONNX Local ML guide](ONNX_LOCAL_ML_GUIDE.md) — MPNet embeddings, BGE reranking, local Whisper, installation, and configuration.
+- [Local ML module README](../local-ml-onnx/README.md) — module configuration and packaged model commands.
+- [Jev decision-plane ADR](adr/architecture/ADR-jev-decision-plane.md) — current Deferred status and promotion gates.
+- [Jev evaluation path ADR](adr/architecture/ADR-jev-decision-plane-evaluation-path.md) — accepted default-off, internal-only, non-routing evaluation path.
+- [Jev activation readiness](research/Jev-Activation-Readiness-2026-10-10.md) — current evidence and remaining gates.
+- [Jev activation plan](research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md) — implementation status and activation sequence.
+
 ## 1. Documentation Taxonomy & Lifecycle Model
 
 Amsha Agent organizes documentation by audience and durability:

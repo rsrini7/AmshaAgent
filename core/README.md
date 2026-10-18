@@ -261,7 +261,7 @@ Observational-only shadow evaluation for intent routing, tool risk, and answer q
 | `amsha.decision.shadow.tool-risk.enabled` | `AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED` | `false` | Enables shadow tool risk evaluation using `DecisionEngine`. |
 | `amsha.decision.shadow.answer-quality.enabled` | `AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED` | `false` | Enables shadow answer quality evaluation using `DecisionEngine`. |
 | `amsha.decision.evaluation.enabled` | `AMSHA_DECISION_EVALUATION_ENABLED` | `false` | Opt-in evaluation path: when `true`, an internal-only operator may run one registered decision against a configured provider for evidence gathering. Off by default; it never registers a `DecisionEngine` bean, so it does not activate the decision plane (§27). |
-| `amsha.decision.drift.window` | `AMSHA_DECISION_DRIFT_WINDOW` | `64` | Baseline and current observations per lane for drift and latency monitoring; must be at least `2`. |
+| `amsha.decision.drift.window` | `AMSHA_DECISION_DRIFT_WINDOW` | `64` | Observations in each baseline and current window per lane. Relative alerts wait until both windows are full (128 observations at the default); the initial baseline remains fixed until reset or monitor recreation. Minimum `2`. |
 | `amsha.decision.drift.confidence-threshold` | `AMSHA_DECISION_DRIFT_CONFIDENCE_THRESHOLD` | `0.15` | Absolute mean-confidence drift threshold; must be finite and in `[0,1]`. |
 | `amsha.decision.drift.abstention-threshold` | `AMSHA_DECISION_DRIFT_ABSTENTION_THRESHOLD` | `0.20` | Absolute abstention-rate drift threshold; must be finite and in `[0,1]`. |
 | `amsha.decision.cost.window` | `AMSHA_DECISION_COST_WINDOW` | `1000` | Priced decisions in the rolling cost-per-1,000 window; must be at least `1`. |
