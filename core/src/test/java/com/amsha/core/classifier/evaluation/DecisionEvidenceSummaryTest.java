@@ -7,8 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalDouble;
 
 import com.amsha.classifier.api.DecisionLatencyBudget;
@@ -208,6 +210,47 @@ class DecisionEvidenceSummaryTest {
         assertEquals(2, lane.totalDecisions());
         assertEquals(null, lane.costPerThousand());
         assertFalse(lane.within());
+    }
+
+    @Test
+    void m5PricesAllZeroRateDecisionsAndMeetsAZeroCeiling() {
+        List<DecisionEvidenceCaseResult> results = new ArrayList<>();
+        for (int index = 0; index < 25; index++) {
+            DecisionEvidenceCase evidenceCase = securityToolRisk("tr-zero-" + index, "BLOCK");
+            DecisionMetadata metadata = new DecisionMetadata("omlx", "clef-flash-oQ4e", Duration.ofMillis(2), 100L, 0L);
+            DecisionEvaluationOutcome outcome = DecisionEvaluationOutcome.opinion(
+                    "omlx", "SELF_HOSTED", "clef-flash-oQ4e", null, Map.of(), metadata);
+            results.add(DecisionEvidenceCaseResult.fromOutcome(
+                    evidenceCase, DecisionToolRiskShadowClassifier.DECISION_ID, outcome, "LOW_RISK", 2_000_000L));
+        }
+
+        DecisionPriceSchedule schedule = new DecisionPriceSchedule(
+                1,
+                "approved provider-spend-only zero rate",
+                List.of(new DecisionPriceSchedule.PriceEntry(
+                        "omlx",
+                        "clef-flash-oQ4e",
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        "project-author-approved local inference rate",
+                        "2026-10-18")));
+        DecisionPriceScheduleRegistry priceRegistry = new DecisionPriceScheduleRegistry(Map.of(1, schedule));
+        DecisionProviderConfig config = Mockito.mock(DecisionProviderConfig.class);
+        DecisionProviderConfig.Slot slot = Mockito.mock(DecisionProviderConfig.Slot.class);
+        DecisionProviderConfig.Slot.Governance governance = Mockito.mock(DecisionProviderConfig.Slot.Governance.class);
+        Mockito.when(config.slots()).thenReturn(Map.of("omlx", slot));
+        Mockito.when(slot.governance()).thenReturn(governance);
+        Mockito.when(governance.costCeilingPerThousand()).thenReturn(Optional.of(BigDecimal.ZERO));
+
+        DecisionEvidenceSummary summary =
+                DecisionEvidenceSummary.summarize(1, results, priceRegistry, config, DecisionLatencyBudget.ADR_8_3);
+        DecisionEvidenceSummary.LaneCost lane = summary.m5().get("SELF_HOSTED");
+
+        assertEquals(25, lane.pricedDecisions());
+        assertEquals(25, lane.totalDecisions());
+        assertEquals(0, lane.costPerThousand().compareTo(BigDecimal.ZERO));
+        assertEquals(0, lane.ceiling().compareTo(BigDecimal.ZERO));
+        assertTrue(lane.within());
     }
 
     @Test

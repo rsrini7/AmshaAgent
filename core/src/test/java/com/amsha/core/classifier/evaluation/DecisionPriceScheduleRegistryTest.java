@@ -40,14 +40,20 @@ class DecisionPriceScheduleRegistryTest {
     }
 
     @Test
-    void loadsTheShippedScheduleWhichPricesNothingYet() {
+    void loadsTheShippedScheduleWithOnlyTheApprovedOmlxZeroRate() {
         DecisionPriceScheduleRegistry registry = new DecisionPriceScheduleRegistry(MAPPER);
 
         assertTrue(registry.registeredVersions().contains(1), "schedule v1 must be registered");
         DecisionPriceSchedule schedule = registry.find(1).orElseThrow();
         assertEquals(1, schedule.scheduleVersion());
-        assertTrue(schedule.isEmpty(), "no rate is authorised yet, so the schedule prices nothing");
-        assertEquals(0, schedule.entryCount());
+        assertEquals(1, schedule.entryCount());
+        DecisionPriceSchedule.PriceEntry entry =
+                schedule.find("omlx", "clef-flash-oQ4e").orElseThrow();
+        assertEquals(0, entry.usdPer1kInputTokens().signum());
+        assertEquals(0, entry.usdPer1kOutputTokens().signum());
+        assertFalse(entry.source().isBlank());
+        assertFalse(entry.effectiveDate().isBlank());
+        assertTrue(schedule.find("typesafe", "jev-1.13.0").isEmpty());
         assertFalse(schedule.description().isBlank(), "the schedule must state its scope");
     }
 
