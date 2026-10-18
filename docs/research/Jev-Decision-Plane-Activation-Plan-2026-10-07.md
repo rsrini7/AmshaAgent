@@ -17,10 +17,15 @@ plane's structural inertness is unchanged. W7 onward MUST NOT be implemented bef
 accepted and the Phase 3 evidence, governance and operations approvals are reviewed. See **Appendix E**
 (W1–W3) and **Appendix F** (W4–W6) for exactly what landed.
 **Scope:** Turning the deferred Jev/System One decision plane into a production-grade, provider-agnostic
-decision capability — starting with an explicit, opt-in evaluation path for TypeSafe, then a gated
-production routing activation.
+decision capability through an explicit, opt-in evaluation path and a separately gated production
+routing activation.
 **Supersedes nothing.** Companion to `docs/research/Jev-Provider-Integration-Plan-2026.md` (wire
 contract, Phase 0 evidence) and `docs/adr/architecture/ADR-jev-decision-plane.md` (governance).
+
+**Promotion scope (project-author decision, 2026-10-18):** OMLX / `clef-flash-oQ4e` is the sole active
+promotion candidate. TypeSafe / `jev-latest` remains comparison evidence only; Laya and KEV
+remain deferred without corpus-v3 evidence. This scope does not approve production routing.
+The Committee must confirm or revise it before ADR §8.4 step 4.
 
 > This document is the implementation brief. It states the verified current state, the design, the
 > workstreams with concrete files and tests, and the ADR/invariant changes. It is written to be handed
@@ -38,9 +43,10 @@ The observation is correct and the code confirms it:
 2. **The intent router has a second, independent lock.** Even with an engine, direct routing needs
    `candidate-evidence-approved` **and** `cost-ceiling-approved` **and** a non-blank `rollout-owner`.
    All three are unset.
-3. **The remaining ADR gates are the real blocker.** Corpus-v3 runs now show both adapters meet
-   numeric M1/M2 thresholds; M3 review recorded 2026-10-17; Quality closed for both lanes. Lane scope, Governance, and Operations
-   remain open. The ADR requires remote TypeSafe calls to travel an **explicit orchestration path**,
+3. **Quality is closed; remaining gates are governance and operations.** Both adapters supplied the
+   required corpus-v3 evidence and meet numeric M1/M2 thresholds; M3 review was recorded on
+   2026-10-17. The author-selected scope is OMLX only; the Committee must confirm or revise it.
+   OMLX governance and operations approvals remain open. The ADR requires remote TypeSafe calls to travel an **explicit orchestration path**,
    never the network-free classifier SPIs.
 
 The correct production answer is therefore **not** "wire the selector into a bean". It is a
@@ -86,12 +92,12 @@ into a configurational one.
 | No production `DecisionEngine` bean | `Instance<DecisionEngine>` is unresolvable; engines are `final class`es with no CDI annotation | `IntentDecisionRouter.isEnabled()` remains false; explicit evaluation constructs a transient engine without activating production routing |
 | No production-routing caller for `DecisionProviderSelector` | `DecisionEvaluationService` uses `select(...)` only for explicit evaluation requests; the agent router does not | A `.env` change alone does not route agent decisions through the provider |
 | Credential input (updated 2026-10-09) | The initial `_API_KEY_REF` proposal required a matching SecretVault entry; the evaluation path now reads the direct key from bound config. | Set `AMSHA_DECISION_<ID>_API_KEY`; no vault provisioning is required. The source config String remains resident for process lifetime. |
-| Live provider evidence — both adapters v3 results | Latest OMLX source-built run e2fecbee-a53e-4741-b310-21a41d50ea59 (clef-flash-oQ4e, SELF_HOSTED; 2026-10-17): 25 evaluated, 5 skipped, 0 refused, 0 transform errors; M1 0/11, M2 0/3, M3 3/25; M4 p95 915.258 ms vs 2,000 ms; M5 0/25 priced. TypeSafe corpus-v3 run dde09c51-6eae-4625-8c7a-1d742b99307f (jev-latest, REMOTE; 2026-10-17): 25 evaluated, 5 skipped, 0 refused, 0 transform errors; M1 0/11, M2 0/3, M3 3/25; M4 p95 505.04 ms vs 750 ms; M5 0/25 priced. Payload-free aggregates: .scratch/decision-corpus-omlx-2026-10-17-v3/e2fecbee-a53e-4741-b310-21a41d50ea59-summary.json and .scratch/decision-corpus-typesafe-2026-10-17-v3/dde09c51-6eae-4625-8c7a-1d742b99307f-summary.json. | Both lanes meet numeric M1/M2 thresholds. M3 review recorded 2026-10-17; Quality is closed for both lanes. OMLX and TypeSafe are within their author-accepted M4 budgets; M5 remains unpriced on both lanes, so Operations remains open. |
+| Live provider evidence — both adapters v3 results | Latest OMLX source-built run `e2fecbee-a53e-4741-b310-21a41d50ea59` (`clef-flash-oQ4e`, SELF_HOSTED; 2026-10-17): 25 evaluated, 5 skipped, 0 refused, 0 transform errors; M1 0/11, M2 0/3, M3 3/25; M4 p95 915.258 ms vs 2,000 ms; M5 0/25 priced. TypeSafe comparison run `dde09c51-6eae-4625-8c7a-1d742b99307f` (`jev-latest`, REMOTE; 2026-10-17): 25 evaluated, 5 skipped, 0 refused, 0 transform errors; M1 0/11, M2 0/3, M3 3/25; M4 p95 505.040791 ms; its saved summary used 500 ms and reports `within:false`. It is below the current category-wide 750 ms REMOTE ceiling by arithmetic, but no runner-emitted 750 ms pass exists and Committee ratification is pending. TypeSafe is comparison-only under current scope. |
 | Operation-aware risk context | Canonical ToolOperation is present in schema-2 JEV and ONNX contexts, and corpus v3 carries requiredOperation; the 2026-10-17 OMLX confirmation and TypeSafe runs each evaluated it and measured M1 0/11. | The operation-aware path is exercised by both adapters. |
-| Provider governance approval | Current OMLX status reports governance declarations present, but no review/approval record closes the local lane's data handling and egress terms. TypeSafe retention/residency remain undeclared if the hosted lane is retained | Governance gate remains UNMET pending a recorded review of the selected lane |
-| Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded evaluation signals, including absolute M4 budget alerts and relative p95 latency drift at 2× baseline. The project author accepts the 2,000 ms SELF_HOSTED budget and the 750 ms REMOTE budget, based on TypeSafe's 505.04 ms corpus-v3 p95 with about 245 ms of headroom. Committee Operations approval, an approved cost basis/ceiling, named owner, and rollback evidence remain open. | Operations gate remains UNMET pending those records |
+| Provider governance approval | OMLX governance declarations are present, but no review/approval record closes local data handling and egress terms. TypeSafe retention/residency remain undeclared, but TypeSafe is comparison evidence only under the 2026-10-18 scope decision. | Governance remains UNMET for the selected OMLX candidate pending a recorded review |
+| Operations approval | `DecisionTelemetry.recordEvaluation` and `DecisionDriftMonitor` provide bounded signals, including absolute M4 budget alerts and relative p95 latency drift at 2× baseline. The project author accepted 2,000 ms SELF_HOSTED and category-wide 750 ms REMOTE budget; Committee ratification of the OMLX budget for production remains pending. Committee ratification of the category-wide 750 ms REMOTE ceiling remains pending; TypeSafe is comparison-only under current scope. OMLX cost basis/ceiling, named owner, and rollback evidence remain open. | Operations gate remains UNMET pending records |
 | Self-hosted authentication header | The direct key configures `SelfHostedProviderConfig.loopbackToken`; the engine sends `X-Amsha-Loopback-Token` | A service requiring `Authorization: Bearer` needs separate header support; use only with an endpoint configured for Amsha's loopback-token header |
-| Candidate evidence is real and current | Both adapters have current v3 runs dated 2026-10-17. Both meet M1/M2 and report M3 3/25; OMLX latest M4 is 915.258 ms vs 2,000 ms; TypeSafe M4 is 505.04 ms vs 750 ms. M5 remains unpriced on both lanes. | M3 review recorded; Governance, Operations, and production approvals remain open |
+| Candidate evidence is real and current | Both adapters supplied corpus-v3 results on 2026-10-17; Quality is closed. OMLX / `clef-flash-oQ4e` is the sole active promotion candidate by project-author decision; TypeSafe / `jev-latest` is comparison evidence only. OMLX M4 is 915.258 ms vs the author-accepted 2,000 ms budget. M5 is unpriced for OMLX. | Committee scope confirmation, OMLX Governance, and Operations approvals remain open |
 
 ### 1.3 The three independent locks (all must open, in order)
 
@@ -794,7 +800,7 @@ DECISION_EVALUATION_REQUESTED audit events. The targeted native JEV validator no
 
 
 
-The three TypeSafe `jev-latest` REMOTE runs listed here are historical 2026-10-09 captures. The fresh 2026-10-10 run is recorded separately above: M1 1/11, M2 1/3, M3 4/25, p95 503.95 ms, and 0/25 priced. Across six recorded p95 measurements, two exceeded the then-current 500 ms limit. Current TypeSafe v3 M4 is assessed against the 750 ms REMOTE budget accepted on 2026-10-17. M5 remains unpriced despite token telemetry; no sourced rate or authorized ceiling is present. The that run's aggregate does not identify the M2 case.
+The three TypeSafe `jev-latest` REMOTE runs listed here are historical 2026-10-09 captures. The fresh 2026-10-10 run is recorded separately above: M1 1/11, M2 1/3, M3 4/25, p95 503.95 ms, and 0/25 priced. Across six recorded p95 measurements, two exceeded the then-current 500 ms limit. The TypeSafe v3 summary records 505.040791 ms against its then-configured 500 ms REMOTE budget (`within:false`). It is below the category-wide 750 ms REMOTE ceiling by arithmetic, but no runner-emitted pass under 750 ms exists; Committee ratification is pending, and TypeSafe is comparison-only under current scope. M5 remains unpriced despite token telemetry; no sourced rate or authorized ceiling is present. That run's aggregate does not identify the M2 case.
 
 **Provider-status payload shape — landed (2026-10-07).** JEV-13 now *also* asserts the provider-status
     payload is exactly the identifier/boolean allow-list: no key outside
@@ -841,19 +847,17 @@ production-engine key with W7 — not up front, because an env var with no reade
 
 ---
 
-## 6. M4 budgets — updated 2026-10-17
+## 6. M4 budgets — updated 2026-10-18
 
-The parent ADR §8.3 now distinguishes three execution categories, measured separately:
+The parent ADR §8.3 distinguishes three execution categories, measured separately:
 
-- **In-process classifiers:** p95 < 50 ms.
-- **Self-hosted local models:** p95 < 2,000 ms, with 1–2 seconds as the expected operating range. The project author accepted this ceiling on 2026-10-17 for local inference on available 64 GB unified-memory hardware.
-- **Remote hosted models:** p95 < 750 ms. The project author accepted this category-wide ceiling on 2026-10-17 based on TypeSafe's corpus-v3 p95 of 505.04 ms, leaving about 245 ms of measured headroom.
+- **In-process classifiers:** p95 < 50 ms; this preserves the local intent-pilot budget.
+- **Self-hosted local models:** p95 < 2,000 ms, with an expected 1–2 second operating range. The project author accepted this ceiling on 2026-10-17 for local inference on available 64 GB unified-memory hardware. Committee Operations ratification for production remains pending.
+- **Remote hosted models:** p95 < 750 ms. The project author accepted this category-wide 750 ms REMOTE ceiling on 2026-10-17, using TypeSafe's 505.040791 ms corpus-v3 p95 as its initial measured basis. The saved TypeSafe summary still records the original 500 ms budget and `within:false`; 505.040791 ms is below 750 ms by arithmetic, but the run did not emit a pass under the revised ceiling. Committee ratification remains pending, and TypeSafe is outside current promotion scope.
 
-`DecisionDriftMonitor` emits a relative `LATENCY_DRIFT` warning when current p95 reaches 2× the first full baseline-window p95. The default window is 64 observations; each lane's baseline remains fixed until `reset(lane)`, `resetAll()`, or monitor recreation, and no operator-facing reset endpoint is provided. Relative alerting precedes the absolute M4 budget only when the baseline is below half that budget: below 1,000 ms for the 2,000 ms self-hosted ceiling and below 375 ms for the 750 ms remote ceiling. If a baseline were comparable to the latest OMLX corpus-v3 p95 of 915.258 ms, its 1,830.516 ms threshold would precede the self-hosted ceiling by about 169 ms; if TypeSafe's baseline were comparable to its 505.04 ms corpus-v3 p95, its 1,010.08 ms threshold would follow the remote absolute alert at 750 ms by about 260 ms. The corpus measurements are illustrative, not the monitor baselines; actual alert lead depends on each lane's first full window.
+`DecisionDriftMonitor` emits a relative `LATENCY_DRIFT` warning when current p95 reaches 2× the first full baseline-window p95. The default window is 64 observations; a lane's baseline remains fixed until `reset(lane)`, `resetAll()`, or monitor recreation. Relative alerting precedes the absolute M4 budget only when baseline p95 is below half the category budget. With an OMLX-comparable baseline of 915.258 ms, the 2,000 ms budget's relative threshold is 1,830.516 ms, about 169 ms below the absolute ceiling. The TypeSafe comparison's 505.040791 ms p95 would put the 2× threshold above the 750 ms ceiling; it is contextual evidence, not a monitor baseline. Actual alert lead depends on each lane's first full window.
 
-The latest OMLX corpus-v3 p95 of 915.258 ms meets the accepted self-hosted budget. TypeSafe's 505.04 ms is within the accepted 750 ms remote budget. This changes the local-model M4 disposition; it does not close Operations while TypeSafe remains in scope, M5 is unpriced, and the owner and rollback rehearsal are unrecorded. `DecisionLatencyBudget.ADR_8_3` and `forCategory` carry these three budgets into future evidence and drift monitoring.
-
----
+The latest OMLX run is within the author-accepted self-hosted budget. This does not close Operations: M5 needs a Committee-selected local-compute basis and ceiling, and rollout/rollback ownership and rehearsal are still missing. The current scope excludes TypeSafe from those active-candidate approvals.
 
 ## 7. Gates, sequencing, and what a PR may not do
 
@@ -910,8 +914,7 @@ W4 lands after the evaluation-path ADR (W8.1) is accepted — **Accepted 2026-10
    accepted behaviour for unpriced lanes; until then the only fail-closed cost check is M5's **evidence gate**,
    which runs **before** activation, not at runtime.
 
-*(M4 is deliberately absent from this list: the lane-specific budget is resolved in §6 and recorded in
-the parent ADR §8.3, so no Committee decision is outstanding for it.)*
+*(M4 thresholds are recorded in parent ADR §8.3. Committee Operations ratification of the author-accepted 2,000 ms OMLX ceiling remains pending; the category-wide 750 ms REMOTE ceiling remains unratified; TypeSafe is comparison-only and this ceiling is not an active gate for OMLX under current scope.)*
 
 ---
 

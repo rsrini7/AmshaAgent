@@ -109,6 +109,8 @@ thresholds have been tuned.
 ### Limits, pricing, context
 
 - **Price:** $42 per Btok = **$0.042 per Mtok**, charged on **input tokens only**; output tokens are free.
+
+**Saved-run cost estimate (comparison only; 2026-10-18).** The 2026-10-17 TypeSafe corpus-v3 summary reports 12,947 input tokens for 25 evaluated decisions (517.88 mean input tokens per decision). At the documented $0.042/Mtok input rate, the offline estimate is **$0.02175096 per 1,000 decisions**; its 1,688 output tokens are free. This is arithmetic from saved telemetry and the documented rate, not a price-schedule entry or Committee-approved M5 ceiling. The rate was re-verified on 2026-10-01; that verification date is not an effective date, which is not recorded here.
 - **Rate limits:** 100K tokens/second and 40 requests/second. Documented as **dynamically adjusting and
   subject to change without notice**; over-limit returns `429`.
 - **Context:** 64k tokens per request total, of which the `state` plus the **longest single question**
@@ -761,11 +763,9 @@ The accepted W4 evaluation path is implemented. It permits credentialed requests
   path and nothing more. It does not move the parent ADR off `Deferred` and does not satisfy §8.4 steps 1–5.
 - The 2026-10-09 change replaces the former `API_KEY_REF` proposal with direct `AMSHA_DECISION_<ID>_API_KEY` configuration. The evaluation service consumes it and clears its request-owned byte copy; the source config String remains resident for the process lifetime.
 - The self-hosted lane sends `X-Amsha-Loopback-Token`, not `Authorization: Bearer`; use it only with a local endpoint configured to accept that header.
-- **M4 is reconciled** in parent ADR §8.3 with three category-specific p95 budgets: < 50 ms for in-process classifiers, < 2,000 ms for self-hosted local models (expected 1–2 seconds), and < 500 ms for remote hosted models. The project author accepted the self-hosted budget on 2026-10-17 for local inference on available 64 GB unified-memory hardware. Budgets are measured per lane and never combined.
+- **M4 is reconciled** in parent ADR §8.3 with three category-specific p95 budgets: < 50 ms in-process, < 2,000 ms self-hosted local models (expected 1–2 seconds), and < 750 ms remote hosted models. The project author accepted the self-hosted ceiling on 2026-10-17 for local inference on available 64 GB unified-memory hardware and accepted a category-wide 750 ms REMOTE ceiling on 2026-10-17, using TypeSafe's measured 505.040791 ms p95 as its initial basis. The TypeSafe summary records the original 500 ms budget and `within:false`; its result is below 750 ms by arithmetic but is not a runner-emitted pass under the revised ceiling. Committee ratification of the 2,000 ms SELF_HOSTED ceiling for the selected OMLX candidate remains pending. The category-wide 750 ms REMOTE ceiling requires Committee ratification before a REMOTE lane is used for production; TypeSafe is comparison evidence only under the 2026-10-18 scope record. Budgets are measured per lane and never combined.
 
-Nothing in this update changes any gate's status. Quality remains UNMET until M1/M2 are measured;
-Governance remains UNMET until retention and residency are declared; Operations remains UNMET until
-ceilings, drift alerting, and a named owner exist.
+The 2026-10-01 protocol re-verification does not change the parent ADR gate status. Quality is now MET on the completed two-adapter corpus-v3 evidence, with M3 reviewed on 2026-10-17. The project author selected OMLX / `clef-flash-oQ4e` as the sole active promotion candidate on 2026-10-18; TypeSafe remains comparison evidence only. OMLX Governance and Operations remain UNMET pending local data-handling approval, M5 cost basis and ceiling, Committee ratification of the self-hosted latency budget, named owner, and rollback rehearsal. Production activation remains Deferred.
 
 ## Sources
 
