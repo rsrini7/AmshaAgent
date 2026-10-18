@@ -110,7 +110,6 @@ thresholds have been tuned.
 
 - **Price:** $42 per Btok = **$0.042 per Mtok**, charged on **input tokens only**; output tokens are free.
 
-**Saved-run cost estimate (comparison only; 2026-10-18).** The 2026-10-17 TypeSafe corpus-v3 summary reports 12,947 input tokens for 25 evaluated decisions (517.88 mean input tokens per decision). At the documented $0.042/Mtok input rate, the offline estimate is **$0.02175096 per 1,000 decisions**; its 1,688 output tokens are free. This is arithmetic from saved telemetry and the documented rate, not a price-schedule entry or Committee-approved M5 ceiling. The rate was re-verified on 2026-10-01; that verification date is not an effective date, which is not recorded here.
 - **Rate limits:** 100K tokens/second and 40 requests/second. Documented as **dynamically adjusting and
   subject to change without notice**; over-limit returns `429`.
 - **Context:** 64k tokens per request total, of which the `state` plus the **longest single question**
@@ -118,6 +117,8 @@ thresholds have been tuned.
 - **Input:** text only — string, JSON object, or array of text. No image, audio, or video.
 - **Language:** English is primary. CJK is handled but weaker; the docs advise testing non-English
   workloads and leaning on confidence when routing.
+
+**Saved-run cost estimate (comparison only; 2026-10-18).** The 2026-10-17 TypeSafe corpus-v3 summary reports 12,947 input tokens across 25 evaluated decisions (517.88 mean input tokens per decision). At the documented input rate of $0.042 per million tokens, the offline estimate is **$0.02175096 per 1,000 decisions**; the 1,688 output tokens are free. This calculation uses saved telemetry and the documented rate; it is not a price-schedule entry or a Committee-approved M5 ceiling. The rate was re-verified on 2026-10-01; its effective date has not been recorded.
 
 ### Primitives and question shape
 
@@ -763,7 +764,7 @@ The accepted W4 evaluation path is implemented. It permits credentialed requests
   path and nothing more. It does not move the parent ADR off `Deferred` and does not satisfy §8.4 steps 1–5.
 - The 2026-10-09 change replaces the former `API_KEY_REF` proposal with direct `AMSHA_DECISION_<ID>_API_KEY` configuration. The evaluation service consumes it and clears its request-owned byte copy; the source config String remains resident for the process lifetime.
 - The self-hosted lane sends `X-Amsha-Loopback-Token`, not `Authorization: Bearer`; use it only with a local endpoint configured to accept that header.
-- **M4 is reconciled** in parent ADR §8.3 with three category-specific p95 budgets: < 50 ms in-process, < 2,000 ms self-hosted local models (expected 1–2 seconds), and < 750 ms remote hosted models. The project author accepted the self-hosted ceiling on 2026-10-17 for local inference on available 64 GB unified-memory hardware and accepted a category-wide 750 ms REMOTE ceiling on 2026-10-17, using TypeSafe's measured 505.040791 ms p95 as its initial basis. The TypeSafe summary records the original 500 ms budget and `within:false`; its result is below 750 ms by arithmetic but is not a runner-emitted pass under the revised ceiling. Committee ratification of the 2,000 ms SELF_HOSTED ceiling for the selected OMLX candidate remains pending. The category-wide 750 ms REMOTE ceiling requires Committee ratification before a REMOTE lane is used for production; TypeSafe is comparison evidence only under the 2026-10-18 scope record. Budgets are measured per lane and never combined.
+- **M4 reconciled** in parent ADR §8.3 with category-specific p95 budgets: < 50 ms in-process, < 2,000 ms self-hosted local models, and < 750 ms remote hosted models. The project author accepted the 2,000 ms SELF_HOSTED ceiling on 2026-10-17 based on local inference latency on available 64 GB unified-memory hardware; Committee Operations ratification remains pending. The category-wide 750 ms REMOTE ceiling was accepted for future REMOTE candidates the same day, informed by TypeSafe's 505.040791 ms corpus-v3 p95 as historical evidence. TypeSafe is comparison evidence only under the 2026-10-18 §8.6 scope decision; its saved run used the 500 ms budget (`within:false`) and did not emit a pass under 750 ms. Committee ratification of the REMOTE ceiling remains pending before any REMOTE lane is promoted. Budgets are measured per lane and never combined.
 
 The 2026-10-01 protocol re-verification does not change the parent ADR gate status. Quality is now MET on the completed two-adapter corpus-v3 evidence, with M3 reviewed on 2026-10-17. The project author selected OMLX / `clef-flash-oQ4e` as the sole active promotion candidate on 2026-10-18; TypeSafe remains comparison evidence only. OMLX Governance and Operations remain UNMET pending local data-handling approval, M5 cost basis and ceiling, Committee ratification of the self-hosted latency budget, named owner, and rollback rehearsal. Production activation remains Deferred.
 
