@@ -448,7 +448,7 @@ class StdioMcpTransportClientTest {
         });
 
         client.init(20);
-        awaitUntil(() -> starts.get() > 0, 5_000);
+        awaitUntil(() -> starts.get() > 0 && client.hasServer("srv"), 5_000);
 
         assertTrue(client.hasServer("srv"), "the scheduled health check must have reconnected the server");
         client.close();
