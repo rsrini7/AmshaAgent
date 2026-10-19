@@ -297,6 +297,8 @@ jobs:
           install: true
 
       - name: Build native SQLite artifact
+        env:
+          AMSHA_NATIVE_IMAGE_PARALLELISM: "1"
         run: mise run build:native-local
 
       - name: Check native artifact
