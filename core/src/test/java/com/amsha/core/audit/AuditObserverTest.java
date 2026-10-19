@@ -42,6 +42,9 @@ public class AuditObserverTest {
 
     @BeforeEach
     void setupHmacMock() {
+        // Previous tests may still have audit work in the shared asynchronous queue.
+        // Drain it before changing the CDI mock's stubbing.
+        auditService.waitForIdle();
         when(auditHashUtil.sha256hex(anyString())).thenCallRealMethod();
         when(auditHashUtil.hmacHex(anyString())).thenAnswer(inv -> {
             String data = inv.getArgument(0);
@@ -53,9 +56,6 @@ public class AuditObserverTest {
 
     @Test
     public void testLoopCompletionFiresAudit() {
-        // This observer writes through the shared asynchronous telemetry queue. Drain events from
-        // preceding tests first so queue pressure cannot drop the event this test is asserting.
-        auditService.waitForIdle();
         String sessionId = "test-observe-" + UUID.randomUUID();
 
         // Simulate LLM calls to accumulate tokens
