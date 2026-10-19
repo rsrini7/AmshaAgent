@@ -43,7 +43,7 @@ public class NamespaceExecutor {
             pb.directory(workspaceDir);
         }
         pb.redirectErrorStream(true);
-        var process = pb.start();
+        var process = startProcess(pb);
 
         try {
             ProcessOutput processOutput = waitForProcess(process);
@@ -75,6 +75,10 @@ public class NamespaceExecutor {
                 workspaceRoot.toAbsolutePath().toString()));
         fullCommand.addAll(command);
         return List.copyOf(fullCommand);
+    }
+
+    Process startProcess(ProcessBuilder processBuilder) throws IOException {
+        return processBuilder.start();
     }
 
     private ProcessOutput waitForProcess(Process process) throws InterruptedException {

@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -107,19 +109,29 @@ class NamespaceExecutorTest {
 
     @Test
     void testNamespaceExecutionReapsAStalledOutputReader() throws Exception {
-        NamespaceExecutor executor = new NamespaceExecutor();
-        executor.timeoutSeconds = 5;
-        Path tempDir = Files.createTempDirectory("ns-exec-stall");
-
-        // The backgrounded grandchild inherits the stdout pipe, so the drain thread is still blocked
-        // after the shell exits. The executor must reap it and report a timeout rather than hang.
-        SecurityException ex = withOsName(
-                "Test OS",
-                () -> assertThrows(
-                        SecurityException.class,
-                        () -> executor.executeInNamespace(tempDir, List.of("sh", "-c", "sleep 8 & exit 0"))));
-
-        assertTrue(ex.getMessage().contains("Tool timed out"));
+        Process process = mock(Process.class);
+        PipedInputStream stdout = new PipedInputStream();
+        PipedOutputStream stdoutWriter = new PipedOutputStream(stdout);
+        try {
+            when(process.getInputStream()).thenReturn(stdout);
+            when(process.waitFor(anyLong(), any())).thenReturn(true);
+            NamespaceExecutor executor = new NamespaceExecutor() {
+                @Override
+                Process startProcess(ProcessBuilder processBuilder) {
+                    assertNotNull(processBuilder);
+                    return process;
+                }
+            };
+            executor.timeoutSeconds = 5;
+            Path tempDir = Files.createTempDirectory("ns-exec-stall");
+            SecurityException ex = withOsName(
+                    "Test OS",
+                    () -> assertThrows(
+                            SecurityException.class, () -> executor.executeInNamespace(tempDir, List.of("echo"))));
+            assertTrue(ex.getMessage().contains("Tool timed out"));
+        } finally {
+            stdoutWriter.close();
+        }
     }
 
     @Test

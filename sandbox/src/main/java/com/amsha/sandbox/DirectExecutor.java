@@ -100,7 +100,13 @@ public class DirectExecutor {
     }
 
     private void terminateProcess(Process process, Thread reader) {
-        process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
+        try {
+            process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
+        } catch (RuntimeException e) {
+            log.debugf(
+                    "Unable to enumerate direct process descendants; forcing parent termination (%s)",
+                    e.getClass().getSimpleName());
+        }
         process.destroyForcibly();
         closeOutput(process);
         if (reader != null && reader.isAlive()) {

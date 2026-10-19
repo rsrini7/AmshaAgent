@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
@@ -16,7 +17,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
@@ -147,12 +147,12 @@ class DirectExecutorTest {
     // ------------------------------------------------------------------
 
     @Test
-    void testDirectExecutionSurvivesAFailedOutputClose() throws Exception {
+    void testDirectExecutionSurvivesFailedDescendantEnumerationAndOutputClose() throws Exception {
         DirectExecutor executor = new DirectExecutor();
         Process proc = mock(Process.class);
         ProcessHandle handle = mock(ProcessHandle.class);
         when(proc.toHandle()).thenReturn(handle);
-        when(handle.descendants()).thenReturn(Stream.of());
+        when(handle.descendants()).thenThrow(new RuntimeException("process enumeration denied"));
         InputStream unclosable = mock(InputStream.class);
         doThrow(new IOException("close refused")).when(unclosable).close();
         when(proc.getInputStream()).thenReturn(unclosable);
@@ -161,6 +161,7 @@ class DirectExecutorTest {
         terminate.setAccessible(true);
 
         assertDoesNotThrow(() -> terminate.invoke(executor, proc, null));
+        verify(proc).destroyForcibly();
     }
 
     @Test
