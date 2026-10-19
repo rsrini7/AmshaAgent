@@ -46,6 +46,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Resolve the local Quarkus extension deployment artifact in a clean reactor. -->
+        <dependency>
+            <groupId>com.amsha</groupId>
+            <artifactId>amsha-deployment</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Quarkus CDI -->
         <dependency>
             <groupId>io.quarkus</groupId>
