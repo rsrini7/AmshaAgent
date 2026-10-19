@@ -43,7 +43,7 @@ public class DirectExecutor {
                 pb.environment().put(entry.getKey(), new String(entry.getValue(), StandardCharsets.UTF_8));
             }
         }
-        var process = pb.start();
+        var process = startProcess(pb);
 
         try {
             ProcessOutput processOutput = waitForProcess(process);
@@ -60,6 +60,10 @@ public class DirectExecutor {
         } finally {
             terminateProcess(process, null);
         }
+    }
+
+    Process startProcess(ProcessBuilder processBuilder) throws IOException {
+        return processBuilder.start();
     }
 
     private ProcessOutput waitForProcess(Process process) throws InterruptedException {
