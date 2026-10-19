@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AuditEvent;
@@ -52,7 +53,10 @@ public class AuditObserverTest {
 
     @Test
     public void testLoopCompletionFiresAudit() {
-        String sessionId = "test-observe-" + System.currentTimeMillis();
+        // This observer writes through the shared asynchronous telemetry queue. Drain events from
+        // preceding tests first so queue pressure cannot drop the event this test is asserting.
+        auditService.waitForIdle();
+        String sessionId = "test-observe-" + UUID.randomUUID();
 
         // Simulate LLM calls to accumulate tokens
         observer.recordLlmCall(sessionId, 50, 10);
