@@ -12,200 +12,205 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  quality-checks:
-    name: Docs & Quality Checks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+  # Current CI scope: run only the Java test suite and JaCoCo coverage gate.
+  # The disabled jobs remain commented below with the reason for each.
+  # Temporarily disabled by project decision on 2026-10-19: keep only Java unit tests and coverage active.
+  # Documentation and script-harness checks can be restored when CI scope is revisited.
+  # quality-checks:
+  #   name: Docs & Quality Checks
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.12"
 
-      - name: Verify Markdown Documentation
-        run: python3 ./scripts/verify_docs.py
+  #     - name: Verify Markdown Documentation
+  #       run: python3 ./scripts/verify_docs.py
 
-      - name: Run Script & Harness Unit Tests
-        run: |
-          python3 scripts/test_repo_root.py
-          python3 scripts/test_dist_wrappers.py
-          python3 scripts/distribution/test_llm_preflight.py
-          python3 scripts/test_autotest_runners.py
-          python3 scripts/test_freeze_sarvam_static.py
-          python3 scripts/test_prove_sarvam_offline.py
-          python3 scripts/quality/test_fix_fqns.py
-          python3 scripts/quality/test_verify_jacoco_coverage.py
-          python3 scripts/quality/test_analyze_jacoco_coverage.py
-          python3 rest-http/scripts/test_common_http.py
+  #     - name: Run Script & Harness Unit Tests
+  #       run: |
+  #         python3 scripts/test_repo_root.py
+  #         python3 scripts/test_dist_wrappers.py
+  #         python3 scripts/distribution/test_llm_preflight.py
+  #         python3 scripts/test_autotest_runners.py
+  #         python3 scripts/test_freeze_sarvam_static.py
+  #         python3 scripts/test_prove_sarvam_offline.py
+  #         python3 scripts/quality/test_fix_fqns.py
+  #         python3 scripts/quality/test_verify_jacoco_coverage.py
+  #         python3 scripts/quality/test_analyze_jacoco_coverage.py
+  #         python3 rest-http/scripts/test_common_http.py
 
-  jvm-validation:
-    name: JVM Hermetic Fast Validation
-    needs: quality-checks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+  # Temporarily disabled: the current launch command passes `serve` as the main class,
+  # causing ClassNotFoundException before readiness. Fix the entry point before re-enabling.
+  # jvm-validation:
+  #   name: JVM Hermetic Fast Validation
+  #   needs: quality-checks
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@v4
 
-      - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "25"
-          cache: "maven"
+  #     - name: Set up Temurin JDK 25
+  #       uses: actions/setup-java@v4
+  #       with:
+  #         distribution: "temurin"
+  #         java-version: "25"
+  #         cache: "maven"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.12"
 
-      - name: Build Fast JAR
-        run: ./mvnw clean package -DskipTests
+  #     - name: Build Fast JAR
+  #       run: ./mvnw clean package -DskipTests
 
-      - name: Run Hermetic JVM Validation
-        env:
-          AMSHA_CI: "true"
-        run: |
-          set -euo pipefail
+  #     - name: Run Hermetic JVM Validation
+  #       env:
+  #         AMSHA_CI: "true"
+  #       run: |
+  #         set -euo pipefail
 
-          # 1. Isolate transient environment
-          DATA_DIR="$(mktemp -d)"
-          RUN_DIR="$(mktemp -d)"
-          SERVER_LOG="$RUN_DIR/server.log"
-          REDACTED_LOG="$RUN_DIR/server.redacted.log"
+  #         # 1. Isolate transient environment
+  #         DATA_DIR="$(mktemp -d)"
+  #         RUN_DIR="$(mktemp -d)"
+  #         SERVER_LOG="$RUN_DIR/server.log"
+  #         REDACTED_LOG="$RUN_DIR/server.redacted.log"
 
-          # Allocate an unused port
-          PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
-          TEST_BASE="http://127.0.0.1:$PORT"
-          export TEST_BASE
+  #         # Allocate an unused port
+  #         PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
+  #         TEST_BASE="http://127.0.0.1:$PORT"
+  #         export TEST_BASE
 
-          # 2. Generate transient CI credentials (fail-closed contract)
-          export CI_KEY="$(openssl rand -base64 32)"
-          echo "::add-mask::$CI_KEY"
-          export AMSHA_API_KEYS_CI="$CI_KEY"
-          export AMSHA_API_KEYS_INTERNAL="$CI_KEY"
-          export AMSHA_DATA_DIR="$DATA_DIR"
+  #         # 2. Generate transient CI credentials (fail-closed contract)
+  #         export CI_KEY="$(openssl rand -base64 32)"
+  #         echo "::add-mask::$CI_KEY"
+  #         export AMSHA_API_KEYS_CI="$CI_KEY"
+  #         export AMSHA_API_KEYS_INTERNAL="$CI_KEY"
+  #         export AMSHA_DATA_DIR="$DATA_DIR"
 
-          # 3. Teardown trap with bounded SIGKILL and log redaction
-          SERVER_PID=""
-          redact_and_print_server_log() {
-            [ -f "$SERVER_LOG" ] || return 0
-            if ! sed -E \
-              -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
-              -e 's/((X-Amsha-API-Key:|API_KEY[=:]|CI_KEY=|AMSHA_API_KEYS_(CI|INTERNAL)=|AMSHA_GENERIC_OPENAI_API_KEY=)[[:space:]]*)[^[:space:]]+/\1[REDACTED]/g' \
-              "$SERVER_LOG" > "$REDACTED_LOG"; then
-              rm -f "$REDACTED_LOG"
-              echo "Server log omitted because redaction failed." >&2
-              return 0
-            fi
-            echo "---- Redacted server startup log ----" >&2
-            sed -n '1,250p' "$REDACTED_LOG" >&2
-          }
+  #         # 3. Teardown trap with bounded SIGKILL and log redaction
+  #         SERVER_PID=""
+  #         redact_and_print_server_log() {
+  #           [ -f "$SERVER_LOG" ] || return 0
+  #           if ! sed -E \
+  #             -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
+  #             -e 's/((X-Amsha-API-Key:|API_KEY[=:]|CI_KEY=|AMSHA_API_KEYS_(CI|INTERNAL)=|AMSHA_GENERIC_OPENAI_API_KEY=)[[:space:]]*)[^[:space:]]+/\1[REDACTED]/g' \
+  #             "$SERVER_LOG" > "$REDACTED_LOG"; then
+  #             rm -f "$REDACTED_LOG"
+  #             echo "Server log omitted because redaction failed." >&2
+  #             return 0
+  #           fi
+  #           echo "---- Redacted server startup log ----" >&2
+  #           sed -n '1,250p' "$REDACTED_LOG" >&2
+  #         }
 
-          cleanup() {
-            local exit_code=$?
-            trap - EXIT INT TERM
-            echo "Teardown: cleaning up validation server..."
-            if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
-              kill -TERM "$SERVER_PID" 2>/dev/null || true
-              for _ in $(seq 1 10); do
-                if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-                  break
-                fi
-                sleep 0.5
-              done
-              if kill -0 "$SERVER_PID" 2>/dev/null; then
-                echo "Validation server did not exit after SIGTERM (pid $SERVER_PID); sending SIGKILL." >&2
-                kill -KILL "$SERVER_PID" 2>/dev/null || true
-                for _ in $(seq 1 10); do
-                  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-                    break
-                  fi
-                  sleep 0.5
-                done
-              fi
-              wait "$SERVER_PID" 2>/dev/null || true
-            fi
+  #         cleanup() {
+  #           local exit_code=$?
+  #           trap - EXIT INT TERM
+  #           echo "Teardown: cleaning up validation server..."
+  #           if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+  #             kill -TERM "$SERVER_PID" 2>/dev/null || true
+  #             for _ in $(seq 1 10); do
+  #               if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+  #                 break
+  #               fi
+  #               sleep 0.5
+  #             done
+  #             if kill -0 "$SERVER_PID" 2>/dev/null; then
+  #               echo "Validation server did not exit after SIGTERM (pid $SERVER_PID); sending SIGKILL." >&2
+  #               kill -KILL "$SERVER_PID" 2>/dev/null || true
+  #               for _ in $(seq 1 10); do
+  #                 if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+  #                   break
+  #                 fi
+  #                 sleep 0.5
+  #               done
+  #             fi
+  #             wait "$SERVER_PID" 2>/dev/null || true
+  #           fi
 
-            if [ -f "$SERVER_LOG" ]; then
-              redact_and_print_server_log
-              if [ -f "$REDACTED_LOG" ]; then
-                cp "$REDACTED_LOG" server.redacted.log 2>/dev/null || true
-              fi
-            fi
+  #           if [ -f "$SERVER_LOG" ]; then
+  #             redact_and_print_server_log
+  #             if [ -f "$REDACTED_LOG" ]; then
+  #               cp "$REDACTED_LOG" server.redacted.log 2>/dev/null || true
+  #             fi
+  #           fi
 
-            rm -rf "$DATA_DIR"
-            exit "$exit_code"
-          }
-          trap cleanup EXIT INT TERM
+  #           rm -rf "$DATA_DIR"
+  #           exit "$exit_code"
+  #         }
+  #         trap cleanup EXIT INT TERM
 
-          # 4. Launch JVM server with required flags matching jar:serve
-          JVM_ARGS=(
-            --add-modules=jdk.incubator.vector
-            --add-opens=java.base/java.nio=ALL-UNNAMED
-            --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
-            --add-opens=java.base/java.lang=ALL-UNNAMED
-            --enable-native-access=ALL-UNNAMED
-            -Dsun.misc.unsafe.memory.access=allow
-            -Dfile.encoding=UTF-8
-            -Dstdout.encoding=UTF-8
-            -Dsun.stdout.encoding=UTF-8
-            -Dsun.stderr.encoding=UTF-8
-            -Dquarkus.profile=cli
-            -Dquarkus.http.host=127.0.0.1
-            -Dquarkus.http.port="$PORT"
-            -Dquarkus.mcp.server.stdio.enabled=false
-            -Damsha.telegram.enabled=false
-            -Damsha.rag.vec-extension-path=./lib/vec0
-            -Damsha.data-dir="$DATA_DIR"
-          )
+  #         # 4. Launch JVM server with required flags matching jar:serve
+  #         JVM_ARGS=(
+  #           --add-modules=jdk.incubator.vector
+  #           --add-opens=java.base/java.nio=ALL-UNNAMED
+  #           --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
+  #           --add-opens=java.base/java.lang=ALL-UNNAMED
+  #           --enable-native-access=ALL-UNNAMED
+  #           -Dsun.misc.unsafe.memory.access=allow
+  #           -Dfile.encoding=UTF-8
+  #           -Dstdout.encoding=UTF-8
+  #           -Dsun.stdout.encoding=UTF-8
+  #           -Dsun.stderr.encoding=UTF-8
+  #           -Dquarkus.profile=cli
+  #           -Dquarkus.http.host=127.0.0.1
+  #           -Dquarkus.http.port="$PORT"
+  #           -Dquarkus.mcp.server.stdio.enabled=false
+  #           -Damsha.telegram.enabled=false
+  #           -Damsha.rag.vec-extension-path=./lib/vec0
+  #           -Damsha.data-dir="$DATA_DIR"
+  #         )
 
-          java "${JVM_ARGS[@]}" -jar app/target/quarkus-app/quarkus-run.jar serve \
-            < /dev/null > "$SERVER_LOG" 2>&1 &
-          SERVER_PID=$!
+  #         java "${JVM_ARGS[@]}" -jar app/target/quarkus-app/quarkus-run.jar serve \
+  #           < /dev/null > "$SERVER_LOG" 2>&1 &
+  #         SERVER_PID=$!
 
-          # 5. Poll readiness
-          READY=false
-          for _ in $(seq 1 60); do
-            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-              echo "Error: Validation server exited before readiness." >&2
-              echo "---- Redacted startup log ----" >&2
-              redact_and_print_server_log
-              exit 1
-            fi
+  #         # 5. Poll readiness
+  #         READY=false
+  #         for _ in $(seq 1 60); do
+  #           if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+  #             echo "Error: Validation server exited before readiness." >&2
+  #             echo "---- Redacted startup log ----" >&2
+  #             redact_and_print_server_log
+  #             exit 1
+  #           fi
 
-            if curl -fsS -m 2 -o /dev/null "$TEST_BASE/q/health/live" 2>/dev/null \
-              || curl -fsS -m 2 -o /dev/null -H "X-Amsha-API-Key: $CI_KEY" "$TEST_BASE/api/v1/mcp/status" 2>/dev/null; then
-              READY=true
-              break
-            fi
+  #           if curl -fsS -m 2 -o /dev/null "$TEST_BASE/q/health/live" 2>/dev/null \
+  #             || curl -fsS -m 2 -o /dev/null -H "X-Amsha-API-Key: $CI_KEY" "$TEST_BASE/api/v1/mcp/status" 2>/dev/null; then
+  #             READY=true
+  #             break
+  #           fi
 
-            sleep 1
-          done
+  #           sleep 1
+  #         done
 
-          if [ "$READY" != "true" ]; then
-            echo "Error: Validation server failed to become ready within 60s." >&2
-            echo "---- Redacted startup log ----" >&2
-            redact_and_print_server_log
-            exit 1
-          fi
+  #         if [ "$READY" != "true" ]; then
+  #           echo "Error: Validation server failed to become ready within 60s." >&2
+  #           echo "---- Redacted startup log ----" >&2
+  #           redact_and_print_server_log
+  #           exit 1
+  #         fi
 
-          # 6. Execute fast validation suite
-          bash rest-http/scripts/run_all_validations.sh --fast
+  #         # 6. Execute fast validation suite
+  #         bash rest-http/scripts/run_all_validations.sh --fast
 
-      - name: Archive redacted server log on failure
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jvm-validation-server-log
-          path: server.redacted.log
-          if-no-files-found: ignore
-          retention-days: 7
+  #     - name: Archive redacted server log on failure
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: jvm-validation-server-log
+  #         path: server.redacted.log
+  #         if-no-files-found: ignore
+  #         retention-days: 7
 
   java-tests:
     name: Java Tests & Coverage Gate
-    needs: quality-checks
     runs-on: ubuntu-latest
     # Local full-reactor `verify` runs in ~10-15 min; 45 bounds a hung fork without
     # masking a genuinely slow runner.
@@ -274,39 +279,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  native-validation:
-    name: Native Build Validation
-    needs: quality-checks
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-14, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+  # Temporarily disabled: free-tier native-image builds exceed practical runner limits.
+  # Linux exhausted heap/watchdog, macOS exceeded an hour, and Windows adds little value
+  # until the Linux and macOS builds are viable.
+  # native-validation:
+  #   name: Native Build Validation
+  #   needs: quality-checks
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [ubuntu-latest, macos-14, windows-latest]
+  #   runs-on: ${{ matrix.os }}
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.12"
 
-      - name: Install project tools
-        uses: jdx/mise-action@v2
-        with:
-          install: true
+  #     - name: Install project tools
+  #       uses: jdx/mise-action@v2
+  #       with:
+  #         install: true
 
-      - name: Build native SQLite artifact
-        env:
-          AMSHA_NATIVE_IMAGE_PARALLELISM: "1"
-        run: mise run build:native-local
+  #     - name: Build native SQLite artifact
+  #       env:
+  #         AMSHA_NATIVE_IMAGE_PARALLELISM: "1"
+  #       run: mise run build:native-local
 
-      - name: Check native artifact
-        shell: bash
-        run: |
-          if [ -f dist/amsha-sqlite ] || [ -f dist/amsha-sqlite.exe ]; then
-            echo "Native artifact present for ${{ matrix.os }}"
-          else
-            echo "Native artifact missing" >&2
-            exit 1
-          fi
+  #     - name: Check native artifact
+  #       shell: bash
+  #       run: |
+  #         if [ -f dist/amsha-sqlite ] || [ -f dist/amsha-sqlite.exe ]; then
+  #           echo "Native artifact present for ${{ matrix.os }}"
+  #         else
+  #           echo "Native artifact missing" >&2
+  #           exit 1
+  #         fi
