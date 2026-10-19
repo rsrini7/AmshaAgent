@@ -148,6 +148,13 @@
       <artifactId>quarkus-jacoco</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Force the local deployment module into the reactor for Quarkus test discovery. -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-deployment</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
