@@ -419,6 +419,13 @@
         </configuration>
       </plugin>
       <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Quarkus test augmentation for the full app needs more heap than the runner default. -->
+          <argLine>@{argLine} ${maven.surefire.argLine} -Xmx3g</argLine>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>io.smallrye</groupId>
         <artifactId>jandex-maven-plugin</artifactId>
         <executions>
