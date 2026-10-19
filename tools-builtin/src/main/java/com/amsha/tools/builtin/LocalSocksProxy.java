@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 import org.jboss.logging.Logger;
 
@@ -16,10 +17,16 @@ import org.jboss.logging.Logger;
  * Tor network. Runs on loopback with a random ephemeral port.
  * <p>
  * SSRF protection: DNS resolution is performed locally before
- * connecting to the destination, and private/internal/multicast
- * addresses are rejected.
+ * connecting to the destination, and loopback, unspecified, private,
+ * link-local, and multicast addresses are rejected.
  */
 public class LocalSocksProxy implements AutoCloseable {
+    @FunctionalInterface
+    interface DestinationConnector {
+        Socket connect(InetAddress address, int port) throws IOException;
+    }
+
+    private final DestinationConnector destinationConnector;
 
     private static final Logger LOG = Logger.getLogger(LocalSocksProxy.class);
 
@@ -28,10 +35,26 @@ public class LocalSocksProxy implements AutoCloseable {
     private volatile boolean closed = false;
 
     LocalSocksProxy() throws IOException {
+        this(LocalSocksProxy::connectDestination);
+    }
+
+    LocalSocksProxy(DestinationConnector destinationConnector) throws IOException {
+        this.destinationConnector = Objects.requireNonNull(destinationConnector, "destinationConnector");
         this.serverSocket = new ServerSocket();
         this.serverSocket.setReuseAddress(true);
         this.serverSocket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 50);
         this.serverThread = Thread.ofVirtual().start(this::run);
+    }
+
+    private static Socket connectDestination(InetAddress address, int port) throws IOException {
+        Socket socket = new Socket();
+        try {
+            socket.connect(new InetSocketAddress(address, port), 10_000);
+            return socket;
+        } catch (IOException e) {
+            closeQuietly(socket);
+            throw e;
+        }
     }
 
     int getPort() {
@@ -128,7 +151,8 @@ public class LocalSocksProxy implements AutoCloseable {
         }
 
         for (InetAddress addr : addresses) {
-            if (addr.isLoopbackAddress()
+            if (addr.isAnyLocalAddress()
+                    || addr.isLoopbackAddress()
                     || addr.isLinkLocalAddress()
                     || addr.isSiteLocalAddress()
                     || addr.isMulticastAddress()) {
@@ -159,8 +183,7 @@ public class LocalSocksProxy implements AutoCloseable {
             if (targetIp == null) return;
 
             // 4. Connect to remote destination
-            try (Socket destSocket = new Socket()) {
-                destSocket.connect(new InetSocketAddress(targetIp, target.port()), 10000); // 10s timeout
+            try (Socket destSocket = destinationConnector.connect(targetIp, target.port())) {
                 destSocket.setSoTimeout(20_000); // 20s read timeout for destination
                 try (InputStream destIn = destSocket.getInputStream();
                         OutputStream destOut = destSocket.getOutputStream()) {
