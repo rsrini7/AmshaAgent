@@ -12,7 +12,7 @@ Fixes over v2.0:
                                with root cause message "system prompt instruction too aggressive".
   3. Log-Based Correction — regex rewritten to match actual Amsha Agent CLI log format:
                             Searches harness output log for [Prompt #N] anchor + Amsha Agent> response,
-                            and amsha-cli.log for StateMachine goal→CliResultBridge window.
+                            and amsha-cli-sqlite.log for StateMachine goal→CliResultBridge window.
   4. Post-/halt SKIP     — session_halted flag set IMMEDIATELY after /halt completes,
                            not after detecting the next prompt's timeout.
 """
@@ -356,7 +356,7 @@ def verify_response_from_log(log_path: str, prompt: str,
     Three-strategy log search:
     A) Fingerprint search — find [ref:XXXXXXXX] in log, extract response after it
     B) Harness output log — [Prompt #N] ... Amsha Agent> <response> ... You>
-    C) amsha-cli.log  — StateMachine goal<PROMPT> ... CliResultBridge signaling
+    C) amsha-cli-sqlite.log  — StateMachine goal<PROMPT> ... CliResultBridge signaling
     """
     if not os.path.exists(log_path):
         alt = get_repo_root(__file__) / log_path
@@ -391,7 +391,7 @@ def verify_response_from_log(log_path: str, prompt: str,
             if resp and len(resp) > 10:
                 return resp
 
-        # Strategy C: amsha-cli.log format
+        # Strategy C: amsha-cli-sqlite.log format
         pat_c = (r"StateMachine starting session\S+\s+goal" +
                  re.escape(prompt[:40]) +
                  r".*?CliResultBridge signaling active waiter")
@@ -683,13 +683,13 @@ def main():
         print(f"\u26a0\ufe0f  No runnable test cases in range '{args.range}'."); sys.exit(0)
 
     log_f = open(args.log_file, "w", encoding="utf-8") if args.log_file else None
-    cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-cli.log")
+    cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-cli-sqlite.log")
 
     backend = args.backend
     if backend == "pg":
-        cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-pg.log")
+        cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-postgresql-postgres.log")
     elif backend == "fs":
-        cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-fs.log")
+        cli_log_path = os.environ.get("AMSHA_CLI_LOG", "amsha-filesystem-fs.log")
 
     print(f"\u2726 Amsha Agent Autotest v3.0")
     print(f"  File      : {args.file}")

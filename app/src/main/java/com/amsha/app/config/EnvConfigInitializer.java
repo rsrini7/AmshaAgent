@@ -17,6 +17,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.ModelDefaults;
+import com.amsha.security.api.VaultConstants;
 
 import org.jboss.logging.Logger;
 
@@ -30,11 +32,11 @@ public class EnvConfigInitializer {
     private static final Pattern ENV_PATTERN = Pattern.compile("^\\s*([A-Za-z_][A-Za-z0-9_.]*?)\\s*=\\s*(.*?)\\s*$");
 
     private static final Set<String> BASE64_KEYS = Set.of(
-            "AMSHA_VAULT_PEPPER",
-            "AMSHA_AUDIT_HMAC_KEY",
-            "AMSHA_API_KEYS_INTERNAL",
-            "AMSHA_API_KEYS_CI",
-            "AMSHA_API_KEYS_ADMIN");
+            VaultConstants.VAULT_PEPPER,
+            VaultConstants.AUDIT_HMAC_KEY,
+            VaultConstants.API_KEYS_INTERNAL,
+            VaultConstants.API_KEYS_CI,
+            VaultConstants.API_KEYS_ADMIN);
     private static final String CHANGE_LOG_SUFFIX = ".changes.log";
     private static final DateTimeFormatter BACKUP_TIMESTAMP_FORMATTER =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmssSSS").withZone(ZoneOffset.UTC);
@@ -114,7 +116,8 @@ public class EnvConfigInitializer {
             System.err.println();
         }
 
-        if ("ollama".equalsIgnoreCase(provider) && (baseUrl == null || baseUrl.contains("jina.ai"))) {
+        if (ModelDefaults.PROVIDER_OLLAMA.equalsIgnoreCase(provider)
+                && (baseUrl == null || baseUrl.contains("jina.ai"))) {
             System.err.println();
             System.err.println("[Amsha Agent] ⚠️  EMBEDDING CONFIG INCOMPLETE");
             System.err.println(

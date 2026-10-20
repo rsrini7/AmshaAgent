@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
@@ -240,7 +241,7 @@ public class LiveProviderCatalogService {
             case ModelDefaults.PROVIDER_OLLAMA -> {
                 // Ollama local endpoint typically requires no auth
             }
-            default -> builder.header("Authorization", "Bearer " + apiKey);
+            default -> builder.header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + apiKey);
         }
     }
 

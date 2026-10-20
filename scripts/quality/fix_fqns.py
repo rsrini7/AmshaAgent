@@ -13,6 +13,8 @@ fqn_pattern = re.compile(
     r'\b((?:java|jakarta|com|org|dev|io|ai|net)\.(?:[a-z_][\w_]*\.)+([A-Z][\w$]*))\b'
 )
 
+FQN_COLLISION_COMMENTS = ('// keep FQN: simple-name collision', '// fully qualified to disambiguate')
+
 # Pre-index all package -> class names in the repository
 package_classes = {}
 
@@ -191,6 +193,11 @@ def process_file(path):
             continue
 
         temp_line = line
+        for marker in FQN_COLLISION_COMMENTS:
+            if marker in temp_line:
+                temp_line = temp_line.replace(f' {marker}', '')
+                temp_line = temp_line.replace(marker, '')
+                modified = True
         for m in reversed(list(fqn_pattern.finditer(temp_line))):
             fqn = m.group(1)
             simple = m.group(2)
@@ -198,24 +205,22 @@ def process_file(path):
 
             if is_in_line_comment_or_string(temp_line, pos):
                 continue
-            if '// fully qualified to disambiguate' in temp_line:
-                continue
             if should_skip_import(fqn, path):
                 continue
 
             if 'caffeine.cache.' in fqn and not simple.startswith('Caffeine'):
-                if '// fully qualified to disambiguate' not in temp_line:
-                    temp_line += ' // fully qualified to disambiguate'
                 continue
 
-            collision = any(
+            file_cls = os.path.basename(path)[:-5] if path.endswith('.java') else None
+            collision = (simple == file_cls) or any(
                 ex.endswith('.' + simple) and ex != fqn
                 for ex in imports
             )
 
             if collision:
-                if '// fully qualified to disambiguate' not in temp_line:
-                    temp_line += ' // fully qualified to disambiguate'
+                # A stable, detectable collision (same file type or imported type)
+                # keeps the FQN; no source comment is needed to preserve that choice.
+                continue
             else:
                 temp_line = temp_line[:m.start()] + simple + temp_line[m.end():]
                 imports.add(fqn)

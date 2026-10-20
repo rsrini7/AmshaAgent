@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.core.tools.LanguageIds;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -41,7 +43,7 @@ public class DirectExecutor {
                 pb.environment().put(entry.getKey(), new String(entry.getValue(), StandardCharsets.UTF_8));
             }
         }
-        var process = pb.start();
+        var process = startProcess(pb);
 
         try {
             ProcessOutput processOutput = waitForProcess(process);
@@ -58,6 +60,10 @@ public class DirectExecutor {
         } finally {
             terminateProcess(process, null);
         }
+    }
+
+    Process startProcess(ProcessBuilder processBuilder) throws IOException {
+        return processBuilder.start();
     }
 
     private ProcessOutput waitForProcess(Process process) throws InterruptedException {
@@ -98,7 +104,13 @@ public class DirectExecutor {
     }
 
     private void terminateProcess(Process process, Thread reader) {
-        process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
+        try {
+            process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
+        } catch (RuntimeException e) {
+            log.debugf(
+                    "Unable to enumerate direct process descendants; forcing parent termination (%s)",
+                    e.getClass().getSimpleName());
+        }
         process.destroyForcibly();
         closeOutput(process);
         if (reader != null && reader.isAlive()) {
@@ -122,11 +134,11 @@ public class DirectExecutor {
         if (!os.contains("win")) return command;
 
         String exe = command.get(0);
-        if ("python3".equals(exe)) {
+        if (LanguageIds.PYTHON3.equals(exe)) {
             // Check if python3 is actually callable. If not, swap to python.
             if (!canRun(exe)) {
                 var fixed = new ArrayList<>(command);
-                fixed.set(0, "python");
+                fixed.set(0, LanguageIds.PYTHON);
                 return fixed;
             }
         }

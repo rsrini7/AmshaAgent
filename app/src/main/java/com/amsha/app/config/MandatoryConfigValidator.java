@@ -1,5 +1,8 @@
 package com.amsha.app.config;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
+
 /**
  * Validates existence of mandatory API keys and environment variables.
  */
@@ -7,9 +10,9 @@ public class MandatoryConfigValidator {
 
     public static void validateMandatoryConfig() {
         String mainKey = System.getProperty("AMSHA_LLM_API_KEY", System.getenv("AMSHA_LLM_API_KEY"));
-        String provider = System.getProperty("AMSHA_LLM_PROVIDER", System.getenv("AMSHA_LLM_PROVIDER"));
+        String provider = System.getProperty(ConfigKeys.LLM_PROVIDER, System.getenv(ConfigKeys.LLM_PROVIDER));
 
-        if (!"ollama".equalsIgnoreCase(provider)) {
+        if (!ModelDefaults.PROVIDER_OLLAMA.equalsIgnoreCase(provider)) {
             validateKey("AMSHA_LLM_API_KEY", mainKey, "LLM provider: " + provider);
         }
 

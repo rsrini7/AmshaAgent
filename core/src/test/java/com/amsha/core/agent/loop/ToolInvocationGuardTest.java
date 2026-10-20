@@ -42,6 +42,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class ToolInvocationGuardTest {
 
@@ -83,6 +84,9 @@ class ToolInvocationGuardTest {
         guard.postPolicyToolRiskDispatcher = postPolicyToolRiskDispatcher;
         when(postPolicyToolRiskDispatcher.evaluate(any()))
                 .thenReturn(new ClassifierResult.NoOpinion<>(NoOpinionReason.MISSING_MODEL));
+        when(postPolicyToolRiskDispatcher.evaluateResolution(any()))
+                .thenAnswer(invocation -> PostPolicyToolRiskTestSupport.resolution(
+                        postPolicyToolRiskDispatcher.evaluate(invocation.getArgument(0))));
 
         guard.dynamicToolAdmissionLookup = mock(Instance.class);
         when(guard.dynamicToolAdmissionLookup.isUnsatisfied()).thenReturn(true);
@@ -98,11 +102,38 @@ class ToolInvocationGuardTest {
     }
 
     @Test
+    void missingRequiredOperationMetadataBlocksBeforeClassifierEvaluation() {
+        AgentTool toolWithoutOperation = mock(AgentTool.class);
+        when(toolWithoutOperation.idempotencyMode()).thenReturn(IdempotencyMode.IDEMPOTENT);
+        when(mockToolRegistry.findTool("missing-operation")).thenReturn(Optional.of(toolWithoutOperation));
+
+        ToolInvocationGuard.GuardDecision result = guard.evaluate(
+                "s1", "coordinator", AutonomyLevel.FULL, "missing-operation", Map.of(), List.of(), "goal", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, result);
+        verify(postPolicyToolRiskDispatcher, never()).evaluateResolution(any());
+        verify(toolRiskShadowEvaluation, never())
+                .observeProvisionalAllow(anyString(), any(ToolRiskShadowContext.class));
+    }
+
+    @Test
+    void provisionalAllowPassesCanonicalOperationToShadowEvaluation() {
+        ToolInvocationGuard.GuardDecision result =
+                guard.evaluate("s1", "coordinator", AutonomyLevel.FULL, "tool", Map.of(), List.of(), "goal", List.of());
+
+        assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, result);
+        ArgumentCaptor<ToolRiskShadowContext> context = ArgumentCaptor.forClass(ToolRiskShadowContext.class);
+        verify(toolRiskShadowEvaluation).observeProvisionalAllow(anyString(), context.capture());
+        assertEquals(ToolOperation.WRITE_MEMORY, context.getValue().requiredOperation());
+    }
+
+    @Test
     void postPolicyContextMarksPendingToolCallStepAsToolInvoked() {
         ReasoningStep pending = ReasoningStep.pending("t", "search", Map.of(), 0, 0);
         when(postPolicyToolRiskDispatcher.evaluate(any())).thenAnswer(invocation -> {
             PostPolicyToolContext ctx = invocation.getArgument(0);
             assertTrue(ctx.toolInvokedInTurn());
+            assertEquals(ToolOperation.WRITE_MEMORY, ctx.requiredOperation());
             return new ClassifierResult.NoOpinion<>(NoOpinionReason.MISSING_MODEL);
         });
 
@@ -110,7 +141,7 @@ class ToolInvocationGuardTest {
                 "s1", "coder", AutonomyLevel.FULL, "tool", Map.of(), List.of(pending), "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.Allow.class, decision);
-        verify(postPolicyToolRiskDispatcher).evaluate(any());
+        verify(postPolicyToolRiskDispatcher).evaluateResolution(any());
     }
 
     @Test
@@ -126,7 +157,7 @@ class ToolInvocationGuardTest {
         assertTrue(((ToolInvocationGuard.GuardDecision.Deduplicate) result)
                 .cachedObservation()
                 .contains("result 1"));
-        verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
+        verify(postPolicyToolRiskDispatcher, never()).evaluateResolution(any());
     }
 
     @Test
@@ -157,7 +188,7 @@ class ToolInvocationGuardTest {
                     List.of());
 
             assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
-            verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
+            verify(postPolicyToolRiskDispatcher, never()).evaluateResolution(any());
         });
     }
 
@@ -274,7 +305,7 @@ class ToolInvocationGuardTest {
                 "s1", "coordinator", AutonomyLevel.SUPERVISED, "tool", Map.of(), List.of(), "goal", List.of());
 
         assertInstanceOf(ToolInvocationGuard.GuardDecision.PauseForApproval.class, result);
-        verify(postPolicyToolRiskDispatcher, never()).evaluate(any());
+        verify(postPolicyToolRiskDispatcher, never()).evaluateResolution(any());
     }
 
     @Test

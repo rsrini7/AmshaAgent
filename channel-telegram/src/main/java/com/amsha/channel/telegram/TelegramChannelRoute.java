@@ -107,7 +107,7 @@ public class TelegramChannelRoute extends RouteBuilder {
                         camelContext.getRouteController().getRouteStatus("telegram-bot"));
             }
         } catch (Exception e) {
-            log.error("Telegram route registration failed", e);
+            log.error("Telegram route registration failed", LogUtil.relevantThrowable(e));
         }
     }
 

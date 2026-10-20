@@ -44,7 +44,8 @@ public class ChannelCronNotificationDispatcher {
                                         event.channelPlatformId(),
                                         event.cronSessionId(),
                                         event.toolName(),
-                                        event.renderedAnswer());
+                                        event.renderedAnswer(),
+                                        event.displayToolParamsJson());
                             } else {
                                 String sessionId = event.cronSessionId();
                                 if (sessionId == null || sessionId.isBlank()) {

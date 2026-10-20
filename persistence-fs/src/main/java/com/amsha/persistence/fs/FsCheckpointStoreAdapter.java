@@ -15,6 +15,7 @@ import com.amsha.persistence.api.CheckpointDtoHelper;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CheckpointUpsertResult;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.ReasoningStepDto;
 
 import io.quarkus.arc.Unremovable;
@@ -22,7 +23,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 @SuppressWarnings("PMD.ExcessiveClassLength") // Data access adapter — many store methods can't be split
 public class FsCheckpointStoreAdapter implements CheckpointStorePort {
 

@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.CoreMemoryStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.api.VersionConflictException;
 
@@ -26,7 +27,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @TieredBackend("fs")
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsCoreMemoryStore implements CoreMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(FsCoreMemoryStore.class);

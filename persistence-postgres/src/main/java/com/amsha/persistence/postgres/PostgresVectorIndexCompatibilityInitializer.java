@@ -10,6 +10,7 @@ import jakarta.interceptor.Interceptor;
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
 
@@ -24,7 +25,7 @@ import io.quarkus.runtime.StartupEvent;
 /** Validates PostgreSQL pgvector namespaces after Flyway has initialized their tables. */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresVectorIndexCompatibilityInitializer {
 
     private static final Logger log = Logger.getLogger(PostgresVectorIndexCompatibilityInitializer.class);

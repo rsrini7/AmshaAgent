@@ -19,6 +19,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.DatabaseSafetyGuard;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -45,6 +46,9 @@ public class RateLimitRetryScheduler {
 
     @Inject
     CronStorePort cronStore;
+
+    @Inject
+    CronRunStorePort cronRunStore;
 
     @Inject
     MeterRegistry meterRegistry;
@@ -125,7 +129,8 @@ public class RateLimitRetryScheduler {
 
                             AgentResult result =
                                     agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
-                            if (!CronSessionStatusSync.syncTerminal(cp.getSessionId(), result, cronStore)) {
+                            if (!CronSessionStatusSync.syncTerminal(
+                                    cp.getSessionId(), result, cronStore, cronRunStore)) {
                                 agentStore.markFailed(cp.getId(), "Cron lease lost during retry resume");
                             }
                         } catch (Exception e) {
@@ -138,7 +143,8 @@ public class RateLimitRetryScheduler {
                                             "Background retry failed: " + LogUtil.rootMessage(e),
                                             AgentResult.FailureCategory.SYSTEM_ERROR,
                                             List.of()),
-                                    cronStore);
+                                    cronStore,
+                                    cronRunStore);
                             agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
                         }
                     } else {
@@ -156,7 +162,7 @@ public class RateLimitRetryScheduler {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
-                log.error("RateLimitRetryScheduler: processPendingRetries failed", e);
+                log.error("RateLimitRetryScheduler: processPendingRetries failed", LogUtil.relevantThrowable(e));
             } else {
                 log.infof(
                         "RateLimitRetryScheduler: database closed during processPendingRetries (app shutting down) - suppression intentional.");
@@ -164,7 +170,7 @@ public class RateLimitRetryScheduler {
             }
         } catch (Exception e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
-            log.error("RateLimitRetryScheduler: processPendingRetries failed", e);
+            log.error("RateLimitRetryScheduler: processPendingRetries failed", LogUtil.relevantThrowable(e));
         }
     }
 
@@ -200,7 +206,7 @@ public class RateLimitRetryScheduler {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             boolean isShutdown = shuttingDown || msg.contains("pool is closed") || msg.contains("database closed");
             if (!isShutdown) {
-                log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", e);
+                log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", LogUtil.relevantThrowable(e));
             } else {
                 log.infof(
                         "RateLimitRetryScheduler: database closed during sweepOrphanedRetries (app shutting down) - suppression intentional.");
@@ -208,7 +214,7 @@ public class RateLimitRetryScheduler {
             }
         } catch (Exception e) {
             if (DatabaseSafetyGuard.checkDatabaseFailure(e)) return;
-            log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", e);
+            log.error("RateLimitRetryScheduler: sweepOrphanedRetries failed", LogUtil.relevantThrowable(e));
         }
     }
 }

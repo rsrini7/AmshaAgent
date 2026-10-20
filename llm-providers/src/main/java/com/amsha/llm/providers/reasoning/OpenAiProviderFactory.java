@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
@@ -30,13 +31,13 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "AMSHA_OPENAI_API_KEY")
+    @ConfigProperty(name = ConfigKeys.OPENAI_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_OPENAI_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OPENAI_BASE_URL)
+    @ConfigProperty(name = ConfigKeys.OPENAI_BASE_URL, defaultValue = ModelDefaults.DEFAULT_OPENAI_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_OPENAI_MODEL")
+    @ConfigProperty(name = ConfigKeys.OPENAI_MODEL)
     Optional<String> modelName;
 
     @Override
@@ -74,7 +75,7 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
         String model = overrideModel;
         boolean strictEligible = strictSchemaEligible();
         List<MultiModelChatModel.ModelEntry> entries =
-                ChatModelFactory.buildMultiModelEntries(key, model, "openai", (k, m) -> {
+                ChatModelFactory.buildMultiModelEntries(key, model, ModelDefaults.PROVIDER_OPENAI, (k, m) -> {
                     ChatModel raw = ChatModelFactory.createOpenAi(
                             baseUrl,
                             k,
@@ -84,11 +85,12 @@ public class OpenAiProviderFactory implements AgentChatModelProvider {
                             agentConfig.maxRetries(),
                             agentConfig.temperature(),
                             agentConfig.logHttp());
-                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("openai", m);
+                    MultimodalCapability cap =
+                            MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_OPENAI, m);
                     return CapabilityAwareChatModel.withCapabilities(raw, strictEligible, cap);
                 });
         if (entries.size() == 1) return entries.get(0).model();
-        return new MultiModelChatModel("openai", entries, 5);
+        return new MultiModelChatModel(ModelDefaults.PROVIDER_OPENAI, entries, 5);
     }
 
     private boolean strictSchemaEligible() {

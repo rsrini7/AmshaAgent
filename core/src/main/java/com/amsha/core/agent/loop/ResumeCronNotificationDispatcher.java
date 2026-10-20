@@ -115,7 +115,8 @@ public class ResumeCronNotificationDispatcher {
                 renderedAnswer,
                 category,
                 sessionId,
-                toolName);
+                toolName,
+                result instanceof AgentResult.AwaitingApproval aa ? aa.displayParamsJson() : null);
 
         boolean published = false;
         if (eventBus != null) {
@@ -134,7 +135,12 @@ public class ResumeCronNotificationDispatcher {
             final String messageText = renderedAnswer;
             pluginRegistry.find(chType).map(ChannelPlugin::jobNotifier).ifPresent(n -> {
                 if (toolName != null) {
-                    n.notifyApprovalRequired(targetPlatformId, sessionId, toolName, messageText);
+                    n.notifyApprovalRequired(
+                            targetPlatformId,
+                            sessionId,
+                            toolName,
+                            messageText,
+                            result instanceof AgentResult.AwaitingApproval aa ? aa.displayParamsJson() : null);
                 } else {
                     n.notifyJobCompleted(targetPlatformId, messageText, sessionId);
                 }

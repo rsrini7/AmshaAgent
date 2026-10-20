@@ -158,6 +158,43 @@ class CronResultHandlerTest {
     }
 
     @Test
+    void cronApprovalNotificationCarriesTheToolParameters() {
+        // Regression: the cron path called the three-argument formatCronHitl overload, which drops
+        // paramsJson entirely. The operator then saw the tool name with no arguments and approved an
+        // uninformed call — for a delegation that hid both the target agent and the goal. The
+        // interactive path already passed displayParamsJson(); this pins the cron path to match.
+        job.setChannelType("WEBSOCKET");
+        job.setGoal("write python program Factorial of 10 and execute");
+        AgentResult result = AgentResult.awaitingApproval(
+                "garuda",
+                "{\"agent\":\"brahma\",\"goal\":\"compute 10!\",\"mode\":\"delegation\"}",
+                sessionId,
+                List.of());
+
+        handler.handleSuccess(job, "cron-cron-1-exec-1", execId, result);
+
+        verify(jobCompletedEvent).fire(argThat(event -> {
+            String answer = event.renderedAnswer();
+            return answer.contains("brahma")
+                    && answer.contains("compute 10!")
+                    && event.displayToolParamsJson().contains("brahma")
+                    && event.displayToolParamsJson().contains("compute 10!");
+        }));
+    }
+
+    @Test
+    void cronApprovalNotificationDoesNotEchoSecretsThatTheSanitizerRedacts() {
+        job.setChannelType("WEBSOCKET");
+        AgentResult result = AgentResult.awaitingApproval(
+                "garuda", "{\"agent\":\"brahma\",\"apiKey\":\"super-secret-value\"}", sessionId, List.of());
+
+        handler.handleSuccess(job, "cron-cron-1-exec-1", execId, result);
+
+        // paramsJson() is the redacted projection, so the notification must not echo the raw secret.
+        verify(jobCompletedEvent).fire(argThat(event -> !event.renderedAnswer().contains("super-secret-value")));
+    }
+
+    @Test
     void testAwaitingRetry_skipsTermination() {
         AgentResult result = AgentResult.awaitingRetry("rate limited", 5000, List.of());
         when(cronStore.markAwaitingRetryIfOwner(job.getId(), execId)).thenReturn(true);

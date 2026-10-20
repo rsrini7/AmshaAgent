@@ -16,6 +16,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import com.amsha.classifier.api.AnswerQualityShadowContext;
 import com.amsha.classifier.api.ToolRiskShadowContext;
+import com.amsha.common.util.LogUtil;
 import com.amsha.common.util.SecretRedactor;
 import com.amsha.core.security.InputSanitizer;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,6 +58,9 @@ public class TestDataCollectionService {
         input.put("agent_role", sanitizeText(context.agentRole()));
         input.put("autonomy", sanitizeText(context.autonomyLevel().name()));
         input.put("tool_name", sanitizeText(context.toolName()));
+        input.put(
+                ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY,
+                sanitizeText(context.requiredOperation().name()));
         input.put("goal", sanitizeText(context.goal()));
 
         input.set("parameters", sanitizeNode(mapper.valueToTree(new TreeMap<>(context.parameters()))));
@@ -109,7 +113,7 @@ public class TestDataCollectionService {
                 channel.write(ByteBuffer.wrap(payload));
             }
         } catch (Exception e) {
-            log.error("Failed to append test data collection record", e);
+            log.error("Failed to append test data collection record", LogUtil.relevantThrowable(e));
         } finally {
             lock.unlock();
         }

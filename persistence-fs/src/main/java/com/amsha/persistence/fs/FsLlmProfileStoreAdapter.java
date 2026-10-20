@@ -14,6 +14,7 @@ import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelCacheInvalidationPort;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
 import com.amsha.persistence.api.WorkspaceConnectionGrantStorePort;
 
@@ -22,7 +23,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsLlmProfileStoreAdapter implements LlmProfileStorePort, WorkspaceConnectionGrantStorePort {
 
     private static final String DOMAIN = "llm-profiles";

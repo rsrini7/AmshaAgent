@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.BootstrapStateStorePort;
@@ -178,18 +179,18 @@ public class ApiKeyRegistry {
         for (Map.Entry<String, String> entry : hmacToKeyName.entrySet()) {
             if (constantTimeEquals(entry.getKey(), inputHex)) {
                 String name = entry.getValue();
-                if ("internal".equals(name)) {
+                if (AccessRoles.INTERNAL.equals(name)) {
                     if (bootstrapStateStore.isResolvable()) {
                         return bootstrapStateStore
                                 .get()
                                 .getState()
                                 .map(state -> {
                                     String oid = state.ownerId();
-                                    return (oid == null || oid.isBlank()) ? "internal" : oid;
+                                    return (oid == null || oid.isBlank()) ? AccessRoles.INTERNAL : oid;
                                 })
-                                .orElse("internal");
+                                .orElse(AccessRoles.INTERNAL);
                     }
-                    return "internal";
+                    return AccessRoles.INTERNAL;
                 }
                 return name;
             }
@@ -210,8 +211,8 @@ public class ApiKeyRegistry {
         for (Map.Entry<String, String> entry : hmacToKeyName.entrySet()) {
             if (constantTimeEquals(entry.getKey(), inputHex)) {
                 String name = entry.getValue();
-                if ("internal".equals(name)) {
-                    return "OWNER".equalsIgnoreCase(role) || "internal".equalsIgnoreCase(role);
+                if (AccessRoles.INTERNAL.equals(name)) {
+                    return AccessRoles.OWNER.equalsIgnoreCase(role) || AccessRoles.INTERNAL.equalsIgnoreCase(role);
                 }
                 return "SERVICE".equalsIgnoreCase(role) || name.equalsIgnoreCase(role);
             }
@@ -227,7 +228,8 @@ public class ApiKeyRegistry {
                         for (String r : roleSet.split(",")) {
                             String trimmed = r.trim();
                             if (trimmed.equalsIgnoreCase(role)
-                                    || ("OWNER".equalsIgnoreCase(trimmed) && "internal".equalsIgnoreCase(role))) {
+                                    || (AccessRoles.OWNER.equalsIgnoreCase(trimmed)
+                                            && AccessRoles.INTERNAL.equalsIgnoreCase(role))) {
                                 return true;
                             }
                         }

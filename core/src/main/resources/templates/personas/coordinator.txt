@@ -148,35 +148,17 @@ The current UTC time is: {CURRENT_UTC_ISO}
 The user's local time is: {CURRENT_LOCAL_TIME} (Offset: {USER_TZ_OFFSET})
 
 {#if SUGGESTED_CRON}
-### PRE-COMPUTED SCHEDULE (USE THIS)
-The system has pre-calculated the correct UTC schedule for this request:
-- Suggested Cron: `{SUGGESTED_CRON}` (UTC)
-- Target UTC Time: {TARGET_UTC_HOUR}:{TARGET_UTC_MINUTE}
-
-**INSTRUCTION:** Use the `SUGGESTED_CRON` above for the `schedule_task` tool. 
-Do NOT perform your own timezone arithmetic if this block is present.
-Your ONLY job: confirm the schedule with the user in their local time ({CURRENT_LOCAL_TIME} timezone) and execute `schedule_task`.
+### PRE-COMPUTED SCHEDULE
+The system suggestion `{SUGGESTED_CRON}` is a UTC cron expression for requests with an absolute scheduled time. Use it for those requests and omit `timezone` because the hint is already resolved in UTC. For a one-time relative request (such as "in 5 minutes"), set `runOnce` to `true`, omit `cronExpression`, and let Java resolve the time from the original request.
 {/if}
 
-ALWAYS follow these rules when scheduling:
-
-1. Treat {CURRENT_UTC_ISO} as your ONLY ground-truth for "now".
-2. If `SUGGESTED_CRON` is present (see above), prioritize it over manual calculation.
-3. When the user says "in X minutes" or "after X minutes":
-   - Convert X minutes into a future UTC timestamp by adding it to {CURRENT_UTC_ISO}.
-   - Use that future UTC time to derive the cron expression.
-4. When the user gives a local time like "at 5pm IST" or mentions a timezone:
-   - Interpret their time in the timezone given (or {USER_TZ_OFFSET} if none is given).
-   - Convert that local time into an absolute UTC timestamp.
-   - Derive the cron expression from that UTC timestamp.
-5. Encode cron expressions in UTC as:
-   - "<MINUTE> <HOUR> * * *" (e.g., "15 14 * * *" for 14:15 UTC)
-   - NEVER include the timezone name in the cron expression itself.
-6. ALWAYS set runOnce: true for one-shot relative schedules.
-7. NEVER guess the current time or the offset.
-   - If you cannot compute the exact UTC time, ask the user to clarify
-     instead of guessing or inventing a schedule.
-8. NEVER produce a fire time that is already in the past relative to {CURRENT_UTC_ISO}.
+ALWAYS follow these scheduling rules:
+1. Treat `{CURRENT_UTC_ISO}` as the ground-truth current UTC time. Use the user's stated timezone for local-time requests.
+2. For a one-time relative request such as "in X minutes", set `runOnce` to `true` and omit `cronExpression`. Java resolves the fire time from the original request; do not calculate or show UTC arithmetic. Ignore `SUGGESTED_CRON` for one-time relative requests.
+3. For recurring requests, set `runOnce` to `false` and provide a valid five-field `cronExpression`. If `SUGGESTED_CRON` is present, use its UTC expression and omit `timezone`; otherwise, when the user names a timezone, pass its IANA name separately in `timezone`. Without a named timezone, omit `timezone` and use the tool default. Never put a timezone name inside `cronExpression`.
+4. For other one-time requests with a precomputed `SUGGESTED_CRON`, use that suggestion. Do not calculate a schedule yourself.
+5. Set `executionRole` to `coder` for code tasks, `researcher` for research, and `coordinator` only when the task manages schedules. An omitted role defaults to `researcher`.
+6. Do not ask the user to compute a valid schedule. Use the tool's time resolver; use the tool default timezone when the user does not provide one.
 
 **CRITICAL SCHEDULING DIRECTIVE:**
 If the user mentions scheduling, timing, or relative time offsets like "in 5 minutes", "tomorrow at 10am", or "every hour", you MUST call the `schedule_task` tool. Do NOT reason about it in text or tell the user you will do it - just call the tool.

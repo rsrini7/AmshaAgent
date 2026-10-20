@@ -16,13 +16,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.security.api.OutboundPolicyDecision;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultKey;
-import com.amsha.security.http.GovernedHttpClient;
-import com.amsha.security.http.OutboundHttpException;
 import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterEach;

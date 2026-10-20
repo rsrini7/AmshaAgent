@@ -15,6 +15,7 @@ import com.amsha.persistence.api.McpConnectionDto;
 import com.amsha.persistence.api.McpConnectionHeaderSecretRefDto;
 import com.amsha.persistence.api.McpConnectionStorePort;
 import com.amsha.persistence.api.McpConnectionToolPolicyDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.postgres.jdbi.McpConnectionJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
@@ -24,7 +25,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresMcpConnectionStoreAdapter implements McpConnectionStorePort {
 
     private final Jdbi jdbi;

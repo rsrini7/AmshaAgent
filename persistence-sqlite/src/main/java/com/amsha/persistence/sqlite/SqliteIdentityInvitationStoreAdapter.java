@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityInvitationStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.IdentityInvitationJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
@@ -18,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteIdentityInvitationStoreAdapter implements IdentityInvitationStorePort {
 
     private final Jdbi jdbi;

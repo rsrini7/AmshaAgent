@@ -12,6 +12,7 @@ import java.util.Optional;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.ArchivalSearchQuery;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.TieredBackend;
 
 import org.jboss.logging.Logger;
@@ -27,7 +28,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @TieredBackend("fs")
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsArchivalMemoryStore implements ArchivalMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(FsArchivalMemoryStore.class);

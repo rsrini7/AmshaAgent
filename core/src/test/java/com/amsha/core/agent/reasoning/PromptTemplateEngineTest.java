@@ -1,11 +1,13 @@
 package com.amsha.core.agent.reasoning;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -21,6 +23,34 @@ import org.junit.jupiter.api.Test;
 import io.quarkus.qute.Engine;
 
 class PromptTemplateEngineTest {
+
+    @Test
+    void coordinatorSchedulePromptMatchesSupportedScheduleTaskParameters() throws Exception {
+        try (var stream =
+                PromptTemplateEngineTest.class.getResourceAsStream("/templates/prompts/role-coordinator.txt")) {
+            assertNotNull(stream, "Coordinator prompt template should be packaged");
+            String prompt = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+
+            assertTrue(prompt.contains("`timezone`"));
+            assertTrue(prompt.contains("`executionRole`"));
+            assertTrue(prompt.contains("`executionRole` to `coder`"));
+            assertFalse(prompt.contains("EXACTLY THREE parameters"));
+            assertFalse(prompt.contains("MANDATORY TIME MATH"));
+            assertFalse(prompt.contains("Write ONLY the UTC result into cronExpression"));
+            assertFalse(prompt.contains("mathematically add X to the current system minute"));
+        }
+        try (var stream = PromptTemplateEngineTest.class.getResourceAsStream("/templates/personas/coordinator.txt")) {
+            assertNotNull(stream, "Coordinator persona template should be packaged");
+            String persona = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(persona.contains("omit `cronExpression`"));
+            assertTrue(persona.contains("pass its IANA name separately in `timezone`"));
+            assertTrue(persona.contains("For a one-time relative request"));
+            assertFalse(persona.contains("Use the `SUGGESTED_CRON` above for the `schedule_task` tool"));
+            assertFalse(persona.contains("Derive the cron expression from that UTC timestamp"));
+            assertFalse(persona.contains("NEVER include the timezone name in the cron expression itself"));
+            assertFalse(persona.contains("ask the user to clarify"));
+        }
+    }
 
     private PromptTemplateEngine engine;
     private Engine quteEngine;

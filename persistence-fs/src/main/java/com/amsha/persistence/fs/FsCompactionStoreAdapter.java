@@ -9,11 +9,12 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CompactionSummaryDto;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsCompactionStoreAdapter implements CompactionStorePort {
 
     private static final String DOMAIN = "compaction";

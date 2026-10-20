@@ -11,6 +11,7 @@ import com.amsha.common.util.TemporalUtils;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.CronJdbiDao;
 
 import org.jboss.logging.Logger;
@@ -21,7 +22,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteCronStoreAdapter implements CronStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteCronStoreAdapter.class);

@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.security.api.ToolOperation;
@@ -30,6 +31,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -52,9 +54,9 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 @ApplicationScoped
 @ToolMetadata(
-        capabilityId = "browser_navigate",
+        capabilityId = ToolNames.BROWSER_NAVIGATE,
         description = "Primary browser navigation for exact URLs via @playwright/cli daemon",
-        defaultRoles = {"researcher", "synthesizer"})
+        defaultRoles = {AgentRoleEnum.RESEARCHER_ID, AgentRoleEnum.SYNTHESIZER_ID})
 public class PlaywrightCliTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(PlaywrightCliTool.class);

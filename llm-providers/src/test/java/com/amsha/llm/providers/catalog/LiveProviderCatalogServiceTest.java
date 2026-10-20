@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.audit.AuditService;
 import com.amsha.llm.api.ModelEntry;
 import com.amsha.security.api.SecretVault;
@@ -348,7 +349,7 @@ class LiveProviderCatalogServiceTest {
     @SuppressWarnings("unchecked")
     void apiKeyFallsBackToTheVaultWhenNoneWasSupplied() {
         SecretVault vault = mock(SecretVault.class);
-        when(vault.retrieveSystemKey("AMSHA_OPENAI_API_KEY")).thenReturn(Optional.empty());
+        when(vault.retrieveSystemKey(ConfigKeys.OPENAI_API_KEY)).thenReturn(Optional.empty());
         when(vault.retrieveSystemKey("OPENAI_API_KEY"))
                 .thenReturn(Optional.of(new VaultKey("vault-key".getBytes(StandardCharsets.UTF_8))));
         service.vault = vault;

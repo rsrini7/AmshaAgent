@@ -13,7 +13,8 @@
 #   bash run_all_validations.sh --auth-session   → API Key Auth + Session lifecycle (fast)
 #   bash run_all_validations.sh --identity       → P109 Identity/Access/bootstrap + OAuth negative (fast)
 #   bash run_all_validations.sh --pii-audit      → PII scanner + Prompt injection + Audit verify (fast)
-#   bash run_all_validations.sh --fast           → all fast/zero-token validators (no LLM wait)
+#   bash run_all_validations.sh --decision-plane → Jev decision-plane Deferred contract (fast, no evaluation requests)
+#   bash run_all_validations.sh --fast           → fast validation set; some agent-backed suites use the configured provider
 #   bash run_all_validations.sh --llm            → memory + web + roles (needs LLM)
 #   bash run_all_validations.sh --list           → list available validators
 
@@ -44,6 +45,7 @@ ONBOARDING_SCRIPT="$SCRIPT_DIR/validate_onboarding.sh"
 ONNX_SCRIPT="$SCRIPT_DIR/validate_onnx.sh"
 DATA_COLLECTION_SCRIPT="$SCRIPT_DIR/validate_data_collection.sh"
 ADVANCED_IDENTITY_SCRIPT="$SCRIPT_DIR/validate_advanced_identity.sh"
+DECISION_PLANE_SCRIPT="$SCRIPT_DIR/validate_decision_plane.sh"
 
 # Source common environment for base URL, data dir, and credential handling
 source "$SCRIPT_DIR/common_env.sh"
@@ -109,11 +111,12 @@ for arg in "$@"; do
     --onnx)         RUN_ALL=false; RUN_ONNX=true ;;
     --data-collection) RUN_ALL=false; RUN_DATA_COLLECTION=true ;;
     --advanced-identity) RUN_ALL=false; RUN_ADVANCED_IDENTITY=true ;;
-    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_SKILLS_ADMISSION=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true ;;
+    --decision-plane) RUN_ALL=false; RUN_DECISION_PLANE=true ;;
+    --fast)   FAST=true; RUN_ALL=false; RUN_REFLEX=true; RUN_SKILLS=true; RUN_SKILLS_ADMISSION=true; RUN_ADMIN=true; RUN_AUTH_SESSION=true; RUN_IDENTITY=true; RUN_PII_AUDIT=true; RUN_SELF_EVOLVE=true; RUN_SSE_SETTINGS=true; RUN_ONBOARDING=true; RUN_DECISION_PLANE=true ;;
     --llm)    LLM=true; RUN_ALL=false; RUN_MEMORY=true; RUN_WEB=true; RUN_ROLES=true; RUN_DELEGATION=true; RUN_CRON=true; RUN_RAG=true; RUN_BUDGET=true; RUN_HITL=true; RUN_DATA_COLLECTION=true ;;
     --list)
       echo "Available validators:"
-      echo "  --reflex       validate_reflex.sh             (zero-token, ~30s)"
+      echo "  --reflex       validate_reflex.sh             (deterministic, ~30s)"
       echo "  --skills       validate_skill.sh              (CRUD + errors, ~90s)"
       echo "  --skills-admission validate_skillsjar_admission.sh (admission/quarantine, fast)"
       echo "  --mcp          validate_mcp.sh                (MCP protocol, ~2min)"
@@ -133,8 +136,9 @@ for arg in "$@"; do
       echo "  --onnx         validate_onnx.sh               (runtime, inference, bundle, vector index, classifier controls; requires local model)"
       echo "  --cron         validate_cron.sh               (programmatic cron resource REST APIs, needs LLM)"
       echo "  --data-collection validate_data_collection.sh  (needs LLM)"
+      echo "  --decision-plane validate_decision_plane.sh    (Jev decision-plane Deferred contract, fast)"
       echo "  --advanced-identity validate_advanced_identity.sh (destructive owner removal tests; opt-in only)"
-      echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding"
+      echo "  --fast         reflex + skills + SkillsJar admission + admin + auth-session + identity + pii-audit + self-evolve + sse-settings + onboarding + decision-plane"
       echo "  --llm          memory + web + roles + cron + rag + budget + hitl + data-collection"
       echo "  (no args)      run ALL validators (excludes destructive tests)"
  echo " --fast includes deterministic validate_mcp_fast.sh MCP handshake checks"
@@ -142,7 +146,7 @@ for arg in "$@"; do
  ;;
     --help)
       echo "Usage: bash run_all_validations.sh [options]"
-      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --onnx --cron --advanced-identity --fast --llm --list --help"
+      echo "Options: --reflex --skills --skills-admission --mcp --memory --web --roles --admin --auth-session --identity --pii-audit --self-evolve --hitl --rag --budget --sse-settings --onboarding --onnx --cron --decision-plane --advanced-identity --fast --llm --list --help"
       echo "  --delegation validate_delegation.sh (all 12 personas, needs LLM)"
       exit 0
       ;;
@@ -153,6 +157,21 @@ done
 # MCP flow behind --mcp so it can continue exercising tool calls and self-connect.
 if [ "$FAST" = true ]; then
     RUN_MCP=true
+fi
+
+# Full and selected agent-backed suites need a working chat provider. This
+# endpoint-only probe sends no prompt and runs before any suite mutates state.
+if [ "$FAST" != true ] && {
+  [ "$RUN_ALL" = true ] || [ "$LLM" = true ] \
+    || [ "${RUN_REFLEX:-false}" = true ] || [ "${RUN_MCP:-false}" = true ] \
+    || [ "${RUN_MEMORY:-false}" = true ] \
+    || [ "${RUN_WEB:-false}" = true ] || [ "${RUN_ROLES:-false}" = true ] \
+    || [ "$RUN_DELEGATION" = true ] || [ "${RUN_CRON:-false}" = true ] \
+    || [ "${RUN_SELF_EVOLVE:-false}" = true ] || [ "${RUN_HITL:-false}" = true ] \
+    || [ "${RUN_RAG:-false}" = true ] || [ "${RUN_BUDGET:-false}" = true ] \
+    || [ "${RUN_DATA_COLLECTION:-false}" = true ];
+}; then
+  python3 "$SCRIPT_DIR/../../scripts/distribution/check_llm_preflight.py" || exit $?
 fi
 
 # ── Pre-flight check ──
@@ -171,7 +190,7 @@ else
 fi
 
 if [ "$FAST" = true ]; then
-  echo "Mode: --fast (portable zero-token validators; ONNX runs explicitly with --onnx)"
+  echo "Mode: --fast (fast validation set; agent-backed suites may use the configured provider; ONNX runs explicitly with --onnx)"
 elif [ "$LLM" = true ]; then
   echo "Mode: --llm (memory + web + roles, needs LLM)"
 elif [ "$RUN_ALL" = true ]; then
@@ -269,6 +288,12 @@ fi
 
 if [ "$RUN_ONBOARDING" = true ] || [ "$RUN_ALL" = true ]; then
   run_validator "ONBOARDING / SAGA" "$ONBOARDING_SCRIPT"
+fi
+
+# Zero-token: the decision plane is Deferred, so its contract is asserted through the
+# classifier control plane, which needs no local model and no LLM call.
+if [ "$RUN_DECISION_PLANE" = true ] || [ "$RUN_ALL" = true ]; then
+  run_validator "JEV DECISION PLANE" "$DECISION_PLANE_SCRIPT"
 fi
 
 if [ "$RUN_ONNX" = true ]; then

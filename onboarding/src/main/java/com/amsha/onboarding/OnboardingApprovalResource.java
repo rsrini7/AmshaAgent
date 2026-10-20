@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.api.dto.AmshaErrorResponse;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.onboarding.dto.ApprovalResolutionRequestDto;
 import com.amsha.onboarding.dto.ConnectionValidationRequestDto;
 import com.amsha.persistence.api.OnboardingDraftDto;
@@ -156,10 +157,10 @@ public class OnboardingApprovalResource {
         }
         String targetHost =
                 switch (providerId.trim().toLowerCase(Locale.ROOT)) {
-                    case "codex" -> "chatgpt.com";
-                    case "claude-code", "claude_code" -> "api.anthropic.com";
-                    case "agy", "antigravity" -> "generativelanguage.googleapis.com";
-                    case "kimchi" -> "llm.kimchi.dev";
+                    case ModelDefaults.PROVIDER_CODEX -> "chatgpt.com";
+                    case ModelDefaults.PROVIDER_CLAUDE_CODE, "claude_code" -> "api.anthropic.com";
+                    case ModelDefaults.PROVIDER_AGY, "antigravity" -> "generativelanguage.googleapis.com";
+                    case ModelDefaults.PROVIDER_KIMCHI -> "llm.kimchi.dev";
                     default -> "localhost";
                 };
         try {

@@ -16,6 +16,7 @@ import com.amsha.persistence.api.CheckpointDtoHelper;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CheckpointUpsertResult;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.persistence.sqlite.jdbi.CheckpointJdbiDao;
@@ -35,7 +36,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 @SuppressWarnings("PMD.ExcessiveClassLength") // Data access adapter — many store methods can't be split
 public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
 

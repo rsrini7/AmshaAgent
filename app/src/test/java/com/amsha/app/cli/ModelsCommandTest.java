@@ -11,8 +11,13 @@ import com.amsha.app.config.LocalModelValidator;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class ModelsCommandTest {
+    private static final String MODEL_ROOT_PROPERTY = "amsha.onnx.model-root";
+
+    @TempDir
+    Path tempModelRoot;
 
     @Test
     void testCatalogResolutionAndAliases() {
@@ -76,20 +81,24 @@ class ModelsCommandTest {
     }
 
     @Test
-    void testVerifyCommandOnExistingBundle() {
+    void testVerifyCommandReportsMissingBundleWithoutLocalModels() {
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         PrintStream orig = System.out;
+        String originalModelRoot = System.getProperty(MODEL_ROOT_PROPERTY);
         try {
+            System.setProperty(MODEL_ROOT_PROPERTY, tempModelRoot.toString());
             System.setOut(new PrintStream(outContent));
             CommandLine cmd = new CommandLine(new ModelsCommand());
             int code = cmd.execute("verify", "whisper");
-            Assertions.assertEquals(0, code);
+            Assertions.assertEquals(1, code);
             String output = outContent.toString();
-            Assertions.assertTrue(output.contains("encoder_model.onnx"));
-            Assertions.assertTrue(output.contains("decoder_model.onnx"));
-            Assertions.assertTrue(output.contains("tokenizer.json"));
-            Assertions.assertTrue(output.contains("manifest.json"));
+            Assertions.assertTrue(output.contains("Bundle directory missing"));
         } finally {
+            if (originalModelRoot == null) {
+                System.clearProperty(MODEL_ROOT_PROPERTY);
+            } else {
+                System.setProperty(MODEL_ROOT_PROPERTY, originalModelRoot);
+            }
             System.setOut(orig);
         }
     }

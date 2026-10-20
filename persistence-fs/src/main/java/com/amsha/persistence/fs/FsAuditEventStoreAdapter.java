@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.jboss.logging.Logger;
 
@@ -19,7 +20,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsAuditEventStoreAdapter implements AuditEventStorePort {
 
     private static final Logger log = Logger.getLogger(FsAuditEventStoreAdapter.class);

@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 
+import com.amsha.common.config.ConfigKeys;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,7 +24,7 @@ class InteractiveSetupWizardTest {
     @BeforeEach
     void setUp() {
         originalIn = System.in;
-        System.clearProperty("AMSHA_LLM_PROVIDER");
+        System.clearProperty(ConfigKeys.LLM_PROVIDER);
         System.clearProperty("AMSHA_INFINITE_LOOP_LLM_PROVIDERS");
         System.clearProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS");
         System.clearProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
@@ -32,7 +34,7 @@ class InteractiveSetupWizardTest {
     @AfterEach
     void tearDown() {
         System.setIn(originalIn);
-        System.clearProperty("AMSHA_LLM_PROVIDER");
+        System.clearProperty(ConfigKeys.LLM_PROVIDER);
         System.clearProperty("AMSHA_INFINITE_LOOP_LLM_PROVIDERS");
         System.clearProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS");
         System.clearProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS");
@@ -41,7 +43,7 @@ class InteractiveSetupWizardTest {
 
     @Test
     void testRunWithSimulatedInputGroq(@TempDir Path tempDir) throws Exception {
-        System.clearProperty("AMSHA_LLM_PROVIDER");
+        System.clearProperty(ConfigKeys.LLM_PROVIDER);
         String simulatedInput = "1\ny\nmy-api-key\nn\nn\nn\nn\n\n";
         System.setIn(new ByteArrayInputStream(simulatedInput.getBytes(StandardCharsets.UTF_8)));
 
@@ -53,15 +55,15 @@ class InteractiveSetupWizardTest {
     }
 
     private static String providerFromSystemOrEnvironment() {
-        String systemProvider = System.getProperty("AMSHA_LLM_PROVIDER");
-        return systemProvider != null ? systemProvider : System.getenv("AMSHA_LLM_PROVIDER");
+        String systemProvider = System.getProperty(ConfigKeys.LLM_PROVIDER);
+        return systemProvider != null ? systemProvider : System.getenv(ConfigKeys.LLM_PROVIDER);
     }
 
     @Test
     void testRunWithProviderChoices(@TempDir Path tempDir) {
         String[] choices = {"2", "3", "4", "5", "6", "7", "8", "9"};
         for (String choice : choices) {
-            System.clearProperty("AMSHA_LLM_PROVIDER");
+            System.clearProperty(ConfigKeys.LLM_PROVIDER);
             String input = choice + "\nn\nn\nn\nn\nn\n\n\n\n";
             System.setIn(new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
             assertDoesNotThrow(() -> InteractiveSetupWizard.run(tempDir, new String[0]));
@@ -70,7 +72,7 @@ class InteractiveSetupWizardTest {
 
     @Test
     void testRunWithNoConsoleAndNoBufferedInputDoesNotBlock(@TempDir Path tempDir) {
-        System.clearProperty("AMSHA_LLM_PROVIDER");
+        System.clearProperty(ConfigKeys.LLM_PROVIDER);
         // Reproduces a non-TTY stdin (pipe, service manager, container, test harness) where
         // System.console() is null and nothing is buffered. The wizard must skip its prompts
         // rather than issue a blocking read(), which previously hung bootstrap indefinitely.
@@ -100,7 +102,7 @@ class InteractiveSetupWizardTest {
                         + "AMSHA_INFINITE_LOOP_LLM_PROVIDERS=infinite-loop\n"
                         + "AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS=infinite-loop\n"
                         + "AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS=infinite-loop\n");
-        System.setProperty("AMSHA_LLM_PROVIDER", "infinite-loop");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "infinite-loop");
         System.setProperty("AMSHA_INFINITE_LOOP_LLM_PROVIDERS", "infinite-loop");
         System.setProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", "infinite-loop");
         System.setProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "infinite-loop");
@@ -120,7 +122,7 @@ class InteractiveSetupWizardTest {
     void ensureBaseConfigs_patchesSarvamCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
         Path envFile = tempDir.resolve(".env");
         Files.writeString(envFile, "AMSHA_LLM_PROVIDER=sarvam\n");
-        System.setProperty("AMSHA_LLM_PROVIDER", "sarvam");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "sarvam");
 
         Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
         ensure.setAccessible(true);
@@ -137,7 +139,7 @@ class InteractiveSetupWizardTest {
     void ensureBaseConfigs_patchesOpenCodeCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
         Path envFile = tempDir.resolve(".env");
         Files.writeString(envFile, "AMSHA_LLM_PROVIDER=opencode\n");
-        System.setProperty("AMSHA_LLM_PROVIDER", "opencode");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "opencode");
 
         Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
         ensure.setAccessible(true);
@@ -154,7 +156,7 @@ class InteractiveSetupWizardTest {
     void ensureBaseConfigs_patchesHuggingFaceCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
         Path envFile = tempDir.resolve(".env");
         Files.writeString(envFile, "AMSHA_LLM_PROVIDER=huggingface\n");
-        System.setProperty("AMSHA_LLM_PROVIDER", "huggingface");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "huggingface");
 
         Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
         ensure.setAccessible(true);
@@ -171,7 +173,7 @@ class InteractiveSetupWizardTest {
     void ensureBaseConfigs_patchesMistralCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
         Path envFile = tempDir.resolve(".env");
         Files.writeString(envFile, "AMSHA_LLM_PROVIDER=mistral\n");
-        System.setProperty("AMSHA_LLM_PROVIDER", "mistral");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "mistral");
 
         Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
         ensure.setAccessible(true);
@@ -188,7 +190,7 @@ class InteractiveSetupWizardTest {
     void ensureBaseConfigs_patchesCloudflareCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
         Path envFile = tempDir.resolve(".env");
         Files.writeString(envFile, "AMSHA_LLM_PROVIDER=cloudflare\n");
-        System.setProperty("AMSHA_LLM_PROVIDER", "cloudflare");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "cloudflare");
 
         Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
         ensure.setAccessible(true);
@@ -210,7 +212,7 @@ class InteractiveSetupWizardTest {
     void ensureBaseConfigs_patchesCohereCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
         Path envFile = tempDir.resolve(".env");
         Files.writeString(envFile, "AMSHA_LLM_PROVIDER=cohere\n");
-        System.setProperty("AMSHA_LLM_PROVIDER", "cohere");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "cohere");
 
         Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
         ensure.setAccessible(true);
@@ -227,7 +229,7 @@ class InteractiveSetupWizardTest {
     void ensureBaseConfigs_patchesCodexCompactionAndClassifierDefaults(@TempDir Path tempDir) throws Exception {
         Path envFile = tempDir.resolve(".env");
         Files.writeString(envFile, "AMSHA_LLM_PROVIDER=codex\n");
-        System.setProperty("AMSHA_LLM_PROVIDER", "codex");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "codex");
 
         Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
         ensure.setAccessible(true);

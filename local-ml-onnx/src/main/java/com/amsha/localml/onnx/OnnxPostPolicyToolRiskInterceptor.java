@@ -75,6 +75,7 @@ public class OnnxPostPolicyToolRiskInterceptor implements PostPolicyToolRiskInte
                     context.agentRole(),
                     context.autonomyLevel(),
                     context.toolName(),
+                    context.requiredOperation(),
                     context.parameters(),
                     context.goal());
 

@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.amsha.persistence.api.ExecutionRunSummaryDto;
 import com.amsha.persistence.api.ExecutionTraceDto;
 import com.amsha.persistence.api.ExecutionTraceStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.jboss.logging.Logger;
 
@@ -24,7 +25,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsExecutionTraceStoreAdapter implements ExecutionTraceStorePort {
 
     private static final Logger log = Logger.getLogger(FsExecutionTraceStoreAdapter.class);

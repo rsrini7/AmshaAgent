@@ -23,6 +23,10 @@
     </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
+      <artifactId>amsha-channel-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.amsha</groupId>
       <artifactId>amsha-common</artifactId>
     </dependency>
     <dependency>
@@ -142,6 +146,13 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-jacoco</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Force the local deployment module into the reactor for Quarkus test discovery. -->
+    <dependency>
+      <groupId>com.amsha</groupId>
+      <artifactId>amsha-deployment</artifactId>
+      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>

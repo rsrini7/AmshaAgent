@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.amsha.channel.api.AttachmentType;
+import com.amsha.channel.api.MediaTypes;
 import com.amsha.core.scope.ContextAwareExecutorService;
 import com.amsha.security.api.MediaBudgetLimits;
 import com.amsha.security.http.OutboundHttpException;
@@ -223,7 +224,7 @@ public final class MediaSecurityValidator {
             throw OutboundHttpException.unsupportedMime(
                     "MIME type " + normalized + " does not match expected attachment type " + expectedType);
         }
-        if (expectedType == AttachmentType.DOCUMENT_PDF && !"application/pdf".equals(normalized)) {
+        if (expectedType == AttachmentType.DOCUMENT_PDF && !MediaTypes.PDF.equals(normalized)) {
             throw OutboundHttpException.unsupportedMime(
                     "MIME type " + normalized + " does not match expected attachment type " + expectedType);
         }
@@ -255,7 +256,7 @@ public final class MediaSecurityValidator {
         return switch (normalized) {
             // Common platform alias for RIFF/WAVE. Keep one canonical value so the
             // allowlist and WAV magic-byte validation remain strict and consistent.
-            case "audio/x-wav" -> "audio/wav";
+            case MediaTypes.X_WAV -> MediaTypes.WAV;
             default -> normalized;
         };
     }
@@ -276,15 +277,15 @@ public final class MediaSecurityValidator {
 
         rejectExecutableHeader(header);
         switch (mimeType) {
-            case "image/png" -> validatePngHeader(header);
-            case "image/jpeg" -> validateJpegHeader(header);
-            case "image/gif" -> validateGifHeader(header);
-            case "image/webp" -> validateWebpHeader(header);
-            case "application/pdf" -> validatePdfHeader(header);
-            case "audio/mpeg" -> validateMpegHeader(header);
-            case "audio/wav" -> validateWavHeader(header);
-            case "audio/ogg" -> validateOggHeader(header);
-            case "audio/webm" -> validateWebmHeader(header);
+            case MediaTypes.PNG -> validatePngHeader(header);
+            case MediaTypes.JPEG -> validateJpegHeader(header);
+            case MediaTypes.GIF -> validateGifHeader(header);
+            case MediaTypes.WEBP -> validateWebpHeader(header);
+            case MediaTypes.PDF -> validatePdfHeader(header);
+            case MediaTypes.MPEG -> validateMpegHeader(header);
+            case MediaTypes.WAV -> validateWavHeader(header);
+            case MediaTypes.OGG -> validateOggHeader(header);
+            case MediaTypes.WEBM -> validateWebmHeader(header);
             default -> {
                 // The MIME allowlist is enforced by validateMimeType.
             }
@@ -379,8 +380,8 @@ public final class MediaSecurityValidator {
 
     private static int requiredMagicHeaderLength(String mimeType) {
         return switch (mimeType) {
-            case "image/png" -> 8;
-            case "image/webp", "audio/wav" -> 12;
+            case MediaTypes.PNG -> 8;
+            case MediaTypes.WEBP, MediaTypes.WAV -> 12;
             default -> 4;
         };
     }

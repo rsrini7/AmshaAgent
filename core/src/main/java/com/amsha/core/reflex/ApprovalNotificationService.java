@@ -7,6 +7,7 @@ import java.util.function.BiConsumer;
 
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.hitl.ApprovalNotifier;
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.domain.model.AgentCron;
@@ -36,7 +37,7 @@ public class ApprovalNotificationService implements ApprovalNotifier {
                 eventBus.publish(EventTypeCatalog.FLUSH_QUEUED_NOTIFICATIONS, new FlushQueuedNotifications(chatId));
             }
         } catch (Exception e) {
-            log.warn("Failed to flush notifications", e);
+            log.warn("Failed to flush notifications", LogUtil.relevantThrowable(e));
         }
     }
 
@@ -45,6 +46,9 @@ public class ApprovalNotificationService implements ApprovalNotifier {
             ChannelType chType = ChannelType.fromString(cron.getChannelType()).orElse(ChannelType.TELEGRAM);
             String platformId = cron.getChannelPlatformId() != null ? cron.getChannelPlatformId() : cron.getChatId();
             String toolName = result instanceof AgentResult.AwaitingApproval aa ? aa.toolName() : null;
+            String approvalSessionId = result instanceof AgentResult.AwaitingApproval aa ? aa.sessionId() : null;
+            String displayParamsJson =
+                    result instanceof AgentResult.AwaitingApproval aa ? aa.displayParamsJson() : null;
             eventBus.publish(
                     EventTypeCatalog.AGENT_JOB_COMPLETED,
                     new AgentJobCompleted(
@@ -55,8 +59,9 @@ public class ApprovalNotificationService implements ApprovalNotifier {
                             cron.getLastDeliveryId(),
                             AgentResultFormatter.format(result),
                             result instanceof AgentResult.Failed f ? f.category() : null,
-                            null,
-                            toolName));
+                            approvalSessionId,
+                            toolName,
+                            displayParamsJson));
         };
     }
 }

@@ -266,13 +266,17 @@ smallrye:
         - "env-example"
         - "native/vec0/**"
         - "provider-catalog.json"
+        # The versioned decision-evidence corpus. Quarkus includes no resources by default, so a
+        # classpath corpus is absent from a native image unless it is named here (and in app/pom.xml's
+        # native profile). See DecisionEvidenceCorpusRegistry.
+        - "decision-evidence/**"
 
   # ---------------------------------------------------------------------------
   # LOGGING
   # ---------------------------------------------------------------------------
-    log:
-      console:
-        enabled: false
+  log:
+    console:
+      enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
     category:
       "dev.langchain4j.model.chat.listener.ListenersUtil":
@@ -353,7 +357,7 @@ smallrye:
       filter: secret-redaction
     file:
       enabled: true
-      path: "./amsha.log"
+      path: "./amsha-prod-sqlite.log"
       level: DEBUG
       format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
       filter: secret-redaction
@@ -493,6 +497,204 @@ amsha:
         enabled: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_ENABLED:false}
         model: "${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_MODEL:}"
         timeout-seconds: ${AMSHA_ONNX_CLASSIFIER_ANSWER_QUALITY_TIMEOUT_SECONDS:2}
+  decision:
+    # -------------------------------------------------------------------------
+    # Opt-in decision evaluation path (W4).
+    #
+    # INERT BY DEFAULT: when false — the shipped value — the internal evaluation
+    # endpoints refuse before any provider is touched, so no egress is possible.
+    # Enabling it lets an operator run the two registered decisions
+    # (`amsha.routing.intent.v1` and `tool.risk.shadow`) and gather evidence.
+    #
+    # It does NOT register a DecisionEngine bean and does not activate routing:
+    # the parent ADR stays Deferred, so `Instance<DecisionEngine>` remains
+    # unsatisfiable and intent routing stays on the deterministic baseline. The
+    # key lands with the workstream that first reads it (W4), rather than ahead
+    # of its reader. See
+    # docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md §W4.
+    # -------------------------------------------------------------------------
+    evaluation:
+      enabled: ${AMSHA_DECISION_EVALUATION_ENABLED:false}
+    # -------------------------------------------------------------------------
+    # Operations monitoring (W6).
+    #
+    # Bounded, payload-free observation of the evaluations the opt-in path runs.
+    # `drift` compares the mean confidence and abstention rate of the most recent
+    # `window` observations on a lane against the first `window`, and logs one WARN
+    # per drift episode; `cost` tracks the rolling cost per 1,000 priced decisions
+    # so an approved per-slot ceiling can fail the evaluation closed.
+    #
+    # Nothing here activates the plane: the monitor observes and the cost guard is
+    # inert until a ceiling is approved and a price schedule authorises rates (the
+    # shipped schedule is empty). See the activation plan §W6.
+    # -------------------------------------------------------------------------
+    drift:
+      window: ${AMSHA_DECISION_DRIFT_WINDOW:64}
+      confidence-threshold: ${AMSHA_DECISION_DRIFT_CONFIDENCE_THRESHOLD:0.15}
+      abstention-threshold: ${AMSHA_DECISION_DRIFT_ABSTENTION_THRESHOLD:0.20}
+    cost:
+      window: ${AMSHA_DECISION_COST_WINDOW:1000}
+    shadow:
+      intent:
+        enabled: ${AMSHA_DECISION_SHADOW_INTENT_ENABLED:false}
+      tool-risk:
+        enabled: ${AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED:false}
+      answer-quality:
+        enabled: ${AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED:false}
+    # -------------------------------------------------------------------------
+    # Decision provider selection (Jev / System One).
+    #
+    # NOT A PRODUCTION BEAN: this mapping is never consumed into a registered
+    # DecisionEngine — the parent ADR keeps the plane Deferred. It is consumed
+    # only by the opt-in evaluation path (amsha.decision.evaluation.enabled,
+    # default false), which constructs an engine for a single evaluation without
+    # registering one, so Instance<DecisionEngine> stays unsatisfiable and no
+    # activation switch opens. With that switch off, a value here changes no
+    # behaviour. See docs/research/Jev-Provider-Integration-Plan-2026.md §8.
+    #
+    # Mirrors the LLM convention above — `selected` picks one provider, and each
+    # provider names its own `model`. Those are the same two axes as
+    # AMSHA_LLM_PROVIDER + amsha.llm.<provider>.model.
+    #
+    # A provider is the System One ENDPOINT that receives POST /v1/systemone,
+    # exactly as an LLM provider is the endpoint that receives
+    # /v1/chat/completions. An id may therefore name a specific decision server
+    # (laya, kev, clm), a generic local runtime host that serves whichever
+    # decision model is loaded into it (omlx), or a hosted API (typesafe).
+    # `model` is a SEPARATE axis naming the checkpoint served at that endpoint —
+    # which is why `omlx` (a runtime) and `laya` (a model) are both valid ids.
+    # It is required for a REMOTE slot (the hosted contract makes it mandatory)
+    # and optional for a SELF-HOSTED one, where omitting it means "the server's
+    # own checkpoint" and the request leaves the field out entirely.
+    #
+    # `selected` must name one of the slots below. An undeclared id resolves to
+    # nothing (fail closed) rather than being turned into an endpoint.
+    #
+    # The lane is derived from the endpoint host, not declared: the literal
+    # 127.0.0.1 selects the self-hosted lane, anything else the remote lane.
+    # `localhost`, `::1`, and other 127.x hosts are rejected as ambiguous.
+    #
+    # `api-key` is the direct environment-backed provider key, following the
+    # same convention as Amsha's other providers. Selection and status expose
+    # only whether a key is configured. Evaluation copies it to request-owned
+    # bytes and clears them after use; the configuration String remains in memory.
+    # `wire-profile` belongs to the MODEL, not the endpoint: a CLM model must
+    # declare PROSE, and the selector refuses the contradiction.
+    #
+    # Each slot also carries a `governance` declaration — the parent ADR's
+    # Governance gate requires retention, residency, training-use, and
+    # tenant-isolation to be declared explicitly before state may leave the
+    # process. Declaring them records an operator decision; it does not by itself
+    # activate anything. The selector refuses an enabled slot whose declaration
+    # is incomplete, and the engine factory re-checks before constructing:
+    #   * `projection-allow-list` is required on BOTH lanes and must be non-empty
+    #     — the state projection redactor fails closed without an allow-list, and
+    #     inventing one from the question handles is exactly the widening the
+    #     control exists to prevent. It is a comma-separated list of the top-level
+    #     `state` field names permitted to leave the process. Tool-risk evaluation requires the
+    #     camel-case `requiredOperation` key to be included in the operator's allow-list.
+    #   * `data-location` is the provider-confirmed country/region where submitted state is
+    #     processed or stored, required on REMOTE lanes. Get it from account terms or the
+    #     provider's data-processing agreement; do not infer it from the endpoint or guess.
+    #     The Jev ADR currently records TypeSafe residency as undeclared. Leave it blank until
+    #     confirmed; the remote slot stays unavailable. Loopback slots never export state.
+    #   * `allow-training-use` must stay false and `tenant-isolation` must stay
+    #     true; a contrary value is refused rather than sent.
+    #   * `retention-window` defaults to PT0S (zero retention), which is a positive
+    #     statement, not an absence of one.
+    #   * `cost-ceiling-per-thousand` is required before production activation, not to
+    #     gather evaluation evidence. Named `PerThousand` rather than `Per1000` on
+    #     purpose: SmallRye derives a member name by inserting `-` before each capital,
+    #     so a trailing digit yields `cost-ceiling-per1000` with no separator — an easy
+    #     key to write wrongly, and an unknown property fails the whole mapping at
+    #     startup rather than being ignored.
+    # -------------------------------------------------------------------------
+    providers:
+      selected: "${AMSHA_DECISION_PROVIDER:}"
+      slots:
+        # TypeSafe Jev — closed hosted reference implementation (remote lane).
+        typesafe:
+          enabled: ${AMSHA_DECISION_TYPESAFE_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_TYPESAFE_ENDPOINT:https://api.typesafe.ai/v1/systemone}"
+          model: "${AMSHA_DECISION_TYPESAFE_MODEL:jev-latest}"
+          api-key: "${AMSHA_DECISION_TYPESAFE_API_KEY:}"
+          timeout: ${AMSHA_DECISION_TYPESAFE_TIMEOUT:PT50S}
+          wire-profile: ${AMSHA_DECISION_TYPESAFE_WIRE_PROFILE:JSON_OBJECT}
+          governance:
+            data-location: "${AMSHA_DECISION_TYPESAFE_GOVERNANCE_DATA_LOCATION:}"
+            retention-window: ${AMSHA_DECISION_TYPESAFE_GOVERNANCE_RETENTION_WINDOW:PT0S}
+            allow-training-use: ${AMSHA_DECISION_TYPESAFE_GOVERNANCE_ALLOW_TRAINING_USE:false}
+            tenant-isolation: ${AMSHA_DECISION_TYPESAFE_GOVERNANCE_TENANT_ISOLATION:true}
+            projection-allow-list: "${AMSHA_DECISION_TYPESAFE_GOVERNANCE_PROJECTION_ALLOW_LIST:}"
+            cost-ceiling-per-thousand: "${AMSHA_DECISION_TYPESAFE_GOVERNANCE_COST_CEILING_PER_THOUSAND:}"
+        # CLM — contrastive System One model (a MODEL id, not a runtime). Its
+        # heads were trained on prose, so a JSON `state` degrades answers
+        # silently rather than failing loudly — hence PROSE below.
+        clm:
+          enabled: ${AMSHA_DECISION_CLM_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_CLM_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
+          model: "${AMSHA_DECISION_CLM_MODEL:CLM-v0.1-8B-MLX-8bit}"
+          api-key: "${AMSHA_DECISION_CLM_API_KEY:}"
+          timeout: ${AMSHA_DECISION_CLM_TIMEOUT:PT50S}
+          wire-profile: ${AMSHA_DECISION_CLM_WIRE_PROFILE:PROSE}
+          governance:
+            data-location: "${AMSHA_DECISION_CLM_GOVERNANCE_DATA_LOCATION:}"
+            retention-window: ${AMSHA_DECISION_CLM_GOVERNANCE_RETENTION_WINDOW:PT0S}
+            allow-training-use: ${AMSHA_DECISION_CLM_GOVERNANCE_ALLOW_TRAINING_USE:false}
+            tenant-isolation: ${AMSHA_DECISION_CLM_GOVERNANCE_TENANT_ISOLATION:true}
+            projection-allow-list: "${AMSHA_DECISION_CLM_GOVERNANCE_PROJECTION_ALLOW_LIST:}"
+            cost-ceiling-per-thousand: "${AMSHA_DECISION_CLM_GOVERNANCE_COST_CEILING_PER_THOUSAND:}"
+        # Laya — Apache-2.0 Jev-wire-compatible server. Bind it to 127.0.0.1:
+        # laya-serve defaults to 0.0.0.0, which exposes it to the LAN.
+        laya:
+          enabled: ${AMSHA_DECISION_LAYA_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_LAYA_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
+          model: "${AMSHA_DECISION_LAYA_MODEL:laya-multilingual}"
+          api-key: "${AMSHA_DECISION_LAYA_API_KEY:}"
+          timeout: ${AMSHA_DECISION_LAYA_TIMEOUT:PT50S}
+          wire-profile: ${AMSHA_DECISION_LAYA_WIRE_PROFILE:JSON_OBJECT}
+          governance:
+            data-location: "${AMSHA_DECISION_LAYA_GOVERNANCE_DATA_LOCATION:}"
+            retention-window: ${AMSHA_DECISION_LAYA_GOVERNANCE_RETENTION_WINDOW:PT0S}
+            allow-training-use: ${AMSHA_DECISION_LAYA_GOVERNANCE_ALLOW_TRAINING_USE:false}
+            tenant-isolation: ${AMSHA_DECISION_LAYA_GOVERNANCE_TENANT_ISOLATION:true}
+            projection-allow-list: "${AMSHA_DECISION_LAYA_GOVERNANCE_PROJECTION_ALLOW_LIST:}"
+            cost-ceiling-per-thousand: "${AMSHA_DECISION_LAYA_GOVERNANCE_COST_CEILING_PER_THOUSAND:}"
+        # Kev — Apache-2.0, LLM-backed rather than a dedicated decision head.
+        # `model` is blank on purpose: it names whichever checkpoint this server
+        # wraps, which is deployment-specific. A self-hosted slot may omit it —
+        # the request then leaves the field out and the server picks its own.
+        kev:
+          enabled: ${AMSHA_DECISION_KEV_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_KEV_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
+          model: "${AMSHA_DECISION_KEV_MODEL:}"
+          api-key: "${AMSHA_DECISION_KEV_API_KEY:}"
+          timeout: ${AMSHA_DECISION_KEV_TIMEOUT:PT50S}
+          wire-profile: ${AMSHA_DECISION_KEV_WIRE_PROFILE:JSON_OBJECT}
+          governance:
+            data-location: "${AMSHA_DECISION_KEV_GOVERNANCE_DATA_LOCATION:}"
+            retention-window: ${AMSHA_DECISION_KEV_GOVERNANCE_RETENTION_WINDOW:PT0S}
+            allow-training-use: ${AMSHA_DECISION_KEV_GOVERNANCE_ALLOW_TRAINING_USE:false}
+            tenant-isolation: ${AMSHA_DECISION_KEV_GOVERNANCE_TENANT_ISOLATION:true}
+            projection-allow-list: "${AMSHA_DECISION_KEV_GOVERNANCE_PROJECTION_ALLOW_LIST:}"
+            cost-ceiling-per-thousand: "${AMSHA_DECISION_KEV_GOVERNANCE_COST_CEILING_PER_THOUSAND:}"
+        # OMLX 0.7.1.dev1 supports POST /v1/systemone. OMLX's OpenAI API expects
+        # Bearer auth while Amsha's loopback client sends X-Amsha-Loopback-Token;
+        # verify authentication compatibility before enabling this slot.
+        omlx:
+          enabled: ${AMSHA_DECISION_OMLX_ENABLED:false}
+          endpoint: "${AMSHA_DECISION_OMLX_ENDPOINT:http://127.0.0.1:8000/v1/systemone}"
+          model: "${AMSHA_DECISION_OMLX_MODEL:}"
+          api-key: "${AMSHA_DECISION_OMLX_API_KEY:}"
+          timeout: ${AMSHA_DECISION_OMLX_TIMEOUT:PT50S}
+          wire-profile: ${AMSHA_DECISION_OMLX_WIRE_PROFILE:JSON_OBJECT}
+          governance:
+            data-location: "${AMSHA_DECISION_OMLX_GOVERNANCE_DATA_LOCATION:}"
+            retention-window: ${AMSHA_DECISION_OMLX_GOVERNANCE_RETENTION_WINDOW:PT0S}
+            allow-training-use: ${AMSHA_DECISION_OMLX_GOVERNANCE_ALLOW_TRAINING_USE:false}
+            tenant-isolation: ${AMSHA_DECISION_OMLX_GOVERNANCE_TENANT_ISOLATION:true}
+            projection-allow-list: "${AMSHA_DECISION_OMLX_GOVERNANCE_PROJECTION_ALLOW_LIST:}"
+            cost-ceiling-per-thousand: "${AMSHA_DECISION_OMLX_GOVERNANCE_COST_CEILING_PER_THOUSAND:}"
   fs:
     data-dir: "${AMSHA_FS_DATA_DIR:./data/fs}"
     lock-timeout-seconds: 30
@@ -837,6 +1039,16 @@ amsha:
       ollama-fallback:
         enabled: ${AMSHA_INTENT_CLASSIFIER_OLLAMA_FALLBACK_ENABLED:false}
       sla-warn-ms: 2000
+    intent-decision-router:
+      enabled: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED:false}
+      review-band:
+        low: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW:0.50}
+        high: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH:0.85}
+      timeout-ms: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS:50000}
+      activation-gate:
+        candidate-evidence-approved: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED:false}
+        cost-ceiling-approved: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED:false}
+        rollout-owner: ${AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER:}
   memory:
     compaction:
       enabled: true
@@ -1154,7 +1366,7 @@ mp:
   quarkus:
     log:
       console:
-        enabled: false
+        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: ERROR
       category:
         "io.quarkus":
@@ -1167,7 +1379,7 @@ mp:
           level: DEBUG
       file:
         enabled: true
-        path: ./amsha-cli.log
+        path: ./amsha-cli-sqlite.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
         rotation:
@@ -1208,10 +1420,10 @@ mp:
     log:
       level: INFO                          # set to INFO to avoid infrastructure flood
       console:
-        enabled: false
+        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       file:
         enabled: true
-        path: ./amsha-dev.log
+        path: ./amsha-dev-sqlite.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
         rotation:
@@ -1251,6 +1463,9 @@ mp:
 
 "%test":
   quarkus:
+    log:
+      file:
+        path: ./amsha-test-sqlite.log
     mcp:
       server:
         stdio:
@@ -1339,6 +1554,9 @@ mp:
 
 "%staging":
   quarkus:
+    log:
+      file:
+        path: ./amsha-staging-sqlite.log
     langchain4j:
       ollama:
         chat-model:
@@ -1452,11 +1670,11 @@ mp:
       clean-at-start: ${AMSHA_FLYWAY_CLEAN_AT_START:true}
     log:
       console:
-        enabled: false
+        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
       file:
         enabled: true
-        path: "./amsha-pg.log"
+        path: "./amsha-postgresql-postgres.log"
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
         rotation:
@@ -1477,11 +1695,11 @@ mp:
       enabled: false
     log:
       console:
-        enabled: false
+        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
       file:
         enabled: true
-        path: "./amsha-fs.log"
+        path: "./amsha-filesystem-fs.log"
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
         rotation:

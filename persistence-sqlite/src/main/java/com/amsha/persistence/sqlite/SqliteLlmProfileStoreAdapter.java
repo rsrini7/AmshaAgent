@@ -14,6 +14,7 @@ import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelCacheInvalidationPort;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
 import com.amsha.persistence.api.WorkspaceConnectionGrantStorePort;
 import com.amsha.persistence.sqlite.jdbi.LlmProfileJdbiDao;
@@ -27,7 +28,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteLlmProfileStoreAdapter implements LlmProfileStorePort, WorkspaceConnectionGrantStorePort {
 
     private final Jdbi jdbi;

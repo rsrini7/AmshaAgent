@@ -32,17 +32,7 @@ public class NamespaceExecutor {
                 System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
         ProcessBuilder pb;
         if (isLinux) {
-            var fullCmd = new ArrayList<>(List.of(
-                    "unshare",
-                    "--pid",
-                    "--fork",
-                    "--mount",
-                    "--net",
-                    "--map-root-user",
-                    "chroot",
-                    workspaceRoot.toAbsolutePath().toString()));
-            fullCmd.addAll(command);
-            pb = new ProcessBuilder(fullCmd);
+            pb = new ProcessBuilder(buildUnshareCommand(workspaceRoot, command));
         } else {
             pb = new ProcessBuilder(command);
             File workspaceDir = workspaceRoot.toFile();
@@ -53,7 +43,7 @@ public class NamespaceExecutor {
             pb.directory(workspaceDir);
         }
         pb.redirectErrorStream(true);
-        var process = pb.start();
+        var process = startProcess(pb);
 
         try {
             ProcessOutput processOutput = waitForProcess(process);
@@ -71,6 +61,24 @@ public class NamespaceExecutor {
         } finally {
             terminateProcess(process, null);
         }
+    }
+
+    static List<String> buildUnshareCommand(Path workspaceRoot, List<String> command) {
+        var fullCommand = new ArrayList<>(List.of(
+                "unshare",
+                "--pid",
+                "--fork",
+                "--mount",
+                "--net",
+                "--map-root-user",
+                "chroot",
+                workspaceRoot.toAbsolutePath().toString()));
+        fullCommand.addAll(command);
+        return List.copyOf(fullCommand);
+    }
+
+    Process startProcess(ProcessBuilder processBuilder) throws IOException {
+        return processBuilder.start();
     }
 
     private ProcessOutput waitForProcess(Process process) throws InterruptedException {
@@ -111,7 +119,13 @@ public class NamespaceExecutor {
     }
 
     private void terminateProcess(Process process, Thread reader) {
-        process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
+        try {
+            process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
+        } catch (RuntimeException e) {
+            log.debugf(
+                    "Unable to enumerate sandbox process descendants; forcing parent termination (%s)",
+                    e.getClass().getSimpleName());
+        }
         process.destroyForcibly();
         closeOutput(process);
         if (reader != null && reader.isAlive()) {

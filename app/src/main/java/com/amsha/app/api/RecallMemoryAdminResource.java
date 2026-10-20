@@ -18,6 +18,7 @@ import java.util.Set;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.memory.tiered.RecallMemoryService;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.RecallMessageDto;
 import com.amsha.persistence.api.RecallSearchQuery;
 
@@ -93,7 +94,7 @@ public class RecallMemoryAdminResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

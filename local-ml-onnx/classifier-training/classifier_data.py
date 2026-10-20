@@ -72,6 +72,15 @@ def deidentify(value: Any) -> Any:
     return value
 
 
+def canonicalize_json_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        if any(not isinstance(key, str) for key in value):
+            raise DatasetValidationError("tool-risk parameter object keys must be strings")
+        return {key: canonicalize_json_value(value[key]) for key in sorted(value)}
+    if isinstance(value, list):
+        return [canonicalize_json_value(item) for item in value]
+    return value
+
 def render_input(record: Mapping[str, Any]) -> str:
     task = require_string(record, "task")
     payload = record.get("input")
@@ -86,8 +95,9 @@ def render_input(record: Mapping[str, Any]) -> str:
             "agent_role": require_string(payload, "agent_role"),
             "autonomy": require_string(payload, "autonomy"),
             "tool_name": require_string(payload, "tool_name"),
+            "required_operation": require_string(payload, "required_operation"),
             "goal": require_string(payload, "goal", allow_blank=True),
-            "parameters": require_mapping(payload, "parameters"),
+            "parameters": canonicalize_json_value(require_mapping(payload, "parameters")),
         }
         return json.dumps(rendered, separators=(",", ":"), ensure_ascii=False, sort_keys=False)
     if task == "answer_quality":

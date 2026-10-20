@@ -13,11 +13,14 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
+import com.amsha.common.http.HttpProtocol;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.security.api.VaultConstants;
 import com.amsha.security.http.GovernedTransportService;
 import com.amsha.security.http.OutboundHttpException;
 import com.amsha.tool.api.AgentTool;
@@ -25,6 +28,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,9 +47,9 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "brave_web_search",
+        capabilityId = ToolNames.WEB_SEARCH_BRAVE,
         description = "Search the web for real-time information using the Brave API",
-        defaultRoles = {"researcher", "synthesizer"})
+        defaultRoles = {AgentRoleEnum.RESEARCHER_ID, AgentRoleEnum.SYNTHESIZER_ID})
 public class BraveWebSearchTool implements AgentTool {
 
     @ConfigProperty(name = "amsha.tools.brave.api-key", defaultValue = "none")
@@ -55,7 +59,7 @@ public class BraveWebSearchTool implements AgentTool {
     SecretVault vault;
 
     private String getApiKey() {
-        return vault.retrieveSystemKey("AMSHA_TOOLS_BRAVE_API_KEY")
+        return vault.retrieveSystemKey(VaultConstants.TOOLS_BRAVE_API_KEY)
                 .map(vk -> {
                     try (vk) {
                         return new String(vk.get(), StandardCharsets.UTF_8);
@@ -122,7 +126,7 @@ public class BraveWebSearchTool implements AgentTool {
     public boolean isEnabled() {
         // Invariant: Use existence check instead of decryption during startup/init.
         // This prevents boot-time crashes in security tests where master keys mismatch.
-        if (vault.systemKeyExists("AMSHA_TOOLS_BRAVE_API_KEY")) {
+        if (vault.systemKeyExists(VaultConstants.TOOLS_BRAVE_API_KEY)) {
             return true;
         }
         return configApiKey != null && !configApiKey.isBlank() && !"none".equalsIgnoreCase(configApiKey);
@@ -171,7 +175,7 @@ public class BraveWebSearchTool implements AgentTool {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(uri)
                     .timeout(Duration.ofSeconds(15))
-                    .header("Accept", "application/json")
+                    .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
                     .header("X-Subscription-Token", getApiKey())
                     .GET()
                     .build();

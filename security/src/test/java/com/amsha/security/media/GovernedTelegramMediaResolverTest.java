@@ -604,6 +604,13 @@ class GovernedTelegramMediaResolverTest {
         assertEquals(OutboundHttpException.Category.IO, ((OutboundHttpException) scrubbedOhe).category());
         assertFalse(scrubbedOhe.getMessage().contains(BOT_TOKEN));
 
+        com.amsha.core.security.http.OutboundHttpException coreOhe =
+                com.amsha.core.security.http.OutboundHttpException.io("I/O failure on bot" + BOT_TOKEN);
+        RuntimeException scrubbedCoreOhe = GovernedTelegramMediaResolver.scrubTokenException(coreOhe, BOT_TOKEN);
+        assertTrue(scrubbedCoreOhe instanceof OutboundHttpException);
+        assertEquals(OutboundHttpException.Category.IO, ((OutboundHttpException) scrubbedCoreOhe).category());
+        assertFalse(scrubbedCoreOhe.getMessage().contains(BOT_TOKEN));
+
         RuntimeException rawWithSuppressed = new RuntimeException("primary failure");
         rawWithSuppressed.addSuppressed(new IOException("suppressed " + BOT_TOKEN));
         RuntimeException scrubbedWithSuppressed =

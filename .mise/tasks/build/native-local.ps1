@@ -85,6 +85,7 @@ if ($srcItem) {
     $env:GRAALVM_HOME = $graalPath
     $env:JAVA_HOME = $graalPath
     $nativeAdditionalBuildArgs = @()
+    $nativeImageBuildArgs = @()
     if ($IsMacOS -and $env:PATH -like '*nix/store*') {
         $zlib = Get-ChildItem '/nix/store' -Filter 'libz.dylib' -Recurse -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -like '*-zlib-*/lib/libz.dylib' } |
@@ -94,10 +95,25 @@ if ($srcItem) {
             if ($env:NIX_LDFLAGS -notlike "*$zlibLibDir*") {
                 $env:NIX_LDFLAGS = "$env:NIX_LDFLAGS -L$zlibLibDir".Trim()
             }
-            $nativeAdditionalBuildArgs += "-Dquarkus.native.additional-build-args=-H:CLibraryPath=$zlibLibDir"
+            $nativeImageBuildArgs += "-H:CLibraryPath=$zlibLibDir"
             Write-Host "ℹ️   Added zlib linker path for Nix clang: $zlibLibDir"
         }
     }
+
+$nativeImageParallelism = $env:AMSHA_NATIVE_IMAGE_PARALLELISM
+if (-not [string]::IsNullOrWhiteSpace($nativeImageParallelism)) {
+    if ($nativeImageParallelism -notmatch '^[1-9][0-9]*$') {
+        throw 'AMSHA_NATIVE_IMAGE_PARALLELISM must be a positive integer.'
+    }
+    $nativeImageBuildArgs += "--parallelism=$nativeImageParallelism"
+    Write-Host "ℹ️   Limiting native-image build parallelism to $nativeImageParallelism worker(s)."
+}
+
+if ($nativeImageBuildArgs.Count -gt 0) {
+    # Quarkus splits this property on commas without trimming; keep the joined list whitespace-free.
+    $nativeImageBuildArgs = @('-H:+ReportExceptionStackTraces') + $nativeImageBuildArgs
+    $nativeAdditionalBuildArgs += "-Dquarkus.native.additional-build-args=$($nativeImageBuildArgs -join ',')"
+}
 
 mise run build:ui:copy
 if ($LASTEXITCODE -ne 0) { throw "build:ui:copy failed with exit code $LASTEXITCODE." }

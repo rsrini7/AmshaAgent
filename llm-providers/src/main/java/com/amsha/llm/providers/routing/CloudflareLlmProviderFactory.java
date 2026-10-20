@@ -7,6 +7,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.LlmModelConfig;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.RoutingChatModelProvider;
@@ -36,13 +38,13 @@ public class CloudflareLlmProviderFactory implements RoutingChatModelProvider {
         String apiKey = config.apiKey()
                 .filter(k -> !k.isBlank())
                 .or(() -> ConfigProvider.getConfig()
-                        .getOptionalValue("amsha.llm.cloudflare.api-key", String.class)
+                        .getOptionalValue(LlmConfigKeys.CLOUDFLARE_API_KEY, String.class)
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getProperty("AMSHA_CLOUDFLARE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getProperty(ConfigKeys.CLOUDFLARE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.cloudflare.api-key"))
+                .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.CLOUDFLARE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getenv("AMSHA_CLOUDFLARE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.CLOUDFLARE_API_KEY))
                         .filter(k -> !k.isBlank()))
                 .orElseThrow(() -> new IllegalStateException(
                         "Cloudflare provider requires an API key (AMSHA_CLOUDFLARE_API_KEY)"));
@@ -67,13 +69,13 @@ public class CloudflareLlmProviderFactory implements RoutingChatModelProvider {
     private String resolveEffectiveBaseUrl(String baseUrl) {
         if (baseUrl != null && baseUrl.contains("{account_id}")) {
             var cfg = ConfigProvider.getConfig();
-            String accId = cfg.getOptionalValue("amsha.llm.cloudflare.account-id", String.class)
+            String accId = cfg.getOptionalValue(LlmConfigKeys.CLOUDFLARE_ACCOUNT_ID, String.class)
                     .filter(id -> !id.isBlank())
-                    .or(() -> Optional.ofNullable(System.getProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID"))
+                    .or(() -> Optional.ofNullable(System.getProperty(ConfigKeys.CLOUDFLARE_ACCOUNT_ID))
                             .filter(id -> !id.isBlank()))
-                    .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.cloudflare.account-id"))
+                    .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.CLOUDFLARE_ACCOUNT_ID))
                             .filter(id -> !id.isBlank()))
-                    .or(() -> Optional.ofNullable(System.getenv("AMSHA_CLOUDFLARE_ACCOUNT_ID"))
+                    .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.CLOUDFLARE_ACCOUNT_ID))
                             .filter(id -> !id.isBlank()))
                     .orElseThrow(
                             () -> new IllegalStateException(

@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AuditEvent;
@@ -41,6 +42,9 @@ public class AuditObserverTest {
 
     @BeforeEach
     void setupHmacMock() {
+        // Previous tests may still have audit work in the shared asynchronous queue.
+        // Drain it before changing the CDI mock's stubbing.
+        auditService.waitForIdle();
         when(auditHashUtil.sha256hex(anyString())).thenCallRealMethod();
         when(auditHashUtil.hmacHex(anyString())).thenAnswer(inv -> {
             String data = inv.getArgument(0);
@@ -52,7 +56,7 @@ public class AuditObserverTest {
 
     @Test
     public void testLoopCompletionFiresAudit() {
-        String sessionId = "test-observe-" + System.currentTimeMillis();
+        String sessionId = "test-observe-" + UUID.randomUUID();
 
         // Simulate LLM calls to accumulate tokens
         observer.recordLlmCall(sessionId, 50, 10);

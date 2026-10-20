@@ -8,6 +8,8 @@ server, credentials, an ONNX bundle, or network access.
 from __future__ import annotations
 
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -100,6 +102,53 @@ class DistributionWrapperContractTest(unittest.TestCase):
         plan = self.parse_plan(self.run_wrapper("sqlite", "--dry-run", "--build"))
         self.assertEqual(plan["command"], "serve")
 
+    def test_no_argument_launch_reaches_the_binary(self) -> None:
+        """A bare wrapper invocation must launch the server, not abort.
+
+        Regression: macOS ships bash 3.2, where an *empty* array expanded as
+        `"${ARR[@]}"` aborts under `set -u` with `unbound variable`.  The serve
+        path's final exec expanded the (empty) passthrough array exactly that
+        way, so `scripts/run_dist_sqlite.sh` with no arguments died before the
+        binary was ever reached.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            capture = Path(directory) / "argv.txt"
+            fake_binary = Path(directory) / "amsha-fake"
+            fake_binary.write_text(
+                "#!/usr/bin/env bash\n"
+                f'printf "%s\\n" "$@" > "{capture}"\n',
+                encoding="utf-8",
+            )
+            fake_binary.chmod(0o755)
+
+            result = self.run_wrapper(
+                "sqlite",
+                extra_env={
+                    "AMSHA_DIST_BINARY": str(fake_binary),
+                    "AMSHA_DATA_DIR": str(Path(directory) / "data"),
+                },
+            )
+
+            self.assertNotIn("unbound variable", result.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(capture.read_text(encoding="utf-8").split(), ["serve"])
+
+    def test_serve_path_exec_guards_the_empty_passthrough_array(self) -> None:
+        """The final exec must use the portable empty-array guard.
+
+        The behavioural test above only fails on an interpreter that actually
+        rejects the unguarded construct, and that depends on which bash the
+        `#!/usr/bin/env bash` shebang resolves to.  On a host where bash 5 is
+        first on PATH the unguarded form is legal and the behavioural test would
+        pass anyway, so assert the guard directly as well — a regression must not
+        be able to hide behind a newer interpreter.
+        """
+        script = (ROOT / "scripts" / "distribution" / "run_dist_backend.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('${PASSTHROUGH_ARGS[@]+"${PASSTHROUGH_ARGS[@]}"}', script)
+        self.assertNotIn('exec "$BINARY" "$COMMAND" "${PASSTHROUGH_ARGS[@]}"', script)
+
     def test_clean_flag_is_reflected_in_plan(self) -> None:
         for backend in WRAPPERS:
             with self.subTest(backend=backend):
@@ -107,6 +156,28 @@ class DistributionWrapperContractTest(unittest.TestCase):
                     self.run_wrapper(backend, "--dry-run", "--clean")
                 )
                 self.assertEqual(plan["clean"], "true")
+
+    def test_full_validation_preflight_runs_before_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            data_dir = Path(directory) / "data"
+            data_dir.mkdir()
+            sentinel = data_dir / "preserve-me"
+            sentinel.write_text("untouched", encoding="utf-8")
+
+            result = self.run_wrapper(
+                "sqlite",
+                "--validate",
+                "--full",
+                "--clean",
+                extra_env={
+                    "AMSHA_DATA_DIR": str(data_dir),
+                    "AMSHA_LLM_PREFLIGHT_URL": "http://127.0.0.1:1/models",
+                },
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("LLM preflight", result.stderr)
+            self.assertTrue(sentinel.exists(), "preflight failure must happen before --clean")
 
     def test_safe_env_loader_does_not_execute_values(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -235,6 +306,237 @@ class DistributionWrapperContractTest(unittest.TestCase):
         for validator in (ROOT / "rest-http" / "scripts").glob("validate_*.sh"):
             self.assertNotIn("head -c", validator.read_text(encoding="utf-8"), validator.name)
 
+    def test_every_validator_is_registered_in_the_master_runner(self) -> None:
+        """A validator no profile can reach is invisible coverage.
+
+        The classifier control plane hid behind --onnx for exactly this reason:
+        validate_onnx.sh was the only caller, so the default profile never ran it.
+        """
+        scripts_dir = ROOT / "rest-http" / "scripts"
+        runner = (scripts_dir / "run_all_validations.sh").read_text(encoding="utf-8")
+        on_disk = sorted(path.name for path in scripts_dir.glob("validate_*.sh"))
+        self.assertTrue(on_disk, "no validator scripts found")
+        assigned = set(re.findall(r"SCRIPT_DIR/(validate_[a-z0-9_]+\.sh)", runner))
+        self.assertEqual(
+            [name for name in on_disk if name not in assigned],
+            [],
+            "these validators have no *_SCRIPT assignment in run_all_validations.sh",
+        )
+        self.assertEqual(
+            sorted(name for name in assigned if not (scripts_dir / name).is_file()),
+            [],
+            "run_all_validations.sh references validator scripts that do not exist",
+        )
+
+    def test_zero_token_decision_plane_validator_runs_in_the_fast_profile(self) -> None:
+        """The decision-plane contract needs no model and no LLM, so it must not be opt-in."""
+        runner = (ROOT / "rest-http" / "scripts" / "run_all_validations.sh").read_text(encoding="utf-8")
+        fast_case = next(line for line in runner.splitlines() if line.strip().startswith("--fast)"))
+        self.assertIn("RUN_DECISION_PLANE=true", fast_case)
+
+    def test_decision_plane_validator_never_posts_evaluation_requests(self):
+        validator = (ROOT / "rest-http" / "scripts" / "validate_decision_plane.sh").read_text(
+            encoding="utf-8"
+        )
+        executable_lines = "\n".join(
+            line for line in validator.splitlines() if not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("evidence/run", executable_lines)
+        self.assertNotIn("/api/v1/admin/decision/evaluate", executable_lines)
+        self.assertNotIn("DECISION_EVALUATE_URL", executable_lines)
+        self.assertNotIn("DECISION_EVAL_BODY", executable_lines)
+        self.assertIn("Decision-evidence corpus v1 loaded:", validator)
+        registry_sources = (
+            ROOT
+            / "core"
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "amsha"
+            / "core"
+            / "classifier"
+            / "evaluation"
+            / "DecisionEvidenceCorpusRegistry.java",
+            ROOT
+            / "core"
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "amsha"
+            / "core"
+            / "classifier"
+            / "evaluation"
+            / "DecisionPriceScheduleRegistry.java",
+        )
+        for source in registry_sources:
+            self.assertIn("is not present on the classpath", source.read_text(encoding="utf-8"))
+        self.assertIn("DecisionEvaluationDisabledPathIT", executable_lines)
+        self.assertIn("DecisionEvaluationPathIT", executable_lines)
+        self.assertIn("decision-evidence/corpus-v1.json is not present on the classpath", executable_lines)
+        self.assertIn("decision-evidence/corpus-v3.json is not present on the classpath", executable_lines)
+        self.assertIn("Decision-evidence corpus v3 loaded:", executable_lines)
+        self.assertIn(
+            "decision-evidence/price-schedule-v1.json is not present on the classpath",
+            executable_lines,
+        )
+
+    def test_validation_run_always_sets_the_inert_plane_diagnostic_expectation(self) -> None:
+        """Leaving the expectation unset makes the startup-diagnostic check vacuous.
+
+        The validator reads an unset AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING as "switches
+        disabled", so a wrapper that does not derive it from the loaded configuration would
+        pass even when the diagnostic is missing. It must therefore always be exported.
+        """
+        switches = {
+            "AMSHA_DECISION_SHADOW_INTENT_ENABLED": "false",
+            "AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED": "false",
+            "AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED": "false",
+            "AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED": "false",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            captured = directory_path / "captured-expectation"
+            validator = directory_path / "validator.sh"
+            validator.write_text(
+                "#!/usr/bin/env bash\n"
+                'printf \'%s\\n\' "${AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING:-UNSET}"'
+                ' > "$AMSHA_CAPTURE_FILE"\n',
+                encoding="utf-8",
+            )
+            validator.chmod(0o755)
+            base_env = {
+                "AMSHA_VALIDATION_SCRIPT": str(validator),
+                "AMSHA_CAPTURE_FILE": str(captured),
+                # An existing runtime: the wrapper runs the suite without owning a server.
+                "TEST_BASE": "http://127.0.0.1:1",
+                **switches,
+            }
+
+            for enabled, expected in (
+                (None, "false"),
+                ("AMSHA_DECISION_SHADOW_INTENT_ENABLED", "true"),
+                ("AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED", "true"),
+            ):
+                extra_env = dict(base_env)
+                if enabled:
+                    extra_env[enabled] = "true"
+                result = self.run_wrapper("sqlite", "--validate", "--fast", extra_env=extra_env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    captured.read_text(encoding="utf-8").strip(),
+                    expected,
+                    f"expectation wrong when {enabled or 'no switch'} is enabled",
+                )
+
+    def test_readiness_counter_counts_every_warning_record(self):
+        validator = (
+            ROOT / "rest-http" / "scripts" / "validate_decision_plane.sh"
+        ).read_text(encoding="utf-8")
+        count_line = next(
+            line for line in validator.splitlines() if "COUNT=$(awk " in line
+        )
+        awk_program = count_line.split("awk '", 1)[1].split("' \"$LOG_FILE\")", 1)[0]
+        self.assertEqual(
+            "/DecisionPlaneReadiness/ { count++ } END { print count+0 }",
+            awk_program,
+        )
+
+        console_record = (
+            "2026-10-10 00:00:00,000 WARN "
+            "[com.amsha.core.classifier.DecisionPlaneReadiness] readiness warning"
+        )
+        file_record = (
+            "amsha-sqlite[10106] WARN "
+            "[com.ams.cor.cla.DecisionPlaneReadiness] readiness warning"
+        )
+
+        def count_records(records):
+            result = subprocess.run(
+                ["awk", awk_program],
+                input="".join(f"{record}\n" for record in records),
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            return result.stdout.strip()
+
+        self.assertEqual("1", count_records([file_record]))
+        self.assertEqual("2", count_records([console_record, file_record]))
+        self.assertEqual("2", count_records([file_record, file_record]))
+
+    def test_validation_wrapper_separates_console_and_quarkus_logs(self):
+        runner = (ROOT / "scripts" / "distribution" / "run_dist_backend.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('console_log_file="${log_file}.console"', runner)
+        self.assertIn('export QUARKUS_LOG_FILE_PATH="$log_file"', runner)
+        self.assertIn('export AMSHA_VALIDATION_LOG_FILE="$log_file"', runner)
+        self.assertIn('> "$console_log_file" 2>&1 &', runner)
+        self.assertNotIn('> "$log_file" 2>&1 &', runner)
+
+    def test_decision_switch_lookup_tolerates_unset_variables(self) -> None:
+        """A clean checkout has no root .env, so the four decision switches are simply absent.
+
+        run_dist_backend.sh runs under `set -u`, and an indirect lookup without an inline
+        default aborts the whole run with "unbound variable" before any suite starts. The
+        repository .env defines these keys, which masks the failure locally, so this runs the
+        real wrapper from a project root that has no env files at all.
+        """
+        switch_names = (
+            "AMSHA_DECISION_SHADOW_INTENT_ENABLED",
+            "AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED",
+            "AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED",
+            "AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            project_root = directory_path / "project"
+            shutil.copytree(ROOT / "scripts", project_root / "scripts")
+            captured = directory_path / "captured-expectation"
+            validator = directory_path / "validator.sh"
+            validator.write_text(
+                "#!/usr/bin/env bash\n"
+                'printf \'%s\\n\' "${AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING:-UNSET}"'
+                ' > "$AMSHA_CAPTURE_FILE"\n',
+                encoding="utf-8",
+            )
+            validator.chmod(0o755)
+            environment = os.environ.copy()
+            for name in (
+                "AMSHA_DATA_DIR",
+                "AMSHA_ONNX_MODEL_ROOT",
+                "AMSHA_ONNX_ENABLED",
+                "AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS",
+                "AMSHA_PERSISTENCE_BACKEND",
+                *switch_names,
+            ):
+                environment.pop(name, None)
+            environment.update(
+                {
+                    "AMSHA_VALIDATION_SCRIPT": str(validator),
+                    "AMSHA_CAPTURE_FILE": str(captured),
+                    # An existing runtime: the wrapper runs the suite without owning a server.
+                    "TEST_BASE": "http://127.0.0.1:1",
+                }
+            )
+            result = subprocess.run(
+                [str(project_root / "scripts" / "run_dist_sqlite.sh"), "--validate", "--fast"],
+                cwd=project_root,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=60,
+            )
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"an absent decision switch must read as disabled, not abort: {result.stderr}",
+            )
+            self.assertEqual(captured.read_text(encoding="utf-8").strip(), "false")
+
     def test_mise_adapters_keep_backend_builds_and_fast_validation_separate(self) -> None:
         dist_tasks = ROOT / ".mise" / "tasks" / "dist"
         for backend in ("sqlite", "pg", "fs"):
@@ -255,7 +557,11 @@ class DistributionWrapperContractTest(unittest.TestCase):
             validator = directory_path / "validator.sh"
             (fake_bin_dir / "curl").write_text(
                 "#!/usr/bin/env bash\n"
-                "exit 0\n",
+                "for _ in $(seq 1 500); do\n"
+                "  [[ -f \"$AMSHA_FAKE_ENV_FILE\" ]] && exit 0\n"
+                "  sleep 0.01\n"
+                "done\n"
+                "exit 1\n",
                 encoding="utf-8",
             )
             (fake_bin_dir / "curl").chmod(0o755)

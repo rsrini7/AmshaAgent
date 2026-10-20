@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.postgres.jdbi.AuditJdbiDao;
 
 import org.jboss.logging.Logger;
@@ -23,7 +24,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresAuditEventStoreAdapter implements AuditEventStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresAuditEventStoreAdapter.class);

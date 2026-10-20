@@ -48,6 +48,29 @@ class ChannelCronNotificationDispatcherTest {
     }
 
     @Test
+    void approvalEventForwardsDisplayParametersToChannelNotifier() {
+        when(telegramPlugin.jobNotifier()).thenReturn(telegramNotifier);
+        when(pluginRegistry.find(ChannelType.TELEGRAM)).thenReturn(Optional.of(telegramPlugin));
+        String displayParamsJson = "{\"agent\":\"brahma\",\"goal\":\"compute 11!\"}";
+        AgentJobCompleted event = new AgentJobCompleted(
+                "cron-1",
+                "user-1",
+                ChannelType.TELEGRAM,
+                "chat-1",
+                "corr-1",
+                "Approval required",
+                null,
+                "cron-session-1",
+                "garuda",
+                displayParamsJson);
+
+        dispatcher.onJobCompleted(event);
+
+        verify(telegramNotifier)
+                .notifyApprovalRequired("chat-1", "cron-session-1", "garuda", "Approval required", displayParamsJson);
+    }
+
+    @Test
     void testCompletionPrefersCronSessionIdWhenPresent() {
         when(telegramPlugin.jobNotifier()).thenReturn(telegramNotifier);
         when(pluginRegistry.find(ChannelType.TELEGRAM)).thenReturn(Optional.of(telegramPlugin));

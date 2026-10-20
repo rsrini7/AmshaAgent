@@ -21,6 +21,7 @@ import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.loop.AgentLoop;
+import com.amsha.core.agent.loop.CronRunResultMapper;
 import com.amsha.core.agent.reasoning.LangChainReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
@@ -96,7 +97,7 @@ public class CronJobRunner {
                 executionId,
                 job.getId(),
                 cronSessionId,
-                "RUNNING",
+                CronRunResultMapper.STATUS_RUNNING,
                 Instant.now(),
                 null,
                 null,

@@ -213,6 +213,82 @@ when all slots are exhausted.
 
 For non-Groq providers, mirror the pattern with `AMSHA_CLASSIFIER_{PROVIDER}_{KEY}`.
 
+## Decision Plane & Classifier Runtime Control
+
+The Jev decision plane is a typed judgment seam (`DecisionEngine`). It is **Deferred**: no production
+`DecisionEngine` bean is registered, so enabled shadow classifiers return `NoOpinion(MISSING_MODEL)` and
+disabled classifiers return `DISABLED`. The shadow switches below request *observational* evaluation — they never change
+routing, tool authorization, HITL decisions, or retry budgets. See
+[ADR-jev-decision-plane](./adr/architecture/ADR-jev-decision-plane.md).
+
+> **Accepted and implemented, default-off.** `AMSHA_DECISION_EVALUATION_ENABLED=false` gates the
+> internal-only, non-routing provider evaluation endpoints. The versioned corpus runner is available at
+> `POST /api/v1/admin/decision/evidence/run`. This path registers no `DecisionEngine` bean; the parent
+> decision-plane ADR remains Deferred. See
+> [ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+> and the [activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md).
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_DECISION_SHADOW_INTENT_ENABLED` | `false` | Enable observational shadow intent classification through `DecisionEngine` |
+| `AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED` | `false` | Enable observational shadow tool-risk evaluation through `DecisionEngine` |
+| `AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED` | `false` | Enable observational shadow answer-quality evaluation through `DecisionEngine` |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED` | `false` | Enable the low-risk typed intent decision pilot router |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW` | `0.50` | Lower review-band threshold; below it a judgment falls back to the deterministic default |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH` | `0.85` | Upper review-band threshold; at or above it direct routing may apply |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS` | `50000` | Per-evaluation deadline for the intent decision router |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED` | `false` | Activation gate: candidate calibration on live traffic formally approved |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED` | `false` | Activation gate: cost ceiling and latency budget formally approved |
+| `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | *(unset)* | Activation gate: accountable rollout **and rollback** owner (a person or team, not a status). **No closed set of values** — the only rule enforced is non-blank (`IntentDecisionRouter.isActivationGateApproved()`), so any placeholder opens the gate; leave unset when no owner is assigned. When both approval booleans are true and this value looks like a placeholder, `ActivationGateReadiness` logs one advisory `WARN` at startup — it never rejects or normalises the value |
+
+Two behaviours are worth calling out because both are fail-closed:
+
+- **Enabling a switch without a resolvable `DecisionEngine` activates no decision behavior.** The plane stays
+  inert and `DecisionPlaneReadiness` logs a single `WARN` at startup naming the enabled switches and the
+  fallback posture. Classifier runtime status also exposes requested and effective state; the warning is the
+  dedicated startup diagnostic for this configuration, so a deployment that enables these switches should
+  treat its absence as a defect.
+- **The intent decision router does not take effect while the activation gate is unapproved.**
+  `isEnabled()` requires `enabled=true` *and* an available engine, but direct routing is permitted
+  only when `isActivationGateApproved()` also holds (candidate evidence approved, cost ceiling
+  approved, and a non-blank rollout owner). With an available engine and the gate unapproved, `evaluateIntent()` returns an
+  `ACTIVATION_GATE_NOT_SATISFIED` fallback for non-blank messages and any `DIRECT_ROUTE` is suppressed — so setting
+  `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op.
+
+### Decision provider selection (Jev / System One)
+
+Selects the provider used by the explicit decision-evaluation path, following the LLM provider convention (`AMSHA_LLM_PROVIDER` plus `amsha.llm.<provider>.model`). Production routing remains inert: setting `AMSHA_DECISION_PROVIDER` alone does not register a production `DecisionEngine` or route agent decisions through it. The accepted, default-off evaluation path consumes provider configuration only for an internal request when `AMSHA_DECISION_EVALUATION_ENABLED=true`. See [the activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md) for the remaining production-routing gates.
+
+Two axes: a provider id names the System One **endpoint** that receives `POST /v1/systemone` (as an LLM provider
+id names the endpoint receiving `/v1/chat/completions`), and `AMSHA_DECISION_{PROVIDER}_MODEL` names the
+checkpoint served there. An id may be a specific decision server (`laya`, `kev`, `clm`), a generic local runtime
+host (`omlx`), or a hosted API (`typesafe`).
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_DECISION_PROVIDER` | *(unset)* | Provider id to use; must match a declared slot. Blank keeps the plane inert |
+| `AMSHA_DECISION_{PROVIDER}_ENABLED` | `false` | Whether the slot may be selected |
+| `AMSHA_DECISION_{PROVIDER}_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint; the lane is derived from its host |
+| `AMSHA_DECISION_{PROVIDER}_MODEL` | *(per slot)* | Decision model to request — **required for a remote provider, optional for a self-hosted one** (blank = the server picks its own checkpoint and the field is omitted) |
+| `AMSHA_DECISION_{PROVIDER}_API_KEY` | *(unset)* | Direct provider API key, following the same environment-backed convention as other Amsha providers; blank means no key is configured |
+| `AMSHA_DECISION_{PROVIDER}_TIMEOUT` | `PT50S` | Provider request timeout; the registered decision deadline may cap it |
+| `AMSHA_DECISION_{PROVIDER}_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered; belongs to the model — CLM requires `PROSE` |
+
+Declared providers: `typesafe`, `clm`, `laya`, `kev`, `omlx`.
+
+The lane is derived from the endpoint host, not declared: the literal `127.0.0.1` selects the self-hosted lane,
+anything else the remote lane. `localhost`, `::1`, and other `127.x` hosts are refused as ambiguous. A **remote**
+slot with no `model` is refused (a self-hosted one may omit it), as is a credentialed remote provider
+(`typesafe`) with no direct `api-key` (`AMSHA_DECISION_TYPESAFE_API_KEY`), a
+non-positive `timeout`, or a CLM model declared without `WIRE_PROFILE=PROSE`.
+
+Classifier *runtime* control (`/api/v1/admin/local-ml/onnx/classifiers*`) is a separate admin
+surface with its own requested-versus-effective semantics; see
+[In-Process Local ML (ONNX Runtime)](#in-process-local-ml-onnx-runtime) and
+[Architecture Invariants](./Architecture_Invariants.md) §7.13.4. The cockpit mirrors only the
+read-only half at `#/classifiers`, which requires the `internal` role and reports no
+activation-gate, evidence, cost-approval, or rollout-owner state.
+
 ## Agent Loop
 
 | Variable | Default | Description |
@@ -236,7 +312,7 @@ the same cooldown timing.
 | `AMSHA_INFINITE_LOOP_LLM_PROVIDERS` | `omlx,groq,openrouter` | Comma-separated LLM providers (slot order) |
 | `AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS` | `groq,ollama` | Comma-separated compaction providers |
 | `AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | `groq,ollama` | Comma-separated classifier providers |
-| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers |
+| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers (slot order); `onnx` is available only with a verified local model bundle. See the [ONNX Local ML guide](ONNX_LOCAL_ML_GUIDE.md). |
 | `AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS` | `5` | Base cooldown between provider switches (s) |
 | `AMSHA_INFINITE_LOOP_COOLDOWN_MAX_SECONDS` | `60` | Max cooldown (s) |
 | `AMSHA_INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS` | `5` | Transient error cooldown (s) |
@@ -311,7 +387,7 @@ schema) and must match the model used by every active provider.
 
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers (slot order) |
+| `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` | `ollama` | Comma-separated embedding providers (slot order); `onnx` is available only with a verified local model bundle. See the [ONNX Local ML guide](ONNX_LOCAL_ML_GUIDE.md). |
 | `AMSHA_EMBEDDING_OLLAMA_MODEL` | `nomic-embed-text:v1.5` | Ollama embedding model |
 | `AMSHA_EMBEDDING_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama base URL for embedding |
 | `AMSHA_EMBEDDING_JINA_API_KEY` | — | Jina AI API key |
@@ -560,6 +636,13 @@ the request before authentication or resource handling.
 | `AMSHA_PG_PASSWORD` | `changeme` | PostgreSQL password |
 
 ## Observability
+
+Application logs are written to a profile/backend-specific file in the process
+working directory. SQLite filenames follow `amsha-<profile>-sqlite.log`
+(for example, `amsha-prod-sqlite.log` and `amsha-dev-sqlite.log`). The
+PostgreSQL and filesystem profiles use `amsha-postgresql-postgres.log` and
+`amsha-filesystem-fs.log`. Set `AMSHA_LOG_CONSOLE_ENABLED=true` to also print
+application logs in the terminal; it defaults to `false`.
 
 | Variable | Default | Description |
 |---|---|---|

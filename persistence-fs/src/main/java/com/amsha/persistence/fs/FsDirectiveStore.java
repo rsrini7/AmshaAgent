@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.selfevolve.api.DirectiveState;
 import com.amsha.selfevolve.api.SynthesizedDirective;
 import com.amsha.selfevolve.store.DirectiveStorePort;
@@ -22,7 +23,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Stores directives as JSON per user in {dataDir}/directives/{userId}.json.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsDirectiveStore implements DirectiveStorePort {
 
     private static final Logger log = Logger.getLogger(FsDirectiveStore.class);

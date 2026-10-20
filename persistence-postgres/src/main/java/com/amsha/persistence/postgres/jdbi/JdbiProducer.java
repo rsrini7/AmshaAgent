@@ -10,6 +10,7 @@ import java.sql.Types;
 import java.util.Map;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -26,7 +27,7 @@ import io.agroal.api.AgroalDataSource;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class JdbiProducer {
 
     @Inject

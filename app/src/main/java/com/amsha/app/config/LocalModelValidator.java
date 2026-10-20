@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 import com.amsha.app.cli.ModelInstaller;
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.localml.onnx.LocalAudioTranscoder;
 
 /**
@@ -33,7 +34,7 @@ public final class LocalModelValidator {
             if (!Files.exists(manifest)) {
                 printMissingWhisperBanner(whisperDir);
             }
-            String ffmpegPath = System.getProperty("amsha.stt.ffmpeg-path", System.getenv("AMSHA_STT_FFMPEG_PATH"));
+            String ffmpegPath = System.getProperty("amsha.stt.ffmpeg-path", System.getenv(ConfigKeys.STT_FFMPEG_PATH));
             if (!LocalAudioTranscoder.isFfmpegAvailable(ffmpegPath)) {
                 printMissingFfmpegBanner(ffmpegPath != null && !ffmpegPath.isBlank() ? ffmpegPath : "ffmpeg");
             }
@@ -55,7 +56,7 @@ public final class LocalModelValidator {
     }
 
     private static boolean isLocalEmbeddingEnabled() {
-        String onnxEnabled = System.getProperty("amsha.onnx.enabled", System.getenv("AMSHA_ONNX_ENABLED"));
+        String onnxEnabled = System.getProperty("amsha.onnx.enabled", System.getenv(ConfigKeys.ONNX_ENABLED));
         String embeddingModel =
                 System.getProperty("amsha.embedding.onnx.model", System.getenv("AMSHA_EMBEDDING_ONNX_MODEL"));
         return "true".equalsIgnoreCase(onnxEnabled) && embeddingModel != null && !embeddingModel.isBlank();

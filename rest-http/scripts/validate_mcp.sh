@@ -236,9 +236,10 @@ port_file.write_text(str(server.server_address[1]), encoding="utf-8")
 server.serve_forever()
 PY
 MOCK_PID=$!
-for _ in $(seq 1 20); do
-    [ -s "$MOCK_PORT_FILE" ] && break
-    sleep 0.1
+for _ in $(seq 1 100); do
+  [ -s "$MOCK_PORT_FILE" ] && break
+  kill -0 "$MOCK_PID" 2>/dev/null || break
+  sleep 0.1
 done
 MOCK_PORT="$(cat "$MOCK_PORT_FILE" 2>/dev/null || true)"
 if [ -z "$MOCK_PORT" ]; then

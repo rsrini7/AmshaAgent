@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
@@ -29,13 +30,13 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "AMSHA_CEREBRAS_API_KEY")
+    @ConfigProperty(name = ConfigKeys.CEREBRAS_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_CEREBRAS_BASE_URL", defaultValue = ModelDefaults.DEFAULT_CEREBRAS_BASE_URL)
+    @ConfigProperty(name = ConfigKeys.CEREBRAS_BASE_URL, defaultValue = ModelDefaults.DEFAULT_CEREBRAS_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "AMSHA_CEREBRAS_MODEL", defaultValue = ModelDefaults.DEFAULT_CEREBRAS_MODEL)
+    @ConfigProperty(name = ConfigKeys.CEREBRAS_MODEL, defaultValue = ModelDefaults.DEFAULT_CEREBRAS_MODEL)
     String modelName;
 
     @Override
@@ -66,8 +67,8 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
     private ChatModel doCreate(String modelName) {
         String key = apiKey.orElseThrow(() -> new IllegalStateException("Cerebras requires AMSHA_CEREBRAS_API_KEY"));
         String cleanKey = key.replaceAll("[\\p{Cntrl}\\s\"']", "").trim();
-        List<MultiModelChatModel.ModelEntry> entries =
-                ChatModelFactory.buildMultiModelEntries(cleanKey, modelName, "cerebras", (k, m) -> {
+        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
+                cleanKey, modelName, ModelDefaults.PROVIDER_CEREBRAS, (k, m) -> {
                     ChatModel raw = ChatModelFactory.createOpenAi(
                             baseUrl,
                             k,
@@ -77,10 +78,11 @@ public class CerebrasProviderFactory implements AgentChatModelProvider {
                             agentConfig.maxRetries(),
                             agentConfig.temperature(),
                             agentConfig.logHttp());
-                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("cerebras", m);
+                    MultimodalCapability cap =
+                            MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_CEREBRAS, m);
                     return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
                 });
         if (entries.size() == 1) return entries.get(0).model();
-        return new MultiModelChatModel("cerebras", entries, 5);
+        return new MultiModelChatModel(ModelDefaults.PROVIDER_CEREBRAS, entries, 5);
     }
 }

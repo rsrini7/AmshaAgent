@@ -117,7 +117,7 @@ $ErrorActionPreference = 'Stop'
 """
 
 [tasks."test:summary"]
-description = "Summarize surefire XML test report counts, reactor JaCoCo coverage, and UI coverage"
+description = "Summarize surefire+failsafe XML test report counts, reactor JaCoCo coverage, and UI coverage"
 dir = "{{config_root}}"
 quiet = true
 shell = "bash -c"
@@ -126,10 +126,15 @@ run = """
 # `rg`, which is not declared in [tools] and therefore absent on a clean checkout — and because
 # stderr was discarded, the task printed a confident "Total: 0" instead of failing. Keep the
 # dependency set to tools that are guaranteed present, and never let "no data" look like "zero".
-if [ "$(find . -path "*/target/surefire-reports/TEST-*.xml" -type f 2>/dev/null | wc -l | tr -d ' ')" -eq 0 ]; then
-    echo "Java Tests: no surefire reports found - run './mvnw test' first." >&2
+#
+# Both report directories are read: Surefire owns the `*Test` classes and Failsafe the `*IT`
+# classes, and Failsafe is inherited by every reactor module. Counting only Surefire would hide
+# the integration tests entirely. Note the parentheses: with `-exec` present `find` suppresses
+# its implicit `-print`, so an unparenthesised `A -o B -exec ...` would silently drop the A half.
+if [ "$(find . \\( -path "*/target/surefire-reports/TEST-*.xml" -o -path "*/target/failsafe-reports/TEST-*.xml" \\) -type f 2>/dev/null | wc -l | tr -d ' ')" -eq 0 ]; then
+    echo "Java Tests: no surefire/failsafe reports found - run './mvnw verify' first." >&2
 else
-    TEST_SUMMARY=$(find . -path "*/target/surefire-reports/TEST-*.xml" -type f -exec grep -h "<testsuite" {} + 2>/dev/null | awk -F' ' '{
+    TEST_SUMMARY=$(find . \\( -path "*/target/surefire-reports/TEST-*.xml" -o -path "*/target/failsafe-reports/TEST-*.xml" \\) -type f -exec grep -h "<testsuite" {} + 2>/dev/null | awk -F' ' '{
         for(i=1; i<=NF; i++) {
             if($i ~ /tests=/)    { split($i, a, "\\x22"); t += a[2] }
             if($i ~ /errors=/)   { split($i, a, "\\x22"); e += a[2] }

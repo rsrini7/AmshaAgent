@@ -15,6 +15,7 @@ import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.classifier.api.ToolRiskPrediction;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
@@ -51,9 +52,39 @@ class OnnxToolRiskShadowClassifierTest {
         assertInstanceOf(ClassifierResult.Opinion.class, result);
         assertTrue(input.get().contains("\"classifier\":\"tool_risk\""));
         assertTrue(input.get().contains("\"tool_name\":\"sandbox_exec\""));
+        assertTrue(input.get()
+                .contains("\"" + ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY + "\":\"EXECUTE_SHELL\""));
         assertTrue(input.get().contains("\"secret\":\"value\""));
         assertFalse(input.get().contains("session"));
         assertFalse(input.get().contains("user_id"));
+    }
+
+    @Test
+    void recursivelySortsNestedParameterObjectKeys() throws Exception {
+        AtomicReference<String> input = new AtomicReference<>();
+        OnnxToolRiskShadowClassifier classifier =
+                new OnnxToolRiskShadowClassifier(true, new ObjectMapper(), serialized -> {
+                    input.set(serialized);
+                    return new ClassifierResult.Opinion<>(ToolRiskPrediction.LOW_RISK, 1.0f, "rule");
+                });
+        ToolRiskShadowContext context = new ToolRiskShadowContext(
+                "coder",
+                AutonomyLevel.FULL,
+                "sandbox_exec",
+                ToolOperation.EXECUTE_SHELL,
+                Map.of("nested", Map.of("z", 2, "a", 1)),
+                "run code");
+
+        classifier.classify(context);
+
+        var fields = new ObjectMapper()
+                .readTree(input.get())
+                .path("parameters")
+                .path("nested")
+                .fieldNames();
+        assertEquals("a", fields.next());
+        assertEquals("z", fields.next());
+        assertFalse(fields.hasNext());
     }
 
     @Test
@@ -93,6 +124,11 @@ class OnnxToolRiskShadowClassifierTest {
 
     private static ToolRiskShadowContext context() {
         return new ToolRiskShadowContext(
-                "coder", AutonomyLevel.FULL, "sandbox_exec", Map.of("secret", "value"), "run the code");
+                "coder",
+                AutonomyLevel.FULL,
+                "sandbox_exec",
+                ToolOperation.EXECUTE_SHELL,
+                Map.of("secret", "value"),
+                "run the code");
     }
 }

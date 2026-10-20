@@ -28,11 +28,13 @@ import com.amsha.mcp.tool.McpTransportType;
 import com.amsha.sandbox.ProcessIsolationExecutor;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolResponse;
 import com.amsha.tools.builtin.SandboxExecTool;
 import com.amsha.tools.builtin.ToolSearchIndex;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -60,6 +62,9 @@ class ToolDiscoveryIntegrationTest {
 
     @Inject
     BeanManager beanManager;
+
+    @ConfigProperty(name = "amsha.tools.playwright.enabled", defaultValue = "false")
+    boolean playwrightEnabled;
 
     private List<AgentTool> discoverRawTools() {
         return beanManager.getBeans(Object.class).stream()
@@ -97,13 +102,12 @@ class ToolDiscoveryIntegrationTest {
             "ingest_document",
             "register_mcp_server",
             "self_evolve_reflect",
-            "browser_navigate");
+            ToolCapability.BROWSER_NAVIGATE.toolName());
 
     private static final List<String> EXPECTED_CREDENTIALLESS_ACTIVE_TOOLS = List.of(
             "agent_task",
             "archival_memory_insert",
             "archival_memory_search",
-            "browser_navigate",
             "core_memory_append",
             "core_memory_read",
             "core_memory_replace",
@@ -184,6 +188,10 @@ class ToolDiscoveryIntegrationTest {
                     activeTools.contains(expectedTool),
                     "Expected unconditional tool '" + expectedTool + "' missing from active manifest: " + activeTools);
         }
+        assertEquals(
+                playwrightEnabled,
+                activeTools.contains(ToolCapability.BROWSER_NAVIGATE.toolName()),
+                "browser_navigate must follow amsha.tools.playwright.enabled");
 
         List<String> expectedActiveTools = discoverRawTools().stream()
                 .filter(AgentTool::isEnabled)

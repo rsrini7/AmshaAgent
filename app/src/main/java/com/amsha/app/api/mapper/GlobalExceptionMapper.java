@@ -9,6 +9,7 @@ import jakarta.ws.rs.ext.Provider;
 
 import java.time.Instant;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 
 import org.jboss.logging.Logger;
@@ -23,7 +24,11 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
 
     @Override
     public Response toResponse(Throwable exception) {
-        log.errorf("REST Endpoint Exception [%s]: %s", uriInfo.getPath(), exception.getMessage(), exception);
+        log.errorf(
+                LogUtil.relevantThrowable(exception),
+                "REST Endpoint Exception [%s]: %s",
+                uriInfo.getPath(),
+                exception.getMessage());
 
         if (exception instanceof WebApplicationException wae) {
             return Response.fromResponse(wae.getResponse())

@@ -16,7 +16,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -39,8 +42,8 @@ public class AgyOAuthTokenExtractor {
     private static final List<String> KEYCHAIN_SERVICES =
             List.of("Antigravity", "antigravity-cli", "Gemini Code Assist", "google-antigravity");
 
-    private static final List<String> TOKEN_CONTAINER_NAMES =
-            List.of("oauthAccount", "oauth", "credentials", "tokens", "auth", "gemini", "antigravity");
+    private static final List<String> TOKEN_CONTAINER_NAMES = List.of(
+            "oauthAccount", "oauth", "credentials", "tokens", "auth", ModelDefaults.PROVIDER_GEMINI, "antigravity");
 
     private static final List<String> TOKEN_FIELD_NAMES = List.of(
             "apiKey", "api_key", "accessToken", "access_token", "bearerToken", "token", "oauthToken", "sessionKey");
@@ -226,7 +229,7 @@ public class AgyOAuthTokenExtractor {
     }
 
     private Optional<String> extractTokenFromEnvironment() {
-        Optional<String> prop = Optional.ofNullable(System.getProperty("amsha.llm.agy.api-key"))
+        Optional<String> prop = Optional.ofNullable(System.getProperty(LlmConfigKeys.AGY_API_KEY))
                 .filter(val -> !val.isBlank())
                 .map(String::trim);
         if (prop.isPresent()) {
@@ -234,10 +237,10 @@ public class AgyOAuthTokenExtractor {
         }
 
         List<String> envVars = List.of(
-                "AMSHA_AGY_API_KEY",
+                ConfigKeys.AGY_API_KEY,
                 "AGY_API_KEY",
                 "ANTIGRAVITY_API_KEY",
-                "AMSHA_GEMINI_API_KEY",
+                ConfigKeys.GEMINI_API_KEY,
                 "GEMINI_API_KEY",
                 "GOOGLE_API_KEY");
 

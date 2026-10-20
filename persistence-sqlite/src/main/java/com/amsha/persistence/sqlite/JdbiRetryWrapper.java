@@ -6,6 +6,7 @@ import java.util.concurrent.Callable;
 import java.util.function.Predicate;
 
 import com.amsha.common.util.BackoffRetryExecutor;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.jboss.logging.Logger;
 import org.jdbi.v3.core.statement.UnableToExecuteStatementException;
@@ -19,7 +20,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * for exponential backoff.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class JdbiRetryWrapper {
 
     private static final Logger log = Logger.getLogger(JdbiRetryWrapper.class);

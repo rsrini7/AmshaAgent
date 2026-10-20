@@ -20,6 +20,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.localml.onnx.OnnxSessionLeaseManager;
 import com.amsha.localml.onnx.OnnxSessionLeaseManager.UnloadResult;
+import com.amsha.persistence.api.AccessRoles;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -80,7 +81,7 @@ public class OnnxModelAdminResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

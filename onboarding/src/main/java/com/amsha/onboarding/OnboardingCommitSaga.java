@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.onboarding.spi.CompensatableOnboardingCommit;
 import com.amsha.onboarding.spi.OnboardingContext;
 import com.amsha.onboarding.spi.OnboardingExtension;
@@ -72,7 +73,7 @@ public class OnboardingCommitSaga {
 
     LlmProfileStorePort profileStore;
 
-    @ConfigProperty(name = "amsha.llm.vault-priority", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.VAULT_PRIORITY, defaultValue = "false")
     boolean vaultPriority;
 
     /**

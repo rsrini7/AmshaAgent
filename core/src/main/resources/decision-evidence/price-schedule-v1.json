@@ -1,0 +1,14 @@
+{
+  "scheduleVersion": 1,
+  "description": "Project-author-approved rates for non-routing OMLX evaluation on 2026-10-18; Committee ratification remains pending for production promotion.",
+  "entries": [
+    {
+      "providerId": "omlx",
+      "modelId": "clef-flash-oQ4e",
+      "usdPer1kInputTokens": 0,
+      "usdPer1kOutputTokens": 0,
+      "source": "Project-author-approved provider-inference-only zero-rate basis for local OMLX deployment at http://127.0.0.1:8000/v1, model clef-flash-oQ4e; approved for evaluation on 2026-10-18; formal Committee ratification remains pending; local compute excluded from M5.",
+      "effectiveDate": "2026-10-18"
+    }
+  ]
+}

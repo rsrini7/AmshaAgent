@@ -8,6 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.oauth.KimchiOAuthTokenExtractor;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -95,11 +98,11 @@ public class KimchiTokenResolver {
             }
         }
 
-        return Optional.ofNullable(System.getProperty("AMSHA_KIMCHI_API_KEY"))
+        return Optional.ofNullable(System.getProperty(ConfigKeys.KIMCHI_API_KEY))
                 .filter(k -> !k.isBlank())
-                .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.kimchi.api-key"))
+                .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.KIMCHI_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getenv("AMSHA_KIMCHI_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.KIMCHI_API_KEY))
                         .filter(k -> !k.isBlank()))
                 .or(() -> Optional.ofNullable(System.getenv("KIMCHI_API_KEY")).filter(k -> !k.isBlank()))
                 .orElseThrow(() -> new IllegalStateException("Kimchi provider requires active credentials. "
@@ -133,7 +136,8 @@ public class KimchiTokenResolver {
         if (!actorUserId.equals(receipt.approvedByUserId())) {
             throw new IllegalStateException("Operation grant actor mismatch");
         }
-        if (!ApprovalReceiptIssuer.oauthExchangeSessionId("kimchi", sessionId).equals(receipt.sessionId())) {
+        if (!ApprovalReceiptIssuer.oauthExchangeSessionId(ModelDefaults.PROVIDER_KIMCHI, sessionId)
+                .equals(receipt.sessionId())) {
             throw new IllegalStateException("Operation grant session mismatch");
         }
 

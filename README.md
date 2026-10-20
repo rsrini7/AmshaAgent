@@ -8,10 +8,10 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Java Tests](https://img.shields.io/badge/Tests-8301_passing-brightgreen.svg?style=flat)
-  ![Java Coverage](https://img.shields.io/badge/Coverage-84.28%25-brightgreen.svg?style=flat)
-  ![UI Tests](https://img.shields.io/badge/UI_Tests-172_passing-brightgreen.svg?style=flat)
-  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-58.67%25-yellow.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9720_passed_%C2%B7_15_skipped_of_9735-brightgreen.svg?style=flat)
+  ![Java Coverage](https://img.shields.io/badge/Coverage-86.69%25-brightgreen.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-201_passing-brightgreen.svg?style=flat)
+  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-59.64%25-yellow.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -51,8 +51,8 @@ responses.
 
 ```bash
 # Prerequisites: JDK 25, Docker/Podman (optional for sandbox)
-git clone https://github.com/your-org/amsha
-cd amsha
+git clone https://github.com/rsrini7/AmshaAgent.git
+cd AmshaAgent
 
 # Copy and edit .env (see docs/CONFIGURATION.md for all variables)
 cp .env.example .env
@@ -99,6 +99,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Non-authoritative classifier shadow path** — disabled-by-default intent, tool-risk, and answer-quality adapters emit bounded payload-free comparisons without changing routing, authorization, retry, or answer behavior; reproducible review/training/export tooling is present, while human-approved datasets and promoted models remain pending
 - **classifier safety gate** — core now provides ordered post-policy tool-risk and answer-quality SPIs with monotonic risk upgrades, existing HITL preservation, and one pre-tool retry budget; no active ONNX implementation is wired, so model evidence remains required before behavioral activation
 - **Non-activating classifier controls** — internal-only, mandatory-audited per-classifier runtime switches distinguish requested from effective state, reject enablement without a ready active implementation, and drain accepted work after disable; no ONNX classifier is behaviorally active
+- **Deferred typed decision plane** — one typed judgment seam (`DecisionEngine` → `Choice`/`Score`/`Noul` plus confidence, or `NoOpinion`) with in-process, self-hosted, and remote provider boundaries behind a placement validator. No production engine is registered: enabled shadow classifiers return `NoOpinion(MISSING_MODEL)`, while the intent router remains disabled and returns a `DISABLED` fallback. If an engine is later registered, direct routing still requires the evidence, cost, and owner approvals. `DecisionPlaneReadiness` announces enabled-but-inert switches once at startup (see [ADR-jev-decision-plane](./docs/adr/architecture/ADR-jev-decision-plane.md)). An explicit evaluation path — opt-in (`amsha.decision.evaluation.enabled`, default `false`), internal-only, and non-routing, registering no engine bean — has landed behind that switch to gather the evidence that gate requires (see [ADR-jev-decision-plane-evaluation-path](./docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md); status Accepted, 2026-10-07). The versioned corpus runner exposes payload-free M1–M5 evidence through an internal endpoint. The OMLX evaluation schedule contains the author-approved zero-rate entry, and its evaluation config sets a separate zero-per-1,000 ceiling; a post-change evidence run is pending, while production cost approval and the other activation gates remain open. The parent production decision-plane ADR remains Deferred, and `Instance<DecisionEngine>` remains unsatisfied.
 - **Reusable local ML verification** — one secret-safe mise workflow checks authenticated OMLX through `generic-openai`, bundle digests, ONNX health/index descriptors, real inference metric movement, and isolated native startup/shutdown without selecting Ollama
 - **Document ingestion** — add knowledge to the RAG store for retrieval in future agent turns via `IngestDocumentTool` (guard/PII/audit-gated); native two-tier hybrid RAG (FTS5 + vector + RRF + optional rerank) retained after safety-gated LangChain4j Easy RAG evaluation (P6 `P6-EASYRAG-01` — 6× Amsha superior on retrieval/governance/native/tenancy/descriptor/rerank, 1× Easy RAG superior on onboarding simplicity, see `rag/README.md` matrix)
 - **Extensible Skills system** — YAML/Markdown custom roles from database, classpath, or SkillsJars with hot reload and optional adaptive execution
@@ -117,6 +118,18 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 MCP management is available from the `#/mcp` panel, channel-neutral `/mcp ...` commands, and REST.
 See the [MCP management guide](./docs/MCP_MANAGEMENT.md) for lifecycle, approvals, user scope, setup
 links, reconfiguration, import, and testing. Module/API details are in [`mcp/README.md`](./mcp/README.md).
+
+## Optional local ONNX model bundles
+
+Local ONNX bundles are downloaded only when explicitly installed; inference does not fetch models automatically. These optional bundles provide dense embeddings, cross-encoder reranking, and in-process speech-to-text:
+
+| Bundle | Use | Install task |
+|---|---|---|
+| MPNet bundle (`all-mpnet-base-v2-e8c3b32`) | Dense embeddings from `sentence-transformers/all-mpnet-base-v2` | `mise run models:install-mpnet` |
+| BGE reranker | Optional RAG cross-encoder reranking | `mise run models:install-bge-reranker` |
+| Whisper tiny.en | Optional in-process speech-to-text | `mise run models:provision-local-whisper` |
+
+Packaged binaries also support `models install <mpnet|bge-reranker|whisper|all>`. See the [ONNX Local ML guide](./docs/ONNX_LOCAL_ML_GUIDE.md) for bundle verification, configuration, fallback behavior, and model-specific requirements. The local ML module also has a [module README](./local-ml-onnx/README.md).
 
 ## Project Map
 
@@ -172,7 +185,7 @@ channel-api/          ← Channel SPI: sealed interfaces and plugin contracts
 llm-provider-api/     ← LLM SPIs: ChatModelCreationPort, exception taxonomy
 security-api/         ← Security vocabulary: SecretVault, ToolOperation/RiskLevel
 tool-api/             ← AgentTool contract surface (ToolResponse, execution context)
-classifier-api/       ← Shadow-classifier contracts
+classifier-api/       ← Shadow-classifier contracts + typed decision-plane seam
 persistence-api/      ← Hexagonal port interfaces (stores, tiered memory ports)
 │
 security/             ← Vault, Argon2id + AES-GCM-SIV crypto, governed HTTP
@@ -272,9 +285,14 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 After `mise run build:test` or `mise run test:ui`, run `mise run test:summary` to view total test counts
 and coverage across both Java and UI suites. For detailed breakdowns:
-- **Java**: `python3 ./scripts/analyze_jacoco_coverage.py --target 0.80` (`--module <mod>`, `--top 10`, `--badge`, `--json`).
+- **Java**: `mise run quality:coverage` (reactor summary + per-module line/branch totals), `mise run quality:coverage-gaps`
+  (largest gaps with the missed line numbers), and `mise run quality:coverage-gate` (the coverage gate alone, against
+  reports already on disk — seconds instead of a full reactor build). These wrap
+  `python3 ./scripts/analyze_jacoco_coverage.py --target 0.80` (`--module <mod>`, `--modules`, `--top 10`, `--badge`, `--json`)
+  and `python3 ./scripts/verify_jacoco_coverage.py`; pass flags through after `--`, e.g. `mise run quality:coverage -- --json`.
   The default target tracks the goal in [`docs/TEST_COVERAGE_ANALYSIS.md`](./docs/TEST_COVERAGE_ANALYSIS.md) §8; the build gate itself is
-  `jacoco.minimum.line.coverage` in the root `pom.xml`.
+  `jacoco.minimum.line.coverage` in the root `pom.xml`. Use `--modules` for per-module line and branch totals — the view that shows
+  whether one module is subsidising another inside the reactor-wide number.
 - **UI**: `mise run test:ui` (runs Vitest with V8 coverage) and `python3 ./scripts/analyze_ui_coverage.py --target 0.50` (`--top 10`, `--badge`, `--badge-tests`, `--json`).
 
 ### ❓ Reference
@@ -286,4 +304,4 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-16; UI 2026-09-12): 8,301 Java tests at 84.28% line coverage and 172 UI tests at 58.67% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-29; UI 2026-09-30): 8,530 Java tests at 84.17% line coverage and 195 UI tests at 59.26% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.

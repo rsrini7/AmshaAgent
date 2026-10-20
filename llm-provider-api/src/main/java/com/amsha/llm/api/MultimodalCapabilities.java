@@ -8,21 +8,30 @@ import java.util.Locale;
 import java.util.Set;
 
 import com.amsha.channel.api.AttachmentType;
+import com.amsha.channel.api.MediaTypes;
 
 /**
  * Model-specific multimodal capability resolution and composite intersection.
  * Unknown provider/model combinations fail closed to {@link MultimodalCapability#TEXT_ONLY}.
  */
 public final class MultimodalCapabilities {
-    public static final Set<String> STANDARD_IMAGE_MIMES = Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
-    public static final Set<String> STANDARD_AUDIO_MIMES = Set.of("audio/mpeg", "audio/wav", "audio/ogg");
-    public static final Set<String> STANDARD_PDF_MIMES = Set.of("application/pdf");
+    public static final Set<String> STANDARD_IMAGE_MIMES =
+            Set.of(MediaTypes.PNG, MediaTypes.JPEG, MediaTypes.WEBP, MediaTypes.GIF);
+    public static final Set<String> STANDARD_AUDIO_MIMES = Set.of(MediaTypes.MPEG, MediaTypes.WAV, MediaTypes.OGG);
+    public static final Set<String> STANDARD_PDF_MIMES = Set.of(MediaTypes.PDF);
 
     private static final long SIZE_10_MB = 10L * 1024L * 1024L;
     private static final long SIZE_20_MB = 20L * 1024L * 1024L;
     private static final long SIZE_25_MB = 25L * 1024L * 1024L;
-    private static final Set<String> OPEN_WEIGHT_PROVIDERS =
-            Set.of("generic-openai", "huggingface", "llamacpp", "mistral", "nvidia", "ollama", "omlx", "openrouter");
+    private static final Set<String> OPEN_WEIGHT_PROVIDERS = Set.of(
+            ModelDefaults.PROVIDER_GENERIC_OPENAI,
+            ModelDefaults.PROVIDER_HUGGINGFACE,
+            ModelDefaults.PROVIDER_LLAMACPP,
+            ModelDefaults.PROVIDER_MISTRAL,
+            ModelDefaults.PROVIDER_NVIDIA,
+            ModelDefaults.PROVIDER_OLLAMA,
+            ModelDefaults.PROVIDER_OMLX,
+            ModelDefaults.PROVIDER_OPENROUTER);
     private static final Set<String> OPENROUTER_GEMINI_VENDORS = Set.of("google", "google-ai");
     private static final Set<String> OPENROUTER_ANTHROPIC_VENDORS = Set.of("anthropic");
     private static final Set<String> OPENROUTER_OPENAI_VENDORS = Set.of("openai");
@@ -124,9 +133,9 @@ public final class MultimodalCapabilities {
         if (!knownFamily) {
             return false;
         }
-        return "gemini".equals(provider)
+        return ModelDefaults.PROVIDER_GEMINI.equals(provider)
                 || (!model.contains("/") && provider.isEmpty())
-                || ("openrouter".equals(provider) && OPENROUTER_GEMINI_VENDORS.contains(vendor));
+                || (ModelDefaults.PROVIDER_OPENROUTER.equals(provider) && OPENROUTER_GEMINI_VENDORS.contains(vendor));
     }
 
     private static boolean isAnthropicMultimodal(String provider, String model, String family, String vendor) {
@@ -134,9 +143,10 @@ public final class MultimodalCapabilities {
         if (!knownFamily) {
             return false;
         }
-        return "anthropic".equals(provider)
+        return ModelDefaults.PROVIDER_ANTHROPIC.equals(provider)
                 || (!model.contains("/") && provider.isEmpty())
-                || ("openrouter".equals(provider) && OPENROUTER_ANTHROPIC_VENDORS.contains(vendor));
+                || (ModelDefaults.PROVIDER_OPENROUTER.equals(provider)
+                        && OPENROUTER_ANTHROPIC_VENDORS.contains(vendor));
     }
 
     private static boolean isOpenAiVision(String provider, String family, String vendor) {
@@ -149,16 +159,18 @@ public final class MultimodalCapabilities {
         if (!knownFamily) {
             return false;
         }
-        return "openai".equals(provider)
-                || "generic-openai".equals(provider)
-                || ("openrouter".equals(provider) && OPENROUTER_OPENAI_VENDORS.contains(vendor));
+        return ModelDefaults.PROVIDER_OPENAI.equals(provider)
+                || ModelDefaults.PROVIDER_GENERIC_OPENAI.equals(provider)
+                || (ModelDefaults.PROVIDER_OPENROUTER.equals(provider) && OPENROUTER_OPENAI_VENDORS.contains(vendor));
     }
 
     private static boolean isOpenWeightVision(String provider, String model, String family, String vendor) {
         if (!OPEN_WEIGHT_PROVIDERS.contains(provider)) {
             return false;
         }
-        if ("openrouter".equals(provider) && model.contains("/") && !OPENROUTER_OPEN_WEIGHT_VENDORS.contains(vendor)) {
+        if (ModelDefaults.PROVIDER_OPENROUTER.equals(provider)
+                && model.contains("/")
+                && !OPENROUTER_OPEN_WEIGHT_VENDORS.contains(vendor)) {
             return false;
         }
         return family.startsWith("llava")

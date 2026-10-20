@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import com.amsha.core.agent.reasoning.prompt.PromptConstants;
 import com.amsha.core.agent.reasoning.prompt.PromptRegistry;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.PromptDto;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -136,7 +137,7 @@ public class PromptAdminResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     public record PromptUpdateRequest(

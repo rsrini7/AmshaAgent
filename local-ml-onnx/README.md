@@ -107,6 +107,13 @@ audit-before-mutation; an audit failure leaves the switch unchanged. The respons
 audit detail exclude model IDs, inputs, outputs, labels, scores, goals, answers, and tool
 parameters.
 
+The web cockpit exposes the read-only runtime-slot view of this surface at `#/classifiers`
+(`ui/src/components/arc-classifier-panel.ts`). It consumes `GET /classifiers` only, offers no
+enable/disable control, and states on every render that it does not report the intent router's
+activation gate, candidate evidence, cost approvals, or rollout ownership. Because the endpoint
+requires the `internal` role, the panel names a `403` as a missing role instead of showing an
+empty slot list. See [ARCHITECTURE](../docs/ARCHITECTURE.md) §"Classifier Runtime Control".
+
 The [Phase 2 classifier preparation and resumption runbook](classifier-training/README.md)
 documents the current pause point, human-review requirements, Git retention boundary,
 and exact `mise` command sequence. All operations enter through
@@ -151,7 +158,12 @@ For distribution environments where Python, `mise`, or repo scripts are not pres
 
 # Verify integrity of installed model files
 ./amsha models verify whisper
+./amsha models verify mpnet
 ```
+
+For MPNet's embedding-space settings and the RAG provider switch, follow the
+[ONNX Local ML guide](../docs/ONNX_LOCAL_ML_GUIDE.md#5-configuration-reference).
+The model bundle remains external to the application binary.
 
 Run `./mvnw -pl local-ml-onnx -Dtest=OnnxEmbeddingModelSmokeTest test` after
 installation to execute the JVM smoke test against the real bundle.

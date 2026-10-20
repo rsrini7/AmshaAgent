@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.OnboardingExtensionStateDto;
 import com.amsha.persistence.api.OnboardingExtensionStateStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.OnboardingExtensionStateJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
@@ -17,7 +18,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteOnboardingExtensionStateStoreAdapter implements OnboardingExtensionStateStorePort {
 
     private final Jdbi jdbi;

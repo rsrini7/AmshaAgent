@@ -13,6 +13,7 @@ import java.util.Set;
 
 import com.amsha.core.routing.ModelProfileValidator;
 import com.amsha.core.routing.ProfileValidationResult;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelProfileDto;
@@ -231,7 +232,7 @@ public class OnboardingProfileExporter {
             String displayName = c.get("displayName") instanceof String s ? s : connId;
             String providerAdapterId = c.get("providerAdapterId") instanceof String s
                     ? s
-                    : (c.get("provider") instanceof String prov ? prov : "openai");
+                    : (c.get("provider") instanceof String prov ? prov : ModelDefaults.PROVIDER_OPENAI);
             String endpointProfileId = c.get("endpointProfileId") instanceof String s && !s.isBlank() ? s : null;
             String customBaseUrl = c.get("customBaseUrl") instanceof String s && !s.isBlank()
                     ? s

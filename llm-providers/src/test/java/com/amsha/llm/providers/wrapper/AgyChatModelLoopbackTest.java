@@ -59,7 +59,7 @@ class AgyChatModelLoopbackTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Inject
-    com.amsha.llm.providers.routing.AgyProviderFactory routingFactory; // fully qualified to disambiguate
+    com.amsha.llm.providers.routing.AgyProviderFactory routingFactory;
 
     @Inject
     AgyProviderFactory reasoningFactory;

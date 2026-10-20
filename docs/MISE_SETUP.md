@@ -114,8 +114,8 @@ mise doctor       # diagnoses common setup issues
 
 ```bash
 # 1. Clone and enter
-git clone https://github.com/rsrini7/Amsha Agent.git
-cd Amsha Agent
+git clone https://github.com/rsrini7/AmshaAgent.git
+cd AmshaAgent
 
 # 2. Trust the config file
 mise trust --all
@@ -160,6 +160,27 @@ mise run dev              # hot reload on :8080
 | `java` | graalvm-community-25.0.2 | Native image compilation only |
 | `maven` | 3.9 | Build tool |
 | `usage` | latest | `mise run <TAB>` tab completion |
+| `python` | **not pinned** | Every script/harness task invokes bare `python3` — see the note below |
+
+> **Python is the one unpinned runtime.** 18 files under `.mise/tasks/` plus three inline
+> references in `mise.toml` call `python3` directly, so those tasks execute on whatever Python the
+> host happens to provide, while CI pins **3.12** (`actions/setup-python`, four jobs). A macOS host
+> defaults to 3.9, which is old enough to break tooling that CI happily accepts:
+>
+> * `analyze_jacoco_coverage.py` — `float | None` in an annotation needs 3.10+, so the module raised
+>   `TypeError` at import on 3.9.
+> * `check_llm_preflight.py` — an `HTTPError` built with `fp=None` never initialises the
+>   `tempfile._TemporaryFileWrapper` half of `addinfo`'s MRO, so `close()` raises `KeyError('file')`
+>   and a successful reachability probe crashed instead of reporting.
+>
+> Both are fixed, but the class is open: CI stays green on 3.12 while a 3.9 developer sees a failure
+> CI never reproduces — the same failure mode as the `rg` incident in
+> [TEST_COVERAGE_ANALYSIS](TEST_COVERAGE_ANALYSIS.md) §0.7, where a tool absent from `[tools]`
+> silently produced wrong output.
+>
+> **Recommended fix:** add `python = "3.12"` to `[tools]`, so local runs test the same runtime CI
+> does. Not applied, because it changes provisioning for every contributor and a host without
+> network access could not install it.
 
 ### What `mise run setup:profile` does
 
@@ -323,6 +344,17 @@ mise run help    # or: mise tasks
 | `mise run db:sqlite:inspect` | Open `amsha-meta.db` in sqlite3 |
 | `mise run db:sqlite:fts-check` | Verify FTS5 available |
 | `mise run db:sqlite:vec-check` | Check `lib/vec0` extension for current platform |
+| **`mise run test:summary`** | Surefire+failsafe counts + reactor JaCoCo summary + UI coverage |
+| `mise run test:ui` | UI Vitest suite with V8 coverage |
+| `mise run test:ui:summary` | UI test count + V8 line/branch coverage |
+| **`mise run quality:coverage`** | Reactor summary **and per-module line/branch totals** (reads existing reports) |
+| `mise run quality:coverage-gaps` | Largest coverage gaps, with the missed line numbers to target |
+| **`mise run quality:coverage-gate`** | The JaCoCo gate alone — seconds instead of a full reactor build |
+| `mise run quality:coverage-sync` | Rewrite the Java test + coverage badges in `README.md` from existing reports |
+| `mise run quality:py-tests` | Python script/harness contract suites (CI parity plus two) |
+| `mise run quality:docs` | Verify Markdown links and anchors across the workspace |
+| `mise run quality:staged` | Review staged changes read-only (never touches the index) |
+| `mise run format` | `fix_fqns.py` + `spotless:apply` (required after Java edits) |
 | `mise run info` | Print Java, Podman, Docker versions |
 | `mise run help` | List all tasks |
 
@@ -369,6 +401,59 @@ The PMD rules are project-specific: 500 lines per class, 80 NCSS statements
 per method, and cognitive complexity 50. `package` does not execute this gate;
 `verify` does. Before handoff, run `mise run sonar:issues` when the SonarQube
 service is available.
+
+### Coverage gates
+
+`verify` is likewise the only phase that reaches the JaCoCo gate: `app/pom.xml`
+binds `scripts/verify_jacoco_coverage.py` to it, and the floor is read from
+`jacoco.minimum.line.coverage` in the root `pom.xml` (currently `0.82`).
+`package` reaches neither PMD nor JaCoCo.
+
+Since the gate therefore costs a full reactor build, three tasks read the reports
+already on disk instead. **None of them build** — run `build:test` (or a reactor
+`verify`) first, and note they report whatever those reports contain:
+
+```bash
+mise run quality:coverage        # reactor summary + per-module line/branch totals
+mise run quality:coverage-gaps   # largest gaps, with the missed line numbers
+mise run quality:coverage-gate   # the gate itself, with --strict-instrumentation
+mise run quality:coverage-sync   # rewrite the Java README badges from the same reports
+```
+
+`quality:coverage-gate` mirrors the CI step, including the fatal empty-report
+check that catches a module whose JaCoCo agent never attached.
+`quality:coverage` adds the per-module view that `test:summary` does not: the
+reactor total can hide a module at 35% being subsidised by one at 99%.
+`quality:coverage-gaps` reads each module's `jacoco.xml` to attach the actual
+missed line numbers, turning the report into a worklist.
+
+`quality:coverage-sync` rewrites the two Java badges in `README.md` from the
+same Surefire/Failsafe and JaCoCo reports the gate reads, so the badge and
+`docs/TEST_COVERAGE_ANALYSIS.md` cannot disagree about the same tree. The test
+badge names every count — `9454 passed · 9 skipped of 9463` — because a single
+number is ambiguous: the same figure means "executed" to one reader and
+"passed" to another. Run it after `./mvnw verify`; it never builds, so it
+reports the last build rather than the current source, and prints the report
+age for that reason. It **fails** if a badge cannot be found rather than
+silently leaving it stale, and it leaves the UI badges to
+`analyze_ui_coverage.py`.
+
+It also refuses to publish a total that could only have come from an
+incomplete run, because the sync overwrites a committed, publicly displayed
+number and the dangerous outcome is a *confidently smaller* one:
+
+- **Partial build refused.** Any reactor module that declares `src/test` but
+  reported no tests aborts the sync by name. `./mvnw -pl core test` leaves 26
+  of 27 modules empty and aggregates to 3,625 instead of 9,463 — a 62% drop
+  that looks entirely ordinary. A module with no `src/test` at all (`ui`) is
+  fine and does not trip the gate.
+- **Decrease refused.** A total below the one currently published aborts
+  unless you pass `--allow-decrease`, which exists for a deliberate test
+  removal. It does *not* wave through a partial build.
+- **Zero refused.** An empty reactor never publishes `0`.
+
+`--badge-tests` is read-only, so it still prints a number for a partial
+reactor but warns on stderr that the total covers a subset.
 
 ### Native build strategy
 

@@ -9,6 +9,7 @@ import java.util.Optional;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.ArchivalMemoryStorePort;
 import com.amsha.persistence.api.ArchivalSearchQuery;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.TieredBackend;
 import com.amsha.persistence.postgres.jdbi.ArchivalMemoryJdbiDao;
 
@@ -21,7 +22,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 @ApplicationScoped
 @Unremovable
 @TieredBackend("postgres")
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresArchivalMemoryStore implements ArchivalMemoryStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresArchivalMemoryStore.class);

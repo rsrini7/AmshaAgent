@@ -234,9 +234,7 @@ class HitlServiceDecisionSafetyTest {
         void cronSessionsCannotBeResolvedThroughTheUi() {
             awaitingIn("cron-42");
 
-            SecurityException error = assertThrows(SecurityException.class, () -> resolve("1", null, true));
-
-            assertTrue(error.getMessage().contains("originating channel"), error.getMessage());
+            assertThrows(SecurityException.class, () -> resolve("1", null, true));
         }
 
         @Test

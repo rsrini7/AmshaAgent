@@ -5,6 +5,8 @@ import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
 
 import jakarta.enterprise.context.ApplicationScoped;
 
+import com.amsha.llm.api.ModelDefaults;
+
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.Unremovable;
@@ -20,7 +22,7 @@ public class OllamaEmbeddingProviderFactory implements EmbeddingProviderFactory 
 
     @Override
     public String providerId() {
-        return "ollama";
+        return ModelDefaults.PROVIDER_OLLAMA;
     }
 
     @Override

@@ -13,6 +13,7 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.memory.tiered.TieredBackendLiteral;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.CoreMemoryStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -35,7 +36,8 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
             @ConfigProperty(name = "amsha.tts.voice") Optional<String> configuredVoice,
             @ConfigProperty(name = "amsha.tts.default-output-mode", defaultValue = "TEXT_ONLY")
                     OutputMode configuredOutputMode,
-            @ConfigProperty(name = "amsha.persistence.backend", defaultValue = "sqlite") String persistenceBackend) {
+            @ConfigProperty(name = PersistenceBackend.PROPERTY, defaultValue = PersistenceBackend.SQLITE)
+                    String persistenceBackend) {
         this.coreMemoryStore = coreMemoryStore;
         this.configuredVoice = configuredVoice.filter(v -> !v.isBlank()).orElse(null);
         this.configuredOutputMode = configuredOutputMode != null ? configuredOutputMode : OutputMode.TEXT_ONLY;

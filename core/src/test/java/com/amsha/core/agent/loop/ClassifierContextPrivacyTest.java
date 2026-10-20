@@ -10,6 +10,7 @@ import com.amsha.classifier.api.AnswerQualityShadowContext;
 import com.amsha.classifier.api.PostPolicyToolContext;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 
@@ -20,10 +21,10 @@ class ClassifierContextPrivacyTest {
     @Test
     void toolRiskContextSummariesExcludeGoalAndParameterPayloads() {
         Map<String, Object> parameters = Map.of("authorization", SECRET);
-        PostPolicyToolContext active =
-                new PostPolicyToolContext("coder", AutonomyLevel.FULL, "host_exec", parameters, SECRET, false);
-        ToolRiskShadowContext shadow =
-                new ToolRiskShadowContext("coder", AutonomyLevel.FULL, "host_exec", parameters, SECRET);
+        PostPolicyToolContext active = new PostPolicyToolContext(
+                "coder", AutonomyLevel.FULL, "host_exec", ToolOperation.EXECUTE_SHELL, parameters, SECRET, false);
+        ToolRiskShadowContext shadow = new ToolRiskShadowContext(
+                "coder", AutonomyLevel.FULL, "host_exec", ToolOperation.EXECUTE_SHELL, parameters, SECRET);
 
         assertPayloadFree(active.toString());
         assertPayloadFree(shadow.toString());

@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -22,7 +23,7 @@ import io.quarkus.runtime.StartupEvent;
  * WORM audit triggers are managed by Flyway (V3__security_and_audit.sql).
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class FtsSchemaInitializer {
 
     private static final Logger LOG = Logger.getLogger(FtsSchemaInitializer.class);

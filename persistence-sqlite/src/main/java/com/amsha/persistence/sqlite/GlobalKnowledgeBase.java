@@ -13,6 +13,7 @@ import java.util.UUID;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.MemoryChunkDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
 
@@ -23,7 +24,7 @@ import org.jdbi.v3.core.Jdbi;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class GlobalKnowledgeBase {
 
     private static final Logger log = Logger.getLogger(GlobalKnowledgeBase.class);

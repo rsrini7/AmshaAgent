@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +28,8 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.CronRunDto;
+import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
@@ -71,6 +74,9 @@ class CheckpointResumeHandlerUnitTest {
     CronStorePort cronStore;
 
     @Mock
+    CronRunStorePort cronRunStore;
+
+    @Mock
     CliResultBridge cliResultBridge;
 
     @Mock
@@ -106,6 +112,7 @@ class CheckpointResumeHandlerUnitTest {
                 reasoningEngine,
                 channelPluginRegistry,
                 cronStore,
+                cronRunStore,
                 cliResultBridge,
                 recoveryService,
                 escalationService);
@@ -325,9 +332,27 @@ class CheckpointResumeHandlerUnitTest {
                 Instant.now(),
                 Instant.now());
         when(cronStore.findById("12345678-1234-1234-1234-123456789012")).thenReturn(Optional.of(cronDto));
+        when(cronStore.markCompletedIfOwner(eq("12345678-1234-1234-1234-123456789012"), eq("session"), any()))
+                .thenReturn(true);
+
+        var pendingRun = new CronRunDto(
+                "session",
+                "12345678-1234-1234-1234-123456789012",
+                cronSessionId,
+                "AWAITING_APPROVAL",
+                Instant.now(),
+                null,
+                null,
+                1,
+                0,
+                0,
+                BigDecimal.ZERO,
+                Instant.now());
+        when(cronRunStore.findById("session")).thenReturn(Optional.of(pendingRun));
 
         syncCronTerminalStatus.invoke(handler, cronSessionId, AgentResult.finished("done", List.of()));
         verify(cronStore).markCompletedIfOwner(eq("12345678-1234-1234-1234-123456789012"), eq("session"), any());
+        verify(cronRunStore).save(argThat(run -> "COMPLETED".equals(run.status())));
     }
 
     @Test

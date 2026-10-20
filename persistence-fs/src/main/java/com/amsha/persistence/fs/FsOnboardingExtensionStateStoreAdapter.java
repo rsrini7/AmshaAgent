@@ -10,13 +10,14 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.OnboardingExtensionStateDto;
 import com.amsha.persistence.api.OnboardingExtensionStateStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsOnboardingExtensionStateStoreAdapter implements OnboardingExtensionStateStorePort {
 
     private static final String DOMAIN = "onboarding";

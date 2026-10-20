@@ -13,6 +13,9 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import com.amsha.common.util.LogUtil;
+import com.amsha.persistence.api.PersistenceBackend;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -30,7 +33,7 @@ import io.quarkus.runtime.StartupEvent;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteWalConfigurer {
 
     private static final Logger log = Logger.getLogger(SqliteWalConfigurer.class);
@@ -78,7 +81,7 @@ public class SqliteWalConfigurer {
             }
 
         } catch (SQLException e) {
-            log.error("SQLite: Failed to configure WAL/ATTACH on startup", e);
+            log.error("SQLite: Failed to configure WAL/ATTACH on startup", LogUtil.relevantThrowable(e));
         }
     }
 

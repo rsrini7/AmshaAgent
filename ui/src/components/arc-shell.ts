@@ -24,6 +24,7 @@ import './arc-scheduler-panel';
 import './arc-audit-panel';
 import './arc-db-console';
 import './arc-model-arena';
+import './arc-classifier-panel';
 import './arc-health-dashboard';
 import './arc-settings';
 import './arc-theme-toggle';
@@ -816,6 +817,9 @@ export class ArcShell extends LitElement {
       ` : nothing}
       ${this._route === '#/arena' ? html`
         <arc-model-arena class="content-area"></arc-model-arena>
+      ` : nothing}
+      ${this._route === '#/classifiers' ? html`
+        <arc-classifier-panel class="content-area"></arc-classifier-panel>
       ` : nothing}
       ${this._route === '#/health' ? html`
         <arc-health-dashboard class="content-area"></arc-health-dashboard>

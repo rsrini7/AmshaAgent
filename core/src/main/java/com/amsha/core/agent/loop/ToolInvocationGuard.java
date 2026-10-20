@@ -14,9 +14,8 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.classifier.api.PostPolicyToolContext;
-import com.amsha.classifier.api.ToolRiskAction;
+import com.amsha.classifier.api.ToolRiskDecisionPolicy;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
@@ -220,8 +219,14 @@ public class ToolInvocationGuard {
         // schedule_task (cron CREATION) is operator-consented under supervision.
         boolean isExempt = isManagementScheduleTool || (isMemoryReadTool && level != AutonomyLevel.READONLY);
 
-        ToolOperation op = toolOpt.map(AgentTool::requiredOperation)
-                .orElseGet(() -> Objects.requireNonNull(dynamicAdmission).requiredOperation());
+        ToolOperation op =
+                toolOpt.isPresent() ? toolOpt.orElseThrow().requiredOperation() : dynamicAdmission.requiredOperation();
+        if (op == null) {
+            log.warnf("GUARD Tool '%s' has no declared required operation.", toolName);
+            GuardDecision.Blocked blocked = new GuardDecision.Blocked("Tool operation metadata is unavailable.");
+            publishGuardCheck(sessionId, toolName, blocked, null);
+            return blocked;
+        }
         boolean alwaysRequiresHitl = op == ToolOperation.EXECUTE_SHELL || op == ToolOperation.NETWORK_OUTBOUND;
 
         // ADR-schedule-task-hitl-under-supervised: a policy-disallowed operation under
@@ -247,7 +252,7 @@ public class ToolInvocationGuard {
             } else {
                 // HITL is the deliberate stronger control for approved operations. The automated
                 // post-policy classifier is not re-run after this pause/resume boundary.
-                observeToolRiskForCollection(sessionId, agentRole, level, toolName, params, goal);
+                observeToolRiskForCollection(sessionId, agentRole, level, toolName, op, params, goal);
                 ApprovalFrame frame = new ApprovalFrame(toolName, params, op.riskLevel());
                 publishGuardCheck(
                         sessionId,
@@ -260,7 +265,7 @@ public class ToolInvocationGuard {
         GuardDecision postPolicyDecision =
                 applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);
         if (postPolicyDecision instanceof GuardDecision.Allow) {
-            observeProvisionalAllow(sessionId, agentRole, level, toolName, params, goal);
+            observeProvisionalAllow(sessionId, agentRole, level, toolName, op, params, goal);
         }
         publishGuardCheck(
                 sessionId, toolName, postPolicyDecision, op.riskLevel().name());
@@ -329,22 +334,21 @@ public class ToolInvocationGuard {
             ToolOperation operation) {
         if (postPolicyToolRiskDispatcher == null) return new GuardDecision.Allow();
         try {
-            ClassifierResult<ToolRiskAction> result = postPolicyToolRiskDispatcher.evaluate(new PostPolicyToolContext(
-                    agentRole,
-                    level,
-                    toolName,
-                    params == null ? Map.of() : params,
-                    goal,
-                    history != null && history.stream().anyMatch(ReasoningStepSupport::isToolCallStep)));
-            return switch (result) {
-                case ClassifierResult.Opinion<ToolRiskAction> opinion ->
-                    switch (opinion.value()) {
-                        case BLOCK -> new GuardDecision.Blocked("Tool call blocked by the post-policy risk gate.");
-                        case REQUIRE_APPROVAL ->
-                            new GuardDecision.PauseForApproval(new ApprovalFrame(
-                                    toolName, params == null ? Map.of() : params, operation.riskLevel()));
-                    };
-                case ClassifierResult.NoOpinion<ToolRiskAction> _ -> new GuardDecision.Allow();
+            ToolRiskDecisionPolicy.PolicyResolution result =
+                    postPolicyToolRiskDispatcher.evaluateResolution(new PostPolicyToolContext(
+                            agentRole,
+                            level,
+                            toolName,
+                            operation,
+                            params == null ? Map.of() : params,
+                            goal,
+                            history != null && history.stream().anyMatch(ReasoningStepSupport::isToolCallStep)));
+            return switch (result.effectiveAction()) {
+                case BLOCK -> new GuardDecision.Blocked("Tool call blocked by the post-policy risk gate.");
+                case REQUIRE_APPROVAL ->
+                    new GuardDecision.PauseForApproval(
+                            new ApprovalFrame(toolName, params == null ? Map.of() : params, operation.riskLevel()));
+                case null -> new GuardDecision.Allow();
             };
         } catch (RuntimeException | LinkageError _) {
             return new GuardDecision.Allow();
@@ -356,9 +360,10 @@ public class ToolInvocationGuard {
             String agentRole,
             AutonomyLevel level,
             String toolName,
+            ToolOperation operation,
             Map<String, Object> params,
             String goal) {
-        observeToolRisk(sessionId, agentRole, level, toolName, params, goal, true);
+        observeToolRisk(sessionId, agentRole, level, toolName, operation, params, goal, true);
     }
 
     private void observeToolRiskForCollection(
@@ -366,9 +371,10 @@ public class ToolInvocationGuard {
             String agentRole,
             AutonomyLevel level,
             String toolName,
+            ToolOperation operation,
             Map<String, Object> params,
             String goal) {
-        observeToolRisk(sessionId, agentRole, level, toolName, params, goal, false);
+        observeToolRisk(sessionId, agentRole, level, toolName, operation, params, goal, false);
     }
 
     private void observeToolRisk(
@@ -376,6 +382,7 @@ public class ToolInvocationGuard {
             String agentRole,
             AutonomyLevel level,
             String toolName,
+            ToolOperation operation,
             Map<String, Object> params,
             String goal,
             boolean includeShadow) {
@@ -383,8 +390,8 @@ public class ToolInvocationGuard {
             if (toolRiskShadowEvaluation == null) {
                 return;
             }
-            ToolRiskShadowContext context =
-                    new ToolRiskShadowContext(agentRole, level, toolName, params == null ? Map.of() : params, goal);
+            ToolRiskShadowContext context = new ToolRiskShadowContext(
+                    agentRole, level, toolName, operation, params == null ? Map.of() : params, goal);
             if (includeShadow) {
                 toolRiskShadowEvaluation.observeProvisionalAllow(sessionId, context);
             } else {

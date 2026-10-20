@@ -17,8 +17,12 @@ import com.amsha.core.security.InputSanitizer;
 import com.amsha.core.state.ActiveWork;
 import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CompactionStorePort;
+import com.amsha.persistence.api.CronStatus;
+import com.amsha.persistence.api.CronStorePort;
 import com.amsha.tool.api.AgentSentinels;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -37,16 +41,19 @@ public class StatusReflex implements AgentReflex {
     CompactionStorePort compactionSummaryRepository;
 
     @Inject
+    CronStorePort cronStorePort;
+
+    @Inject
     GovernanceStrategy governanceStrategy;
 
     @Inject
     @InputSanitizer.PII
     InputSanitizer piiSanitizer;
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "openai")
-    String provider = "openai";
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_OPENAI)
+    String provider = ModelDefaults.PROVIDER_OPENAI;
 
-    @ConfigProperty(name = "amsha.llm.model")
+    @ConfigProperty(name = LlmConfigKeys.MODEL)
     Optional<String> modelName = Optional.empty();
 
     @Override
@@ -111,14 +118,26 @@ public class StatusReflex implements AgentReflex {
                 .orElse("Not compacted - session within active window");
 
         String shortId = sessionId.length() > 8 ? sessionId.substring(sessionId.length() - 8) : sessionId;
-        String prov = provider != null ? provider : "openai";
+        String prov = provider != null ? provider : ModelDefaults.PROVIDER_OPENAI;
         String modelDisplay =
                 (modelName != null && modelName.isPresent() && !modelName.get().isBlank())
                         ? prov + "/" + modelName.get()
                         : prov;
 
+        String pendingRunStatus = null;
+        if (userId != null && !userId.isBlank()) {
+            pendingRunStatus = cronStorePort.findByUserId(userId).stream()
+                    .filter(cron -> sessionId.equals(cron.sessionId()))
+                    .map(cron -> cron.status())
+                    .filter(cronStatus -> CronStatus.AWAITING_APPROVAL.name().equals(cronStatus)
+                            || CronStatus.AWAITING_RETRY.name().equals(cronStatus))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        String statusDisplay = pendingRunStatus == null ? status : status + " (chat session)";
         String output = UserMessages.statusMessage(
-                status,
+                statusDisplay,
                 modelDisplay,
                 cost,
                 budgetUsd,
@@ -128,6 +147,10 @@ public class StatusReflex implements AgentReflex {
                 totalTokens,
                 memoryLine,
                 shortId);
+
+        if (pendingRunStatus != null) {
+            output += "\n\n📅 *Scheduled run: " + pendingRunStatus + "* — check Pending Approvals to continue.";
+        }
 
         return ReflexResult.respond(output, context);
     }

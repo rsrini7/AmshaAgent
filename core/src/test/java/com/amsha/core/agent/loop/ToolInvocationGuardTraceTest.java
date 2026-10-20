@@ -73,6 +73,9 @@ class ToolInvocationGuardTraceTest {
         guard.postPolicyToolRiskDispatcher = postPolicyToolRiskDispatcher;
         when(postPolicyToolRiskDispatcher.evaluate(any()))
                 .thenReturn(new ClassifierResult.NoOpinion<>(NoOpinionReason.MISSING_MODEL));
+        when(postPolicyToolRiskDispatcher.evaluateResolution(any()))
+                .thenAnswer(invocation -> PostPolicyToolRiskTestSupport.resolution(
+                        postPolicyToolRiskDispatcher.evaluate(invocation.getArgument(0))));
 
         guard.dynamicToolAdmissionLookup = mock(Instance.class);
         when(guard.dynamicToolAdmissionLookup.isUnsatisfied()).thenReturn(true);

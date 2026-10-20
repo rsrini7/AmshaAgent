@@ -27,6 +27,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -145,14 +146,16 @@ class FoundryCliExecutorTest {
 
     @Test
     void isAvailableReflectsWhetherAnyFoundryBinaryResolves() {
-        Assumptions.assumeTrue(System.getenv("AMSHA_FOUNDRY_EXE") == null, "a custom foundry executable is configured");
+        Assumptions.assumeTrue(
+                System.getenv(ConfigKeys.FOUNDRY_EXE) == null, "a custom foundry executable is configured");
         // A real user.home means the /opt/homebrew/bin/foundry probe runs; either it or the PATH scan decides.
         assertEquals(FoundryCliExecutor.resolveCliPath() != null, FoundryCliExecutor.isAvailable());
     }
 
     @Test
     void resolveCliPathPrefersTheHomebrewInstall() {
-        Assumptions.assumeTrue(System.getenv("AMSHA_FOUNDRY_EXE") == null, "a custom foundry executable is configured");
+        Assumptions.assumeTrue(
+                System.getenv(ConfigKeys.FOUNDRY_EXE) == null, "a custom foundry executable is configured");
         Assumptions.assumeTrue(
                 Files.isExecutable(Path.of(HOMEBREW_FOUNDRY)), "no homebrew foundry install on this machine");
 
@@ -161,7 +164,8 @@ class FoundryCliExecutorTest {
 
     @Test
     void resolveCliPathSkipsTheUserHomeBlockWhenUserHomeIsBlank() {
-        Assumptions.assumeTrue(System.getenv("AMSHA_FOUNDRY_EXE") == null, "a custom foundry executable is configured");
+        Assumptions.assumeTrue(
+                System.getenv(ConfigKeys.FOUNDRY_EXE) == null, "a custom foundry executable is configured");
         Assumptions.assumeTrue(noFoundryOnPath(), "a foundry binary is present on PATH");
 
         // A blank user.home skips the /opt/homebrew and ~/.local probes, so the PATH scan runs to completion.
@@ -170,7 +174,8 @@ class FoundryCliExecutorTest {
 
     @Test
     void resolveCliPathFindsFoundryUnderTheUserHomeLocalBin() throws IOException {
-        Assumptions.assumeTrue(System.getenv("AMSHA_FOUNDRY_EXE") == null, "a custom foundry executable is configured");
+        Assumptions.assumeTrue(
+                System.getenv(ConfigKeys.FOUNDRY_EXE) == null, "a custom foundry executable is configured");
         Assumptions.assumeTrue(
                 !Files.isExecutable(Path.of(HOMEBREW_FOUNDRY)), "homebrew foundry short-circuits this probe");
 

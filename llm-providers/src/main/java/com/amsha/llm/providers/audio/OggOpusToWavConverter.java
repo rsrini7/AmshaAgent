@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.channel.api.MediaTypes;
 import com.amsha.common.util.LogUtil;
 
 /**
@@ -47,7 +48,7 @@ final class OggOpusToWavConverter {
             return new ConvertedAudio(input, mimeType);
         }
         if (isWav(mimeType, input)) {
-            String outMime = (mimeType == null || mimeType.isBlank()) ? "audio/wav" : mimeType;
+            String outMime = (mimeType == null || mimeType.isBlank()) ? MediaTypes.WAV : mimeType;
             return new ConvertedAudio(input, outMime);
         }
         if (!isOggOpus(mimeType, input) && !isWebm(mimeType, input)) {
@@ -127,7 +128,7 @@ final class OggOpusToWavConverter {
                 throw new AudioConversionException(
                         "ffmpeg produced " + produced + " bytes, exceeding limit " + maxBytes);
             }
-            return new ConvertedAudio(Files.readAllBytes(out), "audio/wav");
+            return new ConvertedAudio(Files.readAllBytes(out), MediaTypes.WAV);
         } catch (IOException e) {
             throw new AudioConversionException("ffmpeg io error: " + LogUtil.rootMessage(e), e);
         } finally {
@@ -174,7 +175,9 @@ final class OggOpusToWavConverter {
     private static boolean isWav(String mimeType, byte[] input) {
         if (mimeType != null) {
             String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
-            if (normalized.equals("audio/wav") || normalized.equals("audio/x-wav") || normalized.equals("audio/wave")) {
+            if (normalized.equals(MediaTypes.WAV)
+                    || normalized.equals(MediaTypes.X_WAV)
+                    || normalized.equals(MediaTypes.WAVE)) {
                 return true;
             }
         }
@@ -184,9 +187,9 @@ final class OggOpusToWavConverter {
     private static boolean isOggOpus(String mimeType, byte[] input) {
         if (mimeType != null) {
             String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
-            if (normalized.equals("audio/ogg")
-                    || normalized.equals("audio/opus")
-                    || normalized.equals("application/ogg")) {
+            if (normalized.equals(MediaTypes.OGG)
+                    || normalized.equals(MediaTypes.OPUS)
+                    || normalized.equals(MediaTypes.APPLICATION_OGG)) {
                 return true;
             }
         }
@@ -196,7 +199,7 @@ final class OggOpusToWavConverter {
     private static boolean isWebm(String mimeType, byte[] input) {
         if (mimeType != null) {
             String normalized = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
-            if (normalized.equals("audio/webm") || normalized.equals("video/webm")) {
+            if (normalized.equals(MediaTypes.WEBM) || normalized.equals(MediaTypes.VIDEO_WEBM)) {
                 return true;
             }
         }

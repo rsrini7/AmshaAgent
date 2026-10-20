@@ -234,6 +234,88 @@ Amsha provides zero-payload-leakage observability for LLM invocations with stric
 |---|---|---|---|
 | `amsha.observability.chat-listener.mode` | `AMSHA_OBSERVABILITY_CHAT_LISTENER_MODE` | `off` | Mode for LangChain4j `ChatModelListener` pilot (`off`, `shadow`, `active`) |
 
+## Decision Plane Shadow Classifiers (Issues 04 & 07)
+
+Observational-only shadow evaluation for intent routing, tool risk, and answer quality. Shadow evaluation operates in parallel to authoritative components without mutating live routing, tool authorization, HITL decisions, or retry budgets. Disabled by default.
+
+> **Deferred — enabling a switch does not activate the plane.** No production `DecisionEngine` bean is
+> registered in this build, so enabled shadow classifiers return `NoOpinion(MISSING_MODEL)` and disabled
+> classifiers return `DISABLED`. The shadow switches below request *observation only*, and `DecisionPlaneReadiness` logs exactly one `WARN` at
+> startup naming the enabled switches — its absence on an enabled deployment is a defect, not a no-op. The
+> intent decision router is gated twice: `isEnabled()` additionally requires an available engine, and a policy
+> action requires `isActivationGateApproved()`, so setting
+> `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op. See
+> [ADR-jev-decision-plane](../docs/adr/architecture/ADR-jev-decision-plane.md) and
+> [Architecture Invariants](../docs/Architecture_Invariants.md) §27.
+>
+> **Accepted and implemented evaluation path:** `DecisionEvaluationService` and `DecisionEvidenceRunner`
+> are exposed through the app's internal-only admin resource. The default-off switch gates real provider
+> calls; `/evidence/run` reads a shipped, versioned corpus and returns payload-free M1–M5 metrics. The
+> path registers no `DecisionEngine` bean, and the parent decision-plane ADR remains Deferred. See
+> [ADR-jev-decision-plane-evaluation-path](../docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+> and the [activation plan](../docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md).
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.decision.shadow.intent.enabled` | `AMSHA_DECISION_SHADOW_INTENT_ENABLED` | `false` | Enables shadow intent classification using `DecisionEngine`. |
+| `amsha.decision.shadow.tool-risk.enabled` | `AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED` | `false` | Enables shadow tool risk evaluation using `DecisionEngine`. |
+| `amsha.decision.shadow.answer-quality.enabled` | `AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED` | `false` | Enables shadow answer quality evaluation using `DecisionEngine`. |
+| `amsha.decision.evaluation.enabled` | `AMSHA_DECISION_EVALUATION_ENABLED` | `false` | Opt-in evaluation path: when `true`, an internal-only operator may run one registered decision against a configured provider for evidence gathering. Off by default; it never registers a `DecisionEngine` bean, so it does not activate the decision plane (§27). |
+| `amsha.decision.drift.window` | `AMSHA_DECISION_DRIFT_WINDOW` | `64` | Observations in each baseline and current window per lane. Relative alerts wait until both windows are full (128 observations at the default); the initial baseline remains fixed until reset or monitor recreation. Minimum `2`. |
+| `amsha.decision.drift.confidence-threshold` | `AMSHA_DECISION_DRIFT_CONFIDENCE_THRESHOLD` | `0.15` | Absolute mean-confidence drift threshold; must be finite and in `[0,1]`. |
+| `amsha.decision.drift.abstention-threshold` | `AMSHA_DECISION_DRIFT_ABSTENTION_THRESHOLD` | `0.20` | Absolute abstention-rate drift threshold; must be finite and in `[0,1]`. |
+| `amsha.decision.cost.window` | `AMSHA_DECISION_COST_WINDOW` | `1000` | Priced decisions in the rolling cost-per-1,000 window; must be at least `1`. |
+| `amsha.routing.intent-decision-router.enabled` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED` | `false` | Enables low-risk typed intent decision pilot router (Issue 07). |
+| `amsha.routing.intent-decision-router.review-band.low` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_LOW` | `0.50` | Lower threshold for intent review band (below which judgment falls back to deterministic default). |
+| `amsha.routing.intent-decision-router.review-band.high` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_REVIEW_BAND_HIGH` | `0.85` | Upper threshold for intent review band (at or above which direct routing applies). |
+| `amsha.routing.intent-decision-router.timeout-ms` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_TIMEOUT_MS` | `50000` | Per-evaluation deadline in milliseconds for the intent decision router. |
+| `amsha.routing.intent-decision-router.activation-gate.candidate-evidence-approved` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_CANDIDATE_EVIDENCE_APPROVED` | `false` | Activation gate: whether candidate model calibration on live traffic is formally approved. |
+| `amsha.routing.intent-decision-router.activation-gate.cost-ceiling-approved` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_COST_CEILING_APPROVED` | `false` | Activation gate: whether target cost ceiling and latency budget are formally approved. |
+| `amsha.routing.intent-decision-router.activation-gate.rollout-owner` | `AMSHA_ROUTING_INTENT_DECISION_ROUTER_ACTIVATION_GATE_ROLLOUT_OWNER` | `""` | Activation gate: designated accountable rollout and rollback owner for the pilot. **No closed set of values** — the only rule enforced is non-blank (`isActivationGateApproved()`), so a placeholder silently satisfies the gate; leave blank when no owner is assigned. A placeholder is announced once at startup by `ActivationGateReadiness` (advisory `WARN`; it does not close the gate). |
+
+## Decision Provider Selection (Jev / System One)
+
+Configuration-driven selection of the provider that answers decision (`choice` / `score` / `noul`) requests,
+mirroring the LLM provider convention (`AMSHA_LLM_PROVIDER` plus `amsha.llm.<provider>.model`). The accepted
+evaluation path consumes this configuration for explicit, audited evaluations through a transient engine.
+No CDI `DecisionEngine` bean exists, and selecting a provider does not activate production routing. See
+[Jev-Provider-Integration-Plan-2026](../docs/research/Jev-Provider-Integration-Plan-2026.md) §8.
+
+**Two axes.** A provider id names the System One **endpoint** that receives `POST /v1/systemone` — exactly as an
+LLM provider id names the endpoint that receives `/v1/chat/completions`. `model` names the checkpoint served
+*there*, the same role `amsha.llm.<provider>.model` plays. An id may therefore be a specific decision server
+(`laya`, `kev`, `clm`), a generic local runtime host serving whichever decision model is loaded into it
+(`omlx`), or a hosted API (`typesafe`) — `omlx` is a *runtime*, `laya` is a *model* it can serve.
+
+| Property | Env Var | Default | Description |
+|---|---|---|---|
+| `amsha.decision.providers.selected` | `AMSHA_DECISION_PROVIDER` | `""` | Provider id to use; must match a declared slot. Blank keeps the plane inert. |
+| `amsha.decision.providers.slots.<id>.enabled` | `AMSHA_DECISION_<ID>_ENABLED` | `false` | Whether the slot may be selected. |
+| `amsha.decision.providers.slots.<id>.endpoint` | `AMSHA_DECISION_<ID>_ENDPOINT` | *(per slot)* | The `POST /v1/systemone` endpoint. The governance lane is derived from its host. |
+| `amsha.decision.providers.slots.<id>.model` | `AMSHA_DECISION_<ID>_MODEL` | *(per slot)* | The decision model to request. **Required for a remote slot; optional for a self-hosted one**, where blank means "the server picks its own checkpoint" and the field is omitted from the request. |
+| `amsha.decision.providers.slots.<id>.api-key` | `AMSHA_DECISION_<ID>_API_KEY` | `""` | Direct provider key, following the same environment-backed convention as other Amsha providers. |
+| `amsha.decision.providers.slots.<id>.timeout` | `AMSHA_DECISION_<ID>_TIMEOUT` | `PT50S` | Provider request timeout; the registered decision deadline may cap it. |
+| `amsha.decision.providers.slots.<id>.wire-profile` | `AMSHA_DECISION_<ID>_WIRE_PROFILE` | `JSON_OBJECT` | How `state` is rendered. Belongs to the **model**: a CLM model requires `PROSE`. |
+
+Declared slots: `typesafe` (`jev-latest`, remote), `clm` (`clm-latest`, `PROSE`), `laya` (`laya-multilingual`),
+`kev` (blank model — a self-hosted server picks its own), and `omlx` (blank model — OMLX 0.7.1.dev1 or later
+with a loaded decision model). OMLX uses `/v1/systemone` for decisions; its regular LLM base URL stays `/v1`.
+The OMLX slot sends Bearer authentication when `AMSHA_DECISION_OMLX_API_KEY` is configured. Other self-hosted
+slots continue to use `X-Amsha-Loopback-Token`.
+
+**Fail-closed resolution.** `DecisionProviderSelector` derives the lane from the endpoint host — the literal
+`127.0.0.1` selects the self-hosted lane, anything else the remote lane — and refuses `localhost`, `::1`, and
+other `127.x` hosts as **ambiguous**, because the two lanes carry different governance. It also refuses a
+**remote** slot with no `model` (a self-hosted slot may omit it), a credentialed remote provider (`typesafe`)
+with no `api-key`, a non-positive `timeout`, and a CLM model declared without `WIRE_PROFILE=PROSE`.
+Refusals name the operator configuration at fault and never a credential.
+
+**Credential handling.** Decision keys use direct environment-backed configuration, just like other
+Amsha provider keys. The selector and status response carry only a configured flag. Evaluation creates a
+request-owned UTF-8 byte copy and clears it after use; the source configuration `String` remains in process
+memory. These provider keys are not SecretVault references. The remote lane still uses SecretVault for
+governed transport proxy and custom-CA material, while a self-hosted lane may use its loopback token.
+
 ## Multimodal Message Mapping & Capability Resolution
 
 When channel messages contain media attachments (`MediaAttachment`), `MultimodalMessageMapper` converts validated attachments into LangChain4j `Content` items:

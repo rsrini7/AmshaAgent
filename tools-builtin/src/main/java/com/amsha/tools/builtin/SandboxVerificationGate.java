@@ -12,7 +12,9 @@ import java.util.regex.Pattern;
 import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.agent.loop.ToolInvoker;
 import com.amsha.core.governance.RequiresApprovalException;
+import com.amsha.core.tools.LanguageIds;
 import com.amsha.core.tools.VerificationGate;
+import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolResponse;
 
@@ -67,7 +69,7 @@ public class SandboxVerificationGate implements VerificationGate {
                         ctx.sessionId(),
                         ctx.agentRole(),
                         ctx.autonomyLevel(),
-                        "sandbox_exec",
+                        ToolCapability.SANDBOX_EXEC.toolName(),
                         params,
                         List.of(),
                         ctx.rawUserGoal(),
@@ -81,7 +83,7 @@ public class SandboxVerificationGate implements VerificationGate {
                 } else if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval p) {
                     throw new RequiresApprovalException(p.frame(), ctx.sessionId());
                 } else {
-                    response = toolInvoker.invoke("sandbox_exec", params, ctx.sessionId());
+                    response = toolInvoker.invoke(ToolCapability.SANDBOX_EXEC.toolName(), params, ctx.sessionId());
                 }
 
                 if (!response.success()) {
@@ -99,11 +101,11 @@ public class SandboxVerificationGate implements VerificationGate {
     }
 
     private boolean isExecutableLanguage(String lang) {
-        return "python".equals(lang)
-                || "python3".equals(lang)
-                || "java".equals(lang)
-                || "go".equals(lang)
-                || "node".equals(lang)
-                || "bash".equals(lang);
+        return LanguageIds.PYTHON.equals(lang)
+                || LanguageIds.PYTHON3.equals(lang)
+                || LanguageIds.JAVA.equals(lang)
+                || LanguageIds.GO.equals(lang)
+                || LanguageIds.NODE.equals(lang)
+                || LanguageIds.BASH.equals(lang);
     }
 }

@@ -9,18 +9,18 @@ import java.util.Set;
  * Maps human-readable deity names to canonical system role IDs.
  */
 public enum AgentPersona {
-    BRIHASPATI("architect", "Brihaspati (The Architect)", Set.of("brihaspati", "brahaspati")),
-    VISHNU("coordinator", "Vishnu (The Coordinator)", Set.of("vishnu")),
-    SARASWATI("researcher", "Saraswati (The Researcher)", Set.of("saraswati")),
-    BRAHMA("coder", "Brahma (The Creator)", Set.of("brahma")),
-    SHIVA("debugger", "Shiva (The Debugger)", Set.of("shiva")),
-    DATTATREYA("synthesizer", "Dattatreya (The Synthesizer)", Set.of("dattatreya", "datta")),
-    GANESHA("optimizer", "Ganesha (The Obstacle Remover)", Set.of("ganesha", "ganesh")),
-    KARTIKEYA("sentinel", "Kartikeya (The Sentinel)", Set.of("kartikeya", "murugan", "skanda")),
-    LAKSHMI("healer", "Lakshmi (The Healer)", Set.of("lakshmi")),
-    DURGA("protector", "Durga (The Protector)", Set.of("durga")),
-    KALI("purifier", "Kali (The Purifier)", Set.of("kali")),
-    PARVATI("nurturer", "Parvati (The Nurturer)", Set.of("parvati", "uma"));
+    BRIHASPATI(AgentRoleEnum.ARCHITECT_ID, "Brihaspati (The Architect)", Set.of("brihaspati", "brahaspati")),
+    VISHNU(AgentRoleEnum.COORDINATOR_ID, "Vishnu (The Coordinator)", Set.of("vishnu")),
+    SARASWATI(AgentRoleEnum.RESEARCHER_ID, "Saraswati (The Researcher)", Set.of("saraswati")),
+    BRAHMA(AgentRoleEnum.CODER_ID, "Brahma (The Creator)", Set.of("brahma")),
+    SHIVA(AgentRoleEnum.DEBUGGER_ID, "Shiva (The Debugger)", Set.of("shiva")),
+    DATTATREYA(AgentRoleEnum.SYNTHESIZER_ID, "Dattatreya (The Synthesizer)", Set.of("dattatreya", "datta")),
+    GANESHA(AgentRoleEnum.OPTIMIZER_ID, "Ganesha (The Obstacle Remover)", Set.of("ganesha", "ganesh")),
+    KARTIKEYA(AgentRoleEnum.SENTINEL_ID, "Kartikeya (The Sentinel)", Set.of("kartikeya", "murugan", "skanda")),
+    LAKSHMI(AgentRoleEnum.HEALER_ID, "Lakshmi (The Healer)", Set.of("lakshmi")),
+    DURGA(AgentRoleEnum.PROTECTOR_ID, "Durga (The Protector)", Set.of("durga")),
+    KALI(AgentRoleEnum.PURIFIER_ID, "Kali (The Purifier)", Set.of("kali")),
+    PARVATI(AgentRoleEnum.NURTURER_ID, "Parvati (The Nurturer)", Set.of("parvati", "uma"));
 
     private final String roleId;
     private final String displayName;

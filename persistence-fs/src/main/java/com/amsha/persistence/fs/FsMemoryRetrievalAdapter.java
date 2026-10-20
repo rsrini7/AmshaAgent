@@ -21,6 +21,7 @@ import com.amsha.persistence.api.IngestResult;
 import com.amsha.persistence.api.MemoryChunkDto;
 import com.amsha.persistence.api.MemoryEntryDto;
 import com.amsha.persistence.api.MemoryRetrievalPort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
 import com.amsha.persistence.fs.lucene.LuceneIndexManager;
@@ -32,7 +33,7 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsMemoryRetrievalAdapter implements MemoryRetrievalPort {
 
     private static final Logger LOG = Logger.getLogger(FsMemoryRetrievalAdapter.class);

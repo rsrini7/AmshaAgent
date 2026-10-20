@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 
@@ -82,26 +83,42 @@ class ClassifierContractsTest {
     void postPolicyToolContextRejectsBlankRequiredFields() {
         assertThrows(
                 NullPointerException.class,
-                () -> new PostPolicyToolContext(null, AutonomyLevel.FULL, "sandbox_exec", Map.of(), "goal", false));
+                () -> new PostPolicyToolContext(
+                        null,
+                        AutonomyLevel.FULL,
+                        "sandbox_exec",
+                        ToolOperation.EXECUTE_SHELL,
+                        Map.of(),
+                        "goal",
+                        false));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new PostPolicyToolContext(" ", AutonomyLevel.FULL, "sandbox_exec", Map.of(), "goal", false));
+                () -> new PostPolicyToolContext(
+                        " ", AutonomyLevel.FULL, "sandbox_exec", ToolOperation.EXECUTE_SHELL, Map.of(), "goal", false));
         assertThrows(
                 NullPointerException.class,
-                () -> new PostPolicyToolContext("coder", AutonomyLevel.FULL, null, Map.of(), "goal", false));
+                () -> new PostPolicyToolContext(
+                        "coder", AutonomyLevel.FULL, null, ToolOperation.EXECUTE_SHELL, Map.of(), "goal", false));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new PostPolicyToolContext("coder", AutonomyLevel.FULL, " ", Map.of(), "goal", false));
+                () -> new PostPolicyToolContext(
+                        "coder", AutonomyLevel.FULL, " ", ToolOperation.EXECUTE_SHELL, Map.of(), "goal", false));
+        assertThrows(
+                NullPointerException.class,
+                () -> new PostPolicyToolContext(
+                        "coder", AutonomyLevel.FULL, "sandbox_exec", null, Map.of(), "goal", false));
     }
 
     @Test
     void postPolicyToolContextRejectsNullAutonomyAndParameters() {
         assertThrows(
                 NullPointerException.class,
-                () -> new PostPolicyToolContext("coder", null, "sandbox_exec", Map.of(), "goal", false));
+                () -> new PostPolicyToolContext(
+                        "coder", null, "sandbox_exec", ToolOperation.EXECUTE_SHELL, Map.of(), "goal", false));
         assertThrows(
                 NullPointerException.class,
-                () -> new PostPolicyToolContext("coder", AutonomyLevel.FULL, "sandbox_exec", null, "goal", false));
+                () -> new PostPolicyToolContext(
+                        "coder", AutonomyLevel.FULL, "sandbox_exec", ToolOperation.EXECUTE_SHELL, null, "goal", false));
     }
 
     @Test
@@ -109,7 +126,8 @@ class ClassifierContractsTest {
         var mutable = new LinkedHashMap<String, Object>();
         mutable.put("command", "ls");
 
-        var context = new PostPolicyToolContext("coder", AutonomyLevel.FULL, "sandbox_exec", mutable, null, false);
+        var context = new PostPolicyToolContext(
+                "coder", AutonomyLevel.FULL, "sandbox_exec", ToolOperation.EXECUTE_SHELL, mutable, null, false);
         mutable.put("command", "rm -rf /");
 
         assertEquals(1, context.parameters().size());
@@ -156,22 +174,31 @@ class ClassifierContractsTest {
     void toolRiskShadowContextRejectsBlankRequiredFields() {
         assertThrows(
                 NullPointerException.class,
-                () -> new ToolRiskShadowContext(null, AutonomyLevel.FULL, "sandbox_exec", Map.of(), "goal"));
+                () -> new ToolRiskShadowContext(
+                        null, AutonomyLevel.FULL, "sandbox_exec", ToolOperation.EXECUTE_SHELL, Map.of(), "goal"));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new ToolRiskShadowContext(" ", AutonomyLevel.FULL, "sandbox_exec", Map.of(), "goal"));
+                () -> new ToolRiskShadowContext(
+                        " ", AutonomyLevel.FULL, "sandbox_exec", ToolOperation.EXECUTE_SHELL, Map.of(), "goal"));
         assertThrows(
                 NullPointerException.class,
-                () -> new ToolRiskShadowContext("coder", AutonomyLevel.FULL, null, Map.of(), "goal"));
+                () -> new ToolRiskShadowContext(
+                        "coder", AutonomyLevel.FULL, null, ToolOperation.EXECUTE_SHELL, Map.of(), "goal"));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new ToolRiskShadowContext("coder", AutonomyLevel.FULL, " ", Map.of(), "goal"));
+                () -> new ToolRiskShadowContext(
+                        "coder", AutonomyLevel.FULL, " ", ToolOperation.EXECUTE_SHELL, Map.of(), "goal"));
         assertThrows(
                 NullPointerException.class,
-                () -> new ToolRiskShadowContext("coder", null, "sandbox_exec", Map.of(), "goal"));
+                () -> new ToolRiskShadowContext("coder", AutonomyLevel.FULL, "sandbox_exec", null, Map.of(), "goal"));
         assertThrows(
                 NullPointerException.class,
-                () -> new ToolRiskShadowContext("coder", AutonomyLevel.FULL, "sandbox_exec", null, "goal"));
+                () -> new ToolRiskShadowContext(
+                        "coder", null, "sandbox_exec", ToolOperation.EXECUTE_SHELL, Map.of(), "goal"));
+        assertThrows(
+                NullPointerException.class,
+                () -> new ToolRiskShadowContext(
+                        "coder", AutonomyLevel.FULL, "sandbox_exec", ToolOperation.EXECUTE_SHELL, null, "goal"));
     }
 
     @Test
@@ -179,7 +206,8 @@ class ClassifierContractsTest {
         var mutable = new LinkedHashMap<String, Object>();
         mutable.put("path", "/tmp");
 
-        var context = new ToolRiskShadowContext("coder", AutonomyLevel.FULL, "sandbox_exec", mutable, null);
+        var context = new ToolRiskShadowContext(
+                "coder", AutonomyLevel.FULL, "sandbox_exec", ToolOperation.EXECUTE_SHELL, mutable, null);
         mutable.put("path", "/etc");
 
         assertEquals(1, context.parameters().size());

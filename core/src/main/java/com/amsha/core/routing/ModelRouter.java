@@ -22,6 +22,8 @@ import com.amsha.core.util.MdcKeys;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
 import com.amsha.llm.api.ChatModelCreationPort;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.persistence.api.LlmProfileStorePort;
 
@@ -90,13 +92,13 @@ public class ModelRouter {
                                 "No ChatModelCreationPort bean found on classpath. Ensure amsha-llm-providers is included in the application."));
     }
 
-    @ConfigProperty(name = "amsha.llm.profile-routing.enabled", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.PROFILE_ROUTING_ENABLED, defaultValue = "false")
     boolean profileRoutingEnabled;
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
     String globalProvider;
 
-    @ConfigProperty(name = "amsha.llm.model")
+    @ConfigProperty(name = LlmConfigKeys.MODEL)
     Optional<String> globalModel;
 
     /**

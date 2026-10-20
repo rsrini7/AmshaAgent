@@ -31,13 +31,15 @@ class ClassifierDataTest(unittest.TestCase):
                 "agent_role": "coordinator",
                 "autonomy": "SUPERVISED",
                 "tool_name": "github",
+                "required_operation": "NETWORK_OUTBOUND",
                 "goal": "inspect repository",
-                "parameters": {"z": 2, "a": 1},
+                "parameters": {"z": 2, "nested": {"z": 3, "a": 4}, "a": 1},
             },
         }
         self.assertEqual(
             '{"classifier":"tool_risk","agent_role":"coordinator","autonomy":"SUPERVISED",'
-            '"tool_name":"github","goal":"inspect repository","parameters":{"a":1,"z":2}}',
+            '"tool_name":"github","required_operation":"NETWORK_OUTBOUND","goal":"inspect repository",'
+            '"parameters":{"a":1,"nested":{"a":4,"z":3},"z":2}}',
             render_input(record),
         )
 

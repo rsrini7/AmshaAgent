@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import com.amsha.localml.onnx.OnnxModelRootResolver;
+
 /**
  * Downloads, verifies, and installs pinned offline ONNX model bundles for Amsha Agent.
  * Ensures strict cryptographic SHA-256 and byte-count integrity with atomic file replacement.
@@ -252,47 +254,19 @@ public final class ModelInstaller {
         return CATALOG.stream().filter(entry -> entry.matches(query)).findFirst();
     }
 
+    /**
+     * Resolves the model root through the canonical rule set shared with the runtime registry.
+     *
+     * <p>This previously kept its own chain, which probed a parent directory for a relative root but
+     * the runtime did not. An install launched from {@code dist/} therefore succeeded while the
+     * running process looked somewhere else. Both sides now delegate to
+     * {@link com.amsha.localml.onnx.OnnxModelRootResolver}, which also makes precedence consistent:
+     * the system property outranks the environment variable, as it does in Quarkus.
+     *
+     * @return an absolute, normalized model root; never {@code null}
+     */
     public static Path resolveModelRoot() {
-        String rootEnv = System.getenv("AMSHA_ONNX_MODEL_ROOT");
-        if (rootEnv == null || rootEnv.isBlank()) {
-            rootEnv = System.getProperty("amsha.onnx.model-root");
-        }
-        if (rootEnv != null && !rootEnv.isBlank()) {
-            Path p = Path.of(rootEnv).toAbsolutePath().normalize();
-            if (Files.isDirectory(p)) {
-                return p;
-            }
-            Path parentCandidate =
-                    Path.of("..").resolve(rootEnv).toAbsolutePath().normalize();
-            if (Files.isDirectory(parentCandidate)) {
-                return parentCandidate;
-            }
-            return p;
-        }
-        String dataDir = System.getProperty("AMSHA_DATA_DIR", System.getenv("AMSHA_DATA_DIR"));
-        if (dataDir != null && !dataDir.isBlank()) {
-            Path p = Path.of(dataDir).resolve("models").toAbsolutePath().normalize();
-            if (Files.isDirectory(p)) {
-                return p;
-            }
-            Path parentCandidate = Path.of("..")
-                    .resolve(dataDir)
-                    .resolve("models")
-                    .toAbsolutePath()
-                    .normalize();
-            if (Files.isDirectory(parentCandidate)) {
-                return parentCandidate;
-            }
-        }
-        Path local = Path.of("data", "models");
-        if (Files.isDirectory(local)) {
-            return local.toAbsolutePath().normalize();
-        }
-        Path parent = Path.of("..", "data", "models");
-        if (Files.isDirectory(parent)) {
-            return parent.toAbsolutePath().normalize();
-        }
-        return local.toAbsolutePath().normalize();
+        return OnnxModelRootResolver.resolve();
     }
 
     public static ModelStatus checkStatus(ModelCatalogEntry entry, Path modelRoot) {

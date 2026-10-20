@@ -219,8 +219,7 @@ final class PendingToolResumeExecutor {
                 ApprovalFrame frame = new ApprovalFrame(pausedTool, pausedParams, RiskLevel.HIGH);
                 return AgentResult.awaitingApproval(frame, request.sessionId(), List.copyOf(request.history()));
             }
-            if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(request.toolName())
-                    || "garuda".equals(request.toolName())) {
+            if (ToolCapability.DELEGATE_TO_AGENT.toolName().equals(request.toolName())) {
                 completeInProgressCheckpoint(request.checkpoint());
                 String safeOutput = UserMessages.stripInternalDirectiveTail(success.output());
                 return AgentResult.finished(safeOutput, List.copyOf(request.history()));

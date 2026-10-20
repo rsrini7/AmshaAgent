@@ -1,0 +1,105 @@
+<svg width="100%" viewBox="0 0 960 650" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="decision-plane-title decision-plane-desc">
+  <title id="decision-plane-title">Jev Decision Plane</title>
+  <desc id="decision-plane-desc">Provider-neutral typed judgment seam, currently Deferred. Enabled shadow classifiers report a missing model; the intent router stays disabled until an engine and activation approvals exist.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <text x="20" y="24" font-size="14" font-weight="600" fill="#e8e6df">Jev Decision Plane — provider-neutral typed judgment seam</text>
+    <text x="20" y="42" font-size="10" fill="#888">Deferred · no production engine · enabled shadow classifiers return MISSING_MODEL · router returns DISABLED</text>
+  </g>
+
+  <!-- Band A: consumers -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="56" width="290" height="56" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="165" y="78" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">IntentDecisionRouter</text>
+    <text x="165" y="96" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">core.routing · isEnabled() permanently false</text>
+
+    <rect x="330" y="56" width="290" height="56" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="475" y="78" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">Shadow classifiers</text>
+    <text x="475" y="96" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">Decision*ShadowClassifier · observational</text>
+
+    <rect x="640" y="56" width="290" height="56" rx="8" fill="#0c447c" stroke="#85b7eb" stroke-width="0.5"/>
+    <text x="785" y="78" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#b5d4f4">Evaluation harness</text>
+    <text x="785" y="96" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#85b7eb">shadow corpus · DecisionShadowEvaluationIT</text>
+  </g>
+
+  <line x1="165" y1="112" x2="165" y2="124" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="475" y1="112" x2="475" y2="124" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="785" y1="112" x2="785" y2="124" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Band B: the seam -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="128" width="910" height="64" rx="8" fill="#492473" stroke="#a98fe2" stroke-width="0.5"/>
+    <text x="475" y="150" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#e8dff5">DecisionEngine — one method, deliberately deep</text>
+    <text x="475" y="170" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#a98fe2">DecisionResult evaluate(DecisionRequest)  ·  sealed result: Opinion(Choice | Score | Noul) or NoOpinion</text>
+    <text x="475" y="185" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#a98fe2">concentrates transport, decoding, redaction and failure mapping behind the seam</text>
+  </g>
+
+  <line x1="165" y1="192" x2="165" y2="204" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="475" y1="192" x2="475" y2="204" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="785" y1="192" x2="785" y2="204" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Band C: adapter categories -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="208" width="290" height="84" rx="8" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="165" y="228" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#9fe1cb">In-process</text>
+    <text x="165" y="246" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#5dcaa5">InProcessDecisionEngine · category IN_PROCESS</text>
+    <text x="165" y="262" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#5dcaa5">InMemoryDecisionEngine · reference only</text>
+    <text x="165" y="280" text-anchor="middle" dominant-baseline="central" font-size="9" font-weight="600" fill="#9fe1cb">allowed at classifier SPIs</text>
+
+    <rect x="330" y="208" width="290" height="84" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
+    <text x="475" y="228" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#f5c4b3">Self-hosted</text>
+    <text x="475" y="246" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#f0997b">SelfHostedDecisionProvider · loopback process</text>
+    <text x="475" y="262" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#f0997b">separate-process redaction + retention controls</text>
+    <text x="475" y="280" text-anchor="middle" dominant-baseline="central" font-size="9" font-weight="600" fill="#f5c4b3">forbidden at classifier SPIs</text>
+
+    <rect x="640" y="208" width="290" height="84" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
+    <text x="785" y="228" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#f5c4b3">Remote</text>
+    <text x="785" y="246" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#f0997b">RemoteDecisionProvider · external provider</text>
+    <text x="785" y="262" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#f0997b">authorized orchestration / evaluation path only</text>
+    <text x="785" y="280" text-anchor="middle" dominant-baseline="central" font-size="9" font-weight="600" fill="#f5c4b3">forbidden at classifier SPIs</text>
+  </g>
+
+  <line x1="245" y1="292" x2="245" y2="304" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="715" y1="292" x2="715" y2="304" stroke="#9c9a92" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Band D: vocabulary + policy/guards -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="308" width="450" height="124" rx="8" fill="#444441" stroke="#b4b2a9" stroke-width="0.5"/>
+    <text x="40" y="330" font-size="11" font-weight="600" fill="#d3d1c7">Typed vocabulary — values are never compared across primitives</text>
+    <text x="40" y="354" font-size="9.5" fill="#b4b2a9">Choice — one label from an admissible closed set (255-option ceiling)</text>
+    <text x="40" y="374" font-size="9.5" fill="#b4b2a9">Score — ordered rubric; score ≠ level distribution ≠ confidence</text>
+    <text x="40" y="394" font-size="9.5" fill="#b4b2a9">Noul — proposition probability; isAffirmed(threshold)</text>
+    <text x="40" y="414" font-size="9.5" fill="#b4b2a9">QuestionKey — identity-safe typed handle; no unchecked casts</text>
+
+    <rect x="490" y="308" width="440" height="124" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
+    <text x="510" y="330" font-size="11" font-weight="600" fill="#fac775">Amsha-owned policy &amp; guards</text>
+    <text x="510" y="354" font-size="9.5" fill="#ef9f27">Intent / ToolRisk DecisionPolicy — thresholds, bands, fallback</text>
+    <text x="510" y="374" font-size="9.5" fill="#ef9f27">DecisionTransactionGuard — undeterminable status reads ACTIVE</text>
+    <text x="510" y="394" font-size="9.5" fill="#ef9f27">ProviderPlacementValidator — SecurityException on bad placement</text>
+    <text x="510" y="414" font-size="9.5" fill="#ef9f27">DecisionPayloadDecoder — malformed input → INFERENCE_ERROR</text>
+  </g>
+
+  <!-- Band E: deferred posture -->
+  <g font-family="'Segoe UI', system-ui, sans-serif">
+    <rect x="20" y="450" width="910" height="110" rx="8" fill="#1a1a1a" stroke="#333" stroke-width="0.5"/>
+    <text x="40" y="474" font-size="12" font-weight="600" fill="#fac775">Deferred posture — enforced in code, not merely documented</text>
+    <text x="40" y="498" font-size="10" fill="#c2c0b6">isEnabled() = enabled AND an engine resolves → false today, so the router never evaluates</text>
+    <text x="40" y="518" font-size="10" fill="#c2c0b6">isActivationGateApproved() = candidate evidence approved AND cost ceiling approved AND non-blank rollout owner</text>
+    <text x="40" y="538" font-size="10" fill="#c2c0b6">DIRECT_ROUTE requires both; no engine returns DISABLED · enabled switch + no engine emits one startup WARN</text>
+  </g>
+
+  <!-- Legend -->
+  <g font-family="'Segoe UI', system-ui, sans-serif" font-size="11" fill="#c2c0b6">
+    <rect x="20" y="574" width="910" height="56" rx="8" fill="#1a1a1a" stroke="#333" stroke-width="0.5"/>
+    <rect x="40" y="592" width="14" height="14" rx="3" fill="#085041" stroke="#5dcaa5" stroke-width="0.5"/>
+    <text x="62" y="603" fill="#c2c0b6">allowed at classifier SPIs</text>
+    <rect x="250" y="592" width="14" height="14" rx="3" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
+    <text x="272" y="603" fill="#c2c0b6">forbidden — SecurityException</text>
+    <text x="40" y="622" fill="#888">A policy may escalate risk (BLOCK &gt; REQUIRE_APPROVAL &gt; ALLOW) but may never downgrade a block or bypass HITL. See docs/Architecture_Invariants.md §27.</text>
+  </g>
+</svg>

@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import com.amsha.persistence.api.PersistenceAction;
 import com.amsha.persistence.api.PersistenceAdapterPort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.jdbi.v3.core.Jdbi;
 
@@ -16,7 +17,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresPersistenceAdapter implements PersistenceAdapterPort {
 
     private final Jdbi jdbi;

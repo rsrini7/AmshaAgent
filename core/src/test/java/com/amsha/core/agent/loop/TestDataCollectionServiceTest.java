@@ -13,6 +13,7 @@ import java.util.Map;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.security.InputSanitizer;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -28,7 +29,12 @@ class TestDataCollectionServiceTest {
     void recordToolRiskCandidateWritesSanitizedJsonl() throws Exception {
         TestDataCollectionService service = newService();
         ToolRiskShadowContext context = new ToolRiskShadowContext(
-                "coder", AutonomyLevel.FULL, "sandbox_exec", Map.of("code", "echo safe"), "run echo");
+                "coder",
+                AutonomyLevel.FULL,
+                "sandbox_exec",
+                ToolOperation.EXECUTE_SHELL,
+                Map.of("code", "echo safe"),
+                "run echo");
 
         service.recordToolRiskCandidate("LOW_RISK", context);
 
@@ -38,6 +44,8 @@ class TestDataCollectionServiceTest {
         assertEquals("tool_risk", record.get("task").asText());
         assertEquals("LOW_RISK", record.get("label").asText());
         assertEquals("sandbox_exec", record.get("input").get("tool_name").asText());
+        assertEquals(
+                "EXECUTE_SHELL", record.get("input").get("required_operation").asText());
         assertEquals(
                 "echo safe", record.get("input").get("parameters").get("code").asText());
     }

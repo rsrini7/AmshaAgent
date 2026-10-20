@@ -10,6 +10,8 @@ import java.io.InputStream;
 import java.util.Properties;
 
 import com.amsha.app.security.ApiKeyRegistry;
+import com.amsha.persistence.api.AccessRoles;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -33,7 +35,7 @@ public class BackendValidator {
 
     private static final Logger log = Logger.getLogger(BackendValidator.class);
 
-    @ConfigProperty(name = "amsha.persistence.backend", defaultValue = "sqlite")
+    @ConfigProperty(name = PersistenceBackend.PROPERTY, defaultValue = PersistenceBackend.SQLITE)
     String runtimeBackend;
 
     @ConfigProperty(name = "amsha.api.keys.internal", defaultValue = "key-internal-changeme")
@@ -46,7 +48,7 @@ public class BackendValidator {
         // Register the internal API key so the cookie issued for skip-onboarding (and other
         // internal-UI flows) validates against ApiKeyRegistry. Mirrors the legacy main-branch
         // behavior where the internal key was an always-valid owner credential.
-        apiKeyRegistry.register("internal", internalApiKey);
+        apiKeyRegistry.register(AccessRoles.INTERNAL, internalApiKey);
 
         String buildBackend = readBuildBackend();
 
@@ -74,9 +76,9 @@ public class BackendValidator {
                             + "╚══════════════════════════════════════════════════════════════════╝",
                     buildBackend,
                     runtimeBackend,
-                    buildBackend.equals("postgres") ? "pg" : buildBackend,
+                    buildBackend.equals(PersistenceBackend.POSTGRES) ? "pg" : buildBackend,
                     buildBackend,
-                    buildBackend.equals("postgres") ? "pg" : buildBackend);
+                    buildBackend.equals(PersistenceBackend.POSTGRES) ? "pg" : buildBackend);
             throw new BackendMismatchException(String.format(
                     "Native binary built for '%s' but .env has AMSHA_PERSISTENCE_BACKEND=%s. "
                             + "Use the '%s' binary or set AMSHA_PERSISTENCE_BACKEND=%s in .env.",

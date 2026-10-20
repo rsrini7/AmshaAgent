@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import com.amsha.common.util.TemporalUtils;
 import com.amsha.persistence.api.AdvisoryLockPort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.LockJdbiDao;
 
 import org.jboss.logging.Logger;
@@ -18,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteAdvisoryLockAdapter implements AdvisoryLockPort {
 
     private static final Logger log = Logger.getLogger(SqliteAdvisoryLockAdapter.class);

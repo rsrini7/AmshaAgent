@@ -84,7 +84,7 @@ quarkus:
       group-id: com.amsha
       artifact-id: amsha-channel-api
   http:
-    host: "localhost"
+    host: "127.0.0.1"
     test-port: 0
   management:
     host: "localhost"

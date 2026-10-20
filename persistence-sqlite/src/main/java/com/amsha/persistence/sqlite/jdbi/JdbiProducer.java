@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.common.util.TemporalUtils;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -31,7 +32,7 @@ import io.agroal.api.AgroalDataSource;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class JdbiProducer {
 
     @Inject

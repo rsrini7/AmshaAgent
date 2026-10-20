@@ -16,7 +16,9 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.ModelDefaults;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -35,7 +37,8 @@ public class KimchiOAuthTokenExtractor {
 
     private static final Logger log = Logger.getLogger(KimchiOAuthTokenExtractor.class);
 
-    private static final List<String> KEYCHAIN_SERVICES = List.of("kimchi", "kimchi-dev", "kimchicorp");
+    private static final List<String> KEYCHAIN_SERVICES =
+            List.of(ModelDefaults.PROVIDER_KIMCHI, "kimchi-dev", "kimchicorp");
 
     private static final List<String> TOKEN_FIELD_NAMES =
             List.of("apiKey", "api_key", "token", "accessToken", "access_token", "bearerToken");
@@ -161,15 +164,15 @@ public class KimchiOAuthTokenExtractor {
         }
 
         List<Path> paths = new ArrayList<>();
-        paths.add(Path.of(userHome, ".config", "kimchi", "config.json"));
+        paths.add(Path.of(userHome, ".config", ModelDefaults.PROVIDER_KIMCHI, "config.json"));
         paths.add(Path.of(userHome, ".kimchi", "config.json"));
-        paths.add(Path.of(userHome, ".config", "opencode", "opencode.json"));
+        paths.add(Path.of(userHome, ".config", ModelDefaults.PROVIDER_OPENCODE, "opencode.json"));
 
         return paths;
     }
 
     private Optional<String> extractTokenFromEnvironment() {
-        List<String> envVars = List.of("AMSHA_KIMCHI_API_KEY", "KIMCHI_API_KEY");
+        List<String> envVars = List.of(ConfigKeys.KIMCHI_API_KEY, "KIMCHI_API_KEY");
 
         for (String varName : envVars) {
             String val = System.getenv(varName);
@@ -195,8 +198,10 @@ public class KimchiOAuthTokenExtractor {
         }
 
         // OpenCode provider schema (provider.kimchi.options.apiKey)
-        JsonNode opencodeKey =
-                node.path("provider").path("kimchi").path("options").path("apiKey");
+        JsonNode opencodeKey = node.path("provider")
+                .path(ModelDefaults.PROVIDER_KIMCHI)
+                .path("options")
+                .path("apiKey");
         if (opencodeKey.isTextual() && !opencodeKey.asText().isBlank()) {
             return Optional.of(opencodeKey.asText().trim());
         }

@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
@@ -35,13 +36,13 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_API_KEY")
+    @ConfigProperty(name = ConfigKeys.GENERIC_OPENAI_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_BASE_URL")
+    @ConfigProperty(name = ConfigKeys.GENERIC_OPENAI_BASE_URL)
     Optional<String> baseUrl;
 
-    @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_MODEL")
+    @ConfigProperty(name = ConfigKeys.GENERIC_OPENAI_MODEL)
     Optional<String> modelName;
 
     @ConfigProperty(name = "AMSHA_GENERIC_OPENAI_EXTRA_BODY")
@@ -84,8 +85,8 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
         if (resolvedModel.isBlank()) {
             throw new IllegalStateException("generic-openai requires AMSHA_GENERIC_OPENAI_MODEL");
         }
-        List<MultiModelChatModel.ModelEntry> entries =
-                ChatModelFactory.buildMultiModelEntries(key, resolvedModel, "generic-openai", (k, m) -> {
+        List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(
+                key, resolvedModel, ModelDefaults.PROVIDER_GENERIC_OPENAI, (k, m) -> {
                     ChatModel raw = ChatModelFactory.createOpenAi(
                             resolvedBaseUrl,
                             k,
@@ -98,12 +99,13 @@ public class GenericOpenAiProviderFactory implements AgentChatModelProvider {
                             ChatModelFactory.mergeCustomParameters(
                                     ChatModelFactory.deepSeekWorkaroundParams(m),
                                     ChatModelFactory.parseExtraBody(extraBody.orElse(""))));
-                    MultimodalCapability cap = MultimodalCapabilities.defaultCapabilityForModel("generic-openai", m);
+                    MultimodalCapability cap =
+                            MultimodalCapabilities.defaultCapabilityForModel(ModelDefaults.PROVIDER_GENERIC_OPENAI, m);
                     return CapabilityAwareChatModel.withCapabilities(raw, false, cap);
                 });
         if (entries.size() == 1) {
             return entries.get(0).model();
         }
-        return new MultiModelChatModel("generic-openai", entries, 5);
+        return new MultiModelChatModel(ModelDefaults.PROVIDER_GENERIC_OPENAI, entries, 5);
     }
 }

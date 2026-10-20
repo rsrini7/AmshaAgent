@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.llm.api.ModelDefaults;
@@ -167,8 +168,8 @@ public class FoundryResponsesChatModel implements ChatModel {
 
             HttpRequest.Builder httpReqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(endpoint))
-                    .header("Content-Type", "application/json")
-                    .header("Accept", "text/event-stream")
+                    .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
+                    .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_TEXT_EVENT_STREAM)
                     .timeout(timeout)
                     .POST(HttpRequest.BodyPublishers.ofByteArray(bodyBytes));
 
@@ -290,9 +291,10 @@ public class FoundryResponsesChatModel implements ChatModel {
             if (trimmed.isEmpty() || trimmed.startsWith(":")) {
                 continue;
             }
-            if (trimmed.startsWith("data:")) {
-                String data = trimmed.substring(5).trim();
-                if ("[DONE]".equalsIgnoreCase(data)) {
+            if (trimmed.startsWith(HttpProtocol.SSE_DATA_PREFIX)) {
+                String data =
+                        trimmed.substring(HttpProtocol.SSE_DATA_PREFIX.length()).trim();
+                if (HttpProtocol.SSE_DONE.equalsIgnoreCase(data)) {
                     break;
                 }
                 try {

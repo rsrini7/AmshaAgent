@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.tools.LanguageIds;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -145,7 +146,8 @@ public class LoopStuckDetector {
 
         String firstToken = extractFirstToken(command);
         // Strip common prefixes like "bash -c", "sh -c", "python -c".
-        if (Set.of("bash", "sh", "zsh", "python", "python3").contains(firstToken.toLowerCase())) {
+        if (Set.of(LanguageIds.BASH, LanguageIds.SH, LanguageIds.ZSH, LanguageIds.PYTHON, LanguageIds.PYTHON3)
+                .contains(firstToken.toLowerCase())) {
             String rest = command.substring(command.indexOf(' ') + 1).trim();
             if (rest.startsWith("-c ")) {
                 rest = rest.substring(3).trim();

@@ -12,6 +12,7 @@ import com.amsha.channel.api.ApprovalPrompt;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
+import com.amsha.channel.api.MediaTypes;
 import com.amsha.channel.api.ReplyNode;
 import com.amsha.common.util.LogUtil;
 
@@ -186,9 +187,9 @@ public class WebChannelSender implements ChannelSender {
                 .trim();
         if (candidate.isBlank()) {
             candidate = switch (mimeType != null ? mimeType : "") {
-                case "audio/mpeg" -> "amsha-reply.mp3";
-                case "audio/ogg" -> "amsha-reply.ogg";
-                case "audio/webm" -> "amsha-reply.webm";
+                case MediaTypes.MPEG -> "amsha-reply.mp3";
+                case MediaTypes.OGG -> "amsha-reply.ogg";
+                case MediaTypes.WEBM -> "amsha-reply.webm";
                 default -> "amsha-reply.wav";
             };
         }
@@ -196,7 +197,7 @@ public class WebChannelSender implements ChannelSender {
     }
 
     private String buildAudioMessageJson(String base64Audio, String mimeType, String fileName) {
-        String safeMime = mimeType != null && !mimeType.isBlank() ? mimeType.trim() : "audio/wav";
+        String safeMime = mimeType != null && !mimeType.isBlank() ? mimeType.trim() : MediaTypes.WAV;
         String safeName = safeFileName(fileName, safeMime);
         return Json.createObjectBuilder()
                 .add("type", "message")

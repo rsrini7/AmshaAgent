@@ -7,8 +7,10 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.localml.onnx.LocalAudioTranscoder;
 
 /**
@@ -124,7 +126,7 @@ public class ModelsCommand implements Runnable {
 
         private static void checkFfmpegNotice() {
             String configuredFfmpeg =
-                    System.getProperty("amsha.stt.ffmpeg-path", System.getenv("AMSHA_STT_FFMPEG_PATH"));
+                    System.getProperty("amsha.stt.ffmpeg-path", System.getenv(ConfigKeys.STT_FFMPEG_PATH));
             if (!LocalAudioTranscoder.isFfmpegAvailable(configuredFfmpeg)) {
                 System.out.println();
                 System.out.println("  ⚠️  Notice: ffmpeg was not detected on your system.");
@@ -138,7 +140,7 @@ public class ModelsCommand implements Runnable {
     }
 
     @Command(name = "verify", description = "Verify checksums of installed model bundles")
-    public static class VerifyCommand implements Runnable {
+    public static class VerifyCommand implements Callable<Integer> {
 
         @Parameters(
                 index = "0",
@@ -148,7 +150,7 @@ public class ModelsCommand implements Runnable {
         String modelName;
 
         @Override
-        public void run() {
+        public Integer call() {
             Path modelRoot = ModelInstaller.resolveModelRoot();
             if (modelName == null || modelName.isBlank() || "all".equalsIgnoreCase(modelName.trim())) {
                 boolean allOk = true;
@@ -163,13 +165,13 @@ public class ModelsCommand implements Runnable {
                 } else {
                     System.err.println("❌ Verification failed for one or more models.");
                 }
-                return;
+                return allOk ? 0 : 1;
             }
 
             Optional<ModelInstaller.ModelCatalogEntry> match = ModelInstaller.findModel(modelName);
             if (match.isEmpty()) {
                 System.err.printf("❌ Unknown model '%s'.%n", modelName);
-                return;
+                return 1;
             }
 
             System.out.printf("Verifying '%s'...%n", match.get().id());
@@ -177,10 +179,12 @@ public class ModelsCommand implements Runnable {
                 System.out.printf(
                         "✅ Model bundle '%s' verified successfully.%n",
                         match.get().id());
+                return 0;
             } else {
                 System.err.printf(
                         "❌ Model bundle '%s' verification failed.%n",
                         match.get().id());
+                return 1;
             }
         }
     }

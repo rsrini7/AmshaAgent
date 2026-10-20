@@ -5,11 +5,12 @@ import jakarta.inject.Inject;
 
 import com.amsha.persistence.api.PersistenceAction;
 import com.amsha.persistence.api.PersistenceAdapterPort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqlitePersistenceAdapter implements PersistenceAdapterPort {
 
     private static final int MAX_ATTEMPTS = 3;

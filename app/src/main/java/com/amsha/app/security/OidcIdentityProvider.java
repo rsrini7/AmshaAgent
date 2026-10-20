@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.common.http.HttpProtocol;
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.ExternalUserProfile;
 import com.amsha.security.api.SecretVault;
@@ -168,7 +170,7 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
             Map<?, ?> userInfo = httpClient
                     .target(userinfoUrl.orElse(""))
                     .request(MediaType.APPLICATION_JSON_TYPE)
-                    .header("Authorization", "Bearer " + accessToken)
+                    .header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + accessToken)
                     .get(Map.class);
 
             String sub = (String) userInfo.get("sub");
@@ -183,7 +185,7 @@ public class OidcIdentityProvider implements ExternalIdentityProvider {
                     (String) userInfo.get("picture"));
 
         } catch (Exception e) {
-            log.error("OIDC authentication failed: " + e.getMessage(), e);
+            log.error("OIDC authentication failed", LogUtil.relevantThrowable(e));
             throw new IllegalStateException("Failed to authenticate with OIDC provider", e);
         }
     }

@@ -9,6 +9,7 @@ import java.util.List;
 import com.amsha.persistence.api.ExecutionRunSummaryDto;
 import com.amsha.persistence.api.ExecutionTraceDto;
 import com.amsha.persistence.api.ExecutionTraceStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.ExecutionTraceJdbiDao;
 
 import org.jboss.logging.Logger;
@@ -19,7 +20,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteExecutionTraceStoreAdapter implements ExecutionTraceStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteExecutionTraceStoreAdapter.class);

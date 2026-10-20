@@ -19,7 +19,10 @@ import java.util.stream.Collectors;
 import com.amsha.app.util.CliUtils;
 import com.amsha.app.util.ProviderKeySpecs;
 import com.amsha.app.util.VarSpec;
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
+import com.amsha.llm.api.ModelDefaults;
+import com.amsha.security.api.VaultConstants;
 
 import org.jboss.logging.Logger;
 
@@ -32,51 +35,56 @@ public class InteractiveSetupWizard {
     private static final Logger log = Logger.getLogger(InteractiveSetupWizard.class);
 
     private static final Set<String> SENSITIVE_KEYS = Set.of(
-            "AMSHA_GROQ_API_KEY",
-            "AMSHA_OPENROUTER_API_KEY",
-            "AMSHA_OPENAI_API_KEY",
-            "AMSHA_GEMINI_API_KEY",
-            "AMSHA_NVIDIA_API_KEY",
-            "AMSHA_CEREBRAS_API_KEY",
-            "AMSHA_OMLX_API_KEY",
-            "AMSHA_EMBEDDING_JINA_API_KEY",
-            "AMSHA_EMBEDDING_OPENAI_API_KEY",
-            "AMSHA_VAULT_PEPPER",
-            "AMSHA_AUDIT_HMAC_KEY",
-            "AMSHA_API_KEYS_INTERNAL",
-            "AMSHA_API_KEYS_CI",
-            "TELEGRAM_BOT_TOKEN",
-            "AMSHA_TOOLS_BRAVE_API_KEY",
-            "AMSHA_TOOLS_SERPER_API_KEY",
-            "AMSHA_TOOLS_GITHUB_TOKEN",
-            "AMSHA_COMPACTION_GROQ_API_KEY",
-            "AMSHA_COMPACTION_CEREBRAS_API_KEY",
-            "AMSHA_COMPACTION_OPENROUTER_API_KEY",
-            "AMSHA_COMPACTION_SARVAM_API_KEY",
-            "AMSHA_COMPACTION_OPENCODE_API_KEY",
-            "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY",
-            "AMSHA_CLASSIFIER_GROQ_API_KEY",
-            "AMSHA_CLASSIFIER_CEREBRAS_API_KEY",
-            "AMSHA_CLASSIFIER_OPENROUTER_API_KEY",
-            "AMSHA_CLASSIFIER_SARVAM_API_KEY",
-            "AMSHA_CLASSIFIER_OPENCODE_API_KEY",
-            "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY",
-            "AMSHA_SARVAM_API_KEY",
-            "AMSHA_OPENCODE_API_KEY");
+            ConfigKeys.GROQ_API_KEY,
+            ConfigKeys.OPENROUTER_API_KEY,
+            ConfigKeys.OPENAI_API_KEY,
+            ConfigKeys.GEMINI_API_KEY,
+            ConfigKeys.NVIDIA_API_KEY,
+            ConfigKeys.CEREBRAS_API_KEY,
+            ConfigKeys.OMLX_API_KEY,
+            ConfigKeys.EMBEDDING_JINA_API_KEY,
+            ConfigKeys.EMBEDDING_OPENAI_API_KEY,
+            VaultConstants.VAULT_PEPPER,
+            VaultConstants.AUDIT_HMAC_KEY,
+            VaultConstants.API_KEYS_INTERNAL,
+            VaultConstants.API_KEYS_CI,
+            ConfigKeys.TELEGRAM_BOT_TOKEN,
+            VaultConstants.TOOLS_BRAVE_API_KEY,
+            VaultConstants.TOOLS_SERPER_API_KEY,
+            VaultConstants.TOOLS_GITHUB_TOKEN,
+            ConfigKeys.COMPACTION_GROQ_API_KEY,
+            ConfigKeys.COMPACTION_CEREBRAS_API_KEY,
+            ConfigKeys.COMPACTION_OPENROUTER_API_KEY,
+            ConfigKeys.COMPACTION_SARVAM_API_KEY,
+            ConfigKeys.COMPACTION_OPENCODE_API_KEY,
+            ConfigKeys.COMPACTION_GENERIC_OPENAI_API_KEY,
+            ConfigKeys.CLASSIFIER_GROQ_API_KEY,
+            ConfigKeys.CLASSIFIER_CEREBRAS_API_KEY,
+            ConfigKeys.CLASSIFIER_OPENROUTER_API_KEY,
+            ConfigKeys.CLASSIFIER_SARVAM_API_KEY,
+            ConfigKeys.CLASSIFIER_OPENCODE_API_KEY,
+            ConfigKeys.CLASSIFIER_GENERIC_OPENAI_API_KEY,
+            ConfigKeys.SARVAM_API_KEY,
+            ConfigKeys.OPENCODE_API_KEY,
+            ConfigKeys.DECISION_TYPESAFE_API_KEY,
+            ConfigKeys.DECISION_CLM_API_KEY,
+            ConfigKeys.DECISION_LAYA_API_KEY,
+            ConfigKeys.DECISION_KEV_API_KEY,
+            ConfigKeys.DECISION_OMLX_API_KEY);
 
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
-            "AMSHA_VAULT_PEPPER",
-            "AMSHA_AUDIT_HMAC_KEY",
-            "AMSHA_API_KEYS_INTERNAL",
-            "AMSHA_API_KEYS_CI",
-            "AMSHA_API_KEYS_ADMIN");
+            VaultConstants.VAULT_PEPPER,
+            VaultConstants.AUDIT_HMAC_KEY,
+            VaultConstants.API_KEYS_INTERNAL,
+            VaultConstants.API_KEYS_CI,
+            VaultConstants.API_KEYS_ADMIN);
 
     public static void run(Path binaryDir, String[] args) {
         if (args != null && args.length > 0 && "models".equalsIgnoreCase(args[0])) {
             return;
         }
 
-        if (System.getProperty("AMSHA_LLM_PROVIDER") == null && System.getenv("AMSHA_LLM_PROVIDER") == null) {
+        if (System.getProperty(ConfigKeys.LLM_PROVIDER) == null && System.getenv(ConfigKeys.LLM_PROVIDER) == null) {
             promptProviderSelection();
         }
 
@@ -123,11 +131,11 @@ public class InteractiveSetupWizard {
                     if (skipTelegram) continue;
                 }
 
-                if (spec.key().equals("AMSHA_TOOLS_GITHUB_TOKEN")
+                if (spec.key().equals(VaultConstants.TOOLS_GITHUB_TOKEN)
                         && !promptOptionalModule(envFile, spec.key(), "GitHub repository access")) continue;
-                if (spec.key().equals("AMSHA_TOOLS_SERPER_API_KEY")
+                if (spec.key().equals(VaultConstants.TOOLS_SERPER_API_KEY)
                         && !promptOptionalModule(envFile, spec.key(), "Serper Search Integration")) continue;
-                if (spec.key().equals("AMSHA_TOOLS_BRAVE_API_KEY")
+                if (spec.key().equals(VaultConstants.TOOLS_BRAVE_API_KEY)
                         && !promptOptionalModule(envFile, spec.key(), "Brave Search Integration")) continue;
 
                 promptVariable(envFile, spec);
@@ -158,80 +166,80 @@ public class InteractiveSetupWizard {
         String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-16, Default: 1]: ");
         String provider =
                 switch (choice != null ? choice.trim() : "") {
-                    case "2" -> "openrouter";
-                    case "3" -> "openai";
-                    case "4" -> "ollama";
-                    case "5" -> "nvidia";
-                    case "6" -> "gemini";
-                    case "7" -> "cerebras";
-                    case "8" -> "omlx";
-                    case "9" -> "generic-openai";
-                    case "10" -> "sarvam";
-                    case "11" -> "opencode";
-                    case "12" -> "huggingface";
-                    case "13" -> "mistral";
-                    case "14" -> "cloudflare";
-                    case "15" -> "cohere";
-                    case "16" -> "codex";
-                    default -> "groq";
+                    case "2" -> ModelDefaults.PROVIDER_OPENROUTER;
+                    case "3" -> ModelDefaults.PROVIDER_OPENAI;
+                    case "4" -> ModelDefaults.PROVIDER_OLLAMA;
+                    case "5" -> ModelDefaults.PROVIDER_NVIDIA;
+                    case "6" -> ModelDefaults.PROVIDER_GEMINI;
+                    case "7" -> ModelDefaults.PROVIDER_CEREBRAS;
+                    case "8" -> ModelDefaults.PROVIDER_OMLX;
+                    case "9" -> ModelDefaults.PROVIDER_GENERIC_OPENAI;
+                    case "10" -> ModelDefaults.PROVIDER_SARVAM;
+                    case "11" -> ModelDefaults.PROVIDER_OPENCODE;
+                    case "12" -> ModelDefaults.PROVIDER_HUGGINGFACE;
+                    case "13" -> ModelDefaults.PROVIDER_MISTRAL;
+                    case "14" -> ModelDefaults.PROVIDER_CLOUDFLARE;
+                    case "15" -> ModelDefaults.PROVIDER_COHERE;
+                    case "16" -> ModelDefaults.PROVIDER_CODEX;
+                    default -> ModelDefaults.PROVIDER_GROQ;
                 };
-        System.setProperty("AMSHA_LLM_PROVIDER", provider);
-        System.setProperty("AMSHA_INFINITE_LOOP_LLM_PROVIDERS", provider);
-        System.setProperty("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", provider);
-        System.setProperty("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", provider);
+        System.setProperty(ConfigKeys.LLM_PROVIDER, provider);
+        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, provider);
+        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, provider);
+        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, provider);
     }
 
     private static void ensureBaseConfigsInEnv(Path envFile) {
-        String provider = Optional.ofNullable(System.getProperty("AMSHA_LLM_PROVIDER"))
-                .or(() -> Optional.ofNullable(System.getenv("AMSHA_LLM_PROVIDER")))
-                .orElse("groq");
+        String provider = Optional.ofNullable(System.getProperty(ConfigKeys.LLM_PROVIDER))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER)))
+                .orElse(ModelDefaults.PROVIDER_GROQ);
         EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_LLM_PROVIDER", provider, EnvConfigInitializer.PatchMode.UPDATE);
+                envFile, ConfigKeys.LLM_PROVIDER, provider, EnvConfigInitializer.PatchMode.UPDATE);
         boolean infiniteLoop = provider.equalsIgnoreCase("infinite-loop");
         patchProviderList(
                 envFile,
-                "AMSHA_INFINITE_LOOP_LLM_PROVIDERS",
+                ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList("AMSHA_INFINITE_LOOP_LLM_PROVIDERS", "omlx,groq,openrouter")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, "omlx,groq,openrouter")
                         : provider);
         patchProviderList(
                 envFile,
-                "AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS",
+                ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS", "groq,ollama")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, "groq,ollama")
                         : provider);
         patchProviderList(
                 envFile,
-                "AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS",
+                ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS", "groq,ollama")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, "groq,ollama")
                         : provider);
-        if ("sarvam".equalsIgnoreCase(provider)) {
+        if (ModelDefaults.PROVIDER_SARVAM.equalsIgnoreCase(provider)) {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_MODEL", "sarvam-105b-conversations");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_BASE_URL", "https://api.sarvam.ai/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_MODEL", "sarvam-105b-conversations");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_SARVAM_BASE_URL", "https://api.sarvam.ai/v1");
         }
-        if ("opencode".equalsIgnoreCase(provider)) {
+        if (ModelDefaults.PROVIDER_OPENCODE.equalsIgnoreCase(provider)) {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_OPENCODE_MODEL", "deepseek-v4-flash-free");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_OPENCODE_BASE_URL", "https://opencode.ai/zen/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_OPENCODE_MODEL", "deepseek-v4-flash-free");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_OPENCODE_BASE_URL", "https://opencode.ai/zen/v1");
         }
-        if ("huggingface".equalsIgnoreCase(provider)) {
+        if (ModelDefaults.PROVIDER_HUGGINGFACE.equalsIgnoreCase(provider)) {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_HUGGINGFACE_MODEL", "meta-llama/Llama-3.3-70B-Instruct");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_HUGGINGFACE_BASE_URL", "https://router.huggingface.co/v1");
         }
-        if ("mistral".equalsIgnoreCase(provider)) {
+        if (ModelDefaults.PROVIDER_MISTRAL.equalsIgnoreCase(provider)) {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_MISTRAL_MODEL", "codestral-latest");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_MISTRAL_BASE_URL", "https://api.mistral.ai/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_MISTRAL_MODEL", "codestral-latest");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_MISTRAL_BASE_URL", "https://api.mistral.ai/v1");
         }
-        if ("cloudflare".equalsIgnoreCase(provider)) {
-            patchBaseConfig(envFile, "AMSHA_CLOUDFLARE_ACCOUNT_ID", "");
+        if (ModelDefaults.PROVIDER_CLOUDFLARE.equalsIgnoreCase(provider)) {
+            patchBaseConfig(envFile, ConfigKeys.CLOUDFLARE_ACCOUNT_ID, "");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_CLOUDFLARE_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
             patchBaseConfig(
                     envFile,
@@ -243,13 +251,13 @@ public class InteractiveSetupWizard {
                     "AMSHA_CLASSIFIER_CLOUDFLARE_BASE_URL",
                     "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1");
         }
-        if ("cohere".equalsIgnoreCase(provider)) {
+        if (ModelDefaults.PROVIDER_COHERE.equalsIgnoreCase(provider)) {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_COHERE_MODEL", "command-r-08-2024");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_MODEL", "command-r-08-2024");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_COHERE_BASE_URL", "https://api.cohere.ai/compatibility/v1");
         }
-        if ("codex".equalsIgnoreCase(provider)) {
+        if (ModelDefaults.PROVIDER_CODEX.equalsIgnoreCase(provider)) {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_CODEX_MODEL", "gpt-5.6-luna");
             patchBaseConfig(envFile, "AMSHA_COMPACTION_CODEX_BASE_URL", "http://127.0.0.1:8787/v1");
             patchBaseConfig(envFile, "AMSHA_CLASSIFIER_CODEX_MODEL", "gpt-5.6-luna");
@@ -282,7 +290,8 @@ public class InteractiveSetupWizard {
     }
 
     private static boolean shouldPromptUnifiedKey(List<VarSpec> missing) {
-        String provider = System.getProperty("AMSHA_LLM_PROVIDER", "groq").toLowerCase(Locale.ROOT);
+        String provider = System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ)
+                .toLowerCase(Locale.ROOT);
         String llmKeyName = llmApiKeyForProvider(provider);
         boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key().equals(llmKeyName));
         String compactionKey = compactionApiKeyForProvider(provider);
@@ -301,7 +310,8 @@ public class InteractiveSetupWizard {
         if (resp == null
                 || resp.trim().isEmpty()
                 || resp.trim().toLowerCase(Locale.ROOT).startsWith("y")) {
-            String provider = System.getProperty("AMSHA_LLM_PROVIDER", "groq").toLowerCase(Locale.ROOT);
+            String provider = System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ)
+                    .toLowerCase(Locale.ROOT);
             String key = readPasswordWithFallback(
                     System.console(), "  └─ Enter " + provider.toUpperCase(Locale.ROOT) + " API key: ");
             if (key != null && !key.isBlank()) {
@@ -330,9 +340,9 @@ public class InteractiveSetupWizard {
             EnvConfigInitializer.patchEnvFile(envFile, classifierKey, key, EnvConfigInitializer.PatchMode.UPDATE);
             System.setProperty(classifierKey, key);
         }
-        if ("cloudflare".equalsIgnoreCase(provider)) {
-            String currentAcc = Optional.ofNullable(System.getProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID"))
-                    .or(() -> Optional.ofNullable(System.getenv("AMSHA_CLOUDFLARE_ACCOUNT_ID")))
+        if (ModelDefaults.PROVIDER_CLOUDFLARE.equalsIgnoreCase(provider)) {
+            String currentAcc = Optional.ofNullable(System.getProperty(ConfigKeys.CLOUDFLARE_ACCOUNT_ID))
+                    .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.CLOUDFLARE_ACCOUNT_ID)))
                     .orElse("");
             if (currentAcc.isBlank()) {
                 String accId = readLineWithFallback(
@@ -340,10 +350,10 @@ public class InteractiveSetupWizard {
                 if (accId != null && !accId.isBlank()) {
                     EnvConfigInitializer.patchEnvFile(
                             envFile,
-                            "AMSHA_CLOUDFLARE_ACCOUNT_ID",
+                            ConfigKeys.CLOUDFLARE_ACCOUNT_ID,
                             accId.trim(),
                             EnvConfigInitializer.PatchMode.UPDATE);
-                    System.setProperty("AMSHA_CLOUDFLARE_ACCOUNT_ID", accId.trim());
+                    System.setProperty(ConfigKeys.CLOUDFLARE_ACCOUNT_ID, accId.trim());
                     System.err.println("     ✓ Cloudflare Account ID saved.");
                 }
             }
@@ -353,21 +363,21 @@ public class InteractiveSetupWizard {
 
     private static String llmApiKeyForProvider(String provider) {
         return switch (provider.toLowerCase(Locale.ROOT)) {
-            case "openrouter" -> "AMSHA_OPENROUTER_API_KEY";
-            case "openai" -> "AMSHA_OPENAI_API_KEY";
-            case "gemini" -> "AMSHA_GEMINI_API_KEY";
-            case "cerebras" -> "AMSHA_CEREBRAS_API_KEY";
-            case "nvidia" -> "AMSHA_NVIDIA_API_KEY";
-            case "sarvam" -> "AMSHA_SARVAM_API_KEY";
-            case "opencode" -> "AMSHA_OPENCODE_API_KEY";
-            case "huggingface" -> "AMSHA_HUGGINGFACE_API_KEY";
-            case "mistral" -> "AMSHA_MISTRAL_API_KEY";
-            case "cloudflare" -> "AMSHA_CLOUDFLARE_API_KEY";
-            case "cohere" -> "AMSHA_COHERE_API_KEY";
-            case "codex" -> "AMSHA_CODEX_API_KEY";
-            case "omlx" -> "AMSHA_OMLX_API_KEY";
-            case "generic-openai" -> "AMSHA_GENERIC_OPENAI_API_KEY";
-            default -> "AMSHA_GROQ_API_KEY";
+            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.OPENROUTER_API_KEY;
+            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.OPENAI_API_KEY;
+            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.GEMINI_API_KEY;
+            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.CEREBRAS_API_KEY;
+            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.NVIDIA_API_KEY;
+            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.SARVAM_API_KEY;
+            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.OPENCODE_API_KEY;
+            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.HUGGINGFACE_API_KEY;
+            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.MISTRAL_API_KEY;
+            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.CLOUDFLARE_API_KEY;
+            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.COHERE_API_KEY;
+            case ModelDefaults.PROVIDER_CODEX -> ConfigKeys.CODEX_API_KEY;
+            case ModelDefaults.PROVIDER_OMLX -> ConfigKeys.OMLX_API_KEY;
+            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.GENERIC_OPENAI_API_KEY;
+            default -> ConfigKeys.GROQ_API_KEY;
         };
     }
 
@@ -380,19 +390,19 @@ public class InteractiveSetupWizard {
             return null;
         }
         return switch (provider.toLowerCase(Locale.ROOT)) {
-            case "openrouter" -> "AMSHA_COMPACTION_OPENROUTER_API_KEY";
-            case "openai" -> "AMSHA_COMPACTION_OPENAI_API_KEY";
-            case "gemini" -> "AMSHA_COMPACTION_GEMINI_API_KEY";
-            case "cerebras" -> "AMSHA_COMPACTION_CEREBRAS_API_KEY";
-            case "nvidia" -> "AMSHA_COMPACTION_NVIDIA_API_KEY";
-            case "sarvam" -> "AMSHA_COMPACTION_SARVAM_API_KEY";
-            case "opencode" -> "AMSHA_COMPACTION_OPENCODE_API_KEY";
-            case "huggingface" -> "AMSHA_COMPACTION_HUGGINGFACE_API_KEY";
-            case "mistral" -> "AMSHA_COMPACTION_MISTRAL_API_KEY";
-            case "cloudflare" -> "AMSHA_COMPACTION_CLOUDFLARE_API_KEY";
-            case "cohere" -> "AMSHA_COMPACTION_COHERE_API_KEY";
-            case "generic-openai" -> "AMSHA_COMPACTION_GENERIC_OPENAI_API_KEY";
-            default -> "AMSHA_COMPACTION_GROQ_API_KEY";
+            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.COMPACTION_OPENROUTER_API_KEY;
+            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.COMPACTION_OPENAI_API_KEY;
+            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.COMPACTION_GEMINI_API_KEY;
+            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.COMPACTION_CEREBRAS_API_KEY;
+            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.COMPACTION_NVIDIA_API_KEY;
+            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.COMPACTION_SARVAM_API_KEY;
+            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.COMPACTION_OPENCODE_API_KEY;
+            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.COMPACTION_HUGGINGFACE_API_KEY;
+            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.COMPACTION_MISTRAL_API_KEY;
+            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.COMPACTION_CLOUDFLARE_API_KEY;
+            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.COMPACTION_COHERE_API_KEY;
+            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.COMPACTION_GENERIC_OPENAI_API_KEY;
+            default -> ConfigKeys.COMPACTION_GROQ_API_KEY;
         };
     }
 
@@ -405,19 +415,19 @@ public class InteractiveSetupWizard {
             return null;
         }
         return switch (provider.toLowerCase(Locale.ROOT)) {
-            case "openrouter" -> "AMSHA_CLASSIFIER_OPENROUTER_API_KEY";
-            case "openai" -> "AMSHA_CLASSIFIER_OPENAI_API_KEY";
-            case "gemini" -> "AMSHA_CLASSIFIER_GEMINI_API_KEY";
-            case "cerebras" -> "AMSHA_CLASSIFIER_CEREBRAS_API_KEY";
-            case "nvidia" -> "AMSHA_CLASSIFIER_NVIDIA_API_KEY";
-            case "sarvam" -> "AMSHA_CLASSIFIER_SARVAM_API_KEY";
-            case "opencode" -> "AMSHA_CLASSIFIER_OPENCODE_API_KEY";
-            case "huggingface" -> "AMSHA_CLASSIFIER_HUGGINGFACE_API_KEY";
-            case "mistral" -> "AMSHA_CLASSIFIER_MISTRAL_API_KEY";
-            case "cloudflare" -> "AMSHA_CLASSIFIER_CLOUDFLARE_API_KEY";
-            case "cohere" -> "AMSHA_CLASSIFIER_COHERE_API_KEY";
-            case "generic-openai" -> "AMSHA_CLASSIFIER_GENERIC_OPENAI_API_KEY";
-            default -> "AMSHA_CLASSIFIER_GROQ_API_KEY";
+            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.CLASSIFIER_OPENROUTER_API_KEY;
+            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.CLASSIFIER_OPENAI_API_KEY;
+            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.CLASSIFIER_GEMINI_API_KEY;
+            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.CLASSIFIER_CEREBRAS_API_KEY;
+            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.CLASSIFIER_NVIDIA_API_KEY;
+            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.CLASSIFIER_SARVAM_API_KEY;
+            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.CLASSIFIER_OPENCODE_API_KEY;
+            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.CLASSIFIER_HUGGINGFACE_API_KEY;
+            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.CLASSIFIER_MISTRAL_API_KEY;
+            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.CLASSIFIER_CLOUDFLARE_API_KEY;
+            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.CLASSIFIER_COHERE_API_KEY;
+            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.CLASSIFIER_GENERIC_OPENAI_API_KEY;
+            default -> ConfigKeys.CLASSIFIER_GROQ_API_KEY;
         };
     }
 

@@ -21,6 +21,9 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 import java.util.concurrent.Semaphore;
 
+import com.amsha.channel.api.MediaTypes;
+import com.amsha.common.config.ConfigKeys;
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.llm.api.ModelDefaults;
@@ -56,7 +59,7 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
     private static final Logger log = Logger.getLogger(OmlxSpeechSynthesisProvider.class);
     private static final String DEFAULT_MODEL = "Qwen3-TTS-12Hz-1.7B-Base-bf16";
     private static final String SUPPORTED_FORMAT = "wav";
-    private static final String WAV_MIME = "audio/wav";
+    private static final String WAV_MIME = MediaTypes.WAV;
     private static final int DEFAULT_MAX_INPUT_CHARS = 1200;
     private static final long DEFAULT_MAX_BYTES = 8L * 1024 * 1024;
     private static final String DEFAULT_TIMEOUT = "PT120S";
@@ -98,8 +101,8 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
             @ConfigProperty(name = "amsha.tts.max-input-chars", defaultValue = "1200") int maxInputChars,
             @ConfigProperty(name = "amsha.tts.max-bytes", defaultValue = "8388608") long maxBytes,
             @ConfigProperty(name = "amsha.tts.max-concurrent", defaultValue = "1") int maxConcurrent,
-            @ConfigProperty(name = "AMSHA_OMLX_API_KEY", defaultValue = "not-needed") String apiKey,
-            @ConfigProperty(name = "AMSHA_OMLX_BASE_URL", defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
+            @ConfigProperty(name = ConfigKeys.OMLX_API_KEY, defaultValue = "not-needed") String apiKey,
+            @ConfigProperty(name = ConfigKeys.OMLX_BASE_URL, defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
                     String baseUrl) {
         this.governedTransport = governedTransport;
         this.objectMapper = objectMapper;
@@ -199,13 +202,13 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
         byte[] body = objectMapper.writeValueAsBytes(payload);
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(speechEndpoint()))
                 .timeout(effectiveTimeout(request.timeout()))
-                .header("Content-Type", "application/json")
-                .header("Accept", "audio/*")
+                .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
+                .header(HttpProtocol.HEADER_ACCEPT, "audio/*")
                 .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/amsha)")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body));
         String key = apiKey == null ? null : apiKey.trim();
         if (key != null && !key.isBlank() && !"not-needed".equalsIgnoreCase(key)) {
-            builder.header("Authorization", "Bearer " + key);
+            builder.header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + key);
         }
         return builder.build();
     }

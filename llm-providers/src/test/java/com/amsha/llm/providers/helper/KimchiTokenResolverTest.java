@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.llm.api.oauth.KimchiOAuthTokenExtractor;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -43,7 +44,7 @@ import org.mockito.Mockito;
 class KimchiTokenResolverTest {
 
     /** First link of the property fallback chain; also the name of an environment variable further down. */
-    private static final String KIMCHI_KEY_PROPERTY = "AMSHA_KIMCHI_API_KEY";
+    private static final String KIMCHI_KEY_PROPERTY = ConfigKeys.KIMCHI_API_KEY;
 
     /** Second link of the property fallback chain. */
     private static final String KIMCHI_ALT_PROPERTY = "amsha.llm.kimchi.api-key";
@@ -295,7 +296,7 @@ class KimchiTokenResolverTest {
     void blankSystemPropertyIsSkipped() {
         System.setProperty(KIMCHI_KEY_PROPERTY, "   ");
         Assumptions.assumeTrue(
-                System.getenv("AMSHA_KIMCHI_API_KEY") == null && System.getenv("KIMCHI_API_KEY") == null,
+                System.getenv(ConfigKeys.KIMCHI_API_KEY) == null && System.getenv("KIMCHI_API_KEY") == null,
                 "a Kimchi API key is present in the environment");
 
         IllegalStateException thrown =
@@ -308,7 +309,7 @@ class KimchiTokenResolverTest {
         // The remaining links are the AMSHA_KIMCHI_API_KEY / KIMCHI_API_KEY environment variables, which a
         // test cannot unset. Skip (visible in the report) rather than assert something the machine decides.
         Assumptions.assumeTrue(
-                System.getenv("AMSHA_KIMCHI_API_KEY") == null && System.getenv("KIMCHI_API_KEY") == null,
+                System.getenv(ConfigKeys.KIMCHI_API_KEY) == null && System.getenv("KIMCHI_API_KEY") == null,
                 "a Kimchi API key is present in the environment");
 
         IllegalStateException thrown =

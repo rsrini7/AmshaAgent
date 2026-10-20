@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.List;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.selfevolve.api.EvolutionEvent;
 import com.amsha.selfevolve.store.EvolutionEventStorePort;
 
@@ -18,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Uses JDBI with ON CONFLICT DO NOTHING for DB-enforced idempotency.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresEvolutionEventStore implements EvolutionEventStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresEvolutionEventStore.class);

@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.mcp.transport.McpClientService;
@@ -26,6 +27,7 @@ import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolCategory;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import io.quarkus.arc.Unremovable;
@@ -40,9 +42,9 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 @ApplicationScoped
 @ToolMetadata(
-        capabilityId = "register_mcp_server",
+        capabilityId = ToolNames.REGISTER_MCP_SERVER,
         description = "Register a new MCP server",
-        defaultRoles = {"coder", "debugger"},
+        defaultRoles = {AgentRoleEnum.CODER_ID, AgentRoleEnum.DEBUGGER_ID},
         category = ToolCategory.NETWORK)
 public class McpSelfRegisterTool implements AgentTool {
 

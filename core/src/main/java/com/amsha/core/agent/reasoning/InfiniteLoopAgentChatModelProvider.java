@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.routing.InfiniteLoopChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
@@ -31,19 +32,19 @@ public class InfiniteLoopAgentChatModelProvider implements AgentChatModelProvide
 
     private static final Logger log = Logger.getLogger(InfiniteLoopAgentChatModelProvider.class);
 
-    @ConfigProperty(name = "amsha.infinite-loop.llm.providers", defaultValue = "omlx,groq,openrouter")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_LLM_PROVIDERS, defaultValue = "omlx,groq,openrouter")
     String loopProviders;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-base-seconds", defaultValue = "30")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_BASE_SECONDS, defaultValue = "30")
     int cooldownBaseSeconds;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-max-seconds", defaultValue = "300")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_MAX_SECONDS, defaultValue = "300")
     int cooldownMaxSeconds;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-transient-seconds", defaultValue = "5")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS, defaultValue = "5")
     int cooldownTransientSeconds;
 
-    @ConfigProperty(name = "amsha.infinite-loop.max-latency-ms", defaultValue = "60000")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_MAX_LATENCY_MS, defaultValue = "60000")
     long maxLatencyMs;
 
     @Inject

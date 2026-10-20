@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.llm.api.oauth.AgyOAuthTokenExtractor;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -295,7 +296,7 @@ class AgyTokenResolverTest {
         // The remaining links in the chain are AMSHA_AGY_API_KEY / GEMINI_API_KEY / GOOGLE_API_KEY, which a
         // test cannot unset. Skip (visible in the report) rather than assert something the machine decides.
         Assumptions.assumeTrue(
-                System.getenv("AMSHA_AGY_API_KEY") == null
+                System.getenv(ConfigKeys.AGY_API_KEY) == null
                         && System.getenv("GEMINI_API_KEY") == null
                         && System.getenv("GOOGLE_API_KEY") == null,
                 "an agy/Gemini API key is present in the environment");

@@ -10,6 +10,7 @@ import java.util.Optional;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.postgres.jdbi.CronJdbiDao;
 
 import org.jboss.logging.Logger;
@@ -23,7 +24,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresCronStoreAdapter implements CronStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresCronStoreAdapter.class);

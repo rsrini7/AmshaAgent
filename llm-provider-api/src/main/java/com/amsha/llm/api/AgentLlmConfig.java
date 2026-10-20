@@ -16,13 +16,13 @@ public class AgentLlmConfig {
     @ConfigProperty(name = "amsha.llm.max-output-tokens", defaultValue = "8192")
     int maxTokens;
 
-    @ConfigProperty(name = "amsha.llm.temperature", defaultValue = "0.1")
+    @ConfigProperty(name = LlmConfigKeys.TEMPERATURE, defaultValue = "0.1")
     double temperature;
 
     @ConfigProperty(name = "amsha.llm.timeout", defaultValue = "PT60S")
     Duration timeout;
 
-    @ConfigProperty(name = "amsha.llm.log-http", defaultValue = "false")
+    @ConfigProperty(name = LlmConfigKeys.LOG_HTTP, defaultValue = "false")
     boolean logHttp;
 
     @ConfigProperty(name = "amsha.llm.max-retries", defaultValue = "3")

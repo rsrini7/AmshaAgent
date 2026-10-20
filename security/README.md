@@ -1,6 +1,6 @@
 # Amsha Security Module (`amsha-security`)
 
-Implementation of the [`amsha-security-api`](../security-api/README.md) contracts: secret vault, key derivation, governed outbound transport, autonomy policy, and bootstrap credential issuance. Extracted from `amsha-core` (stream S7 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../docs/adr/architecture/ADR-extract-core-subsystems.md)).
+Implementation of the [`amsha-security-api`](../security-api/README.md) contracts: secret vault, key derivation, outbound policy and approval services, autonomy policy, and bootstrap credential issuance. The canonical governed HTTP client and DNS pinning implementation now live in `amsha-core`; this module retains compatibility wrappers. Extracted from `amsha-core` (stream S7 of the core-subsystems extraction; see [ADR-extract-core-subsystems](../docs/adr/architecture/ADR-extract-core-subsystems.md)).
 
 This is an **impl-tier** module: it depends on `amsha-security-api` and on `amsha-core` only for audit/observability interfaces, as permitted by the two-tier boundary policy. The BouncyCastle dependency lives here, not in core.
 
@@ -11,8 +11,8 @@ This is an **impl-tier** module: it depends on `amsha-security-api` and on `amsh
 | `SecretVaultImpl` | `SecretVault` port implementation backed by AES-GCM-SIV (`AesGcmSivCipher`) |
 | `Argon2idKeyDerivation` | Argon2id-based key derivation from the system pepper |
 | `VaultKeyCache` | Session-scoped derived-key cache |
-| `GovernedTransportService` / `GovernedHttpClient` | Outbound HTTP governance: policy decisions, pre-connect DNS revalidation, proxy socket-pinning, and approval receipts |
-| `GovernedHttpDnsPinning` | DNS validation, trusted-proxy socket pinning (`PinnedProxy`), and SSRF IP safety checks |
+| `GovernedTransportService` | Outbound HTTP policy orchestration, audit, and request metrics |
+| `GovernedHttpClient` / `GovernedHttpDnsPinning` / `OutboundHttpException` | **Backwards-compatibility wrappers** only — the canonical implementation moved to `amsha-core` (`com.amsha.core.security.http`), because core MUST NOT depend on an impl-tier module (§1.8, Rule 17). New code SHOULD use the core types |
 | `ApprovalReceiptIssuer` / `OutboundApprovalReceipt` | Issuance and validation of single-use, checkpoint-backed outbound-approval receipts |
 | `StandardAutonomyPolicy` | Default `AutonomyLevel` evaluation |
 | `BootstrapCredentialIssuer` / `DevSecretSeeder` | Bootstrap credentials and optional dev-secret seeding |
@@ -55,6 +55,13 @@ All outbound HTTP calls routed through `GovernedTransportService` (including LLM
 | `amsha.transport.duration` | Timer | `purpose`, `status` | Latency distribution of outbound HTTP requests. |
 
 ## Governed HTTP Transport & DNS Pinning
+
+> **The canonical transport lives in `amsha-core`.** `GovernedHttpClient`, `GovernedHttpDnsPinning` and
+> `OutboundHttpException` are implemented in `com.amsha.core.security.http`; this module keeps
+> `com.amsha.security.http` wrappers that delegate to them so existing callers compile unchanged. The
+> behaviour below is unchanged — it is simply no longer implemented in this module. `OutboundHttpPolicyService`
+> is in `amsha-core`; this module retains request orchestration (`GovernedTransportService`) and approval
+> receipts (`ApprovalReceiptIssuer`).
 
 All outbound HTTP requests and proxy resolutions pass through SSRF and DNS safety validation implemented by `GovernedHttpClient` and `GovernedHttpDnsPinning`:
 

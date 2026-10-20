@@ -5,13 +5,14 @@ import jakarta.inject.Inject;
 
 import com.amsha.persistence.api.PersistenceAction;
 import com.amsha.persistence.api.PersistenceAdapterPort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsPersistenceAdapter implements PersistenceAdapterPort {
 
     @Inject

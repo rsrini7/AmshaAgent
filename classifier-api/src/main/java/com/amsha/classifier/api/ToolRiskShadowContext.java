@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 /**
  * Minimum in-process context observed after deterministic policy provisionally allows a tool.
@@ -15,12 +16,24 @@ import com.amsha.security.api.AutonomyLevel;
  * Nested parameter values must be treated as read-only.
  */
 public record ToolRiskShadowContext(
-        String agentRole, AutonomyLevel autonomyLevel, String toolName, Map<String, Object> parameters, String goal) {
+        String agentRole,
+        AutonomyLevel autonomyLevel,
+        String toolName,
+        ToolOperation requiredOperation,
+        Map<String, Object> parameters,
+        String goal) {
+
+    /** Camel-case field name serialized in a Jev decision state object. */
+    public static final String REQUIRED_OPERATION_FIELD = "requiredOperation";
+
+    /** Snake-case key used by evidence corpora and the ONNX input envelope. */
+    public static final String REQUIRED_OPERATION_INPUT_KEY = "required_operation";
 
     public ToolRiskShadowContext {
         agentRole = requireNonBlank(agentRole, "agentRole");
         Objects.requireNonNull(autonomyLevel, "autonomyLevel");
         toolName = requireNonBlank(toolName, "toolName");
+        Objects.requireNonNull(requiredOperation, "requiredOperation");
         parameters = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(parameters, "parameters")));
         goal = Objects.requireNonNullElse(goal, "");
     }
@@ -29,7 +42,7 @@ public record ToolRiskShadowContext(
     @Override
     public String toString() {
         return "ToolRiskShadowContext[agentRole=" + agentRole + ", autonomyLevel=" + autonomyLevel + ", toolName="
-                + toolName + ", parameterCount=" + parameters.size() + "]";
+                + toolName + ", requiredOperation=" + requiredOperation + ", parameterCount=" + parameters.size() + "]";
     }
 
     private static String requireNonBlank(String value, String name) {

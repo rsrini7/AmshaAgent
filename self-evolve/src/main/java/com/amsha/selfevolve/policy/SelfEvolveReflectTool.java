@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.security.api.ToolOperation;
 import com.amsha.selfevolve.api.DirectiveState;
@@ -18,6 +19,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
@@ -34,11 +36,11 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 @ApplicationScoped
 @ToolMetadata(
-        capabilityId = "self_evolve_reflect",
+        capabilityId = ToolNames.SELF_EVOLVE_REFLECT,
         description = "Trigger self-evolution directive synthesis. Analyzes memory patterns and creates "
                 + "behavioral directives in SHADOW mode for safe evaluation. Also promotes/disables "
                 + "existing directives based on evaluation history.",
-        defaultRoles = {"coordinator"})
+        defaultRoles = {AgentRoleEnum.COORDINATOR_ID})
 public class SelfEvolveReflectTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(SelfEvolveReflectTool.class);

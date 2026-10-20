@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.util.Fts5QueryUtil;
 import com.amsha.persistence.api.RecallMemoryStorePort;
@@ -20,6 +21,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
@@ -38,12 +40,19 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "recall_memory_search",
+        capabilityId = ToolNames.RECALL_MEMORY_SEARCH,
         description =
                 "Searches EXACT conversation history for specific code snippets, error traces, or past decisions. "
                         + "Use this when you need to recall exact details (e.g., 'the stack trace from yesterday', 'the Python function we wrote'). "
                         + "Does NOT search high-level summaries unless explicitly requested with include_summaries=true.",
-        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder", "debugger"})
+        defaultRoles = {
+            AgentRoleEnum.ARCHITECT_ID,
+            AgentRoleEnum.COORDINATOR_ID,
+            AgentRoleEnum.RESEARCHER_ID,
+            AgentRoleEnum.SYNTHESIZER_ID,
+            AgentRoleEnum.CODER_ID,
+            AgentRoleEnum.DEBUGGER_ID
+        })
 public class RecallMemorySearchTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(RecallMemorySearchTool.class);

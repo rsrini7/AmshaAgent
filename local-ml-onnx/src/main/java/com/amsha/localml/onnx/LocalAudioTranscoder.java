@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.channel.api.MediaTypes;
 import com.amsha.common.util.LogUtil;
 
 import org.jboss.logging.Logger;
@@ -28,23 +29,23 @@ public final class LocalAudioTranscoder {
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
     private static final Set<String> SUPPORTED_AUDIO_MIMES = Set.of(
-            "audio/wav",
-            "audio/x-wav",
-            "audio/wave",
-            "audio/pcm",
-            "audio/ogg",
-            "audio/opus",
-            "application/ogg",
-            "audio/mpeg",
-            "audio/mp3",
-            "audio/webm",
-            "video/webm",
-            "audio/flac",
-            "audio/x-flac",
-            "audio/mp4",
-            "audio/m4a",
-            "audio/x-m4a",
-            "audio/aac");
+            MediaTypes.WAV,
+            MediaTypes.X_WAV,
+            MediaTypes.WAVE,
+            MediaTypes.PCM,
+            MediaTypes.OGG,
+            MediaTypes.OPUS,
+            MediaTypes.APPLICATION_OGG,
+            MediaTypes.MPEG,
+            MediaTypes.MP3,
+            MediaTypes.WEBM,
+            MediaTypes.VIDEO_WEBM,
+            MediaTypes.FLAC,
+            MediaTypes.X_FLAC,
+            MediaTypes.MP4,
+            MediaTypes.M4A,
+            MediaTypes.X_M4A,
+            MediaTypes.AAC);
 
     private LocalAudioTranscoder() {}
 
@@ -59,8 +60,8 @@ public final class LocalAudioTranscoder {
         String base = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
         return SUPPORTED_AUDIO_MIMES.contains(base)
                 || base.startsWith("audio/")
-                || "video/webm".equals(base)
-                || "application/ogg".equals(base);
+                || MediaTypes.VIDEO_WEBM.equals(base)
+                || MediaTypes.APPLICATION_OGG.equals(base);
     }
 
     /**

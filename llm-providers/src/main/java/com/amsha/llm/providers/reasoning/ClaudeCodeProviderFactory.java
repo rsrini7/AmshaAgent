@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.helper.ClaudeCodeTokenResolver;
@@ -36,13 +37,15 @@ public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
     @Inject
     GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "amsha.llm.claude-code.model", defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.CLAUDE_CODE_MODEL, defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL)
     String modelName;
 
-    @ConfigProperty(name = "amsha.llm.claude-code.base-url", defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL)
+    @ConfigProperty(
+            name = LlmConfigKeys.CLAUDE_CODE_BASE_URL,
+            defaultValue = ModelDefaults.DEFAULT_CLAUDE_CODE_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.llm.claude-code.api-key")
+    @ConfigProperty(name = LlmConfigKeys.CLAUDE_CODE_API_KEY)
     Optional<String> apiKey;
 
     @Override
@@ -69,7 +72,9 @@ public class ClaudeCodeProviderFactory implements AgentChatModelProvider {
         String token = tokenResolver.resolveToken(apiKey);
 
         String resolvedModel = overrideModel != null ? overrideModel : modelName;
-        if (resolvedModel == null || resolvedModel.isBlank() || "mistral-small".equalsIgnoreCase(resolvedModel)) {
+        if (resolvedModel == null
+                || resolvedModel.isBlank()
+                || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(resolvedModel)) {
             resolvedModel = ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL;
         }
 

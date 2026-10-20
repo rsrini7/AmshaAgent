@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import com.amsha.persistence.api.IdentityInvitationDto;
 import com.amsha.persistence.api.IdentityInvitationStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.postgres.jdbi.IdentityInvitationJdbiDao;
 
 import org.jdbi.v3.core.Jdbi;
@@ -18,7 +19,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresIdentityInvitationStoreAdapter implements IdentityInvitationStorePort {
 
     private final Jdbi jdbi;

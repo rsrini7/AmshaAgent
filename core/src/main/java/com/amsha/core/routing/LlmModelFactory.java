@@ -98,8 +98,8 @@ public class LlmModelFactory {
             StructuredOutputMode structuredOutputMode,
             boolean toolless) {
 
-        String effectiveBaseUrl = "ollama".equalsIgnoreCase(provider) ? ollamaBaseUrl : baseUrl;
-        String effectiveModel = "ollama".equalsIgnoreCase(provider) ? ollamaModelId : modelName;
+        String effectiveBaseUrl = ModelDefaults.PROVIDER_OLLAMA.equalsIgnoreCase(provider) ? ollamaBaseUrl : baseUrl;
+        String effectiveModel = ModelDefaults.PROVIDER_OLLAMA.equalsIgnoreCase(provider) ? ollamaModelId : modelName;
 
         RoutingChatModelProvider factory = factories.stream()
                 .filter(f -> f.providerId().equalsIgnoreCase(provider))

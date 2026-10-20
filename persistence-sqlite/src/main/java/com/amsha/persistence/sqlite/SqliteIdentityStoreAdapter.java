@@ -10,6 +10,7 @@ import com.amsha.persistence.api.ExternalIdentityDto;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 import com.amsha.persistence.sqlite.jdbi.IdentityJdbiDao;
 
@@ -20,7 +21,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteIdentityStoreAdapter implements IdentityStorePort {
 
     private final Jdbi jdbi;

@@ -2,6 +2,9 @@ package com.amsha.core.config;
 
 import java.util.List;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.tool.api.ToolNames;
+
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
@@ -30,20 +33,20 @@ public interface PolicyConfig {
         /**
          * Role IDs exempt from the destructive vocabulary filter (e.g., debugger).
          */
-        @WithDefault("debugger")
+        @WithDefault(AgentRoleEnum.DEBUGGER_ID)
         List<String> exemptRoles();
 
         /**
          * Roles whose primary mission is writing code — exempt because code
          * creation often uses destructive vocabulary.
          */
-        @WithDefault("coder")
+        @WithDefault(AgentRoleEnum.CODER_ID)
         List<String> sandboxOnlyRoles();
 
         /**
          * The role to redirect to when destructive vocabulary is detected.
          */
-        @WithDefault("coordinator")
+        @WithDefault(AgentRoleEnum.COORDINATOR_ID)
         String overrideRole();
     }
 
@@ -54,7 +57,7 @@ public interface PolicyConfig {
          * supervision is operator-consented; `manage_schedule` stays exempt so
          * list/read/delete management actions remain approval-free.
          */
-        @WithDefault("manage_schedule")
+        @WithDefault(ToolNames.MANAGE_SCHEDULE)
         List<String> hitlExemptTools();
 
         /**

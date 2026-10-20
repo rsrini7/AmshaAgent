@@ -12,6 +12,7 @@ import java.sql.Statement;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -42,7 +43,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Registered with Agroal via Quarkus configuration.
  */
 @Singleton
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
 
     private static final Logger log = Logger.getLogger(FtsConnectionInterceptor.class);
@@ -118,7 +119,10 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                 try {
                     Files.createDirectories(ftsDb.getParentFile().toPath());
                 } catch (IOException e) {
-                    log.warnf("Failed to create data directory for FTS: %s", ftsDb.getParent(), e);
+                    log.warnf(
+                            LogUtil.relevantThrowable(e),
+                            "Failed to create data directory for FTS: %s",
+                            ftsDb.getParent());
                 }
                 String ftsPath = ftsDb.getAbsolutePath().replace("\\", "/");
                 try (Statement stmt = connection.createStatement()) {

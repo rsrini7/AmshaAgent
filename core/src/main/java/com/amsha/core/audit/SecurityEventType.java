@@ -123,7 +123,10 @@ public enum SecurityEventType {
     // DB Console & Model Arena
     DATABASE_QUERY_FAILED, // DB console query execution error or database unavailable
     PROVIDER_EGRESS_VALIDATED, // Model Arena governed provider egress validation succeeded
-    OUTBOUND_EGRESS_DENIED; // Governed outbound HTTP egress rejected by policy
+    OUTBOUND_EGRESS_DENIED, // Governed outbound HTTP egress rejected by policy
+
+    // Decision plane (Jev / System One) — W4 evaluation path
+    DECISION_EVALUATION_REQUESTED; // One opt-in decision evaluation egress attempt (recorded before the call)
 
     /**
      * Returns true if a write failure for this event type must HALT the agent
@@ -174,7 +177,8 @@ public enum SecurityEventType {
                     MCP_CREDENTIAL_CLEANUP_FAILED,
                     DATABASE_QUERY_FAILED,
                     PROVIDER_EGRESS_VALIDATED,
-                    DELEGATION_DISPATCHED -> true;
+                    DELEGATION_DISPATCHED,
+                    DECISION_EVALUATION_REQUESTED -> true;
             default -> false;
         };
     }

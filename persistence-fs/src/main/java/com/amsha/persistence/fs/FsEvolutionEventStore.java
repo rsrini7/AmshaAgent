@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.selfevolve.api.EvolutionEvent;
 import com.amsha.selfevolve.store.EvolutionEventStorePort;
 
@@ -20,7 +21,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Stores events as JSON wrapper per session in {dataDir}/evolution/{sessionId}.json.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 public class FsEvolutionEventStore implements EvolutionEventStorePort {
 
     private static final Logger log = Logger.getLogger(FsEvolutionEventStore.class);

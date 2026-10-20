@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -226,7 +228,7 @@ class KimchiOAuthTokenExtractorTest {
 
             Optional<String> token = extractor.extractToken();
             assertTrue(token.isPresent());
-            String envVar = System.getenv("AMSHA_KIMCHI_API_KEY");
+            String envVar = System.getenv(ConfigKeys.KIMCHI_API_KEY);
             if (envVar == null || envVar.isBlank()) {
                 envVar = System.getenv("KIMCHI_API_KEY");
             }

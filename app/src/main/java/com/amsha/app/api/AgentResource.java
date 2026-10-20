@@ -37,6 +37,7 @@ import com.amsha.core.api.dto.CreateSessionResponse;
 import com.amsha.core.api.dto.RunAgentRequest;
 import com.amsha.core.api.dto.ServiceResult;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
 
@@ -89,7 +90,7 @@ public class AgentResource {
         Map<String, String> expectedLabels = new HashMap<>();
         if (collectionEnabled
                 && securityContext != null
-                && securityContext.isUserInRole("internal")
+                && securityContext.isUserInRole(AccessRoles.INTERNAL)
                 && httpHeaders != null) {
             try {
                 putValidatedLabel(

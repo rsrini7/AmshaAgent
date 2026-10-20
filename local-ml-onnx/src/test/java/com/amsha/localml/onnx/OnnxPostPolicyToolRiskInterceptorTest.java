@@ -7,14 +7,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.classifier.api.ClassifierResult.NoOpinionReason;
 import com.amsha.classifier.api.PostPolicyToolContext;
 import com.amsha.classifier.api.ToolRiskAction;
 import com.amsha.classifier.api.ToolRiskPrediction;
+import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.localml.onnx.OnnxClassifierRuntimeControl.Classifier;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
@@ -22,7 +25,13 @@ import org.junit.jupiter.api.Test;
 class OnnxPostPolicyToolRiskInterceptorTest {
 
     private static final PostPolicyToolContext CONTEXT = new PostPolicyToolContext(
-            "coder", AutonomyLevel.FULL, "sandbox_exec", Map.of("language", "java"), "run code", false);
+            "coder",
+            AutonomyLevel.FULL,
+            "sandbox_exec",
+            ToolOperation.EXECUTE_SHELL,
+            Map.of("language", "java"),
+            "run code",
+            false);
 
     @Test
     void unconfiguredPassThroughWithoutOverhead() {
@@ -98,6 +107,29 @@ class OnnxPostPolicyToolRiskInterceptorTest {
             assertEquals(ToolRiskAction.BLOCK, ((ClassifierResult.Opinion<?>) result).value());
             assertTrue(invoked.get());
         }
+    }
+
+    @Test
+    void forwardsCanonicalOperationThroughThePostPolicyPath() throws Exception {
+        AtomicReference<String> serializedInput = new AtomicReference<>();
+        var runtimeControl = new OnnxClassifierRuntimeControl(false, false, false);
+        var shadowClassifier = new OnnxToolRiskShadowClassifier(true, new ObjectMapper(), input -> {
+            serializedInput.set(input);
+            return new ClassifierResult.Opinion<>(ToolRiskPrediction.REQUIRE_APPROVAL, 0.9f, "rule");
+        });
+        var interceptor = new OnnxPostPolicyToolRiskInterceptor(runtimeControl, shadowClassifier);
+
+        try (var _ = runtimeControl.registerReadyImplementation(Classifier.TOOL_RISK)) {
+            runtimeControl.setEnabled(Classifier.TOOL_RISK, true);
+            interceptor.evaluate(CONTEXT);
+        }
+
+        assertEquals(
+                ToolOperation.EXECUTE_SHELL.name(),
+                new ObjectMapper()
+                        .readTree(serializedInput.get())
+                        .get(ToolRiskShadowContext.REQUIRED_OPERATION_INPUT_KEY)
+                        .asText());
     }
 
     @Test

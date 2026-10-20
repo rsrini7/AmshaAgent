@@ -18,6 +18,7 @@ import java.util.List;
 
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.selfevolve.api.DirectiveState;
 import com.amsha.selfevolve.api.SynthesizedDirective;
 import com.amsha.selfevolve.policy.InteractionPolicySynthesizer;
@@ -152,7 +153,7 @@ public class AdminDirectiveResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 
     private String resolveUserId() {

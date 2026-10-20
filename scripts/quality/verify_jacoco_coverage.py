@@ -7,7 +7,91 @@ import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
+
+
+@dataclass(frozen=True)
+class TestTotals:
+    """Tests reported by one module's Surefire and Failsafe XML.
+
+    ``passed`` is derived rather than stored so it can never disagree with the four counts it is
+    computed from. It subtracts skipped as well as failures and errors: a skipped test neither
+    passed nor failed, and counting it as either is how a "passing" badge ends up reporting a
+    number larger than the tests that actually ran.
+    """
+
+    total: int = 0
+    failures: int = 0
+    errors: int = 0
+    skipped: int = 0
+
+    @property
+    def passed(self) -> int:
+        return max(0, self.total - self.failures - self.errors - self.skipped)
+
+
+def test_report_totals(module: Path) -> TestTotals:
+    """Sum test counts from a module's Surefire and Failsafe reports.
+
+    Distinguishes "this module has no tests" (fine) from "tests ran but the coverage
+    agent never attached" (a silent measurement failure that must not be averaged in
+    as 0% coverage).
+
+    Both report directories must be read. Surefire runs the `*Test` classes and Failsafe
+    runs the `*IT` classes, and Failsafe is inherited by every reactor module. Counting
+    only Surefire would make a module whose only tests are integration tests look
+    untested, silently exempting it from the strict-instrumentation check below.
+
+    This is the single reader for those reports: `executed_test_count` and the README badge
+    emitter both derive from it, so a badge and the gate can never read the same tree
+    differently.
+    """
+    accumulated = [0, 0, 0, 0]
+    for directory in ("surefire-reports", "failsafe-reports"):
+        reports = module / "target" / directory
+        if not reports.is_dir():
+            continue
+        for report in reports.glob("TEST-*.xml"):
+            try:
+                suite = ET.parse(report).getroot()
+            except ET.ParseError:
+                continue
+            if suite.tag != "testsuite":
+                continue
+            accumulated[0] += int(suite.get("tests", 0) or 0)
+            accumulated[1] += int(suite.get("failures", 0) or 0)
+            accumulated[2] += int(suite.get("errors", 0) or 0)
+            accumulated[3] += int(suite.get("skipped", 0) or 0)
+    return TestTotals(*accumulated)
+
+
+def module_has_test_sources(module: Path) -> bool:
+    """Whether this module declares test sources at all.
+
+    Used to tell "this module has no tests, which is fine" apart from "this module has tests
+    but produced no report", which is what a partial `-pl` build looks like from here.
+    """
+    return (module / "src" / "test").is_dir()
+
+
+def modules_missing_test_reports(root: Path) -> list[str]:
+    """Reactor modules that declare test sources but reported no executed test.
+
+    A `./mvnw -pl core test` run leaves every other module without reports. Aggregating anyway
+    produces a confident, drastically smaller total - 3,625 instead of 9,463 on this reactor, a
+    62% silent drop - so the caller must refuse rather than publish it.
+    """
+    missing: list[str] = []
+    for module in reactor_modules(root):
+        if module_has_test_sources(module) and test_report_totals(module).total == 0:
+            missing.append(module.name)
+    return missing
+
+
+def executed_test_count(module: Path) -> int:
+    """Count tests reported by Surefire and Failsafe."""
+    return test_report_totals(module).total
 
 
 def reactor_modules(root: Path) -> list[Path]:
@@ -52,22 +136,28 @@ def line_counts(report: Path) -> tuple[int, int]:
 
 
 def executed_test_count(module: Path) -> int:
-    """Count tests reported by Surefire.
+    """Count tests reported by Surefire and Failsafe.
 
     Distinguishes "this module has no tests" (fine) from "tests ran but the coverage
     agent never attached" (a silent measurement failure that must not be averaged in
     as 0% coverage).
+
+    Both report directories must be read. Surefire runs the `*Test` classes and Failsafe
+    runs the `*IT` classes, and Failsafe is inherited by every reactor module. Counting
+    only Surefire would make a module whose only tests are integration tests look
+    untested, silently exempting it from the strict-instrumentation check below.
     """
-    reports = module / "target" / "surefire-reports"
-    if not reports.is_dir():
-        return 0
     total = 0
-    for report in reports.glob("TEST-*.xml"):
-        try:
-            suite = ET.parse(report).getroot()
-        except ET.ParseError:
+    for directory in ("surefire-reports", "failsafe-reports"):
+        reports = module / "target" / directory
+        if not reports.is_dir():
             continue
-        total += int(suite.get("tests", 0) or 0)
+        for report in reports.glob("TEST-*.xml"):
+            try:
+                suite = ET.parse(report).getroot()
+            except ET.ParseError:
+                continue
+            total += int(suite.get("tests", 0) or 0)
     return total
 
 
@@ -126,7 +216,7 @@ def main() -> int:
         )
         hint = (
             "These modules are counted as 0% covered, which understates the reactor figure. "
-            "Verify the module's Surefire <argLine> composes with jacoco:prepare-agent "
+            "Verify the module's Surefire/Failsafe <argLine> composes with jacoco:prepare-agent "
             "(the parent uses late evaluation '@{argLine}')."
         )
         if args.strict_instrumentation:

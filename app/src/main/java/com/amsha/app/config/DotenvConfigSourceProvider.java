@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.common.util.LogUtil;
+
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 import org.slf4j.Logger;
@@ -111,7 +113,9 @@ public class DotenvConfigSourceProvider implements ConfigSourceProvider {
             log.debug("Loaded {} properties from .env file.", immutableProperties.size());
             return immutableProperties;
         } catch (IOException e) {
-            log.warn("Failed to read .env file. Falling back to default environment variables.", e);
+            log.warn(
+                    "Failed to read .env file. Falling back to default environment variables",
+                    LogUtil.relevantThrowable(e));
             return Collections.emptyMap();
         }
     }

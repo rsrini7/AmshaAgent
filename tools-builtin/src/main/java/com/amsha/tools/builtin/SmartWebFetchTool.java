@@ -15,6 +15,8 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import com.amsha.common.http.HttpProtocol;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.security.OutboundHttpPolicyService;
@@ -27,6 +29,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
@@ -48,11 +51,11 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "web_fetch",
+        capabilityId = ToolNames.WEB_FETCH,
         description = "Last-resort governed fetch for an exact URL after browser_navigate fails. "
                 + "Use for articles, documentation, and static pages. "
                 + "For JavaScript-heavy sites, use browser_navigate first.",
-        defaultRoles = {"researcher", "synthesizer", "coordinator"})
+        defaultRoles = {AgentRoleEnum.RESEARCHER_ID, AgentRoleEnum.SYNTHESIZER_ID, AgentRoleEnum.COORDINATOR_ID})
 public class SmartWebFetchTool implements AgentTool {
 
     private static final int MAX_CONTENT_CHARS = 8192;
@@ -272,7 +275,7 @@ public class SmartWebFetchTool implements AgentTool {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(30))
-                .header("Accept", "text/html,text/plain,*/*")
+                .header(HttpProtocol.HEADER_ACCEPT, "text/html,text/plain,*/*")
                 .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/amsha)")
                 .GET()
                 .build();

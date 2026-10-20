@@ -186,6 +186,7 @@ class OnnxAdminResourceTest {
         when(securityContext.isUserInRole("internal")).thenReturn(false);
 
         assertEquals(403, resource.disableClassifier("intent").getStatus());
+        assertEquals(403, resource.enableClassifier("intent").getStatus());
         verifyNoInteractions(auditService);
     }
 

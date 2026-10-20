@@ -5,10 +5,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,11 +26,10 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests for {@link DirectExecutor}, the un-isolated host-execution strategy.
  *
- * <p>Every process arm is driven against real short-lived child processes rather than a mocked
- * {@code ProcessBuilder}, so the actual start / drain / wait / terminate plumbing runs. The private
- * helpers ({@code waitForProcess}, {@code terminateProcess}, {@code canRun}) are reached
- * reflectively, matching the convention used elsewhere in this module.
- *
+ * <p>Most process arms use real short-lived children to exercise process start, drain, wait,
+ * and termination. The stalled-reader test uses a controlled process stream to avoid relying on
+ * shell background-job behavior across platforms. Private helpers ({@code waitForProcess},
+ * {@code terminateProcess}, {@code canRun}) are reached reflectively where useful.
  * <p><b>Platform-locked residue:</b> the {@code python3} → {@code python} Microsoft Store shim fix
  * (lines 128-130) only fires when {@code python3} is absent from {@code PATH}. The surrounding branch
  * is exercised here with {@code os.name} forced to Windows, but the swap itself needs a host without
@@ -103,17 +105,36 @@ class DirectExecutorTest {
 
     @Test
     void testDirectExecutionReapsAStalledOutputReader() throws Exception {
-        DirectExecutor executor = new DirectExecutor();
+        Process process = mock(Process.class);
+        ProcessHandle handle = mock(ProcessHandle.class);
+        when(process.toHandle()).thenReturn(handle);
+        when(handle.descendants()).thenAnswer(_ -> Stream.empty());
+        when(process.waitFor(anyLong(), any())).thenReturn(true);
+        when(process.destroyForcibly()).thenReturn(process);
+
+        PipedInputStream stdout = new PipedInputStream();
+        PipedOutputStream stdoutWriter = new PipedOutputStream(stdout);
+        when(process.getInputStream()).thenReturn(stdout);
+
+        DirectExecutor executor = new DirectExecutor() {
+            @Override
+            Process startProcess(ProcessBuilder processBuilder) {
+                assertNotNull(processBuilder);
+                return process;
+            }
+        };
         executor.timeoutSeconds = 5;
         Path tempDir = Files.createTempDirectory("direct-exec-stall");
 
-        // The backgrounded grandchild inherits the stdout pipe, so the drain thread is still blocked
-        // after the shell exits. The executor must reap it and report a timeout rather than hang.
-        SecurityException ex = assertThrows(
-                SecurityException.class,
-                () -> executor.executeDirectly(tempDir, List.of("sh", "-c", "sleep 8 & exit 0"), Map.of()));
-
-        assertTrue(ex.getMessage().contains("Tool timed out"));
+        try {
+            // Keep stdout open after the mocked process exits; this deterministically stalls the
+            // drain reader without relying on host-shell background-process behavior.
+            SecurityException ex = assertThrows(
+                    SecurityException.class, () -> executor.executeDirectly(tempDir, List.of("echo"), Map.of()));
+            assertTrue(ex.getMessage().contains("Tool timed out"));
+        } finally {
+            stdoutWriter.close();
+        }
     }
 
     @Test
@@ -147,12 +168,12 @@ class DirectExecutorTest {
     // ------------------------------------------------------------------
 
     @Test
-    void testDirectExecutionSurvivesAFailedOutputClose() throws Exception {
+    void testDirectExecutionSurvivesFailedDescendantEnumerationAndOutputClose() throws Exception {
         DirectExecutor executor = new DirectExecutor();
         Process proc = mock(Process.class);
         ProcessHandle handle = mock(ProcessHandle.class);
         when(proc.toHandle()).thenReturn(handle);
-        when(handle.descendants()).thenReturn(Stream.of());
+        when(handle.descendants()).thenThrow(new RuntimeException("process enumeration denied"));
         InputStream unclosable = mock(InputStream.class);
         doThrow(new IOException("close refused")).when(unclosable).close();
         when(proc.getInputStream()).thenReturn(unclosable);
@@ -161,6 +182,7 @@ class DirectExecutorTest {
         terminate.setAccessible(true);
 
         assertDoesNotThrow(() -> terminate.invoke(executor, proc, null));
+        verify(proc).destroyForcibly();
     }
 
     @Test

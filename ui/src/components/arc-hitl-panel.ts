@@ -352,7 +352,7 @@ export class ArcHitlPanel extends LitElement {
               
               <div class="actions">
           ${this.channelCommandPending
-            ? html`<span class="empty">Approval command sent. Waiting for scheduled task...</span>`
+            ? html`<span class="empty">Approval action submitted. Waiting for the result...</span>`
             : this._processing.has(a.taskId)
             ? html`<span class="empty">Syncing with cluster...</span>`
             : this._statusUnknown.has(a.taskId)

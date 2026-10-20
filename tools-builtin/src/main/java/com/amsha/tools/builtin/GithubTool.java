@@ -17,17 +17,20 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.security.api.RequiresSecret;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.ToolOperation;
+import com.amsha.security.api.VaultConstants;
 import com.amsha.security.api.VaultKey;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -52,9 +55,15 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "github",
+        capabilityId = ToolNames.GITHUB,
         description = "Read-only access to GitHub repositories and resources",
-        defaultRoles = {"architect", "coordinator", "researcher", "debugger", "synthesizer"})
+        defaultRoles = {
+            AgentRoleEnum.ARCHITECT_ID,
+            AgentRoleEnum.COORDINATOR_ID,
+            AgentRoleEnum.RESEARCHER_ID,
+            AgentRoleEnum.DEBUGGER_ID,
+            AgentRoleEnum.SYNTHESIZER_ID
+        })
 @SuppressWarnings("java:S1192")
 public class GithubTool implements AgentTool {
 
@@ -118,7 +127,7 @@ public class GithubTool implements AgentTool {
     }
 
     @Override
-    @RequiresSecret(envVar = "GH_TOKEN", vaultKey = "AMSHA_TOOLS_GITHUB_TOKEN")
+    @RequiresSecret(envVar = "GH_TOKEN", vaultKey = VaultConstants.TOOLS_GITHUB_TOKEN)
     public List<String> sandboxCommand(ToolExecutionContext ctx, Map<String, Object> params) {
         String action = (String) params.getOrDefault("action", "repo");
         String command = (String) params.getOrDefault("command", "view");
@@ -376,8 +385,9 @@ public class GithubTool implements AgentTool {
 
     private String resolveGhToken() {
         try {
-            VaultKey key =
-                    secretVault.retrieveSystemKey("AMSHA_TOOLS_GITHUB_TOKEN").orElse(null);
+            VaultKey key = secretVault
+                    .retrieveSystemKey(VaultConstants.TOOLS_GITHUB_TOKEN)
+                    .orElse(null);
             if (key == null) return null;
             try (key) {
                 return new String(key.get(), StandardCharsets.UTF_8);

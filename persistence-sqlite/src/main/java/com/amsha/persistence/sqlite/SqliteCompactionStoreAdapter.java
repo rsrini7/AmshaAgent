@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import com.amsha.common.util.LogUtil;
 import com.amsha.persistence.api.CompactionStorePort;
 import com.amsha.persistence.api.CompactionSummaryDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.sqlite.jdbi.CompactionJdbiDao;
 
 import org.jboss.logging.Logger;
@@ -19,7 +20,7 @@ import org.jdbi.v3.core.Jdbi;
 import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class SqliteCompactionStoreAdapter implements CompactionStorePort {
 
     private static final Logger log = Logger.getLogger(SqliteCompactionStoreAdapter.class);

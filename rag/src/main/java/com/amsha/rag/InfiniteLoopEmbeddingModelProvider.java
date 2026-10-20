@@ -18,8 +18,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.routing.InfiniteLoopProvider;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.EmbeddingIndexDescriptor;
 import com.amsha.persistence.api.EmbeddingIndexDescriptorSource;
 
@@ -54,19 +56,19 @@ public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescrip
     @Any
     Instance<EmbeddingProviderFactory> factories;
 
-    @ConfigProperty(name = "amsha.infinite-loop.embedding.providers", defaultValue = "ollama")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_EMBEDDING_PROVIDERS, defaultValue = ModelDefaults.PROVIDER_OLLAMA)
     String loopProviders;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-base-seconds", defaultValue = "30")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_BASE_SECONDS, defaultValue = "30")
     int cooldownBaseSeconds;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-max-seconds", defaultValue = "300")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_MAX_SECONDS, defaultValue = "300")
     int cooldownMaxSeconds;
 
-    @ConfigProperty(name = "amsha.infinite-loop.cooldown-transient-seconds", defaultValue = "5")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_COOLDOWN_TRANSIENT_SECONDS, defaultValue = "5")
     int cooldownTransientSeconds;
 
-    @ConfigProperty(name = "amsha.infinite-loop.max-latency-ms", defaultValue = "60000")
+    @ConfigProperty(name = ConfigKeys.INFINITE_LOOP_MAX_LATENCY_MS, defaultValue = "60000")
     long maxLatencyMs;
 
     @ConfigProperty(name = "amsha.rag.embed-dimensions", defaultValue = "768")

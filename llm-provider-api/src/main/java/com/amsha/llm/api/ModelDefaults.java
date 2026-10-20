@@ -4,6 +4,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import com.amsha.common.http.HttpProtocol;
+
 /**
  * Single source of truth for all default model names, base URLs, and provider constants.
  * Every provider factory, catalog, validation service, and UI endpoint must reference
@@ -130,6 +132,15 @@ public final class ModelDefaults {
     // ── Fallback Provider ────────────────────────────────────────
 
     public static final String DEFAULT_PROVIDER = PROVIDER_GROQ;
+
+    // ── Unset-Model Sentinel ─────────────────────────────────────
+
+    /**
+     * Legacy placeholder treated as "no explicit model selected". Every provider factory falls back to its
+     * configured default when the requested model is {@code null}, blank, or equal (case-insensitively) to
+     * this value. Reference this constant instead of retyping the literal.
+     */
+    public static final String PLACEHOLDER_MODEL = "mistral-small";
 
     // ── URL-to-Provider Mapping ──────────────────────────────────
 
@@ -279,6 +290,6 @@ public final class ModelDefaults {
                 return Map.of("x-api-key", apiKey, "anthropic-version", "2023-06-01");
             }
         }
-        return Map.of("Authorization", "Bearer " + apiKey);
+        return Map.of(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + apiKey);
     }
 }

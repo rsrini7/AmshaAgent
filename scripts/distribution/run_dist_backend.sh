@@ -245,6 +245,25 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   # Validation launches the server with stdin closed; never enter the
   # interactive first-run setup in that mode.
   export AMSHA_UI_SKIP_ONBOARDING=true
+
+  # The decision plane is inert whenever a decision switch is enabled and no
+  # DecisionEngine is resolvable, and the startup diagnostic is the only signal for it.
+  # Derive the validator's expectation from the configuration this run actually loads, so a
+  # missing diagnostic fails instead of being read as "switches disabled".
+  decision_plane_switches=false
+  for decision_switch in \
+    AMSHA_DECISION_SHADOW_INTENT_ENABLED \
+    AMSHA_DECISION_SHADOW_TOOL_RISK_ENABLED \
+    AMSHA_DECISION_SHADOW_ANSWER_QUALITY_ENABLED \
+    AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED; do
+    # Indirect expansion must carry its own default: `set -u` aborts on an unset name, and a
+    # clean checkout or distribution without a root .env has none of these variables set.
+    # That must read as "disabled", not crash the run.
+    if [[ "${!decision_switch:-false}" == "true" ]]; then
+      decision_plane_switches=true
+    fi
+  done
+  export AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING="$decision_plane_switches"
 fi
 if [[ "$ONNX_REQUESTED" == false ]] && ! is_process_env_key "AMSHA_ONNX_ENABLED"; then
   # A file-level ONNX opt-in must not make ordinary validation download or
@@ -404,9 +423,23 @@ print_plan() {
   fi
 }
 
+run_validation() {
+  if [[ ${#VALIDATE_ARGS[@]} -gt 0 ]]; then
+    (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT" "${VALIDATE_ARGS[@]}")
+  else
+    (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT")
+  fi
+}
+
 if [[ "$DRY_RUN" == true ]]; then
   print_plan
   exit 0
+fi
+
+# Fail before native compilation or --clean when a full validation run cannot
+# reach the primary configured chat provider. Fast validators make no LLM calls.
+if [[ "$VALIDATE_MODE" == true && "$FAST_MODE" == false ]]; then
+  python3 "$PROJECT_ROOT/scripts/distribution/check_llm_preflight.py"
 fi
 
 if [[ "$CLEAN_REQUESTED" == true ]]; then
@@ -421,7 +454,7 @@ fi
 # migration smoke tests and prevents the wrapper from touching port 8080 or a
 # shared database while validating an existing runtime.
 if [[ "$VALIDATE_MODE" == true && -n "${TEST_BASE:-}" && "$AUTO_BUILD" == false ]]; then
-  (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT" "${VALIDATE_ARGS[@]}")
+  run_validation
   exit $?
 fi
 
@@ -445,7 +478,7 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   [[ "$validation_port" =~ ^[0-9]+$ ]] || die "AMSHA_VALIDATION_PORT must be numeric."
 
   if [[ -n "${TEST_BASE:-}" ]]; then
-    (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT" "${VALIDATE_ARGS[@]}")
+    run_validation
     exit $?
   fi
 
@@ -457,14 +490,19 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   export QUARKUS_HTTP_PORT="$validation_port"
   log_file="${AMSHA_VALIDATION_LOG_FILE:-$PROJECT_ROOT/amsha-${BACKEND}-validation.$$.log}"
   mkdir -p "$(dirname "$log_file")"
-  # Native distributions disable console logging and write to the backend
-  # log configured in application.yaml. Point the validation server at the
-  # advertised wrapper log so it contains the actual server diagnostics.
+  console_log_file="${log_file}.console"
+  # Keep redirected process output separate from the Quarkus file appender.
+  # Writing both sinks to one file duplicates readiness records with different
+  # prefixes and makes the exact-once JEV-12 check ambiguous.
   export QUARKUS_LOG_FILE_ENABLE=true
   export QUARKUS_LOG_FILE_PATH="$log_file"
+  # Publish the resolved path so validators can assert startup diagnostics
+  # (for example the deferred decision-plane warning) without scraping stdout.
+  export AMSHA_VALIDATION_LOG_FILE="$log_file"
   printf '🚀 Starting %s validation server on %s.\n' "$BACKEND" "$validation_base"
   printf '📄 Server logs: %s\n' "$log_file"
-  (cd "$PROJECT_ROOT" && exec "$BINARY" serve) < /dev/null > "$log_file" 2>&1 &
+  printf '📄 Console logs: %s\n' "$console_log_file"
+  (cd "$PROJECT_ROOT" && exec "$BINARY" serve) < /dev/null > "$console_log_file" 2>&1 &
   server_pid=$!
 
   cleanup() {
@@ -502,8 +540,8 @@ if [[ "$VALIDATE_MODE" == true ]]; then
       break
     fi
     if ! kill -0 "$server_pid" 2>/dev/null; then
-      if [[ "$BACKEND" == postgres ]] && [[ -f "$PROJECT_ROOT/amsha-pg.log" ]] \
-        && grep -q "FlywayValidateException" "$PROJECT_ROOT/amsha-pg.log" 2>/dev/null; then
+      if [[ "$BACKEND" == postgres ]] && [[ -f "$PROJECT_ROOT/amsha-postgresql-postgres.log" ]] \
+        && grep -q "FlywayValidateException" "$PROJECT_ROOT/amsha-postgresql-postgres.log" 2>/dev/null; then
         printf '⚠️  PostgreSQL Flyway validation failed due to schema checksum mismatch.\n' >&2
         printf '💡 Pass --clean to reset the database, or run: mise run db:pg:reset\n' >&2
       fi
@@ -514,7 +552,7 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   [[ "$ready" == true ]] || die "Validation server did not become ready; inspect $log_file."
 
   export TEST_BASE="$validation_base"
-  (cd "$PROJECT_ROOT" && bash "$VALIDATION_SCRIPT" "${VALIDATE_ARGS[@]}")
+  run_validation
   exit $?
 fi
 
@@ -526,4 +564,7 @@ printf '\n'
 printf '📂 Persistence: %s (profile: %s)\n' "$AMSHA_PERSISTENCE_BACKEND" "$QUARKUS_PROFILE"
 printf '📁 Data directory: %s\n' "$AMSHA_DATA_DIR"
 cd "$PROJECT_ROOT"
-exec "$BINARY" "$COMMAND" "${PASSTHROUGH_ARGS[@]}"
+# `set -u` plus macOS's bash 3.2 aborts on `"${PASSTHROUGH_ARGS[@]}"` when the
+# array is empty (a bare `run_dist_sqlite.sh` has no passthrough args), so the
+# expansion must carry its own guard.  `${#PASSTHROUGH_ARGS[@]}` above is safe.
+exec "$BINARY" "$COMMAND" ${PASSTHROUGH_ARGS[@]+"${PASSTHROUGH_ARGS[@]}"}

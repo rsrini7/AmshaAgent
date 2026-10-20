@@ -8,6 +8,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.ToIntFunction;
 
+import com.amsha.classifier.api.ProviderPlacementValidator;
+
 /** Resolves optional classifier SPIs without requiring their implementation modules. */
 public final class OptionalClassifierBeanResolver {
 
@@ -46,7 +48,14 @@ public final class OptionalClassifierBeanResolver {
         try {
             Bean typed = bean;
             Object reference = beanManager.getReference(typed, spiType, beanManager.createCreationalContext(typed));
-            return spiType.isInstance(reference) ? spiType.cast(reference) : null;
+            if (!spiType.isInstance(reference)) {
+                return null;
+            }
+            T instance = spiType.cast(reference);
+            ProviderPlacementValidator.validateClassifierSpiPlacement(instance);
+            return instance;
+        } catch (SecurityException e) {
+            throw e;
         } catch (RuntimeException | LinkageError ignored) {
             return null;
         }

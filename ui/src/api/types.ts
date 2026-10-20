@@ -336,3 +336,20 @@ export interface ApprovalResolutionResponse {
   verified: boolean;
   message: string;
 }
+/** Payload returned by GET /admin/local-ml/onnx/classifiers. */
+export interface ClassifierRuntimeResponse {
+  classifiers: ClassifierSnapshot[];
+}
+
+/** One ONNX classifier runtime slot, matching OnnxClassifierRuntimeControl.Snapshot. */
+export interface ClassifierSnapshot {
+  classifier: string;
+  startupEnabled: boolean;
+  requestedEnabled: boolean;
+  implementationAvailable: boolean;
+  effectiveEnabled: boolean;
+  acceptingRequests: boolean;
+  draining: boolean;
+  inFlight: number;
+  revision: number;
+}

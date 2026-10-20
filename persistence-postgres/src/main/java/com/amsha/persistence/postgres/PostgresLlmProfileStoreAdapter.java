@@ -14,6 +14,7 @@ import com.amsha.persistence.api.LlmProfileStorePort;
 import com.amsha.persistence.api.ModelCacheInvalidationPort;
 import com.amsha.persistence.api.ModelProfileDto;
 import com.amsha.persistence.api.ModelRouteAssignmentDto;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.WorkspaceConnectionGrantDto;
 import com.amsha.persistence.api.WorkspaceConnectionGrantStorePort;
 import com.amsha.persistence.postgres.jdbi.LlmProfilePostgresDao;
@@ -27,7 +28,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresLlmProfileStoreAdapter implements LlmProfileStorePort, WorkspaceConnectionGrantStorePort {
 
     private final Jdbi jdbi;

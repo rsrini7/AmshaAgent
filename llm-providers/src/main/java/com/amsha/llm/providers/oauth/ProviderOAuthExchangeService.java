@@ -17,9 +17,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.persistence.api.LlmConnectionDto;
 import com.amsha.security.api.OutboundPurpose;
 import com.amsha.security.api.SecretVault;
@@ -219,8 +221,8 @@ public class ProviderOAuthExchangeService {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(tokenEndpoint))
                     .timeout(EXCHANGE_TIMEOUT)
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .header("Accept", "application/json")
+                    .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_FORM_URLENCODED)
+                    .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
                     .POST(HttpRequest.BodyPublishers.ofString(formBody))
                     .build();
 
@@ -382,10 +384,10 @@ public class ProviderOAuthExchangeService {
         if (providerId == null) return "generic-oauth-token";
         String norm = providerId.trim().toLowerCase(Locale.ROOT);
         return switch (norm) {
-            case "codex" -> VaultConstants.CODEX_OAUTH_TOKEN_KEY;
-            case "claude-code", "claude_code" -> VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY;
-            case "kimchi" -> VaultConstants.KIMCHI_OAUTH_TOKEN_KEY;
-            case "agy", "antigravity" -> VaultConstants.AGY_OAUTH_TOKEN_KEY;
+            case ModelDefaults.PROVIDER_CODEX -> VaultConstants.CODEX_OAUTH_TOKEN_KEY;
+            case ModelDefaults.PROVIDER_CLAUDE_CODE, "claude_code" -> VaultConstants.CLAUDE_CODE_OAUTH_TOKEN_KEY;
+            case ModelDefaults.PROVIDER_KIMCHI -> VaultConstants.KIMCHI_OAUTH_TOKEN_KEY;
+            case ModelDefaults.PROVIDER_AGY, "antigravity" -> VaultConstants.AGY_OAUTH_TOKEN_KEY;
             default -> norm + "-oauth-token";
         };
     }
@@ -394,10 +396,10 @@ public class ProviderOAuthExchangeService {
         if (providerId == null) return "localhost";
         String norm = providerId.trim().toLowerCase(Locale.ROOT);
         return switch (norm) {
-            case "codex" -> "chatgpt.com";
-            case "claude-code", "claude_code" -> "api.anthropic.com";
-            case "agy", "antigravity" -> "generativelanguage.googleapis.com";
-            case "kimchi" -> "llm.kimchi.dev";
+            case ModelDefaults.PROVIDER_CODEX -> "chatgpt.com";
+            case ModelDefaults.PROVIDER_CLAUDE_CODE, "claude_code" -> "api.anthropic.com";
+            case ModelDefaults.PROVIDER_AGY, "antigravity" -> "generativelanguage.googleapis.com";
+            case ModelDefaults.PROVIDER_KIMCHI -> "llm.kimchi.dev";
             default -> "localhost";
         };
     }

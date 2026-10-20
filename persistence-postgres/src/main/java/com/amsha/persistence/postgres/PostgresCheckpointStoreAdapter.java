@@ -14,6 +14,7 @@ import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CheckpointUpsertResult;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.ToolDecision;
 import com.amsha.persistence.postgres.jdbi.CheckpointJdbiDao;
@@ -32,7 +33,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  */
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "postgres")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.POSTGRES)
 public class PostgresCheckpointStoreAdapter implements CheckpointStorePort {
 
     private static final Logger log = Logger.getLogger(PostgresCheckpointStoreAdapter.class);

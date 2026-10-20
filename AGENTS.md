@@ -61,6 +61,28 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   never register as active implementations. Enable without a ready implementation fails
   closed; disable rejects new leases and drains accepted work. Mutations require internal
   authorization and mandatory audit-before-mutation.
+- The Jev decision plane is **Deferred**: no production `DecisionEngine` bean may be
+  registered. Enabled shadow classifiers without a resolvable engine return
+  `NoOpinion(MISSING_MODEL)`; disabled classifiers return `DISABLED`. With no engine,
+  `IntentDecisionRouter.isEnabled()` is false and `evaluateIntent()` returns a `DISABLED`
+  fallback. Enabling a decision switch without a resolvable engine must stay inert and log
+  exactly one `DecisionPlaneReadiness` WARN.
+  Moving the ADR off `Deferred` is a deliberate architectural change, never a side effect
+  of an unrelated edit (`docs/Architecture_Invariants.md` §27).
+- An **explicit evaluation path** exists to make a real provider call without registering a production
+  bean: see `docs/adr/architecture/ADR-jev-decision-plane-evaluation-path.md` (status: **Accepted**,
+  2026-10-07) and the `docs/research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md` brief. It is
+  opt-in (`amsha.decision.evaluation.enabled`, default `false`), internal-only, audited-before-egress, and
+  non-routing, and it is the only caller of the `DecisionEngineFactory` construction seam — constructing an
+  engine for one evaluation is not registering one, so `Instance<DecisionEngine>` stays unsatisfiable and no
+  activation switch opens. W4 and W5 have landed: the versioned corpus-backed `/evidence/run` endpoint
+  reports M1–M5 through the deterministic policy layer. Both adapters meet the numeric M1/M2 thresholds and
+  M3 was reviewed on 2026-10-17, so Quality is closed. On 2026-10-18 the project author approved a zero-rate
+  OMLX schedule entry and a separate zero-per-1,000 ceiling for non-routing evaluation; a fresh M5 run is pending. Production Governance and
+  Operations remain open, including Committee ratification of the production cost ceiling. The parent ADR
+  stays Deferred and no production engine is registered.
+  The path must stay off by default, internal-only, allow-listed, non-routing, and must NOT make
+  `Instance<DecisionEngine>` resolvable (§27.6, §27.7).
 - After a successful tool result, the coordinator must emit `FINISH`; no subsequent
   tool call may follow in that turn. Keep full and compact prompts aligned.
 - `NETWORK_OUTBOUND` and `EXECUTE_SHELL` always require HITL. Trusted roles only
@@ -91,6 +113,12 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   `isInternal()`. Reads remain public.
 - Use `ToolCapability.toolName()` instead of tool-name literals where `amsha-core`
   is available. Put tool mode values in `static final` constants.
+- Repeated string identifiers that must stay in sync — build-time property names,
+  config keys, enum-like ids — belong in one shared `static final String` constant
+  or enum, never retyped at each site. The persistence backend key and its ids live
+  in `com.amsha.persistence.api.PersistenceBackend`; reference them from
+  `@IfBuildProperty` / `@ConfigProperty`. Constants are inlined by the compiler, so
+  the emitted annotation is byte-identical to the previous literal.
 - Static data is immutable (`Map.copyOf()`); records validate cross-field rules in
   compact constructors. Qualifier literals extend `AnnotationLiteral<T>` and
   implement `T` (suppress `java:S2176`).
@@ -101,6 +129,11 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
   `computeIfAbsent` over fragile lock-free volatile schemes. Use `VarHandle` when
   zero-allocation field access modes (`getAcquire`/`setRelease`) are required. See
   [§24.6](docs/Architecture_Invariants.md#246-volatile-field-invariants--modern-jdk-25-concurrency-alternatives-246-invariant).
+- Log exceptions with `LogUtil.relevantThrowable(e)` (`amsha-common`) rather than passing a raw
+  throwable or a pre-rendered stack string; it drops test-runner, build and reflection frames so an
+  expected failure cannot flood the log. Never embed a stack trace in the log *message* — the redacting
+  filter rewrites frame names. For format-style calls pass the throwable first:
+  `log.errorf(LogUtil.relevantThrowable(e), "failed for %s", id)`.
 
 
 ### Routing, channels, and prompts
@@ -246,6 +279,10 @@ and `python3 scripts/test_review_staged.py`.
   `rest-http/scripts/run_all_validations.sh` and child scripts through
   `rest-http/scripts/common_env.sh`.
 - The master validator must return a nonzero exit code when any suite fails.
+- Every `validate_*.sh` must be registered in `run_all_validations.sh`; the guard in
+  `scripts/distribution/test_dist_wrappers.py` fails when a validator is orphaned or a
+  `*_SCRIPT` path is stale. Zero-token validators belong in the `--fast` set, because a
+  check that only an opt-in flag can reach is invisible coverage.
 
 ## Agent skills
 

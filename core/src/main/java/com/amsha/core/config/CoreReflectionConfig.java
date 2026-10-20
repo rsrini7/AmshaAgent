@@ -19,6 +19,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.message.VideoContent;
 import dev.langchain4j.data.pdf.PdfFile;
 
+import com.amsha.classifier.api.DecisionMetadata;
 import com.amsha.core.agent.loop.GroupAnalyticsService;
 import com.amsha.core.agent.loop.GroupConsultationEngine;
 import com.amsha.core.agent.loop.GroupConsultationService;
@@ -49,6 +50,30 @@ import com.amsha.core.api.dto.SessionStatusResponse;
 import com.amsha.core.audit.AuditOutcome;
 import com.amsha.core.audit.AuditVerifier;
 import com.amsha.core.audit.SecurityEventType;
+import com.amsha.core.classifier.DecisionAnswerQualityShadowClassifier;
+import com.amsha.core.classifier.DecisionIntentShadowClassifier;
+import com.amsha.core.classifier.DecisionTelemetry;
+import com.amsha.core.classifier.DecisionToolRiskShadowClassifier;
+import com.amsha.core.classifier.evaluation.DecisionEvaluationOutcome;
+import com.amsha.core.classifier.evaluation.DecisionEvaluationRefusedException;
+import com.amsha.core.classifier.evaluation.DecisionEvaluationRequest;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceCase;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceCaseResult;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceCorpus;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceDiagnostics;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceRunAttribution;
+import com.amsha.core.classifier.evaluation.DecisionEvidenceSummary;
+import com.amsha.core.classifier.evaluation.DecisionPriceSchedule;
+import com.amsha.core.classifier.evaluation.DecisionRefusalReason;
+import com.amsha.core.classifier.provider.DecisionProviderUnavailableException;
+import com.amsha.core.classifier.remote.RemoteDecisionEngine;
+import com.amsha.core.classifier.remote.RemoteEndpointValidator;
+import com.amsha.core.classifier.remote.RemoteProviderConfig;
+import com.amsha.core.classifier.selfhosted.SelfHostedDecisionEngine;
+import com.amsha.core.classifier.selfhosted.SelfHostedEndpointValidator;
+import com.amsha.core.classifier.selfhosted.SelfHostedProviderConfig;
+import com.amsha.core.classifier.selfhosted.StateProjectionRedactor;
+import com.amsha.core.classifier.wire.WireProfile;
 import com.amsha.core.cron.AgentJobCompleted;
 import com.amsha.core.cron.CronTaskScheduled;
 import com.amsha.core.governance.ApprovalFrame;
@@ -58,6 +83,7 @@ import com.amsha.core.observability.ChatModelListenerRuntimeControl;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.CapabilityJsonParser;
 import com.amsha.core.routing.InfiniteLoopChatModel;
+import com.amsha.core.routing.IntentDecisionRouter;
 import com.amsha.core.routing.LazyChatModel;
 import com.amsha.core.routing.ModalityRouteSeeder;
 import com.amsha.core.routing.ModelCacheInvalidator;
@@ -80,6 +106,8 @@ import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.security.CredentialDetectionResult;
 import com.amsha.core.security.ExternalIdentityProvider;
 import com.amsha.core.security.OutboundHttpPolicyService;
+import com.amsha.core.security.http.GovernedHttpClient;
+import com.amsha.core.security.http.OutboundHttpException;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
@@ -212,7 +240,61 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SpeechDeliveryService.class,
             ResumeCronNotificationDispatcher.class,
             ResumeToolInfoFormatter.class,
-            SafeSymbolMetadata.class
+            SafeSymbolMetadata.class,
+            DecisionTelemetry.class,
+            DecisionIntentShadowClassifier.class,
+            DecisionToolRiskShadowClassifier.class,
+            DecisionAnswerQualityShadowClassifier.class,
+            // Decision provider wiring: the validated governance record may cross a serialization
+            // boundary once evidence/telemetry lands, and the refusal exception is part of the
+            // payload-free contract those surfaces report. Registered here rather than with a
+            // type-level annotation, per AGENTS.md §8.
+            DecisionProviderGovernance.class,
+            DecisionProviderUnavailableException.class,
+            // W4 evaluation path: the request and outcome records may cross the evidence and telemetry
+            // serialization boundaries, and the refusal type and its reason enum are part of the
+            // payload-free contract those surfaces report. Registered centrally, per AGENTS.md §8.
+            DecisionEvaluationRequest.class,
+            DecisionEvaluationOutcome.class,
+            DecisionEvaluationRefusedException.class,
+            DecisionRefusalReason.class,
+            DecisionMetadata.class,
+            // W5 evidence corpus: the versioned corpus is deserialized from a classpath resource at
+            // runtime, so its records (and the nested redaction attestation) need reflection entries in
+            // a native image. Registered centrally, per AGENTS.md §8.
+            DecisionEvidenceCase.class,
+            DecisionEvidenceCorpus.class,
+            DecisionEvidenceCorpus.Baseline.class,
+            DecisionEvidenceCorpus.RedactionReview.class,
+            // W5 evidence run response graph: aggregate summary, run attribution, and optional
+            // diagnostics are serialized at /evidence/run. Per-case results stay internal for metric
+            // calculation and are ignored in the response. Registered centrally, per AGENTS.md §8.
+            DecisionEvidenceCaseResult.class,
+            DecisionEvidenceSummary.class,
+            DecisionEvidenceRunAttribution.class,
+            DecisionEvidenceDiagnostics.class,
+            DecisionEvidenceDiagnostics.ProviderUsage.class,
+            DecisionEvidenceSummary.MetricResult.class,
+            DecisionEvidenceSummary.LaneLatency.class,
+            DecisionEvidenceSummary.LaneCost.class,
+            DecisionPriceSchedule.class,
+            DecisionPriceSchedule.PriceEntry.class,
+            SelfHostedDecisionEngine.class,
+            SelfHostedEndpointValidator.class,
+            SelfHostedProviderConfig.class,
+            SelfHostedProviderConfig.Builder.class,
+            // Enum component of SelfHostedProviderConfig, which is serialized: Jackson resolves the
+            // constant by name, so the enum must be reachable reflectively in a native image.
+            WireProfile.class,
+            StateProjectionRedactor.class,
+            RemoteDecisionEngine.class,
+            RemoteEndpointValidator.class,
+            RemoteProviderConfig.class,
+            RemoteProviderConfig.Builder.class,
+            GovernedHttpClient.class,
+            OutboundHttpException.class,
+            OutboundHttpException.Category.class,
+            IntentDecisionRouter.class
         },
         classNames = {
             "com.amsha.core.agent.reasoning.AttachmentContentMapper",
@@ -238,6 +320,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$SystemMessageMixin",
             "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ToolExecutionResultMessageMixin",
             "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$CustomMessageMixin",
-            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ToolExecutionRequestMixin"
+            "io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ToolExecutionRequestMixin",
+            "com.amsha.core.classifier.remote.RemoteDecisionWireCodec",
+            "com.amsha.core.security.http.GovernedHttpSecuritySupport"
         })
 public class CoreReflectionConfig {}

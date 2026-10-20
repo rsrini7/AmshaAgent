@@ -5,10 +5,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,9 +29,9 @@ import org.junit.jupiter.api.Test;
  * {@code ProcessBuilder}. The private helpers ({@code waitForProcess}, {@code terminateProcess}) are
  * reached reflectively, matching the convention used elsewhere in this module.
  *
- * <p><b>Platform note:</b> this host is not Linux, so the {@code unshare … chroot} command
- * construction is exercised with {@code os.name} forced to Linux; {@code unshare} is absent here, so
- * the attempt fails at {@code start()} and the assertion documents exactly that.
+ * <p>Process lifecycle tests force the direct execution path so they do not depend on
+ * privileged user namespaces. Linux command construction is checked separately without
+ * launching {@code unshare}.
  */
 class NamespaceExecutorTest {
 
@@ -37,7 +41,7 @@ class NamespaceExecutorTest {
         executor.timeoutSeconds = 5;
         Path tempDir = Files.createTempDirectory("ns-exec-test");
 
-        String output = executor.executeInNamespace(tempDir, List.of("echo", "ns_ok"));
+        String output = withOsName("Test OS", () -> executor.executeInNamespace(tempDir, List.of("echo", "ns_ok")));
         assertNotNull(output);
         assertTrue(output.contains("ns_ok"));
     }
@@ -48,8 +52,10 @@ class NamespaceExecutorTest {
         executor.timeoutSeconds = 5;
         Path tempDir = Files.createTempDirectory("ns-exec-err");
 
-        assertThrows(Exception.class, () -> {
-            executor.executeInNamespace(tempDir, List.of("non_existent_binary_xyz_123"));
+        withOsName("Test OS", () -> {
+            assertThrows(Exception.class, () -> {
+                executor.executeInNamespace(tempDir, List.of("non_existent_binary_xyz_123"));
+            });
         });
     }
 
@@ -64,7 +70,8 @@ class NamespaceExecutorTest {
         Path workspace = Files.createTempDirectory("ns-exec-ws").resolve("missing");
         assertFalse(Files.exists(workspace));
 
-        String output = executor.executeInNamespace(workspace, List.of("echo", "recreated"));
+        String output =
+                withOsName("Test OS", () -> executor.executeInNamespace(workspace, List.of("echo", "recreated")));
 
         assertTrue(output.contains("recreated"));
         assertTrue(Files.isDirectory(workspace), "the missing workspace should have been recreated");
@@ -76,8 +83,10 @@ class NamespaceExecutorTest {
         executor.timeoutSeconds = 0; // waitFor(0, SECONDS) returns false immediately
         Path tempDir = Files.createTempDirectory("ns-exec-timeout");
 
-        SecurityException ex = assertThrows(
-                SecurityException.class, () -> executor.executeInNamespace(tempDir, List.of("sleep", "5")));
+        SecurityException ex = withOsName(
+                "Test OS",
+                () -> assertThrows(
+                        SecurityException.class, () -> executor.executeInNamespace(tempDir, List.of("sleep", "5"))));
 
         assertTrue(ex.getMessage().contains("Tool timed out"));
     }
@@ -88,9 +97,11 @@ class NamespaceExecutorTest {
         executor.timeoutSeconds = 5;
         Path tempDir = Files.createTempDirectory("ns-exec-fail");
 
-        ToolExecutionException ex = assertThrows(
-                ToolExecutionException.class,
-                () -> executor.executeInNamespace(tempDir, List.of("sh", "-c", "echo boom; exit 4")));
+        ToolExecutionException ex = withOsName(
+                "Test OS",
+                () -> assertThrows(
+                        ToolExecutionException.class,
+                        () -> executor.executeInNamespace(tempDir, List.of("sh", "-c", "echo boom; exit 4"))));
 
         assertEquals(4, ex.exitCode());
         assertTrue(ex.getMessage().contains("boom"));
@@ -98,43 +109,57 @@ class NamespaceExecutorTest {
 
     @Test
     void testNamespaceExecutionReapsAStalledOutputReader() throws Exception {
-        NamespaceExecutor executor = new NamespaceExecutor();
-        executor.timeoutSeconds = 5;
-        Path tempDir = Files.createTempDirectory("ns-exec-stall");
-
-        // The backgrounded grandchild inherits the stdout pipe, so the drain thread is still blocked
-        // after the shell exits. The executor must reap it and report a timeout rather than hang.
-        SecurityException ex = assertThrows(
-                SecurityException.class,
-                () -> executor.executeInNamespace(tempDir, List.of("sh", "-c", "sleep 8 & exit 0")));
-
-        assertTrue(ex.getMessage().contains("Tool timed out"));
+        Process process = mock(Process.class);
+        PipedInputStream stdout = new PipedInputStream();
+        PipedOutputStream stdoutWriter = new PipedOutputStream(stdout);
+        try {
+            when(process.getInputStream()).thenReturn(stdout);
+            when(process.waitFor(anyLong(), any())).thenReturn(true);
+            NamespaceExecutor executor = new NamespaceExecutor() {
+                @Override
+                Process startProcess(ProcessBuilder processBuilder) {
+                    assertNotNull(processBuilder);
+                    return process;
+                }
+            };
+            executor.timeoutSeconds = 5;
+            Path tempDir = Files.createTempDirectory("ns-exec-stall");
+            SecurityException ex = withOsName(
+                    "Test OS",
+                    () -> assertThrows(
+                            SecurityException.class, () -> executor.executeInNamespace(tempDir, List.of("echo"))));
+            assertTrue(ex.getMessage().contains("Tool timed out"));
+        } finally {
+            stdoutWriter.close();
+        }
     }
 
     @Test
     void testNamespaceExecutionPropagatesInterruption() throws Exception {
-        NamespaceExecutor executor = new NamespaceExecutor();
-        executor.timeoutSeconds = 30;
-        Path tempDir = Files.createTempDirectory("ns-exec-interrupt");
+        withOsName("Test OS", () -> {
+            NamespaceExecutor executor = new NamespaceExecutor();
+            executor.timeoutSeconds = 30;
+            Path tempDir = Files.createTempDirectory("ns-exec-interrupt");
 
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        Thread worker = new Thread(
-                () -> {
-                    try {
-                        executor.executeInNamespace(tempDir, List.of("sleep", "10"));
-                    } catch (Throwable t) {
-                        failure.set(t);
-                    }
-                },
-                "ns-exec-interrupt-test");
-        worker.setDaemon(true);
-        worker.start();
-        Thread.sleep(400L);
-        worker.interrupt();
-        worker.join(10_000L);
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            Thread worker = new Thread(
+                    () -> {
+                        try {
+                            executor.executeInNamespace(tempDir, List.of("sleep", "10"));
+                        } catch (Throwable t) {
+                            failure.set(t);
+                        }
+                    },
+                    "ns-exec-interrupt-test");
+            worker.setDaemon(true);
+            worker.start();
+            Thread.sleep(400L);
+            worker.interrupt();
+            worker.join(10_000L);
 
-        assertFalse(worker.isAlive(), "worker must not be left blocked");
-        assertTrue(failure.get() instanceof InterruptedException, "unexpected failure: " + failure.get());
+            assertFalse(worker.isAlive(), "worker must not be left blocked");
+            assertTrue(failure.get() instanceof InterruptedException, "unexpected failure: " + failure.get());
+        });
     }
 
     // ------------------------------------------------------------------
@@ -156,6 +181,22 @@ class NamespaceExecutorTest {
         terminate.setAccessible(true);
 
         assertDoesNotThrow(() -> terminate.invoke(executor, proc, null));
+    }
+
+    @Test
+    void testTerminateProcessStillKillsParentWhenDescendantEnumerationIsDenied() throws Exception {
+        NamespaceExecutor executor = new NamespaceExecutor();
+        Process process = mock(Process.class);
+        ProcessHandle handle = mock(ProcessHandle.class);
+        when(process.toHandle()).thenReturn(handle);
+        when(handle.descendants()).thenThrow(new SecurityException("process enumeration denied"));
+        when(process.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+
+        Method terminate = NamespaceExecutor.class.getDeclaredMethod("terminateProcess", Process.class, Thread.class);
+        terminate.setAccessible(true);
+
+        assertDoesNotThrow(() -> terminate.invoke(executor, process, null));
+        verify(process).destroyForcibly();
     }
 
     @Test
@@ -181,16 +222,21 @@ class NamespaceExecutorTest {
 
     @Test
     void testLinuxBranchBuildsTheUnshareChrootCommand() throws Exception {
-        NamespaceExecutor executor = new NamespaceExecutor();
-        executor.timeoutSeconds = 5;
         Path tempDir = Files.createTempDirectory("ns-exec-linux");
 
-        withOsName("Linux", () -> {
-            // unshare is absent on this host, so the constructed command cannot be launched.
-            // Reaching the launch is what proves the unshare/chroot argument list was built.
-            Exception ex = assertThrows(Exception.class, () -> executor.executeInNamespace(tempDir, List.of("echo")));
-            assertNotNull(ex);
-        });
+        assertEquals(
+                List.of(
+                        "unshare",
+                        "--pid",
+                        "--fork",
+                        "--mount",
+                        "--net",
+                        "--map-root-user",
+                        "chroot",
+                        tempDir.toAbsolutePath().toString(),
+                        "echo",
+                        "ns_ok"),
+                NamespaceExecutor.buildUnshareCommand(tempDir, List.of("echo", "ns_ok")));
     }
 
     // ------------------------------------------------------------------
@@ -215,9 +261,28 @@ class NamespaceExecutorTest {
         }
     }
 
+    private static <T> T withOsName(String osName, ThrowingSupplier<T> body) throws Exception {
+        String original = System.getProperty("os.name");
+        try {
+            System.setProperty("os.name", osName);
+            return body.get();
+        } finally {
+            if (original == null) {
+                System.clearProperty("os.name");
+            } else {
+                System.setProperty("os.name", original);
+            }
+        }
+    }
+
     @FunctionalInterface
     private interface ThrowingRunnable {
         void run() throws Exception;
+    }
+
+    @FunctionalInterface
+    private interface ThrowingSupplier<T> {
+        T get() throws Exception;
     }
 
     private static Object readAccessor(Object target, String name) throws Exception {

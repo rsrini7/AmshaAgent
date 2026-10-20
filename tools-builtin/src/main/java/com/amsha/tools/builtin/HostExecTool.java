@@ -25,9 +25,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.amsha.common.util.HtmlArtifactUtil;
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.tools.CodeLanguageDetector;
+import com.amsha.core.tools.LanguageIds;
 import com.amsha.core.tools.OutputTruncator;
 import com.amsha.sandbox.DirectExecutor;
 import com.amsha.sandbox.ToolExecutionException;
@@ -36,6 +38,7 @@ import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -57,7 +60,7 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "host_exec",
+        capabilityId = ToolNames.HOST_EXEC,
         description = "Execute a command directly on the host (no Podman sandbox)",
         defaultRoles = {})
 public class HostExecTool implements AgentTool {
@@ -154,10 +157,10 @@ public class HostExecTool implements AgentTool {
                 params.put("code", params.get("command"));
             }
             String code = (String) params.get("code");
-            String lang = (String) params.getOrDefault("language", "bash");
+            String lang = (String) params.getOrDefault("language", LanguageIds.BASH);
             if (code == null) return ToolResponse.failure(1, "Parameter 'code' is required.");
             if (lang == null || lang.isBlank()) {
-                lang = "bash";
+                lang = LanguageIds.BASH;
             }
             lang = lang.toLowerCase(Locale.ROOT);
 
@@ -174,8 +177,8 @@ public class HostExecTool implements AgentTool {
             }
 
             return switch (lang) {
-                case "bash" -> executeBash(ctx, workspaceRoot, code);
-                case "java" -> executeJava(workspaceRoot, code);
+                case LanguageIds.BASH -> executeBash(ctx, workspaceRoot, code);
+                case LanguageIds.JAVA -> executeJava(workspaceRoot, code);
                 default ->
                     ToolResponse.failure(
                             1, "language not supported: " + lang + " (host_exec currently supports: bash, java)");
@@ -190,13 +193,13 @@ public class HostExecTool implements AgentTool {
             String msg = e.getMessage() != null && !e.getMessage().isBlank()
                     ? e.getMessage()
                     : "I/O error during host_exec: " + e.getClass().getSimpleName();
-            log.errorf(e, "[HostExecTool] I/O failure session=%s", sessionId);
+            log.errorf(LogUtil.relevantThrowable(e), "[HostExecTool] I/O failure session=%s", sessionId);
             return ToolResponse.failure(1, msg);
         } catch (Exception e) {
             String msg = e.getMessage() != null && !e.getMessage().isBlank()
                     ? e.getMessage()
                     : "Host execution failed with no details.";
-            log.errorf(e, "[HostExecTool] Unexpected failure session=%s", sessionId);
+            log.errorf(LogUtil.relevantThrowable(e), "[HostExecTool] Unexpected failure session=%s", sessionId);
             return ToolResponse.failure(1, msg);
         }
     }
@@ -218,7 +221,7 @@ public class HostExecTool implements AgentTool {
         Files.writeString(scriptPath, effectiveCode, StandardCharsets.UTF_8);
         setExecutable(scriptPath);
 
-        List<String> command = List.of("bash", scriptPath.toString());
+        List<String> command = List.of(LanguageIds.BASH, scriptPath.toString());
         // DirectExecutor expects Map<String, byte[]> for secrets; host_exec intentionally
         // does NOT propagate secrets (mirrors SandboxExecTool.executeJavaFallback behaviour).
         String rawOutput = directExecutor.executeDirectly(workspaceRoot, command, Map.of());

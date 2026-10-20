@@ -172,7 +172,7 @@ public class DevSecretSeeder {
             return;
         }
         String envValue = ConfigProvider.getConfig()
-                .getOptionalValue("AMSHA_AUDIT_HMAC_KEY", String.class)
+                .getOptionalValue(VaultConstants.AUDIT_HMAC_KEY, String.class)
                 .orElse(null);
         if (envValue == null || envValue.isBlank()) {
             log.warnf("DevSecretSeeder: AMSHA_AUDIT_HMAC_KEY not set in config.");
@@ -206,9 +206,9 @@ public class DevSecretSeeder {
         if (!autoSeedEnabled) {
             return;
         }
-        seedFromHostEnvAsSystemKey("AMSHA_TOOLS_GITHUB_TOKEN");
-        seedFromHostEnvAsSystemKey("AMSHA_TOOLS_SERPER_API_KEY");
-        seedFromHostEnvAsSystemKey("AMSHA_TOOLS_BRAVE_API_KEY");
+        seedFromHostEnvAsSystemKey(VaultConstants.TOOLS_GITHUB_TOKEN);
+        seedFromHostEnvAsSystemKey(VaultConstants.TOOLS_SERPER_API_KEY);
+        seedFromHostEnvAsSystemKey(VaultConstants.TOOLS_BRAVE_API_KEY);
     }
 
     private void seedFromHostEnvAsSystemKey(String vaultKeyName) {

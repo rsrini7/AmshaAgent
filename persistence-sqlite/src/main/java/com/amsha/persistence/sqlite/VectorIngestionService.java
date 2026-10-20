@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.VectorIndexMetadataPort;
 import com.amsha.persistence.api.VectorIndexNamespace;
 
@@ -31,7 +32,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
  * Reads (vector searches) remain fully concurrent — no serialization needed.
  */
 @ApplicationScoped
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "sqlite", enableIfMissing = true)
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.SQLITE, enableIfMissing = true)
 public class VectorIngestionService {
 
     private static final Logger log = Logger.getLogger(VectorIngestionService.class);

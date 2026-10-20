@@ -65,6 +65,13 @@ Run only affected test classes first. Use `-pl <module> -am` to compile upstream
 ```
 Confirm output: `Failures: 0, Errors: 0`.
 
+> **Trap — `-pl <module>` without `-am` can test against STALE installed jars.** A sibling module that is
+> not in the reactor is resolved from `~/.m2`: whatever was last installed, which may predate your working
+> tree. Observed 2026-10-01 — three `core` decoder tests failed "expected `Opinion` but was `NoOpinion`"
+> purely because `-pl core test` linked a stale `amsha-classifier-api`; the identical tests were green
+> under `-pl classifier-api,core`. **If a failure implicates a sibling module's class, get that module into
+> `-pl` (or use `-am`) before believing it is a regression.**
+
 ### 2. Module PMD Gate
 Run the module-scoped PMD complexity and size checks:
 
@@ -89,10 +96,19 @@ Verify formatting is clean:
 After editing any Markdown files (docs, plans, ADRs):
 
 ```bash
-python3 ./scripts/quality/verify_docs.py
+python3 ./scripts/verify_docs.py            # auto-forwarding shim — SIGTERMs (exit 137)
+python3 ./scripts/quality/verify_docs.py    # canonical script
 ```
 *(Note: Run the canonical script under `scripts/quality/verify_docs.py` to avoid subprocess forwarding signals).*
 Confirm output: `found 0 errors and 0 warnings`.
+
+> **Correction (2026-10-01) — the canonical script now fails too, and *not* with 137.** It walks all ~149
+> repo Markdown files, and the sandbox file-access broker raises
+> `PermissionError: Sensitive content approval timed out` partway through. There is **no CLI argument to
+> scope it to a path**, so the real doc gate cannot currently be run in this environment at all. Substitute
+> a scoped check over just the files you edited — resolve each relative Markdown link against the repo root
+> and assert the target exists — and **state explicitly that you substituted it** rather than implying the
+> gate passed.
 
 ### 5. Full Clean Install / Reactor Build
 Compiles all modules end-to-end and validates packaging:
@@ -102,7 +118,34 @@ Compiles all modules end-to-end and validates packaging:
 ```
 Confirms clean builds across all ~28 reactor modules.
 
-### 6. Static Analysis & Sonar Audit
+### 6. Configuration Surface (yaml ↔ `.env.example`)
+A change to a `@ConfigProperty` is not verified until the documented surfaces agree — the ADR convention is
+*"every `@ConfigProperty` must appear in `application.yaml`, `.env.example`, and the module README."*
+
+**The trap that silently eats the work.** `app/src/main/resources/env-example` is **GENERATED**.
+`app/pom.xml` has an execution `sync-env-example` bound to `generate-resources` that copies the repo-root
+`.env.example` over it with `overwrite=true`, and `.gitignore:68` excludes it. An edit made there is destroyed
+by the next build **and leaves no trace in `git status`** — so it looks like nothing was ever written. The
+only file to edit is the repo-root **`.env.example`**:
+
+```bash
+./mvnw -o -pl app generate-resources -q
+diff -q .env.example app/src/main/resources/env-example   # no output = identical
+```
+
+**Verifying parity.** Extract every `AMSHA_<AREA>_*` name from the relevant `application.yaml` block and
+require each to appear (optionally commented) in `.env.example`. Use the **Grep tool, not a script**: on
+2026-10-01 a Python script reading `.env.example` was SIGTERM'd twice by the file-access broker (exit 137),
+and a bash `grep` over the same files returned empty at exit 0 — while Grep read both fine.
+
+**Renaming a config field** touches more places than it looks: the `@ConfigMapping` accessor, the
+`application.yaml` key, the `AMSHA_*` name in *both* the yaml default and `.env.example`, every hand-written
+config double in tests, and every `@TestProfile` `getConfigOverrides()` key. Then re-run `spotless:apply` and
+the affected suites. When a previously-optional field becomes **mandatory**, every double that omitted it now
+fails — update the doubles as part of the change rather than relaxing the rule, and add a case for each new
+refusal plus one for the boundary that must *not* trigger it.
+
+### 7. Static Analysis & Sonar Audit
 Check for critical issues or blocker bugs before handoff:
 
 ```bash
@@ -123,6 +166,9 @@ Use this workflow to measure test coverage or enforce the JaCoCo line coverage g
 # Summarize overall coverage
 python3 ./scripts/analyze_jacoco_coverage.py --summary
 
+# Per-module line + branch totals, weakest first, with a reactor TOTAL row
+python3 ./scripts/analyze_jacoco_coverage.py --modules
+
 # Enforce coverage floor (read from pom.xml <jacoco.minimum.line.coverage>)
 python3 ./scripts/quality/verify_jacoco_coverage.py --minimum 0.82
 
@@ -135,8 +181,48 @@ python3 ./scripts/quality/verify_jacoco_coverage.py --minimum 0.82
   ```bash
   python3 ./scripts/jacoco_lines.py --root . <fully.qualified.ClassName>
   ```
+- **Per-module totals**: use `--modules` (line *and* branch, weakest first, plus a `TOTAL` row; add
+  `--module <mod>` for one module, or `--json` for machine-readable). Do **not** confuse it with
+  `--module <mod>` alone, which only *filters the class gap ranking* and yields no per-module totals.
+  The `TOTAL` row must reproduce the reactor figure exactly — that equality is the honest-aggregation check.
+- **Mise wrappers exist for all of the above** (they read existing reports and never build):
+  `mise run quality:coverage` (summary + per-module totals), `mise run quality:coverage-gaps` (top gaps with
+  missed line numbers), `mise run quality:coverage-gate` (the gate alone — seconds instead of an ~11 min
+  reactor build), `mise run quality:py-tests` (Python contract suites, including two `ci.yml` omits).
 - **Always re-measure after `clean`**: JaCoCo maps current source line numbers onto compiled bytecode in `target/classes`. Running against stale classes yields corrupted line data.
 - **Historical Analysis & Gap Registry**: Detailed module-by-module analysis, class rosters, and gap tracking are maintained in [`docs/TEST_COVERAGE_ANALYSIS.md`](../../../docs/TEST_COVERAGE_ANALYSIS.md). Consult that document when planning coverage enhancements.
+
+### 3. Coverage Traps & Badge Maintenance
+
+- **Black-box / distribution validation contributes ZERO coverage.** `scripts/distribution/` and
+  `rest-http/` contain no `jacoco`/`javaagent` reference, and the CI `jvm-validation` job
+  (`package -DskipTests` plus HTTP checks) launches an uninstrumented JVM. `validate_decision_plane.sh`,
+  the other `validate_*.sh` scripts, and that job move the gate by **0 lines** — never cite them as
+  coverage evidence. A `@QuarkusTest` inventory is likewise a *static count of annotations*, not a
+  measurement.
+- **Unit and IT coverage are MERGED and cannot be separated.** Surefire and Failsafe both take
+  `@{argLine}`, so both forks append to one `target/jacoco.exec` per module (no module sets `destFile`).
+  The reactor percentage is a union; "what do the `*IT`s cover on their own?" is unanswerable from these
+  reports. `--strict-instrumentation` catches an agent that never attached — **not** an IT gap.
+- **README Java badges are hand-maintained.** Nothing writes `![Tests]` / `![Coverage]` for Java:
+  `analyze_jacoco_coverage.py --badge` only *prints* a string, and `--sync-readme` exists only on the UI
+  analyzer. Reconcile both Java badges by hand after a full reactor run. (UI badges *are* auto-synced via
+  `analyze_ui_coverage.py --summary --sync-readme` — never hand-edit those.)
+- **`analyze_jacoco_coverage.py` reads the floor from the POM** via `build_gate(root)`, with the badge
+  colour band in the separately testable `badge_color(pct, gate)`. It once hardcoded a dead `0.74` and so
+  painted `brightgreen` for `[0.74, 0.82)` — a range the build rejects. Guarded by
+  `scripts/quality/test_analyze_jacoco_coverage.py` (23 tests), whose `BadgeOutputTest` drives `main()`
+  end-to-end by patching `repo_root.get_repo_root`. **The pure-function tests still pass when the call
+  site is broken**, so the end-to-end ones are the ones that matter.
+- **Concurrent Maven runs corrupt each other.** A second `clean` deletes `target/classes` while the first
+  is still compiling; the signature is `default-compile` failing in under a second with "package
+  com.amsha.… does not exist". Never start a second reactor while one is running — to test another
+  revision, isolate it with `git archive <sha> | tar -x -C /tmp/x`.
+- **Mise task files have a required shape.** `.mise/tasks/<group>/<name>.sh` needs
+  `#MISE description = "..."` on **line 2**, `set -euo pipefail`, a trailing `exec <root-shim> "$@"`, and
+  mode **100755** — mise silently skips it otherwise. A task that can emit machine-readable stdout
+  (`--json`, `--badge`) must send its chatter to **stderr**, or the payload is corrupted and `| jq` fails
+  with `Expecting value: line 1 column 1`.
 
 ---
 
@@ -156,6 +242,9 @@ When writing or extending tests in this codebase:
    - For `submit` overloads on `ManagedExecutor`, match `submit(Runnable)` vs `submit(Callable)` explicitly to avoid stub misses.
 4. **Concrete Utility Types**:
    - Use real instances of lightweight utilities (`ObjectMapper`, `SimpleMeterRegistry`) rather than mocks to avoid silent false positives on complex method chains.
+5. **`@Alternative @Priority(1)` in `src/test` is enabled GLOBALLY for the module's whole test deployment** — not merely for the profiles that list it in `getEnabledAlternatives()`. Proven in `core`: it declares only `amsha-persistence-api`, `MockAuditEventStorePort` appears in no `getEnabledAlternatives()`, yet it is the only `AuditEventStorePort` implementation and `AuditVerifierTest` is green. When a globally resolvable test bean would silently change another test's semantics (e.g. `Instance<DecisionEngine>.isResolvable()`, read by `DecisionPlaneReadiness`), gate it with `QuarkusTestProfile.getEnabledAlternatives()`.
+6. **A `@Dependent` CDI producer hands back a FRESH object on every `Instance.get()`**, so `verify(mock, never())` against a separately injected instance is **vacuously true** — it passes while proving nothing. Make the producer `@Singleton` first, then confirm non-vacuity with a `times(1)` positive control before trusting the negative assertion.
+7. **Assert structure, not substrings, when the point is wire/contract conformance.** A `body.contains("...")` check cannot see a field in the wrong slot or an extra field — which is exactly the defect class these tests exist to catch. Parse the emitted payload and assert the exact key sets instead.
 
 ---
 
@@ -169,7 +258,7 @@ After running the verification workflow, summarize findings using a clean Markdo
 | **PMD Complexity** | `./mvnw -pl <module> -am pmd:check -DskipTests` | BUILD SUCCESS |
 | **Spotless & FQNs** | `python3 fix_fqns.py && ./mvnw spotless:check` | Clean |
 | **Clean Install** | `./mvnw -o clean install -DskipTests` | BUILD SUCCESS |
-| **Docs Verifier** | `python3 ./scripts/quality/verify_docs.py` | 0 errors, 0 warnings |
+| **Docs Verifier** | `python3 ./scripts/quality/verify_docs.py` | 0 errors, 0 warnings — **currently unrunnable in this sandbox; substitute a scoped link check and say so** |
 | **Coverage Gate** | `python3 ./scripts/quality/verify_jacoco_coverage.py --minimum 0.82` | X.XX% (≥ 82.00%) |
 | **Sonar Check** | `mise run sonar:issues` | 0 Blockers / 0 Critical |
 

@@ -11,6 +11,7 @@ import java.util.Optional;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.providers.ChatModelFactory;
@@ -39,13 +40,13 @@ public class KimchiProviderFactory implements AgentChatModelProvider {
     @Inject
     GovernedTransportService governedTransport;
 
-    @ConfigProperty(name = "amsha.llm.kimchi.model", defaultValue = ModelDefaults.DEFAULT_KIMCHI_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.KIMCHI_MODEL, defaultValue = ModelDefaults.DEFAULT_KIMCHI_MODEL)
     String modelName;
 
-    @ConfigProperty(name = "amsha.llm.kimchi.base-url", defaultValue = ModelDefaults.DEFAULT_KIMCHI_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.KIMCHI_BASE_URL, defaultValue = ModelDefaults.DEFAULT_KIMCHI_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.llm.kimchi.api-key")
+    @ConfigProperty(name = LlmConfigKeys.KIMCHI_API_KEY)
     Optional<String> apiKey;
 
     @Override
@@ -77,7 +78,9 @@ public class KimchiProviderFactory implements AgentChatModelProvider {
         String key = tokenResolver.resolveToken(apiKey);
 
         String resolvedModel = (overrideModel != null && !overrideModel.isBlank()) ? overrideModel : modelName;
-        if (resolvedModel == null || resolvedModel.isBlank() || "mistral-small".equalsIgnoreCase(resolvedModel)) {
+        if (resolvedModel == null
+                || resolvedModel.isBlank()
+                || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(resolvedModel)) {
             resolvedModel = ModelDefaults.DEFAULT_KIMCHI_MODEL;
         }
 

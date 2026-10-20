@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.AgentCron;
 import com.amsha.core.domain.model.AgentCronRecord;
@@ -126,7 +127,7 @@ public class ListApprovalsReflex implements AgentReflex {
         return String.format(
                 "• `%s` [%s]\n  Goal: %s\n  Status: %s\n  Updated: %s\n  Approve: `/approve %s` or `/deny %s`",
                 cron.getId(),
-                cron.getExecutionRole() != null ? cron.getExecutionRole() : "coordinator",
+                cron.getExecutionRole() != null ? cron.getExecutionRole() : AgentRoleEnum.COORDINATOR_ID,
                 cron.getGoal() != null ? cron.getGoal() : "(no goal)",
                 cron.getStatus() != null ? cron.getStatus().name() : "UNKNOWN",
                 when,

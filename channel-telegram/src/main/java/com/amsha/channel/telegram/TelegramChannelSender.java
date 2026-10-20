@@ -18,6 +18,7 @@ import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.channel.api.InteractionNode;
+import com.amsha.channel.api.MediaTypes;
 import com.amsha.channel.api.ReplyNode;
 import com.amsha.common.util.HtmlArtifactUtil;
 import com.amsha.common.util.LogUtil;
@@ -46,17 +47,17 @@ public class TelegramChannelSender implements ChannelSender {
      * gets a sane, non-executable attachment name. Unknown or blank MIME falls back to {@code .wav}.
      */
     private static final Map<String, String> MIME_TO_EXT = Map.ofEntries(
-            Map.entry("audio/wav", ".wav"),
-            Map.entry("audio/x-wav", ".wav"),
-            Map.entry("audio/wave", ".wav"),
-            Map.entry("audio/mpeg", ".mp3"),
-            Map.entry("audio/mp3", ".mp3"),
-            Map.entry("audio/ogg", ".ogg"),
-            Map.entry("audio/opus", ".opus"),
-            Map.entry("audio/flac", ".flac"),
-            Map.entry("audio/aac", ".aac"),
-            Map.entry("audio/x-m4a", ".m4a"),
-            Map.entry("audio/webm", ".weba"));
+            Map.entry(MediaTypes.WAV, ".wav"),
+            Map.entry(MediaTypes.X_WAV, ".wav"),
+            Map.entry(MediaTypes.WAVE, ".wav"),
+            Map.entry(MediaTypes.MPEG, ".mp3"),
+            Map.entry(MediaTypes.MP3, ".mp3"),
+            Map.entry(MediaTypes.OGG, ".ogg"),
+            Map.entry(MediaTypes.OPUS, ".opus"),
+            Map.entry(MediaTypes.FLAC, ".flac"),
+            Map.entry(MediaTypes.AAC, ".aac"),
+            Map.entry(MediaTypes.X_M4A, ".m4a"),
+            Map.entry(MediaTypes.WEBM, ".weba"));
 
     private final ProducerTemplate producerTemplate;
     private final TelegramMarkdownV2Renderer renderer;

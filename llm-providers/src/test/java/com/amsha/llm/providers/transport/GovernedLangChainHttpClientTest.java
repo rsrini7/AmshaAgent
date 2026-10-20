@@ -88,7 +88,7 @@ class GovernedLangChainHttpClientTest {
                         any(),
                         any(),
                         eq(true),
-                        any(java.net.http.HttpRequest.class), // fully qualified to disambiguate
+                        any(java.net.http.HttpRequest.class),
                         any());
 
         HttpRequest req = HttpRequest.builder()
@@ -111,8 +111,7 @@ class GovernedLangChainHttpClientTest {
         assertEquals(200, resp.statusCode());
         assertEquals("{\"result\":\"ok\"}", resp.body());
 
-        ArgumentCaptor<java.net.http.HttpRequest> reqCaptor = // fully qualified to disambiguate
-                ArgumentCaptor.forClass(java.net.http.HttpRequest.class); // fully qualified to disambiguate
+        ArgumentCaptor<java.net.http.HttpRequest> reqCaptor = ArgumentCaptor.forClass(java.net.http.HttpRequest.class);
         verify(transportService)
                 .send(
                         eq(OPENAI_URL),
@@ -123,7 +122,7 @@ class GovernedLangChainHttpClientTest {
                         reqCaptor.capture(),
                         any());
 
-        java.net.http.HttpRequest sentHttpReq = reqCaptor.getValue(); // fully qualified to disambiguate
+        java.net.http.HttpRequest sentHttpReq = reqCaptor.getValue();
         assertEquals("POST", sentHttpReq.method());
         assertEquals(OPENAI_URL, sentHttpReq.uri().toString());
         assertTrue(sentHttpReq.headers().firstValue("Authorization").isPresent());

@@ -12,6 +12,7 @@ import com.amsha.classifier.api.ClassifierResult;
 import com.amsha.classifier.api.ToolRiskPrediction;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.security.api.AutonomyLevel;
+import com.amsha.security.api.ToolOperation;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +35,12 @@ class ToolRiskShadowEvaluationServiceTest {
                 null,
                 false);
         ToolRiskShadowContext context = new ToolRiskShadowContext(
-                "coder", AutonomyLevel.FULL, "private_tool_name", Map.of("token", "private-secret"), "private goal");
+                "coder",
+                AutonomyLevel.FULL,
+                "private_tool_name",
+                ToolOperation.READ_FS,
+                Map.of("token", "private-secret"),
+                "private goal");
 
         service.observeProvisionalAllow("test-session-id", context);
 
@@ -64,7 +70,7 @@ class ToolRiskShadowEvaluationServiceTest {
     void isolatesClassifierAndExecutorFailureAsBoundedNoOpinion() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ToolRiskShadowContext context =
-                new ToolRiskShadowContext("coder", AutonomyLevel.FULL, "tool", Map.of(), "goal");
+                new ToolRiskShadowContext("coder", AutonomyLevel.FULL, "tool", ToolOperation.READ_FS, Map.of(), "goal");
         new ToolRiskShadowEvaluationService(
                         List.of(ignored -> {
                             throw new IllegalStateException("sensitive");

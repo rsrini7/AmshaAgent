@@ -1,10 +1,12 @@
 # Java Test Coverage — Deep Analysis and Prioritized Action Plan
 
-> **Status**: **CLOSED / COMPLETE** (2026-09-16)  
-> **Recorded outcome (2026-09-16)**: The full-reactor snapshot recorded **8,301 passing Java/JUnit tests** and **84.28% reactor line coverage**, surpassing the 82.00% JaCoCo build floor. Re-run a clean full-reactor build before treating this snapshot as current evidence.
-> **UI companion snapshot (2026-09-12)**: Vitest recorded **172 passing tests**, 0 failures and 0 errors, with **58.67% line coverage** (4,665/7,951 lines). UI and Java percentages have different denominators and are measured by separate pipelines.
-> **Gate Ratchet**: Root `pom.xml` `<jacoco.minimum.line.coverage>` permanently locked at **`0.82`** (82.00%).  
-> **Test Suite**: **8,301 passing Java tests** recorded across 28 child modules with 0 failures and 0 errors.
+> **Status**: **Original coverage-plan checkpoint closed** (2026-09-16); later branch follow-ups are recorded below.
+> **Recorded outcome (2026-09-16, at closure)**: The full-reactor snapshot recorded **8,301 passing Java/JUnit tests** and **84.28% reactor line coverage**, surpassing the 82.00% JaCoCo build floor.
+> **Latest measurement (2026-09-29)**: **8,530 passing tests** (8,500 Surefire + 30 Failsafe) at **84.17%** (52,507 / 62,379 lines). Re-run a clean full-reactor build before treating either figure as current evidence.
+> **Latest measurement (2026-10-03)**: **9,463 tests executed** (9,433 Surefire + 30 Failsafe; 0 failures, 0 errors, 9 skipped) at **86.94%** (54,428 / 62,607 lines), 29/29 modules, `./mvnw -o clean verify` in 11:12. The figure reconciles exactly with the on-disk reports. The README **coverage** badge carries this 86.94%; its **test** badge carries all three counts at once — `9454 passed · 9 skipped of 9463` — so "total", "passed" and "skipped" are never conflated the way they were when the badge showed a single `_passing` figure that silently meant either total-executed or total-passed. The reactor denominator **grows** as tests are added — a percentage can fall while covered lines rise, so compare covered/total, not the percentage alone. The covered count is **not bit-stable**: successive runs of near-identical trees have measured 54,146, 54,152, 54,215, 54,261, 54,319, 54,427 and 54,428 lines (the last two from the same tree on 2026-10-03), so treat a single-digit spread as noise rather than drift. Read per-class figures from `target/site/jacoco/jacoco.csv` only — the sibling `target/jacoco-report/` tree is not the source the gate consumes and can be wrong.
+> **UI companion snapshot (2026-09-30)**: Vitest recorded **195 passing tests**, 0 failures and 0 errors, with **59.26% line coverage** (4,838/8,163 lines). UI and Java percentages have different denominators and are measured by separate pipelines.
+> **Gate Ratchet**: Root `pom.xml` `<jacoco.minimum.line.coverage>` permanently locked at **`0.82`** (82.00%). These two badges are no longer hand-maintained: `mise run quality:coverage-sync` rewrites both from the same Surefire/Failsafe and JaCoCo reports the gate reads, and fails loudly if a badge cannot be found rather than leaving it stale. Because the task overwrites a committed number, it also **refuses to publish a smaller total**: a module that declares `src/test` but reported no tests (what `./mvnw -pl core test` leaves behind — 3,625 instead of 9,463) aborts the sync by name, as does any decrease below the published figure unless `--allow-decrease` is passed for a deliberate test removal.  
+> **Test Suite (2026-09-16)**: **8,301 passing Java tests** recorded across 28 child modules with 0 failures and 0 errors.
 > **Scope**: Multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator, JDK 25, Quarkus 3.39.3).  
 > **Method**: Full-reactor test execution + JaCoCo 0.8.15 line/branch/method analysis, cross-referenced with a static test-reference scan.
 
@@ -42,9 +44,9 @@ threshold* in `pom.xml`. The measured number happened to land just above it — 
 `onboarding` (2,685 lines, 4.5% of the reactor) was recorded as 0% covered, and the gate that consumed the number
 was not running at all.
 
-> **The floor has since been raised to `0.74`.** With both defects fixed, `0.70` was four points below reality and
-> permitted a silent 4.5pp decline. `pom.xml` now carries `0.74` with a comment explaining the headroom; CI reads
-> the value from the POM rather than duplicating it. See §10 item 2.
+> **The floor has since been raised twice: `0.70` → `0.74` → `0.82`.** With both defects fixed, `0.70` was four
+> points below reality and permitted a silent 4.5pp decline. `pom.xml` carries the live value (`0.82` today) with a
+> comment explaining the headroom; CI reads it from the POM rather than duplicating it. See §10 item 2.
 
 > **Phase 1 progress (same day).** Coverage has since risen to **76.10%** (45,657 / 59,997) — **+951 lines,
 > +1.59pp** over the 74.51% baseline above — measured from 6,528 tests in 905 suites, 0 failures, 0 errors,
@@ -114,9 +116,9 @@ was not running at all.
 > remaining gap in the package.
 >
 > The headline figure above is deliberately **left at 74.51%**: it is the measurement that anchored the ratchet,
-> and overwriting it would erase the evidence that the floor was set correctly. `0.74` is still the gate, and the
-> next step (`0.74` → `0.75`) is now well within reach — `0.75` sits ~1.10pp (~660 lines) below measured
-> coverage, against run-to-run jitter of ~2 lines, so it can be raised deliberately rather than reflexively.
+> and overwriting it would erase the evidence that the floor was set correctly. The floor has since been ratcheted
+> on to `0.82`, so the next-step arithmetic recorded here (`0.74` → `0.75`) is historical — re-derive any proposed
+> raise against the current gate and a fresh full-reactor report.
 
 ### 1.3 Dead code found while raising coverage
 
@@ -349,6 +351,7 @@ Phase 0 (restore measurement integrity) was implemented alongside this analysis.
 | 0.6 Stale docs | **Fixed** | `docs/TESTING_GUIDE.md` corrected in four places. Rather than swap one literal for another, §1.6 now states the acceptance rule as "0 failures, 0 errors, no drop in count" and points at `mise run test:summary` to derive the current number — the hard-coded "1664" had drifted by ~4,500 tests. |
 | 0.7 `mise run test:summary` reported **0 tests** | **Fixed** | Found while validating 0.6. The task aggregated surefire XML with `rg`, which is **not declared in `[tools]`** and therefore absent on a clean checkout; because stderr was discarded, the task printed a confident `Total: 0` instead of failing. Replaced with POSIX `find`/`grep`/`awk` and added an explicit empty-state message. Now reports `Total: 6199 … Suites: 900`. |
 | 0.8 `./mvnw verify` was broken — the gate had **never run** | **Fixed** | Discovered while validating 0.1. `maven-failsafe-plugin` inherited only `<argLine>` from the parent, so integration tests booted Quarkus as `prod`; `StartupSecurityValidator` then aborted on the missing audit HMAC key, the build died in `verify`, and `jacoco-coverage-check` — bound to that same phase — was never reached. Fixed by giving Failsafe the same `systemPropertyVariables` as Surefire (notably `quarkus.profile=test`). `SessionOwnershipIT` went 1 error → **5/5 pass**. See §1.2. |
+| 0.9 Python runtime unpinned in `[tools]` | **Open** | Same family as 0.7 (`rg` not declared in `[tools]`), but for the interpreter itself. `mise.toml [tools]` pins java, maven, powershell, node, gh, go and sonar-scanner yet **no Python**, while CI pins **3.12** (`actions/setup-python`, four jobs). 18 files under `.mise/tasks/` plus 3 inline `mise.toml` references invoke bare `python3`, so local tasks run on whatever the host provides — macOS defaults to 3.9. Two scripts broke on a 3.9 host while CI stayed green: `analyze_jacoco_coverage.py` (`float \| None` needs 3.10+, raised `TypeError` at import, which `mise.toml` line 148 then discarded via `2>/dev/null`, so the coverage summary vanished silently) and `check_llm_preflight.py` (`HTTPError(fp=None).close()` raises `KeyError('file')` because the `fp=None` constructor skips `__init__` on the `tempfile._TemporaryFileWrapper` half of `addinfo`'s MRO, turning a successful reachability probe into a crash). Both instances are **fixed** — the coverage script needs `from __future__ import annotations`, the preflight close is wrapped in `contextlib.suppress`, and both suites are green on 3.9, 3.11 and 3.14 — but the *class* is open until `python` is pinned. **CI's 3.12 was not verified locally**; it is untested because no 3.12 interpreter is installed on this host. See `docs/MISE_SETUP.md` §3. |
 
 Verified after the changes: full reactor `./mvnw --batch-mode clean verify` → **BUILD SUCCESS, exit 0, all 29 projects
 green, 6,199 tests, 0 failures, 0 errors, 7 skipped** (confirming the 0.4 timeout guard breaks nothing); the gate
@@ -500,19 +503,43 @@ pom.xml                          jacoco-maven-plugin 0.8.15
   report         (verify)        → target/site/jacoco/jacoco.csv
   antrun         (initialize)    → touch target/jacoco.exec   ← creates a 0-byte file
 app/pom.xml                      antrun (verify)
-  → scripts/verify_jacoco_coverage.py --minimum 0.74
-scripts/quality/verify_jacoco_coverage.py   sums LINE_MISSED/LINE_COVERED across modules; fails < 74%
-scripts/quality/analyze_jacoco_coverage.py  ranks gaps; --target default 0.80
+  → scripts/verify_jacoco_coverage.py --minimum ${jacoco.minimum.line.coverage}
+scripts/quality/verify_jacoco_coverage.py   sums LINE_MISSED/LINE_COVERED across modules; fails < 82%
+scripts/quality/analyze_jacoco_coverage.py  ranks gaps; --target default 0.80; --modules for per-module totals
 mise run test:summary                       surefire counts + jacoco summary + UI coverage
+mise run quality:coverage                   summary + per-module line/branch totals (reads existing reports)
+mise run quality:coverage-gate              the gate standalone: ~1 s instead of an ~11 min reactor
+mise run quality:coverage-gaps              top gaps with the missed line numbers to target
+mise run quality:py-tests                   the Python script/harness contract suites
 ```
 
-> The `0.74` floor is defined once, in `pom.xml` as `jacoco.minimum.line.coverage`. `app/pom.xml` passes the
-> property through, and the CI step reads it out of the POM with `sed` rather than hardcoding a copy — the old
-> duplicated `0.70` is how the floor silently drifted four points below reality.
+> The floor is defined once, in `pom.xml` as `jacoco.minimum.line.coverage` — currently **`0.82`**. `app/pom.xml`
+> passes the property through, and the CI step reads it out of the POM with `sed` rather than hardcoding a copy —
+> the old duplicated `0.70` is how the floor silently drifted four points below reality.
 >
 > `analyze_jacoco_coverage.py` was realigned in the same pass: its `--target` default moved `0.72` → `0.80` (the
-> goal recommended in §8, and now above the gate) and its badge colour bands moved `0.70` → `0.74`, so the badge
-> can no longer read "green" at a coverage level the build would reject.
+> goal recommended in §8, and now above the gate). Its badge colour band no longer hardcodes a threshold at all —
+> `badge_color(pct, gate)` reads the live gate from the root POM through `build_gate()`, so the badge cannot read
+> "green" at a coverage level the build would reject. An earlier revision hardcoded `0.74`, which went stale the
+> moment the gate moved to `0.82`; reading the POM is what prevents that class of drift.
+>
+> `--modules` was added for the per-module view (§3, §10 item 3). It is a separate flag rather than an overload of
+> `--module` because the two answer different questions: `--module <mod>` *filters the class gap ranking* to one
+> module, whereas `--modules` *aggregates to module totals* (line and branch) across the whole reactor, weakest line
+> coverage first, with a `TOTAL` row. It reuses the rows `read_gaps()` already returns — no second CSV parse and no
+> second glob, which matters because a recursive `**/jacoco.csv` glob also matches the reactor-wide aggregate under
+> `target/jacoco-report/` and inflates the totals roughly 34×. The check that the aggregation is honest is that its
+> `TOTAL` row reproduces the reactor figure exactly: **84.17% (52,507 / 62,379 lines)**, branch **68.21%**
+> (24,636 / 36,118).
+>
+> The four `mise run quality:*` lines above are thin wrappers over these same scripts, added because the gate and
+> the analyzer previously had **no task entry point at all** — `test:summary` was the only task touching coverage,
+> and it reports the reactor total only. Two consequences worth knowing: the gate normally runs *only* inside
+> `./mvnw verify` (an ~11 minute reactor), so `quality:coverage-gate` turns "am I still above the floor?" into a
+> ~1 second check against reports already on disk; and `quality:py-tests` runs the contract suites CI runs plus
+> the two it does not (`test_verify_docs.py`, `test_jacoco_lines.py`), which are green but otherwise unguarded.
+> All four read existing reports and never build, and they print their own diagnostics to **stderr** so that
+> `--json` and `--badge` output on stdout stays parseable.
 
 **Integrity problems in this pipeline — with current status:**
 
@@ -520,10 +547,10 @@ mise run test:summary                       surefire counts + jacoco summary + U
   the only phase that reaches the gate. The pre-existing `jvm-validation` job still builds with `-DskipTests` and
   exercises the running JAR over HTTP — that job is a smoke test, not a coverage check, and both are needed.
 - ~~**`verify` never completed.**~~ **Fixed (§1.2.1).** The gate was bound to a phase the build never reached.
-- ~~**`--minimum 0.70` was four points stale.**~~ **Fixed.** The floor is now `0.74` against a measured 74.51%
-  (§10 item 2).
+- ~~**`--minimum 0.70` was four points stale.**~~ **Fixed.** The floor is now `0.82`, read from the POM rather
+  than duplicated in the script (§10 item 2).
 - ~~**`analyze_jacoco_coverage.py --target` defaulted to `0.72`.**~~ **Fixed.** Now `0.80`, above the gate; the
-  badge colour bands moved to `0.74` with it.
+  badge colour band is derived from the live POM gate rather than a hardcoded threshold.
 - **The `touch jacoco.exec` step still masks missing instrumentation.** Its stated purpose is to stop JaCoCo from
   skipping reports for modules with no tests. The side effect is that a module whose agent silently fails
   produces a *valid-looking but empty* report showing 0% — indistinguishable from "no tests exist". This is exactly
@@ -537,6 +564,28 @@ mise run test:summary                       surefire counts + jacoco summary + U
 ## 3. Measured baseline by module
 
 Sorted ascending by line coverage. `missed` = uncovered lines (the absolute size of each gap).
+
+> **This table is the analysis-time baseline (2026-09-15/16), not the current state.** It is retained because the
+> phases below are measured against it. Most rows have moved since; the current figures are listed below as of
+> 2026-09-29, and `python3 scripts/analyze_jacoco_coverage.py --modules` is authoritative for all of them.
+>
+> - **Moved up:** `persistence-postgres` 66.06 → **99.49**, `persistence-sqlite` 70.40 → **99.63**,
+>   `persistence-fs` 76.85 → **99.43**, `llm-providers` 65.80 → **97.88**, `sandbox` 65.04 → **91.39**,
+>   `security` 75.29 → **88.93**, `skills` 66.28 → **79.90**, `channel-telegram` 68.82 → **81.75**,
+>   `app` 69.18 → **81.23**, `tools-builtin` 67.41 → **76.18**, `core` 78.19 → **83.06**,
+>   `local-ml-onnx` 72.63 → **75.50**, `self-evolve` 71.67 → **73.13**, `mcp` 78.05 → **78.42**.
+> - **Unchanged:** `tool-api` 35.83, `common` 35.90, `persistence-api` 67.67, `deployment` 69.66, `memory` 72.69,
+>   `channel-web` 78.07, `persistence-common` 81.82, `onboarding` 82.31, `rag` 83.29, `llm-provider-api` 83.35,
+>   `channel-api` 84.51, `security-api` 95.90.
+> - **Moved down:** `classifier-api` 100.00 → **79.08**. The Jev decision plane added **32 new contract types**
+>   (+3,380 source lines) and took the module from **73** to **1,372** instrumented lines (+1,299), so the `100.00`
+>   in the row below is historical; the residual is concentrated in `DecisionPayloadDecoder` (83 missed) and
+>   `InMemoryDecisionEngine` (33).
+>
+> For current per-module figures, run `python3 scripts/analyze_jacoco_coverage.py --modules` — it prints line and
+> branch totals for every module, weakest line coverage first, plus a reactor `TOTAL` row. Add
+> `--modules --module <module>` for a single module, or `--modules --json` for machine-readable output. Note that
+> `--module` on its own only *filters the class gap ranking*; it does not produce per-module totals.
 
 > **Four rows differ from the first draft of this table.** `onboarding` was listed at 0.00% — a measurement defect,
 > not a coverage level (see §1.2.2); it is in fact one of the better-covered modules at **82.31%**. `app` rose from
@@ -594,11 +643,19 @@ branch percentage is undefined rather than 0% or 100%. It is 1.5% of nothing; ig
 | persistence-postgres | 465 | 3.0% |
 | security | 407 | 2.7% |
 
-Denominator: **15,291 uncovered lines** (59,997 total − 44,706 covered).
+Denominator: **15,291 uncovered lines** (59,997 total − 44,706 covered) — the analysis-time baseline, as above.
 
 **`core` + `app` + `llm-providers` = 57.6% of all uncovered lines.** One third of the entire remaining gap is
 `core` alone. The `onboarding` measurement fix has already been banked — it moved the reactor from 70.83% to
 **74.51%** without a single test being written, and `onboarding` no longer appears as a gap at all.
+
+> **The shape of this table has since changed, and the shares above are baseline-scoped.** The denominator is now
+> **9,872** uncovered lines, down from 15,291. `llm-providers` has left the list entirely (1,388 → **86** missed),
+> and `core` is now **4,207** missed — **42.6%** of the remaining gap, up from 33.5%, not because `core` regressed
+> but because every other row shrank faster than it did. The current top ten by missed lines are: `core` 4,207,
+> `app` 1,404, `local-ml-onnx` 627, `mcp` 520, `tools-builtin` 511, `onboarding` 475, `classifier-api` 287,
+> `self-evolve` 244, `llm-provider-api` 213, `persistence-api` 194. Regenerate with
+> `python3 scripts/analyze_jacoco_coverage.py --modules`.
 
 ### A note on what "untested class" does and does not mean
 
@@ -619,8 +676,16 @@ module's test sources. Cross-referencing against measured coverage materially na
 
 ## 4. Worst branch coverage — the real weak spot
 
-Branch coverage is **58.31%** versus **78.85%** method and **74.51%** line. The classes below are *partially*
-covered — the happy path works, the decision lattice does not.
+> **Analysis-time baseline (2026-09-15/16) — not the current state.** Branch coverage is now **68.21%**
+> (24,636 / 36,118) against **84.17%** line. Phases 3, 3b and 4 closed most of the cron/checkpoint and
+> provider-wrapper rows below. The most decision-blind classes *today* are
+> `core.GovernedHttpDnsPinning` (134 missed branches / **6.9%**), `core.GovernedHttpClient` (83 / 39.0%),
+> `core.TextPatternUtils` (75 / 47.9%) and `classifier-api.DecisionPayloadDecoder` (107 / 53.5%) — the first
+> two are the SSRF-relocation classes **this branch introduced**, so they are the sharpest branch-coverage
+> regression in the reactor and the best-value branch target available.
+
+At the time of this analysis, branch coverage was **58.31%** versus **78.85%** method and **74.51%** line. The
+classes below are *partially* covered — the happy path works, the decision lattice does not.
 
 | Missed branches | Branch % | Class |
 |---:|---:|---|
@@ -649,6 +714,13 @@ decision-blind class in the reactor.
 
 ## 5. Top uncovered classes by absolute line gap
 
+> **Analysis-time baseline (2026-09-15/16) — not the current state.** Most of these gaps have since been
+> closed. The largest *current* gaps are `core.GovernedHttpDnsPinning` (126 missed / 10.0%),
+> `app.OidcIdentityProvider` (107 / 39.5%), `classifier-api.DecisionPayloadDecoder` (83 / 68.6%) — a
+> decision-plane class added by this branch — `core.GovernedHttpClient` (80 / 53.5%) and
+> `skills.SkillsJarSkillProvider` (75 / 70.8%). Run
+> `python3 scripts/analyze_jacoco_coverage.py --top 20 --lines` for the live ranking.
+
 | Missed | Covered | Line % | Missed branches | Class |
 |---:|---:|---:|---:|---|
 | 123 | 123 | 50.0 | 65 | `core.agent.loop.CheckpointResumeHandler` |
@@ -674,12 +746,19 @@ decision-blind class in the reactor.
 | 61 | 149 | 71.0 | 39 | `core.agent.loop.ToolStepHandler` |
 | 54 | **0** | **0.0** | 44 | `core.tools.DynamicToolSchemaParser` |
 
-Classes at a literal **0%** with meaningful size: `core.tools.DynamicToolSchemaParser` (54),
+Classes at a literal **0%** with meaningful size, **as measured at the analysis date**: `core.tools.DynamicToolSchemaParser` (54),
 `app.api.IdentityResourceHelper` (82), `app.db.DbQueryAstScanner` (74), `app.api.DbConsoleTenantResolver` (60),
 `persistence-fs.FsEvolutionEventStore` (40), `common.HtmlArtifactUtil` (37), `skills.ClasspathSkillProvider` (28),
 `common.BackoffRetryExecutor` (28), `app.config.BackendValidator` (23), `app.config.SandboxValidator` (17),
 `app.security.ActiveWorkspaceFilter` (18), `self-evolve.PostgresDirectiveStore` (21),
 `llm-provider-api.LlmExceptionClassifierChain` (21), `memory.TieredMemoryProducer` (17).
+
+**As of 2026-09-29 that list has shrunk to 16 classes**, and only five of the originals survive
+(`HtmlArtifactUtil`, `BackoffRetryExecutor`, `PostgresDirectiveStore`, `LlmExceptionClassifierChain`,
+`TieredMemoryProducer`): the rest were closed by Phase 5 slices. The current largest dark classes are
+`app.McpImportResource` (42), `common.HtmlArtifactUtil` (37), `app.McpSetupResource` (30) and
+`common.BackoffRetryExecutor` (25). The decision plane added one more — `classifier-api.StateProjectionPolicy`
+(14 lines, 0.00%) — which sits just under the size threshold used above.
 
 ---
 
@@ -697,6 +776,14 @@ The good news first — the **mandatory safety machinery is genuinely well teste
 | `@Transactional` placement rules | Yes — `TxReflectionTest` asserts TxType per method |
 
 Gaps on the critical path:
+
+> **Update (2026-09-29) — four of the five gaps below are now closed.** The table is retained as the
+> analysis-time record. *Native reflection registration* is covered by `NativeReflectionCompletenessTest`
+> (Phase 6). *Migration parity* was closed by the Phase 3 Flyway-parity slice. *Store-port parity* was closed
+> by the Phase 3 cross-backend contract suites. *Cron store branch coverage* was closed by Phase 3b, which
+> took `persistence-postgres` / `persistence-sqlite` / `persistence-fs` to **99.49% / 99.63% / 99.43%** line.
+> The fifth row (the unenforced coverage gate) was a defect rather than a gap and was fixed in CI
+> (§1.2.1, §1.2.3).
 
 | Gap | Evidence | Risk |
 |---|---|---|
@@ -772,6 +859,12 @@ Solid in `core` (78%) and the API modules. Weakest in `llm-providers` (65.8%), `
 `channel-web` have **zero** `@QuarkusTest` classes — everything is plain-JUnit or Mockito-based, so CDI wiring,
 bean resolution, and startup ordering for those modules are never exercised end-to-end.
 
+> **These counts are static because coverage cannot answer this question.** Surefire and Failsafe share one
+> `jacoco.exec` per module, so the report cannot say which lines the `*IT` suite alone covers (§11). The table is
+> a count of `@QuarkusTest` annotations in test sources, not a measurement. The reactor has **9 `*IT` classes**
+> (`core` 4, `app` 3, `local-ml-onnx` 2) contributing **30 Failsafe tests** — note that one of them,
+> `DecisionShadowEvaluationIT`, is a plain JUnit class despite the `*IT` name, so it is not a CDI-boot test.
+
 | Module | Test files | `@QuarkusTest` | Mockito |
 |---|---:|---:|---:|
 | core | 361 | 41 | 201 |
@@ -799,8 +892,10 @@ covered). Concentrated in:
 1. ~~**No global timeout guard.**~~ **Fixed (0.4).** The root `pom.xml` now sets
    `junit.jupiter.execution.timeout.default=5 m` and `forkedProcessTimeoutInSeconds=900` as overridable properties.
    Note the first attempt used `PT5M`, which the JUnit Platform **silently ignores** — see §1.1.
-2. **No architecture/invariant guard for reflection configs** (see §6).
-3. **No migration or cross-backend parity assertions.**
+2. ~~**No architecture/invariant guard for reflection configs** (see §6).~~ **Closed (2026-09-16)** —
+   `NativeReflectionCompletenessTest` under `app` (see the Phase 6 status below).
+3. ~~**No migration or cross-backend parity assertions.**~~ **Closed (2026-09-15)** — the Phase 3
+   Flyway-migration parity slice and the cross-backend store-port contract suites.
 4. **Test isolation defects.** `InteractiveSetupWizardTest` and `BootstrapOrchestratorTest` drive real
    production bootstrap code that reads `System.in`, writes `app/.env`, and shells out to `npm install -g`.
    `app/.env` is gitignored so the repo is not polluted, but a unit test performing a global npm install is
@@ -809,6 +904,11 @@ covered). Concentrated in:
 ---
 
 ## 8. Recommended target: **80% line / 62% branch**
+
+> **Reached and exceeded (2026-09-29).** The reactor now measures **84.17%** line and **68.21%** branch
+> (52,507 / 62,379 lines), so this section's recommendation is a *floor* rather than a goal. The binding
+> constraint is the root POM's `jacoco.minimum.line.coverage = 0.82` (§2, §10.2). Read the rest of this
+> section as the rationale for the target set on 2026-09-15, not as a statement of the current gap.
 
 **Why not 90%.** The 90% threshold is not reachable at reasonable cost in this codebase, and chasing it would
 degrade the suite:
@@ -2464,19 +2564,33 @@ Module movement: **2,306 → 2,153 missed, 69.17% → 71.21% (+2.04 pp), 153 lin
 102 → 99. Six new plain-JUnit test files, **106 new tests**; the module suite is **933 tests, 0 failures, 0 errors,
 2 skipped**.
 
-**Finding — a dead privilege-escalation guard, i.e. a real authorisation hole.** In
+**Finding — a dead privilege-escalation guard: redundant today, a latent trap for reuse.** In
 `IdentityResourceHelper.validateInvitationRole`, the third guard requires `!"OWNER".equals(callerRole)` **and** a
 normalized role outside `{ADMIN, MEMBER}`. `isValidRole` has already narrowed the role to `{OWNER, ADMIN, MEMBER}`, so
 "outside `{ADMIN, MEMBER}`" means `OWNER` — and any `OWNER` request from a non-owner already returned at the second
-guard. The third guard can therefore **never fire**, and a `MEMBER` really can invite an `ADMIN`:
+guard. The third guard can therefore **never fire**, and the helper in isolation allows:
 
 ```java
 IdentityResourceHelper.validateInvitationRole("MEMBER", "ADMIN")   // returns null (allowed)
 ```
 
-This is the "guard on a closed set that an earlier guard already exhausted" shape. Reported, not "fixed" — the test
-pins the actual behaviour and names the finding, so a future change is noticed. **This one is worth a human decision
-rather than a coverage-driven edit.**
+**Corrected 2026-10-01 — this is not a live authorisation hole.** The helper has exactly one caller,
+`IdentityResource.createInvitation`, and that method rejects any caller whose *active membership role* is not
+`OWNER` or `ADMIN` **before** it calls the helper (`IdentityResource.java:123`). So `callerRole` is `OWNER` or
+`ADMIN` in production, and the `MEMBER` case above cannot be reached through the API. For that reachable caller set
+the third guard is fully redundant: an `OWNER` has no higher role to grant, and an `ADMIN`'s only higher role is
+`OWNER`, which the second guard already blocks. `IdentityResource` exposes no role-update endpoint at all — roles are
+assigned only by invitation creation (gated) and ownership transfer (gated to `OWNER`) — so there is no second path
+in. The earlier wording here ("i.e. a real authorisation hole", "a `MEMBER` really can invite an `ADMIN`") described
+the helper in isolation and overstated its production impact.
+
+The residual risk is therefore *future*, not present: the helper reads as though it defends itself, but its safety
+property actually lives in a different file. Reusing it from a new call site, or relaxing the caller gate, would
+silently permit the escalation the third guard appears to prevent. This is the "guard on a closed set that an
+earlier guard already exhausted" shape. Reported, not "fixed" — the test pins the actual behaviour and names the
+finding, so a future change is noticed. **Worth a human decision rather than a coverage-driven edit:** either make
+the helper self-defending (reject a caller role outside `{OWNER, ADMIN}`, and compare roles by rank) or delete the
+dead guard so the contract is honest.
 
 **Finding — `DbQueryAstScanner.visit(ParenthesedSelect)` is unreachable under JSqlParser 4.9.** The override looks
 live and is even exercised by every nested-subquery test, but the dispatch never lands on it. `Select` implements
@@ -2490,6 +2604,22 @@ live and is even exercised by every nested-subquery test, but the dispatch never
 and static overload resolution — compiled inside `Select`, where `this` is `Select` — always selects `visit(Select)`.
 The behaviour is still correct (`visit(Select)` → `visitSelect` handles `ParenthesedSelect` at lines 100–105), so this
 is redundancy, not a bug. `visit(ParenthesedSelect)` is nonetheless dead and cannot be reached without reflection.
+
+**Independently verified 2026-10-01 — and the protection is stronger than this finding implies.** The scanner feeds a
+security control, not just a report: `DbQueryValidator.checkSchemaColumns` rejects any scanned column that is not on
+the metadata allowlist, so *completeness of the traversal* is what stops `sql` (the full DDL) being smuggled out of
+`sqlite_master`. "Redundancy, not a bug" therefore deserved checking rather than assuming. It holds — `visitSelect`
+handles `ParenthesedSelect` at 100–105, and `scanBody` covers parenthesized subqueries in `fromItem` (115), in joins
+(135), and in expression positions via `accept`, which routes a `ParenthesedSelect` through `visit(Select)`.
+
+The more useful conclusion is that scanner completeness is **not** the only protection. `validateTablesAndSchemaColumns`
+independently requires a referenced metadata table to be the *direct root FROM* table, with no joins **and no CTEs**
+(`select.getWithItemsList()` must be empty), and `TablesNamesFinder` supplies the table list separately. So a CTE such
+as `WITH x AS (SELECT sql FROM sqlite_master) SELECT name FROM x` is rejected by that coarser guard before column
+scanning is ever reached, and a future scanner regression — a subquery carrier that `scanBody` fails to descend into —
+would not by itself open a DDL-exfiltration path. Scanner completeness is defence in depth here, not the sole control.
+Both suites are green: `DbQueryAstScannerTest` 16, `DbQueryValidatorTest` 21, including the
+`WITH v AS (SELECT * FROM session_history_view) SELECT * FROM v` and `IN (SELECT sql FROM sqlite_master)` cases.
 
 **Finding — `DbQueryAstScanner.scanBody`'s null guard is dead.** The only caller is `visitSelect`, inside an
 `instanceof PlainSelect plainSelect` branch, so the parameter can never be null.
@@ -2864,6 +2994,113 @@ With the targets in `skills`, `local-ml-onnx`, and `app` scheduler addressed, Ph
   - `BatchHitlKeyboardBuilder`: Expanded tests with multi-tool batch rows (Approve All / Deny All), double-UUID cron compression/decompression, and token-overflow caching (line coverage raised to **89.8%**).
   - `TelegramChannelSender`: Expanded tests for `sendChatAction`, `editMessage`, and MarkdownV2 entity-parse error fallbacks (line coverage raised to **81.3%**).
 
+#### Phase 5 status (2026-09-29) — the Jev decision plane: contracts, wiring, and a zero-LLM-token REST validator
+
+The Jev decision plane landed on this branch as a **Deferred** seam: it adds contract surface and tests that
+pin its inert posture, but deliberately registers no production `DecisionEngine`. This adds no live routing
+or authorization decisions; enabled shadow classifiers report `MISSING_MODEL`, the router stays on its
+deterministic fallback, and the readiness bean emits its configured startup diagnostic.
+
+**What the branch added.** 37 new files under `*/src/test/**` (36 Java types — several of them support
+harnesses rather than test classes — plus a shadow-evaluation corpus) and 13 modified ones, 50 files in
+total. **31 of the 37 are decision-plane**; the other 6 belong to the SSRF-relocation, tool-guard and
+classifier-lifecycle work that ships alongside it. They occupy four layers, each covering something the
+others cannot:
+
+| Layer | Representative classes | Why the layer below cannot replace it |
+|---|---|---|
+| Contract / vocabulary (`classifier-api`) | `DecisionPlaneVocabularyTest`, `DecisionPlaneEvaluationTest`, `InMemoryDecisionEngineTest`, `IntentDecisionPolicyTest`, `ToolRiskDecisionPolicyTest` | Pure unit: pins the record shapes, the fail-closed `NoOpinion(MISSING_MODEL)` result and the policy tables with no container |
+| Wrapper integration (`core`) | `DecisionShadowClassifierTest`, `DecisionTelemetryTest`, `DecisionPlaneReadinessTest`, `RemoteDecisionEngineContractTest`, `SelfHostedDecisionEngineContractTest`, `StateProjectionRedactorTest` | Needs the real CDI wiring and the `Instance<DecisionEngine>` lookup semantics a hand-built object cannot reproduce |
+| End-to-end posture (`core` + `app`) | `DecisionShadowEvaluationIT` (+ 8 support types under `core/.../classifier/shadow`), `IntentDecisionRouter{Test,ApprovedConfigIT,PendingConfigIT,EmptyOwnerConfigIT}`, `DecisionShadowCdiWiringIT`, `DecisionShadowDeferredStateIT` | Failsafe / `@QuarkusTest`: only a booted application proves the plane is inert *and* that every gate/switch combination behaves as documented |
+| Deployed HTTP contract (`rest-http`) | `rest-http/scripts/validate_decision_plane.sh` | Nothing in the Java suite asserts the control plane's wire contract against a **running** server |
+
+**The zero-LLM-token REST validator is the genuinely new capability.** `validate_decision_plane.sh` runs 16
+assertions (`JEV-1`..`JEV-12`) against a live server with **no model bundle, no LLM or provider token**; it
+uses the normal internal API credential for authenticated admin requests. Because
+`classifierRuntimeStatus()` / `updateClassifier()` on `OnnxAdminResource` check only `isInternal()` and never
+`onnxEnabled`. It is wired into `--fast` rather than behind an opt-in flag, and `JEV-5`..`JEV-7` overlap
+`ONNX-5`..`ONNX-7` **deliberately** — the same invariants must hold with and without the ONNX bundle loaded.
+`docs/TESTING_GUIDE.md` §23.6.1 carries the full check list.
+
+**Two non-vacuity probes worth reusing.** (1) The authorization probe was driven through a fake `curl` on `PATH` with a
+deliberate `auth_regressed` scenario, and the startup-warning expectation was proven by removing a switch
+from the environment. (2) *Mutation-free negative probes* — the "mutation requires an internal key" check
+targets an **unknown** classifier id, so a regressed `isInternal()` still fails the assertion (it falls
+through to `400 unknown_classifier`, never `403`) while the probe can never change live state. That matters
+because `TEST_BASE` may point the validator at a real instance.
+
+**Module effect.** `classifier-api` went **100.00% → 79.08%** (73 → 1,372 instrumented lines, +1,299) — the
+only module that moved *down*, because it absorbed 32 new contract types. Residual gaps:
+`DecisionPayloadDecoder` (83 missed / 68.56%), `InMemoryDecisionEngine` (33 / 74.42%),
+`DecisionTransactionGuard` (21 / 51.16%), `DecisionRequest` (18 / 60.87%), `DecisionResult` (15 / 51.61%),
+`StateProjectionPolicy` (14 / **0.00%**). `core` reached **83.06%** and `app` **81.23%**; the reactor measured
+**84.17%** line / **68.21%** branch (52,507 / 62,379 lines; 8,500 Surefire + 30 Failsafe = **8,530** tests),
+still clear of the `0.82` floor. `StateProjectionPolicy` is the only outright dark class in the module and is
+the obvious next target here.
+
+**Cockpit surface added (read-only).** The branch previously changed no UI code, which left the
+decision plane's only operator surface — `GET /api/v1/admin/local-ml/onnx/classifiers` — invisible to
+operators. It now ships a read-only view at `#/classifiers` (`ui/src/components/arc-classifier-panel.ts`)
+plus 23 Vitest cases: 21 for the panel and 2 for the new `ArcClient.getClassifierRuntimeStatus()`.
+The panel derives its state from `effectiveEnabled` rather than `requestedEnabled`, renders an explicit
+*internal role required* notice for a `403` instead of an empty slot list, keeps that distinct from `401`
+and from a CSRF `403`, and treats a `200` that omits any of the three slots as a malformed contract. It
+carries **no** enable/disable control and **no** activation-gate claim, and a test pins both: the phrase
+"activation gate" must appear exactly once (inside the mandatory scope notice) and the panel must render
+exactly one `<button>`. The new component measures **81.77% line / 79.41% branch**, above the UI average.
+UI suite: **195 passing** at **59.26%** line coverage (was 172 at 58.67%). The UI contract path is
+unchanged — hand-written `ArcClient` and `ui/src/api/types.ts`; see
+[ARCHITECTURE](./ARCHITECTURE.md) §"Cockpit API contract ownership".
+
+#### Phase 5 — decision-plane evaluation path (2026-10-07): **proposed, no code yet**
+
+Nothing in this section moves a coverage number, because nothing has been implemented. It is recorded
+here so the next coverage cycle does not read the evaluation path as unplanned work.
+
+A production-grade design for the deferred plane's missing capability — an explicit, opt-in,
+non-routing **evaluation path** that can make a real credentialed provider call without registering a
+`DecisionEngine` bean — is specified in
+[ADR-jev-decision-plane-evaluation-path](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md)
+(Status: **Accepted**, 2026-10-07) and the
+[activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md). Its test matrix
+(plan Appendix C.4) landed as ~10 new unit/IT classes across `core` and `app`, plus the new
+`validate_decision_plane.sh` checks `JEV-13` and `JEV-17` (with `JEV-14`, `JEV-15` and `JEV-18` covered by
+loopback integration tests, and `JEV-16` reserved for the PR-5 production-engine workstream).
+
+Coverage effect now that it has landed: `core` gains a factory, a governance validator, a credential
+resolver, an evaluation service, an evidence runner and a drift monitor — all new, all unit-testable,
+which should lift `core` rather than dilute it. `app` gains one internal-only admin resource whose
+authorization matrix is asserted in-container. The `0.82` reactor floor is unaffected by the design
+itself; per-class figures must be read from `jacoco.xml` after the fact, as always.
+
+#### Phase 5 — remaining work (2026-09-29)
+
+Measured against the target list at the top of this phase:
+
+| Roadmap target | Then | Now | Status |
+|---|---:|---:|---|
+| `app` `IdentityResourceHelper` | 82 missed / 0% | 3 / 96.3% | closed |
+| `app` `DbQueryAstScanner` | 74 / 0% | 4 / 94.6% | closed |
+| `app` `DbConsoleTenantResolver` | 60 / 0% | **0** / 100% | closed |
+| `app` `BackendValidator`, `SandboxValidator`, `ActiveWorkspaceFilter` | 23 / 17 / 18, all 0% | 0 / 0 / 0 | closed |
+| `app` `McpImportResource`, `McpSetupResource` | 44 / 39, both 0% | 42 / 30 | partial |
+| `skills` `ClasspathSkillProvider`, `DatabaseSkillProvider` | 28 / 16, both 0% | **0 / 0** | closed |
+| `skills` `SkillsJarSkillProvider` | 117 missed | 75 (70.82%) | partial |
+| `local-ml-onnx` `LocalOnnxAudioTranscriptionAdapter` | 77 missed | 60 (69.54%) | partial |
+| `local-ml-onnx` `LocalAudioTranscoder` | 65 / **23.8% branch** | 48 (57.89%) | partial |
+| `mcp.transport` `StdioMcpTransportClient`, `McpConnectionLifecycleOrchestrator` | 67 / 62 | **67 / 62** | **untouched** |
+| `onboarding` `SettingsResource`, `BootstrapResource` | 216 / 145, both 0% | 61 / 60 | partial |
+
+**Still open, in value order.** `mcp.transport` is now the largest untouched mass in the phase
+(`StdioMcpTransportClient` 67, `McpConnectionLifecycleOrchestrator` 62, `McpReflex` 61,
+`McpSetupTokenService` 50, `McpSelfRegisterTool` 45 — **285 lines across five classes, none of them
+CDI-dependent**). Then `app` (`PlaywrightCliInstaller` 70, `Vec0NativeLibraryInstaller` 59, `AuthResource` 56,
+`BootstrapOrchestrator` 46), `onboarding` (`SettingsResource` 61, `BootstrapResource` 60,
+`OnboardingSelectionScrubber` 59), `skills.SkillsJarSkillProvider` 75, and `local-ml-onnx`
+(`LocalOnnxAudioTranscriptionAdapter` 60, `OnnxShadowClassifierEngine` 56, `OnnxScoringRunner` 48).
+
+`app.OidcIdentityProvider` (107) and `app.GithubIdentityProvider` (50) remain **BLOCKED** — they make outbound
+HTTP calls through the JAX-RS client, which has no JSON `MessageBodyReader` outside a Quarkus container.
 
 ### Phase 6 — Cross-cutting invariant tests *(cheap, high value)*
 
@@ -2886,20 +3123,27 @@ Added `NativeReflectionCompletenessTest` under `app` (`app.config`), asserting t
 1. **CI enforcement (non-negotiable).** ✅ **In place** — the `java-tests` job runs `./mvnw verify` on every push
    and fails on the coverage gate. It must stay on `verify`: `package` reaches neither PMD nor JaCoCo.
 2. **Ratchet, don't just threshold.** ✅ **In place** — `jacoco.minimum.line.coverage` has been ratcheted
-   from `0.70` → `0.74` → **`0.82`** (82.00%). The latest recorded repository coverage is **84.28%**
-   (the exact numerator must come from a fresh clean full-reactor report), leaving measurable headroom so incidental churn does
+   from `0.70` → `0.74` → **`0.82`** (82.00%). The latest recorded repository coverage is **84.17%**
+   (52,507 / 62,379 lines), leaving measurable headroom so incidental churn does
    not trip the gate while locking in the 82% floor.
-3. **Per-module floor.** Add `--module`-level minimums (start at 60%) so `classifier-api` at 100% cannot
-   subsidise `persistence-postgres` at 66%.
-4. **Add a branch gate.** Line coverage is **74.51%** while branch is **58.31%** — a 16-point gap that a
-   line-only gate cannot see. Gate branch separately (start at 58%, target 62%). This is the largest remaining
-   hole in the enforcement story.
+3. **Per-module floor.** Add per-module minimums (start at 60%) so `persistence-fs` at 99.43% cannot
+   subsidise `tool-api` at 35.83%. The original example here — `classifier-api` at 100% subsidising
+   `persistence-postgres` at 66% — has expired at both ends: `classifier-api` is now **79.08%** and
+   `persistence-postgres` **99.49%**. The *measurement* half is now in place: `--modules` prints every
+   module's line and branch totals plus a reactor `TOTAL`, so the subsidisation is directly observable and
+   the per-module floor can be set from data rather than guesswork. What remains is *enforcement* — a
+   per-module minimum in the build, which is still a single reactor-wide number today.
+4. **Add a branch gate.** Line coverage is **84.17%** while branch is **68.21%** (24,636 / 36,118) — still a
+   ~16-point gap that a line-only gate cannot see. Gate branch separately (start at 68%, target 72%). This
+   remains the largest hole in the enforcement story.
 5. **Fail on empty module reports.** ✅ **In place** — `--strict-instrumentation` runs as a fatal CI step. This is
    the specific guard for the §1.2.2 failure class; keep it fatal.
 6. **Report the badge from a real run.** `analyze_jacoco_coverage.py --badge` exists; publish it only from CI.
-   The README badge was hand-corrected to 74.51% on 2026-09-14 — it should be generated, not typed.
+   The README badge was hand-corrected to 74.51% on 2026-09-14 and reads 84.17% as of 2026-09-29 — still typed
+   by hand, not generated. It should be generated, not typed.
 7. **Align `analyze_jacoco_coverage.py` with the gate.** ✅ **In place** — `--target` moved `0.72` → `0.80` (the §8
-   goal, and above the gate) and the badge colour bands moved `0.70` → `0.74`. Keep both above
+   goal, and above the gate) and the badge colour band is now derived from the live POM gate
+   (`badge_color(pct, gate)` via `build_gate()`) rather than a hardcoded threshold. Keep both above
    `jacoco.minimum.line.coverage`: the analyzer must not report "target met" for a level the build rejects.
 8. **Exclude non-logic from the target, explicitly.** Rather than a blanket 80%, define the denominator to
    exclude `*ReflectionConfig`, `*Metrics`, `*Constants`, and DTO records — then hold *logic* classes to a
@@ -2930,6 +3174,21 @@ mise run test:summary
   tests. Cross-module coverage (e.g. `core` code exercised from `app`'s `@QuarkusTest`) is attributed to the
   module where the class lives, but only when that module's own tests run it. This understates coverage for
   modules that are primarily consumed by `app`.
+- **Unit and integration coverage are merged, and cannot be separated.** Both Surefire (`*Test`) and Failsafe
+  (`*IT`) forks receive the JaCoCo agent via `@{argLine}` (`pom.xml:444, 464`), and both append to the **same**
+  `target/jacoco.exec` — there is no `destFile` override or per-phase exec file anywhere in the 29 poms. The
+  reported figure is therefore a union, and "what do the integration tests alone cover?" is **not answerable**
+  from these reports. This is why §7's integration table counts `@QuarkusTest` annotations statically instead of
+  reading coverage. To isolate the IT contribution you must do it by hand: `rm -f <mod>/target/jacoco.exec`,
+  run only the Failsafe phase, then `jacoco:report` — `jacoco.exec` is appended to, never replaced, so a stale
+  file silently merges the two phases.
+- **Out-of-JVM integration testing is invisible to every tool here.** The black-box layer — `scripts/distribution/`
+  (which drives `rest-http/scripts/run_all_validations.sh`, including the JEV decision-plane checks) and CI's
+  `jvm-validation` job (`clean package -DskipTests`, then HTTP against the running JAR) — exercises a packaged
+  server with **no `-javaagent`**. Neither directory contains a single `jacoco` or `javaagent` reference, so that
+  execution contributes **zero** lines to any `jacoco.exec`. Gaps that only a black-box test would expose cannot
+  be found by `--modules`, `--gaps`, or the gate. `--strict-instrumentation` is not a substitute: it detects a
+  module whose agent never attached, not an integration gap.
 - ~~**`app` and `onboarding` required separate runs.**~~ **No longer true.** Both were consequences of the defects
   fixed in §1.2 — the full-reactor run hung on `BootstrapOrchestratorTest` (0.3) and `verify` died before the gate
   (0.8). A single `clean verify` now runs the whole reactor green.

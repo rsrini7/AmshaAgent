@@ -3,20 +3,38 @@ package com.amsha.app.security;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import jakarta.ws.rs.ProcessingException;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.Entity;
+import jakarta.ws.rs.client.Invocation;
+import jakarta.ws.rs.client.WebTarget;
+import jakarta.ws.rs.core.Form;
+import jakarta.ws.rs.core.MediaType;
+
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.core.security.ExternalUserProfile;
 import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultKey;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * Tests for {@link OidcIdentityProvider}.
@@ -25,29 +43,31 @@ import org.junit.jupiter.api.Test;
  * construction (including PKCE, nonce, redirect resolution and percent-encoding), the RS256-only algorithm guard,
  * PKCE S256 derivation, JWT payload decoding, and every arm of id_token claim validation.
  *
- * <p><strong>Why {@code authenticate} is not covered here.</strong> It drives a JAX-RS
- * {@code ClientBuilder.newBuilder()…build()} client, and outside the Quarkus runtime that client has no
- * {@code MessageBodyReader} for {@code Map} + {@code application/json}, so every request fails before any of the
- * provider's logic runs:
+ * <p><strong>How {@code authenticate} is covered.</strong> A <em>real</em>
+ * {@code ClientBuilder.newBuilder()…build()} client cannot be driven from a plain unit test: outside the Quarkus
+ * runtime it has no {@code MessageBodyReader} for {@code Map} + {@code application/json}, so every request dies
+ * before the provider's logic runs:
  *
  * <pre>
  * Response could not be mapped to type interface java.util.Map for response with media type application/json.
- * Hints: Consider adding one the 'quarkus-rest-client-jackson' or 'quarkus-rest-client-jsonb' extensions
  * </pre>
  *
- * The provider is built from a real local {@code HttpServer} acting as the IdP, with genuinely RS256-signed JWTs,
- * and all of it fails on that mapping step — the form encoding, the JWKS lookup and the RSA verification are never
- * reached. Closing this needs a {@code @QuarkusTest} plus a stub-IdP {@code QuarkusTestResourceLifecycleManager};
- * no such test resource exists anywhere in this module, and the sibling {@code GithubIdentityProviderTest} leaves
- * its own HTTP path dark for the same reason. Recorded as a finding rather than worked around by mocking the
- * client (the field is {@code private final}, so replacing it would need reflection into a final field — and the
- * point of the test is the real request/verify path, not a stub of it).
+ * That wall is a property of the <em>implementation</em>, not of the field. {@code httpClient} is declared
+ * {@code private final Client}, and {@code jakarta.ws.rs.client.Client} is an interface, so replacing it with a
+ * Mockito mock chain ({@code Client → WebTarget → Invocation.Builder}) makes the whole path reachable — nothing is
+ * ever marshalled, because the stubbed {@code post(...)}/{@code get(...)} calls return plain {@link Map}s, which is
+ * exactly the type the production code casts them to. id_tokens are signed with a genuine RSA key pair whose public
+ * half is served as the JWKS, so the RS256 verification runs for real rather than being stubbed.
  */
 class OidcIdentityProviderTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String ISSUER = "https://idp.example.com";
     private static final String CLIENT_ID = "client-123";
+    private static final String TOKEN_URL = "https://idp.example.com/token";
+    private static final String USERINFO_URL = "https://idp.example.com/userinfo";
+    private static final String JWKS_URL = "https://idp.example.com/jwks";
+    private static final String KID = "kid-1";
 
     private OidcIdentityProvider provider;
 
@@ -59,10 +79,10 @@ class OidcIdentityProviderTest {
         setField("clientSecret", Optional.of("secret-456"));
         setField("clientSecretVaultKey", Optional.empty());
         setField("authorizationUrl", Optional.of("https://idp.example.com/auth"));
-        setField("tokenUrl", Optional.of("https://idp.example.com/token"));
-        setField("userinfoUrl", Optional.of("https://idp.example.com/userinfo"));
+        setField("tokenUrl", Optional.of(TOKEN_URL));
+        setField("userinfoUrl", Optional.of(USERINFO_URL));
         setField("issuer", Optional.of(ISSUER));
-        setField("jwksUrl", Optional.of("https://idp.example.com/jwks"));
+        setField("jwksUrl", Optional.of(JWKS_URL));
         setField("redirectUriConfig", Optional.of("https://app.example.com/callback"));
         provider.secretVault = mock(SecretVault.class);
     }
@@ -391,5 +411,470 @@ class OidcIdentityProviderTest {
         Map<String, Object> claims = Map.of("exp", future, "iss", ISSUER, "aud", CLIENT_ID);
 
         assertDoesNotThrow(() -> OidcIdentityProvider.validateIdTokenClaims(claims, ISSUER, CLIENT_ID, null));
+    }
+
+    // ---------- authenticate() over a mocked JAX-RS client ----------
+
+    private Client mockHttpClient;
+
+    private void installMockHttpClient() throws Exception {
+        mockHttpClient = mock(Client.class);
+        setField("httpClient", mockHttpClient);
+    }
+
+    /** Stubs {@code client.target(url)}; the returned builder's {@code get}/{@code post} yield {@code payload}. */
+    private Invocation.Builder stubEndpoint(String url, Map<String, Object> payload) {
+        Invocation.Builder builder = mock(Invocation.Builder.class);
+        when(builder.header(anyString(), any())).thenReturn(builder);
+        doReturn(payload).when(builder).get(eq(Map.class));
+        doReturn(payload).when(builder).post(any(Entity.class), eq(Map.class));
+        WebTarget target = mock(WebTarget.class);
+        when(target.request(any(MediaType[].class))).thenReturn(builder);
+        when(mockHttpClient.target(url)).thenReturn(target);
+        return builder;
+    }
+
+    private static Form capturedForm(Invocation.Builder builder) {
+        ArgumentCaptor<Entity> captor = ArgumentCaptor.forClass(Entity.class);
+        verify(builder).post(captor.capture(), eq(Map.class));
+        return (Form) captor.getValue().getEntity();
+    }
+
+    private static KeyPair newRsaKeyPair() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        return generator.generateKeyPair();
+    }
+
+    private static String signedIdToken(Map<String, Object> header, Map<String, Object> claims, PrivateKey key)
+            throws Exception {
+        String signingInput = b64(JSON.writeValueAsBytes(header)) + "." + b64(JSON.writeValueAsBytes(claims));
+        Signature signature = Signature.getInstance("SHA256withRSA");
+        signature.initSign(key);
+        signature.update(signingInput.getBytes(StandardCharsets.US_ASCII));
+        return signingInput + "." + b64(signature.sign());
+    }
+
+    private static Map<String, Object> jwks(PublicKey publicKey, String kid) {
+        RSAPublicKey rsa = (RSAPublicKey) publicKey;
+        Map<String, Object> key = new LinkedHashMap<>();
+        key.put("kty", "RSA");
+        key.put("use", "sig");
+        key.put("kid", kid);
+        key.put("n", b64(rsa.getModulus().toByteArray()));
+        key.put("e", b64(rsa.getPublicExponent().toByteArray()));
+        return Map.of("keys", List.of(key));
+    }
+
+    private static Map<String, Object> claimsWith(String name, Object value) {
+        Map<String, Object> claims = new LinkedHashMap<>(validClaims());
+        claims.put(name, value);
+        return claims;
+    }
+
+    private static Map<String, Object> claimsWithout(String name) {
+        Map<String, Object> claims = new LinkedHashMap<>(validClaims());
+        claims.remove(name);
+        return claims;
+    }
+
+    @Test
+    @DisplayName("authenticate returns the profile built from a signature-verified id_token, without touching userinfo")
+    void authenticateReturnsTheProfileFromAVerifiedIdToken() throws Exception {
+        KeyPair keyPair = newRsaKeyPair();
+        installMockHttpClient();
+        String idToken =
+                signedIdToken(Map.of("alg", "RS256", "kid", KID), claimsWith("nonce", "n-1"), keyPair.getPrivate());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+        Invocation.Builder userinfo = stubEndpoint(USERINFO_URL, Map.of("sub", "should-not-be-used"));
+        stubEndpoint(JWKS_URL, jwks(keyPair.getPublic(), KID));
+
+        ExternalUserProfile profile = provider.authenticate("code-1", "http://cb", "verifier-1", "n-1");
+
+        assertEquals("user-1", profile.providerUserId());
+        assertEquals("user@example.com", profile.email());
+        assertTrue(profile.emailVerified());
+        assertEquals("Test User", profile.displayName());
+        assertEquals("https://example.com/p.png", profile.avatarUrl());
+        verify(userinfo, never()).get(eq(Map.class));
+    }
+
+    @Test
+    @DisplayName("authenticate falls back to the userinfo endpoint when the token response has no id_token")
+    void authenticateFallsBackToUserinfoWhenNoIdTokenIsReturned() throws Exception {
+        installMockHttpClient();
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        Invocation.Builder userinfo = stubEndpoint(
+                USERINFO_URL,
+                Map.of(
+                        "sub",
+                        "user-9",
+                        "email",
+                        "u9@example.com",
+                        "email_verified",
+                        true,
+                        "name",
+                        "User Nine",
+                        "picture",
+                        "https://example.com/9.png"));
+
+        ExternalUserProfile profile = provider.authenticate("code-1", "http://cb");
+
+        assertEquals("user-9", profile.providerUserId());
+        assertEquals("u9@example.com", profile.email());
+        assertTrue(profile.emailVerified());
+        assertEquals("User Nine", profile.displayName());
+        assertEquals("https://example.com/9.png", profile.avatarUrl());
+
+        ArgumentCaptor<Object> headerValue = ArgumentCaptor.forClass(Object.class);
+        verify(userinfo).header(eq("Authorization"), headerValue.capture());
+        assertEquals("Bearer at-1", headerValue.getValue());
+    }
+
+    @Test
+    @DisplayName("a userinfo response without the optional profile fields still yields a usable identity")
+    void authenticateToleratesAMinimalUserinfoResponse() throws Exception {
+        installMockHttpClient();
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        ExternalUserProfile profile = provider.authenticate("code-1", "http://cb");
+
+        assertEquals("user-9", profile.providerUserId());
+        assertFalse(profile.emailVerified());
+        assertNull(profile.email());
+        assertNull(profile.displayName());
+        assertNull(profile.avatarUrl());
+    }
+
+    @Test
+    @DisplayName("an id_token is not trusted when no JWKS is configured, so authenticate falls back to userinfo")
+    void authenticateIgnoresAnIdTokenWhenNoJwksIsConfigured() throws Exception {
+        installMockHttpClient();
+        String idToken = token(Map.of("alg", "RS256"), validClaims());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        setField("jwksUrl", Optional.empty());
+        assertEquals("user-9", provider.authenticate("code-1", "http://cb").providerUserId());
+
+        setField("jwksUrl", Optional.of("   "));
+        assertEquals("user-9", provider.authenticate("code-1", "http://cb").providerUserId());
+    }
+
+    @Test
+    @DisplayName("a blank id_token is treated as absent")
+    void authenticateTreatsABlankIdTokenAsAbsent() throws Exception {
+        installMockHttpClient();
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", "   "));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        assertEquals("user-9", provider.authenticate("code-1", "http://cb").providerUserId());
+    }
+
+    @Test
+    @DisplayName("authenticate rejects a token response with no access_token")
+    void authenticateRejectsATokenResponseWithoutAnAccessToken() throws Exception {
+        installMockHttpClient();
+        stubEndpoint(TOKEN_URL, Map.of("id_token", "irrelevant"));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(ex.getMessage().contains("Failed to authenticate"), ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("authenticate rejects a userinfo response without a subject")
+    void authenticateRejectsAUserinfoResponseWithoutASubject() throws Exception {
+        installMockHttpClient();
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("email", "x@example.com"));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(
+                ex.getCause().getMessage().contains("userinfo"), ex.getCause().getMessage());
+    }
+
+    @Test
+    @DisplayName("a transport failure surfaces as an IllegalStateException carrying the original cause")
+    void authenticateWrapsTransportFailures() throws Exception {
+        installMockHttpClient();
+        WebTarget target = mock(WebTarget.class);
+        when(target.request(any(MediaType[].class))).thenThrow(new ProcessingException("boom"));
+        when(mockHttpClient.target(TOKEN_URL)).thenReturn(target);
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertInstanceOf(ProcessingException.class, ex.getCause());
+    }
+
+    // ---------- token request encoding ----------
+
+    @Test
+    @DisplayName("authenticate posts an authorization_code form carrying the PKCE verifier and client secret")
+    void authenticatePostsTheAuthorizationCodeForm() throws Exception {
+        installMockHttpClient();
+        Invocation.Builder tokenEndpoint = stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        provider.authenticate("code-1", "http://cb.example/from-request", "verifier-1", null);
+
+        Form form = capturedForm(tokenEndpoint);
+        assertEquals("authorization_code", form.asMap().getFirst("grant_type"));
+        assertEquals("code-1", form.asMap().getFirst("code"));
+        assertEquals("https://app.example.com/callback", form.asMap().getFirst("redirect_uri"));
+        assertEquals(CLIENT_ID, form.asMap().getFirst("client_id"));
+        assertEquals("secret-456", form.asMap().getFirst("client_secret"));
+        assertEquals("verifier-1", form.asMap().getFirst("code_verifier"));
+    }
+
+    @Test
+    @DisplayName("a blank PKCE verifier is omitted from the token form")
+    void authenticateOmitsABlankCodeVerifier() throws Exception {
+        installMockHttpClient();
+        Invocation.Builder tokenEndpoint = stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        provider.authenticate("code-1", "http://cb", "   ", null);
+
+        assertFalse(capturedForm(tokenEndpoint).asMap().containsKey("code_verifier"));
+    }
+
+    @Test
+    @DisplayName("the token form uses the request redirect URI when the configured one is absent")
+    void authenticateUsesTheRequestRedirectWhenConfigIsAbsent() throws Exception {
+        setField("redirectUriConfig", Optional.empty());
+        installMockHttpClient();
+        Invocation.Builder tokenEndpoint = stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        provider.authenticate("code-1", "http://cb.example/from-request");
+
+        assertEquals(
+                "http://cb.example/from-request",
+                capturedForm(tokenEndpoint).asMap().getFirst("redirect_uri"));
+    }
+
+    @Test
+    @DisplayName("the client_secret parameter is omitted when no secret is configured")
+    void authenticateOmitsTheClientSecretWhenNoneIsConfigured() throws Exception {
+        setField("clientSecret", Optional.empty());
+        installMockHttpClient();
+        Invocation.Builder tokenEndpoint = stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        provider.authenticate("code-1", "http://cb");
+
+        assertFalse(capturedForm(tokenEndpoint).asMap().containsKey("client_secret"));
+    }
+
+    // ---------- client-secret resolution ----------
+
+    @Test
+    @DisplayName("a configured vault key supplies the client secret in preference to the plaintext one")
+    void authenticateResolvesTheClientSecretFromTheVault() throws Exception {
+        setField("clientSecretVaultKey", Optional.of("oidc/secret"));
+        installMockHttpClient();
+        when(provider.secretVault.retrieveSystemKey("oidc/secret"))
+                .thenAnswer(invocation -> Optional.of(new VaultKey("from-vault".getBytes(StandardCharsets.UTF_8))));
+        Invocation.Builder tokenEndpoint = stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        provider.authenticate("code-1", "http://cb");
+
+        assertEquals("from-vault", capturedForm(tokenEndpoint).asMap().getFirst("client_secret"));
+    }
+
+    @Test
+    @DisplayName("a vault key that resolves to nothing falls back to the plaintext secret")
+    void authenticateFallsBackToThePlaintextSecretWhenTheVaultKeyIsMissing() throws Exception {
+        setField("clientSecretVaultKey", Optional.of("oidc/secret"));
+        installMockHttpClient();
+        when(provider.secretVault.retrieveSystemKey("oidc/secret")).thenReturn(Optional.empty());
+        Invocation.Builder tokenEndpoint = stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        provider.authenticate("code-1", "http://cb");
+
+        assertEquals("secret-456", capturedForm(tokenEndpoint).asMap().getFirst("client_secret"));
+    }
+
+    @Test
+    @DisplayName("a vault lookup that throws falls back to the plaintext secret")
+    void authenticateFallsBackToThePlaintextSecretWhenTheVaultThrows() throws Exception {
+        setField("clientSecretVaultKey", Optional.of("oidc/secret"));
+        installMockHttpClient();
+        when(provider.secretVault.retrieveSystemKey("oidc/secret"))
+                .thenThrow(new IllegalStateException("vault unavailable"));
+        Invocation.Builder tokenEndpoint = stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        provider.authenticate("code-1", "http://cb");
+
+        assertEquals("secret-456", capturedForm(tokenEndpoint).asMap().getFirst("client_secret"));
+    }
+
+    @Test
+    @DisplayName("a blank vault key skips the vault entirely")
+    void authenticateSkipsTheVaultWhenTheKeyIsBlank() throws Exception {
+        setField("clientSecretVaultKey", Optional.of("   "));
+        installMockHttpClient();
+        Invocation.Builder tokenEndpoint = stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1"));
+        stubEndpoint(USERINFO_URL, Map.of("sub", "user-9"));
+
+        provider.authenticate("code-1", "http://cb");
+
+        assertEquals("secret-456", capturedForm(tokenEndpoint).asMap().getFirst("client_secret"));
+        verify(provider.secretVault, never()).retrieveSystemKey(anyString());
+    }
+
+    // ---------- id_token verification ----------
+
+    @Test
+    @DisplayName("an id_token with a non-RS256 header is refused")
+    void authenticateRefusesAnIdTokenThatIsNotRsaSigned() throws Exception {
+        KeyPair keyPair = newRsaKeyPair();
+        installMockHttpClient();
+        String idToken = signedIdToken(Map.of("alg", "HS256", "kid", KID), validClaims(), keyPair.getPrivate());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(ex.getCause().getMessage().contains("RS256"), ex.getCause().getMessage());
+    }
+
+    @Test
+    @DisplayName("an id_token signed by a key other than the advertised one is refused")
+    void authenticateRefusesAnIdTokenWithABadSignature() throws Exception {
+        KeyPair signingKey = newRsaKeyPair();
+        KeyPair publishedKey = newRsaKeyPair();
+        installMockHttpClient();
+        String idToken = signedIdToken(Map.of("alg", "RS256", "kid", KID), validClaims(), signingKey.getPrivate());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+        stubEndpoint(JWKS_URL, jwks(publishedKey.getPublic(), KID));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(
+                ex.getCause().getMessage().contains("signature invalid"),
+                ex.getCause().getMessage());
+    }
+
+    @Test
+    @DisplayName("an id_token missing sub is refused even though its signature verifies")
+    void authenticateRefusesAnIdTokenWithoutASubject() throws Exception {
+        KeyPair keyPair = newRsaKeyPair();
+        installMockHttpClient();
+        String idToken = signedIdToken(Map.of("alg", "RS256", "kid", KID), claimsWithout("sub"), keyPair.getPrivate());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+        stubEndpoint(JWKS_URL, jwks(keyPair.getPublic(), KID));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(
+                ex.getCause().getMessage().contains("missing sub"),
+                ex.getCause().getMessage());
+    }
+
+    @Test
+    @DisplayName("an expired id_token is refused even though its signature verifies")
+    void authenticateRefusesAnExpiredIdToken() throws Exception {
+        KeyPair keyPair = newRsaKeyPair();
+        installMockHttpClient();
+        String idToken = signedIdToken(
+                Map.of("alg", "RS256", "kid", KID),
+                claimsWith("exp", Instant.now().getEpochSecond() - 60),
+                keyPair.getPrivate());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+        stubEndpoint(JWKS_URL, jwks(keyPair.getPublic(), KID));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(ex.getCause().getMessage().contains("expired"), ex.getCause().getMessage());
+    }
+
+    @Test
+    @DisplayName("an id_token that is not three segments is refused")
+    void authenticateRefusesAMalformedIdToken() throws Exception {
+        installMockHttpClient();
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", "not-a-jwt"));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(
+                ex.getCause().getMessage().contains("Malformed"), ex.getCause().getMessage());
+    }
+
+    @Test
+    @DisplayName("an id_token whose payload segment is not decodable JSON is refused")
+    void authenticateRefusesAnUndecodableIdTokenPayload() throws Exception {
+        installMockHttpClient();
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", "a.!!!.c"));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(
+                ex.getCause().getMessage().contains("Failed to decode"),
+                ex.getCause().getMessage());
+    }
+
+    // ---------- JWKS key selection ----------
+
+    @Test
+    @DisplayName("findJwksKey falls back to the first RSA signing key when no kid matches")
+    void findJwksKeyFallsBackToTheFirstRsaSigningKey() throws Exception {
+        KeyPair keyPair = newRsaKeyPair();
+        installMockHttpClient();
+        String idToken =
+                signedIdToken(Map.of("alg", "RS256", "kid", "unknown-kid"), validClaims(), keyPair.getPrivate());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+        stubEndpoint(JWKS_URL, jwks(keyPair.getPublic(), "different-kid"));
+
+        assertEquals("user-1", provider.authenticate("code-1", "http://cb").providerUserId());
+    }
+
+    @Test
+    @DisplayName("a JWKS whose keys are all unusable yields 'key not found'")
+    void authenticateRefusesWhenTheJwksHasNoUsableKey() throws Exception {
+        KeyPair keyPair = newRsaKeyPair();
+        installMockHttpClient();
+        String idToken = signedIdToken(Map.of("alg", "RS256", "kid", KID), validClaims(), keyPair.getPrivate());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+        stubEndpoint(JWKS_URL, Map.of("keys", List.of(Map.of("kty", "EC", "use", "sig", "kid", "other"))));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(
+                ex.getCause().getMessage().contains("key not found"),
+                ex.getCause().getMessage());
+    }
+
+    @Test
+    @DisplayName("a JWKS without a keys array yields 'key not found'")
+    void authenticateRefusesAJwksWithoutAKeysArray() throws Exception {
+        KeyPair keyPair = newRsaKeyPair();
+        installMockHttpClient();
+        String idToken = signedIdToken(Map.of("alg", "RS256", "kid", KID), validClaims(), keyPair.getPrivate());
+        stubEndpoint(TOKEN_URL, Map.of("access_token", "at-1", "id_token", idToken));
+        stubEndpoint(JWKS_URL, Map.of("unexpected", "shape"));
+
+        IllegalStateException ex =
+                assertThrows(IllegalStateException.class, () -> provider.authenticate("code-1", "http://cb"));
+        assertTrue(
+                ex.getCause().getMessage().contains("key not found"),
+                ex.getCause().getMessage());
+    }
+
+    // ---------- lifecycle ----------
+
+    @Test
+    @DisplayName("close() closes the underlying JAX-RS client")
+    void closeClosesTheHttpClient() throws Exception {
+        installMockHttpClient();
+
+        provider.close();
+
+        verify(mockHttpClient).close();
     }
 }

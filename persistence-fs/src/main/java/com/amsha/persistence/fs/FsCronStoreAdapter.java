@@ -13,6 +13,7 @@ import java.util.function.UnaryOperator;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CronStatus;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.jboss.logging.Logger;
 
@@ -21,7 +22,7 @@ import io.quarkus.arc.properties.IfBuildProperty;
 
 @ApplicationScoped
 @Unremovable
-@IfBuildProperty(name = "amsha.persistence.backend", stringValue = "fs")
+@IfBuildProperty(name = PersistenceBackend.PROPERTY, stringValue = PersistenceBackend.FILESYSTEM)
 @SuppressWarnings("java:S1192")
 public class FsCronStoreAdapter implements CronStorePort {
 

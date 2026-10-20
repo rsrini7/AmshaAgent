@@ -48,14 +48,14 @@ final class SpecializedChatModelFactory {
     static ChatModel createSpecializedAdapter(
             String adapter, String baseUrl, String apiKey, String model, AgentLlmConfig config) {
         return switch (adapter) {
-            case "gemini" -> createGemini(baseUrl, apiKey, model, config);
-            case "anthropic", "claude" -> createAnthropic(baseUrl, apiKey, model, config);
-            case "claude-code" -> createClaudeCode(baseUrl, apiKey, model, config);
-            case "agy", "antigravity" -> createAgy(baseUrl, apiKey, model, config);
-            case "kimchi" -> createKimchi(baseUrl, apiKey, model, config);
-            case "foundry", "foundrylocal" -> createFoundry(baseUrl, model, config);
-            case "ollama" -> createOllama(baseUrl, model, config);
-            case "codex" -> createCodex(baseUrl, apiKey, null, model, config);
+            case ModelDefaults.PROVIDER_GEMINI -> createGemini(baseUrl, apiKey, model, config);
+            case ModelDefaults.PROVIDER_ANTHROPIC, "claude" -> createAnthropic(baseUrl, apiKey, model, config);
+            case ModelDefaults.PROVIDER_CLAUDE_CODE -> createClaudeCode(baseUrl, apiKey, model, config);
+            case ModelDefaults.PROVIDER_AGY, "antigravity" -> createAgy(baseUrl, apiKey, model, config);
+            case ModelDefaults.PROVIDER_KIMCHI -> createKimchi(baseUrl, apiKey, model, config);
+            case ModelDefaults.PROVIDER_FOUNDRY, "foundrylocal" -> createFoundry(baseUrl, model, config);
+            case ModelDefaults.PROVIDER_OLLAMA -> createOllama(baseUrl, model, config);
+            case ModelDefaults.PROVIDER_CODEX -> createCodex(baseUrl, apiKey, null, model, config);
             default -> null;
         };
     }
@@ -70,7 +70,7 @@ final class SpecializedChatModelFactory {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
+        String modelName = (model == null || model.isBlank() || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(model))
                 ? ModelDefaults.DEFAULT_AGY_MODEL
                 : model;
         return new AgyResponsesChatModel(
@@ -93,7 +93,7 @@ final class SpecializedChatModelFactory {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
+        String modelName = (model == null || model.isBlank() || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(model))
                 ? ModelDefaults.DEFAULT_CLAUDE_CODE_MODEL
                 : model;
         return new ClaudeCodeResponsesChatModel(
@@ -221,7 +221,7 @@ final class SpecializedChatModelFactory {
             String model,
             AgentLlmConfig config,
             GovernedTransportService governedTransport) {
-        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
+        String modelName = (model == null || model.isBlank() || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(model))
                 ? ModelDefaults.DEFAULT_KIMCHI_MODEL
                 : model;
         return new KimchiResponsesChatModel(
@@ -240,7 +240,7 @@ final class SpecializedChatModelFactory {
 
     static ChatModel createFoundry(
             String baseUrl, String model, AgentLlmConfig config, GovernedTransportService governedTransport) {
-        String modelName = (model == null || model.isBlank() || "mistral-small".equalsIgnoreCase(model))
+        String modelName = (model == null || model.isBlank() || ModelDefaults.PLACEHOLDER_MODEL.equalsIgnoreCase(model))
                 ? ModelDefaults.DEFAULT_FOUNDRY_MODEL
                 : model;
         return new FoundryResponsesChatModel(

@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 
 import java.util.Map;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
@@ -18,6 +19,7 @@ import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 
 import org.jboss.logging.Logger;
@@ -39,11 +41,17 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "core_memory_append",
+        capabilityId = ToolNames.CORE_MEMORY_APPEND,
         description = "Append content to a core memory block (or create if missing). "
                 + "Rate limited to 5 writes/minute. CAS versioning prevents conflicts. "
                 + "Keys: user_profile, active_task, constraints, project_context, preferences.",
-        defaultRoles = {"architect", "coordinator", "researcher", "synthesizer", "coder"})
+        defaultRoles = {
+            AgentRoleEnum.ARCHITECT_ID,
+            AgentRoleEnum.COORDINATOR_ID,
+            AgentRoleEnum.RESEARCHER_ID,
+            AgentRoleEnum.SYNTHESIZER_ID,
+            AgentRoleEnum.CODER_ID
+        })
 public class CoreMemoryAppendTool implements AgentTool {
 
     private static final Logger log = Logger.getLogger(CoreMemoryAppendTool.class);

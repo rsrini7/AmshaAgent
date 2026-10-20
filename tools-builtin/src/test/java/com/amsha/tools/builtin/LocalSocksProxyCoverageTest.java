@@ -188,6 +188,15 @@ class LocalSocksProxyCoverageTest {
         }
     }
 
+    @Test
+    void ssrfBlock_anyLocalAddress() throws Exception {
+        try (LocalSocksProxy proxy = new LocalSocksProxy()) {
+            byte[] reply = connectAndReadReply(proxy.getPort(), new byte[] {5, 1, 0, 1, 0, 0, 0, 0, 0, 0});
+
+            assertEquals(2, reply[1], "0.0.0.0 is an unspecified address and must be blocked");
+        }
+    }
+
     // ── IPv6 (ATYP=4) target parsing ──────────────────────────────────────────────────────
 
     @Test
@@ -234,14 +243,14 @@ class LocalSocksProxyCoverageTest {
     /**
      * Exercises the full CONNECT tunnel, including the bidirectional pipe threads.
      *
-     * <p>The destination is addressed as {@code 0.0.0.0}. That literal passes the SSRF guard
-     * because {@link InetAddress} classifies it as none of loopback / link-local / site-local /
-     * multicast - yet connecting to it is routed to the local host, so the test needs no
-     * external network. Using {@code 127.0.0.1} directly would be refused by the guard.
+     * <p>The request uses a documentation-range IPv4 address. The injected connector maps it to
+     * a local echo socket only after the production SSRF checks accept the target, so the test
+     * remains deterministic without external network access or a wildcard-bound listener.
      */
     @Test
     void connectTunnelsBidirectionally() throws Exception {
         byte[] payload = "hello-socks".getBytes(StandardCharsets.UTF_8);
+        InetAddress expectedTarget = InetAddress.getByAddress(new byte[] {(byte) 203, 0, 113, 1});
         AtomicReference<byte[]> receivedByDestination = new AtomicReference<>(new byte[0]);
 
         try (ServerSocket destination = new ServerSocket(0, 5, InetAddress.getLoopbackAddress())) {
@@ -254,13 +263,17 @@ class LocalSocksProxyCoverageTest {
                     receivedByDestination.set(got);
                     dout.write(got);
                     dout.flush();
-                } catch (Exception ignored) {
+                } catch (Exception _) {
                     // Teardown races are not interesting here.
                 }
             });
 
             byte[] echoed = new byte[0];
-            try (LocalSocksProxy proxy = new LocalSocksProxy();
+            try (LocalSocksProxy proxy = new LocalSocksProxy((targetIp, targetPort) -> {
+                        assertEquals(expectedTarget, targetIp);
+                        assertEquals(destination.getLocalPort(), targetPort);
+                        return new Socket(InetAddress.getLoopbackAddress(), targetPort);
+                    });
                     Socket client = new Socket(InetAddress.getLoopbackAddress(), proxy.getPort())) {
                 client.setSoTimeout(15_000);
                 OutputStream out = client.getOutputStream();
@@ -272,7 +285,7 @@ class LocalSocksProxyCoverageTest {
                 assertEquals(0, in.read());
 
                 int port = destination.getLocalPort();
-                out.write(new byte[] {5, 1, 0, 1, 0, 0, 0, 0, (byte) (port >> 8), (byte) port});
+                out.write(new byte[] {5, 1, 0, 1, (byte) 203, 0, 113, 1, (byte) (port >> 8), (byte) port});
                 out.flush();
 
                 byte[] reply = in.readNBytes(10);

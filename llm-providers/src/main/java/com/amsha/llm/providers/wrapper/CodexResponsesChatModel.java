@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.tools.ToolSchemaProvider;
 import com.amsha.llm.api.MultimodalRequests;
@@ -117,9 +118,9 @@ public class CodexResponsesChatModel implements ChatModel {
             HttpRequest.Builder httpReqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(endpoint))
                     .timeout(timeout)
-                    .header("Authorization", "Bearer " + new String(token))
-                    .header("Content-Type", "application/json")
-                    .header("Accept", "text/event-stream")
+                    .header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + new String(token))
+                    .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
+                    .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_TEXT_EVENT_STREAM)
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8));
 
             if (accountId != null && !accountId.isBlank()) {
@@ -239,9 +240,10 @@ public class CodexResponsesChatModel implements ChatModel {
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
-                if (!line.startsWith("data:")) continue;
-                String data = line.substring(5).trim();
-                if (data.isEmpty() || "[DONE]".equals(data)) continue;
+                if (!line.startsWith(HttpProtocol.SSE_DATA_PREFIX)) continue;
+                String data =
+                        line.substring(HttpProtocol.SSE_DATA_PREFIX.length()).trim();
+                if (data.isEmpty() || HttpProtocol.SSE_DONE.equals(data)) continue;
 
                 JsonNode node = objectMapper.readTree(data);
                 acc.handleEvent(node, data);

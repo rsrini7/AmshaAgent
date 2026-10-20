@@ -66,7 +66,7 @@ public class IntentDetectorModelProducer {
     public ChatModel intentDetectorFallbackModel() {
         log.infof("IntentDetectorModelProducer intent-classifier-fallback model=%s", ollamaModelId);
         return modelFactory.createModel(
-                "ollama",
+                ModelDefaults.PROVIDER_OLLAMA,
                 ollamaBaseUrl,
                 null,
                 ollamaModelId,

@@ -45,6 +45,23 @@ public class WebJobNotifier implements ChannelJobNotifier {
     }
 
     @Override
+    public void notifyApprovalRequired(
+            String recipient, String cronSessionId, String toolName, String renderedMessage, String displayParamsJson) {
+        var payloadBuilder = Json.createObjectBuilder()
+                .add("type", "approval_required")
+                .add("role", "assistant")
+                .add("text", renderedMessage)
+                .add("sessionId", cronSessionId)
+                .add("toolName", toolName)
+                .add("instructions", "To approve, run /approve " + cronSessionId);
+        if (displayParamsJson != null && !displayParamsJson.isBlank()) {
+            payloadBuilder.add(
+                    "approval", Json.createObjectBuilder().add("tool", toolName).add("params", displayParamsJson));
+        }
+        sendToSession(recipient, cronSessionId, payloadBuilder.build().toString());
+    }
+
+    @Override
     public void notifyJobCompleted(String recipient, String renderedMessage, String sessionId) {
         String payload = Json.createObjectBuilder()
                 .add("type", "message")

@@ -48,8 +48,8 @@ current.
 
 | Suite | Recorded result | Line coverage | Evidence date |
 |---|---:|---:|---|
-| Java/JUnit, full Maven reactor | **8,301 passing**; 0 failures, 0 errors | **84.28%** | 2026-09-16 |
-| UI/Vitest | **172 passing**; 0 failures, 0 errors | **58.67%** (4,665/7,951 lines) | 2026-09-12 |
+| Java/JUnit, full Maven reactor | **8,530 passing**; 0 failures, 0 errors (8,500 Surefire + 30 Failsafe) | **84.17%** (52,507/62,379 lines) | 2026-09-29 |
+| UI/Vitest | **195 passing**; 0 failures, 0 errors | **59.26%** (4,838/8,163 lines) | 2026-09-30 |
 
 Run `./mvnw --batch-mode clean verify` followed by `mise run test:summary` for
 Java/JUnit and `mise run test:ui` followed by `mise run test:ui:summary` for the UI.
@@ -57,15 +57,16 @@ The Java total is aggregated from Surefire XML and the UI total from Vitest JUni
 XML; a clean run matters because stale or partial report files can produce a
 misleading count.
 
-My interpretation of this snapshot: Java is 2.28 percentage points above the
+My interpretation of this snapshot: Java is 2.17 percentage points above the
 current 82.00% JaCoCo build floor, which is useful headroom but not a reason to
 stop adding tests. The UI line figure is 8.67 points above the analyzer's 50.00%
 target, but UI coverage has no equivalent Maven build gate. The two percentages
 use different codebases and denominators, so they should be tracked separately;
 neither percentage replaces behavioral, integration, native, or REST validation.
 
-The earlier 2026-09-14 measurement is retained below as historical analysis:
-6,528 tests in 905 suites, 0 failures, 0 errors, 7 skipped, reactor line coverage 76.10%.
+Earlier measurements are retained as historical analysis. The 2026-09-16 snapshot
+recorded **8,301 tests at 84.28%**, and the 2026-09-14 snapshot recorded 6,528 tests
+in 905 suites, 0 failures, 0 errors, 7 skipped, at 76.10% reactor line coverage.
 Derive a fresh exact count with `mise run test:summary`
 (see [§1.6](#16-target-0-failures-0-errors-no-drop-in-test-count)).
 
@@ -1836,7 +1837,7 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION_OTHER/run" \
 ### 17.1 Check vector search status
 
 ```bash
-grep -i "vector search" logs/amsha.log | tail -3
+grep -i "vector search" amsha-prod-sqlite.log | tail -3
 ```
 
 **Expect:** `vector search enabled (vec0 loaded)` **OR** `vector search disabled - vec0 extension not loaded`
@@ -2491,6 +2492,20 @@ bash rest-http/scripts/run_all_validations.sh --onnx
 The current Phase 3A assembly must report all three active implementations unavailable,
 return `409 MISSING_READY_IMPLEMENTATION` for enable, and reject non-internal mutation.
 
+#### 23.6.1 Zero-token decision-plane validation (`--decision-plane`)
+
+The decision-plane shell validator checks the classifier control-plane contract and native resource availability without invoking a model provider. It runs in `--fast` and can also be run by itself:
+
+```bash
+bash rest-http/scripts/run_all_validations.sh --decision-plane
+```
+
+The distribution launcher exports `AMSHA_VALIDATION_LOG_FILE`. JEV-17 verifies the corpus and price-schedule startup load messages; the registries initialize at startup, so this check reads logs and does not call `POST /evidence/run`. If the log file is unavailable, JEV-17 skips and names the required launcher path.
+
+The /evidence/run response contract, including opt-in aggregate diagnostics, is covered by DecisionEvidenceIT with the loopback DecisionProviderFixture. That test exercises the HTTP boundary without a hosted provider. The decision-plane shell validator checks control-plane and startup contracts only and makes no evaluation request. Enabled and disabled evaluation requests stay in the loopback integration tests.
+
+The suite also covers internal authorization, exact response shapes, Deferred posture, fail-closed enable behavior, revision stability, and the single `DecisionPlaneReadiness` startup warning. `AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true` requires that warning; `false` forbids it.
+
 ## 24. Testing Identity, OIDC, Web Sessions, and Multi-Admin
 
 To verify the complete identity subsystem, browser authentication, and multi-admin scopes in real-time, follow these manual test scenarios.
@@ -2568,4 +2583,4 @@ For `AMSHA_VAULT_PEPPER` and `AMSHA_AUDIT_HMAC_KEY`, use stable 32+ character va
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · recorded snapshot: 8,301 passing Java/JUnit tests at 84.28% line coverage and 172 passing UI/Vitest tests at 58.67% line coverage · 28 Maven modules · 21 tools · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider) · Tiered Memory · Answer Quality Guard.*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · recorded snapshot: 8,530 passing Java/JUnit tests (8,500 Surefire + 30 Failsafe) at 84.17% line coverage and 195 passing UI/Vitest tests at 59.26% line coverage · 28 Maven modules · 21 tools · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider) · Tiered Memory · Answer Quality Guard.*

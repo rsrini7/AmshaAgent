@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.config.CoreSpiResolutionValidator;
@@ -26,6 +27,7 @@ import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.tools.CodeLanguageDetector;
+import com.amsha.core.tools.LanguageIds;
 import com.amsha.core.tools.OutputTruncator;
 import com.amsha.sandbox.SandboxCodeSafetyScanner;
 import com.amsha.security.api.ToolOperation;
@@ -33,6 +35,7 @@ import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolMetadata;
+import com.amsha.tool.api.ToolNames;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,9 +51,9 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 @ToolMetadata(
-        capabilityId = "sandbox_exec",
+        capabilityId = ToolNames.SANDBOX_EXEC,
         description = "Execute code in an isolated sandbox",
-        defaultRoles = {"coder", "debugger"})
+        defaultRoles = {AgentRoleEnum.CODER_ID, AgentRoleEnum.DEBUGGER_ID})
 @SuppressWarnings("java:S1192")
 public class SandboxExecTool implements AgentTool {
 
@@ -177,19 +180,20 @@ public class SandboxExecTool implements AgentTool {
         }
 
         return switch (lang) {
-            case "java" -> {
+            case LanguageIds.JAVA -> {
                 String className = codeLanguageDetector.extractJavaClassName(code);
                 String srcPath = CONTAINER_WORKSPACE + "/" + className + ".java";
                 yield List.of(
-                        "sh",
+                        LanguageIds.SH,
                         "-c",
                         "ver=$(java -version 2>&1); ver=${ver#*\\\"}; ver=${ver%%.*} && "
                                 + "exec java --enable-preview --source \"$ver\" " + srcPath);
             }
-            case "python", "python3" -> List.of("python3", CONTAINER_WORKSPACE + "/script.py");
-            case "bash" -> List.of("bash", CONTAINER_WORKSPACE + "/script.sh");
-            case "go" -> List.of("go", "run", CONTAINER_WORKSPACE + "/main.go");
-            case "node" -> List.of("node", CONTAINER_WORKSPACE + "/script.js");
+            case LanguageIds.PYTHON, LanguageIds.PYTHON3 ->
+                List.of(LanguageIds.PYTHON3, CONTAINER_WORKSPACE + "/script.py");
+            case LanguageIds.BASH -> List.of(LanguageIds.BASH, CONTAINER_WORKSPACE + "/script.sh");
+            case LanguageIds.GO -> List.of(LanguageIds.GO, "run", CONTAINER_WORKSPACE + "/main.go");
+            case LanguageIds.NODE -> List.of(LanguageIds.NODE, CONTAINER_WORKSPACE + "/script.js");
             default -> codeLanguageDetector.buildCommand(lang, code);
         };
     }
@@ -211,7 +215,7 @@ public class SandboxExecTool implements AgentTool {
         if (code == null) return;
         lang = lang.toLowerCase(Locale.ROOT);
 
-        if ("java".equals(lang)) {
+        if (LanguageIds.JAVA.equals(lang)) {
             if (!codeLanguageDetector.containsTypeDeclaration(code)) {
                 code = "public class Main {\n    public static void main(String[] args) {\n" + code.indent(8)
                         + "    }\n}\n";
@@ -221,19 +225,19 @@ public class SandboxExecTool implements AgentTool {
             Path javaFile = workspaceRoot.resolve(className + ".java");
             Files.writeString(javaFile, code, StandardCharsets.UTF_8);
 
-        } else if ("python".equals(lang) || "python3".equals(lang)) {
+        } else if (LanguageIds.PYTHON.equals(lang) || LanguageIds.PYTHON3.equals(lang)) {
             // Write to file - avoids shell quote-stripping of f-strings,
             // double quotes, and special chars when passed via -c to Podman.
             Files.createDirectories(workspaceRoot);
             Files.writeString(workspaceRoot.resolve("script.py"), code, StandardCharsets.UTF_8);
 
-        } else if ("go".equals(lang)) {
+        } else if (LanguageIds.GO.equals(lang)) {
             Files.createDirectories(workspaceRoot);
             Files.writeString(workspaceRoot.resolve("main.go"), code, StandardCharsets.UTF_8);
-        } else if ("node".equals(lang)) {
+        } else if (LanguageIds.NODE.equals(lang)) {
             Files.createDirectories(workspaceRoot);
             Files.writeString(workspaceRoot.resolve("script.js"), code, StandardCharsets.UTF_8);
-        } else if ("bash".equals(lang)) {
+        } else if (LanguageIds.BASH.equals(lang)) {
             Files.createDirectories(workspaceRoot);
             Files.writeString(workspaceRoot.resolve("script.sh"), code, StandardCharsets.UTF_8);
         }
@@ -261,7 +265,7 @@ public class SandboxExecTool implements AgentTool {
             String violation = SandboxCodeSafetyScanner.findViolation(lang, code);
             if (violation != null) return ToolResponse.failure(1, "🚫 Execution blocked: " + violation);
 
-            if ("java".equals(lang) && !codeLanguageDetector.containsTypeDeclaration(code)) {
+            if (LanguageIds.JAVA.equals(lang) && !codeLanguageDetector.containsTypeDeclaration(code)) {
                 code = "public class Main {\n    public static void main(String[] args) {\n" + code.indent(8)
                         + "    }\n}\n";
             }
@@ -281,8 +285,8 @@ public class SandboxExecTool implements AgentTool {
             Path workspaceRoot = Path.of(workspaceRootDir, codeLanguageDetector.toFsName(sessionId));
 
             return switch (lang) {
-                case "java" -> executeJavaFallback(sessionId, workspaceRoot, code, requiredSecrets);
-                case "go" -> executeGo(sessionId, workspaceRoot, code, requiredSecrets);
+                case LanguageIds.JAVA -> executeJavaFallback(sessionId, workspaceRoot, code, requiredSecrets);
+                case LanguageIds.GO -> executeGo(sessionId, workspaceRoot, code, requiredSecrets);
                 default -> executeInterpreted(sessionId, workspaceRoot, lang, code, params, requiredSecrets);
             };
         } catch (BudgetExceededException e) {

@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.event.DomainEventBus;
 import com.amsha.core.event.EventTypeCatalog;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
@@ -99,7 +100,7 @@ public class SessionCatalogService {
             }
         } catch (Exception e) {
             Logger.getLogger(SessionCatalogService.class)
-                    .warn("Failed to flush pending notifications during rotation", e);
+                    .warn("Failed to flush pending notifications during rotation", LogUtil.relevantThrowable(e));
         }
 
         // 3. In-Memory Cache (Guaranteed)
@@ -112,7 +113,8 @@ public class SessionCatalogService {
                         EventTypeCatalog.SESSION_ROTATED,
                         new SessionRotatedEvent(oldSessionId, nextSessionId, ownerKey, canonical));
             } catch (Exception e) {
-                Logger.getLogger(SessionCatalogService.class).warn("Failed to publish SessionRotatedEvent", e);
+                Logger.getLogger(SessionCatalogService.class)
+                        .warn("Failed to publish SessionRotatedEvent", LogUtil.relevantThrowable(e));
             }
         }
 

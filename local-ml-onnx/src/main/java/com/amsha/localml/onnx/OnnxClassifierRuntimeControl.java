@@ -11,6 +11,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.classifier.api.ProviderPlacementValidator;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import io.quarkus.arc.Unremovable;
@@ -53,13 +55,31 @@ public class OnnxClassifierRuntimeControl {
 
     /**
      * Registers one verified and promotion-approved active implementation.
+     * Enforces structural provider placement validation before activating the implementation slot.
+     *
+     * <p>Shadow-only classifiers MUST NOT call this method.
+     */
+    public Registration registerReadyImplementation(Classifier classifier, Object implementation) {
+        Objects.requireNonNull(implementation, "implementation");
+        ProviderPlacementValidator.validateClassifierSpiPlacement(implementation);
+        Slot slot = slot(classifier);
+        slot.registerImplementation();
+        return new Registration(slot);
+    }
+
+    /**
+     * Registers the calling classifier as its own ready active implementation.
+     *
+     * <p>This overload performs <b>no</b> provider placement validation. It delegates with this runtime
+     * control as the object to validate, and a runtime control is not a {@code DecisionEngine}, so
+     * {@link ProviderPlacementValidator#validateClassifierSpiPlacement(Object)} has nothing to reject.
+     * Placement enforcement for this seam lives in {@link #registerReadyImplementation(Classifier, Object)},
+     * which is the overload that actually receives the implementation.
      *
      * <p>Shadow-only classifiers MUST NOT call this method.
      */
     public Registration registerReadyImplementation(Classifier classifier) {
-        Slot slot = slot(classifier);
-        slot.registerImplementation();
-        return new Registration(slot);
+        return registerReadyImplementation(classifier, this);
     }
 
     /** Acquires one active inference lease only while the classifier is effectively enabled. */

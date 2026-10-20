@@ -8,10 +8,12 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.routing.CapabilityAwareChatModel;
 import com.amsha.core.routing.MultiModelChatModel;
 import com.amsha.llm.api.AgentChatModelProvider;
 import com.amsha.llm.api.AgentLlmConfig;
+import com.amsha.llm.api.LlmConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.MultimodalCapabilities;
 import com.amsha.llm.api.MultimodalCapability;
@@ -30,13 +32,13 @@ public class CohereProviderFactory implements AgentChatModelProvider {
     @Inject
     AgentLlmConfig agentConfig;
 
-    @ConfigProperty(name = "amsha.llm.cohere.api-key")
+    @ConfigProperty(name = LlmConfigKeys.COHERE_API_KEY)
     Optional<String> apiKey;
 
-    @ConfigProperty(name = "amsha.llm.cohere.base-url", defaultValue = ModelDefaults.DEFAULT_COHERE_BASE_URL)
+    @ConfigProperty(name = LlmConfigKeys.COHERE_BASE_URL, defaultValue = ModelDefaults.DEFAULT_COHERE_BASE_URL)
     String baseUrl;
 
-    @ConfigProperty(name = "amsha.llm.cohere.model", defaultValue = ModelDefaults.DEFAULT_COHERE_MODEL)
+    @ConfigProperty(name = LlmConfigKeys.COHERE_MODEL, defaultValue = ModelDefaults.DEFAULT_COHERE_MODEL)
     String modelName;
 
     @Override
@@ -66,11 +68,11 @@ public class CohereProviderFactory implements AgentChatModelProvider {
 
     private ChatModel createModel(String model) {
         String key = apiKey.filter(k -> !k.isBlank())
-                .or(() -> Optional.ofNullable(System.getProperty("AMSHA_COHERE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getProperty(ConfigKeys.COHERE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getProperty("amsha.llm.cohere.api-key"))
+                .or(() -> Optional.ofNullable(System.getProperty(LlmConfigKeys.COHERE_API_KEY))
                         .filter(k -> !k.isBlank()))
-                .or(() -> Optional.ofNullable(System.getenv("AMSHA_COHERE_API_KEY"))
+                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.COHERE_API_KEY))
                         .filter(k -> !k.isBlank()))
                 .orElseThrow(() -> new IllegalStateException("Cohere requires AMSHA_COHERE_API_KEY"));
         List<MultiModelChatModel.ModelEntry> entries = ChatModelFactory.buildMultiModelEntries(

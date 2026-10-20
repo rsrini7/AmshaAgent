@@ -90,6 +90,16 @@ mise run dist:validate-pg
 mise run dist:validate-fs
 ```
 
+Full validation runs a short LLM preflight against the first provider in
+`AMSHA_INFINITE_LOOP_LLM_PROVIDERS` before building, cleaning data, or starting
+the suite. It requests the provider's model-list endpoint only—no prompt or
+completion is sent. An unreachable/unhealthy endpoint stops the run early;
+`--fast` skips this check. For providers with a non-standard health endpoint,
+set `AMSHA_LLM_PREFLIGHT_URL` to that complete HTTP(S) URL. A 401/403 confirms
+network reachability only; the preflight does not verify credentials or model
+generation. Direct calls to `run_all_validations.sh` use the provider settings
+exported in that shell.
+
 To validate a server that is already running, set `TEST_BASE`. The wrapper
 will not start or stop another server, and a local native binary is not needed
 unless `--build` is also supplied:
@@ -516,7 +526,7 @@ needed). Run individually or via the master runner `run_all_validations.sh`.
 
 | Flag | Script | Coverage | Cost |
 |---|---|---|---|
-| `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | zero-token |
+| `--reflex` | `validate_reflex.sh` | Reflex commands via goal text | deterministic |
 | `--skills` | `validate_skill.sh` | Skill CRUD, routing, errors | low |
 | `--skills-admission` | `validate_skillsjar_admission.sh` | SkillsJar admission, quarantine schema, refresh stability | zero-token |
 | `--mcp` | `validate_mcp.sh` | MCP JSON-RPC protocol plus approval-gated discover/connect, policies, reconfigure, pause/resume, import, setup-token, and cleanup | low |
@@ -533,14 +543,15 @@ complete flow across the rate-limit window.
 | `--auth-session` | `validate_auth_session.sh` | API-key auth + session lifecycle | fast |
 | `--identity` | `validate_identity_access.sh` | P109 bootstrap/identity/OAuth | fast |
 | `--pii-audit` | `validate_pii_injection_audit.sh` | PII redaction + injection + audit HMAC | fast |
-| `--onnx` | `validate_onnx.sh` | ONNX health, fixed-text inference metric, bundle digests, vector compatibility, non-activating classifier controls | local CPU |
+| `--onnx` | `validate_onnx.sh` | ONNX health, fixed-text inference metric, bundle digests, vector compatibility, classifier controls stay non-activating under ONNX | local CPU |
+| `--decision-plane` | `validate_decision_plane.sh` | Jev decision-plane Deferred contract: auth matrix, snapshot shape and coherence, fail-closed enable, revision stability, startup diagnostic | zero-token |
 | `--self-evolve` | `validate_self_evolve.sh` | Directives lifecycle (seeds when `--data-dir` given) | LLM |
 | `--hitl` | `validate_hitl.sh` | Approve/deny (REST + goal-string + taskId), 401/409 | LLM |
 | `--rag` | `validate_rag.sh` | Ingest → approve → recall + rag_chunk isolation | LLM |
 | `--budget` | `validate_budget.sh` | Budget limits + autonomy; FULL safe-operation bypass and mandatory network/shell HITL | LLM |
 | `--sse-settings` | `validate_sse_settings.sh` | UI SSE streams, ws-token, settings CRUD | fast |
 | `--cron` | `validate_cron.sh` | Programmatic cron REST lifecycle | LLM |
-| `--fast` | `(master)` | all fast/zero-token validators | mixed |
+| `--fast` | `(master)` | Fast validation set; some agent-backed suites use the configured provider | mixed |
 The `--fast` profile includes `validate_mcp_fast.sh`: MCP admin status/tools, REST API-key rejection, the current durable connection-list shape, JSON-RPC initialize, session handshake, tools/list, and unknown-tool rejection. It does not invoke LLM-backed tools or mutate managed connections.
 | `--llm` | `(master)` | memory + web + roles + cron + rag + budget + hitl | LLM |
 
@@ -551,6 +562,23 @@ OMLX OpenAI-compatible API and manage an isolated native lifecycle, keep the req
 forces `generic-openai` plus ONNX, never selects Ollama, and does not print raw HTTP
 payloads or credentials. See the
 [local ONNX guide](../docs/ONNX_LOCAL_ML_GUIDE.md#reusable-local-runtime-smoke-runner).
+
+`--decision-plane` runs the zero-token classifier control-plane contract. The decision
+plane is Deferred, so no `DecisionEngine` bean is available; the validator checks that
+posture and the startup readiness diagnostic. It makes no evidence or decision-evaluation
+requests. JEV-14/15 evaluation paths are covered by loopback integration tests. This
+coverage overlaps deliberately with `validate_onnx.sh` ONNX-5..7 — the same invariant
+must hold with and without the local ONNX bundle loaded. When `AMSHA_VALIDATION_LOG_FILE`
+is set (the `run_dist_*` wrappers export it), the validator checks that the
+`DecisionPlaneReadiness` startup diagnostic appears exactly once; set
+`AMSHA_DECISION_PLANE_EXPECT_INERT_WARNING=true` to require it, or `=false` to forbid it
+when the shadow switches are disabled.
+
+> **Evaluation coverage:** the shell validator checks provider-status authorization and
+> exact payload shape (JEV-13). It skips the evaluation requests for JEV-14/15, which are
+> covered by `DecisionEvaluationPathIT` and `DecisionEvaluationDisabledPathIT` against a
+> loopback provider fixture. `DecisionEvidenceIT` exercises the evidence endpoint with
+> that fixture and asserts the aggregate response contract and token telemetry.
 
 ### New P109 config flags (also in `.env.example`)
 

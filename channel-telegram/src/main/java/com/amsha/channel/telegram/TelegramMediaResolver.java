@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import com.amsha.channel.api.AttachmentType;
 import com.amsha.channel.api.MediaAttachment;
+import com.amsha.channel.api.MediaTypes;
 
 import org.apache.camel.component.telegram.model.IncomingAudio;
 import org.apache.camel.component.telegram.model.IncomingDocument;
@@ -46,7 +47,7 @@ public class TelegramMediaResolver {
             return null;
         }
         long size = knownSize(photo.getFileSize());
-        return resolveMedia(fileId, AttachmentType.IMAGE, "image/jpeg", "photo_" + fileId + ".jpg", size);
+        return resolveMedia(fileId, AttachmentType.IMAGE, MediaTypes.JPEG, "photo_" + fileId + ".jpg", size);
     }
 
     /** Resolves a Telegram document with a conservative type derived from MIME/name. */
@@ -87,7 +88,7 @@ public class TelegramMediaResolver {
         if (fileId == null) {
             return null;
         }
-        String mimeType = normalizeMimeType(voice.getMimeType(), "audio/ogg");
+        String mimeType = normalizeMimeType(voice.getMimeType(), MediaTypes.OGG);
         return resolveMedia(
                 fileId, AttachmentType.AUDIO, mimeType, "voice_" + fileId + ".ogg", knownSize(voice.getFileSize()));
     }
@@ -126,7 +127,7 @@ public class TelegramMediaResolver {
 
     private static AttachmentType typeFor(String mimeType, String fileName) {
         String lowerName = fileName.toLowerCase(Locale.ROOT);
-        if ("application/pdf".equals(mimeType) || lowerName.endsWith(".pdf")) {
+        if (MediaTypes.PDF.equals(mimeType) || lowerName.endsWith(".pdf")) {
             return AttachmentType.DOCUMENT_PDF;
         }
         if (mimeType.startsWith("image/")) {
@@ -140,14 +141,14 @@ public class TelegramMediaResolver {
 
     private static String detectMimeType(String fileName) {
         String lower = fileName.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(".pdf")) return "application/pdf";
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-        if (lower.endsWith(".png")) return "image/png";
-        if (lower.endsWith(".webp")) return "image/webp";
-        if (lower.endsWith(".gif")) return "image/gif";
-        if (lower.endsWith(".mp3")) return "audio/mpeg";
-        if (lower.endsWith(".wav")) return "audio/wav";
-        if (lower.endsWith(".ogg")) return "audio/ogg";
+        if (lower.endsWith(".pdf")) return MediaTypes.PDF;
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return MediaTypes.JPEG;
+        if (lower.endsWith(".png")) return MediaTypes.PNG;
+        if (lower.endsWith(".webp")) return MediaTypes.WEBP;
+        if (lower.endsWith(".gif")) return MediaTypes.GIF;
+        if (lower.endsWith(".mp3")) return MediaTypes.MPEG;
+        if (lower.endsWith(".wav")) return MediaTypes.WAV;
+        if (lower.endsWith(".ogg")) return MediaTypes.OGG;
         return "application/octet-stream";
     }
 
@@ -163,7 +164,7 @@ public class TelegramMediaResolver {
 
     private static String fallbackAudioMimeType(String fileName) {
         String detected = detectMimeType(fileName);
-        return detected.startsWith("audio/") ? detected : "audio/mpeg";
+        return detected.startsWith("audio/") ? detected : MediaTypes.MPEG;
     }
 
     private static String safeFileName(String fileName, String fallback) {

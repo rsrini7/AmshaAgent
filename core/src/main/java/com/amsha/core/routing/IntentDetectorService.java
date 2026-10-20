@@ -14,12 +14,16 @@ import jakarta.inject.Inject;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.amsha.channel.api.IntentDetector;
+import com.amsha.classifier.api.IntentDecisionAction;
+import com.amsha.classifier.api.IntentPolicyResolution;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.persona.AgentRoleRegistry;
@@ -84,6 +88,9 @@ public class IntentDetectorService implements IntentDetector {
 
     @Inject
     IntentShadowEvaluationService intentShadowEvaluation;
+
+    @Inject
+    IntentDecisionRouter intentDecisionRouter;
 
     @ConfigProperty(name = "amsha.routing.intent-classifier.sla-warn-ms", defaultValue = "2000")
     long slaWarnMs;
@@ -185,6 +192,24 @@ public class IntentDetectorService implements IntentDetector {
                     return completeClassification(userMessage, role);
                 }
             }
+        }
+
+        // §Issue 07 Low-Risk Intent Decision Routing Pilot
+        if (intentDecisionRouter != null && intentDecisionRouter.isEnabled()) {
+            Set<String> validRoles = agentRoleRegistry.allRoles().stream()
+                    .map(AgentRoleEnum::toScopedName)
+                    .collect(Collectors.toSet());
+            IntentPolicyResolution resolution = intentDecisionRouter.evaluateIntent(userMessage, validRoles);
+            if (resolution.action() == IntentDecisionAction.DIRECT_ROUTE
+                    && intentDecisionRouter.isDirectRoutingPermitted()
+                    && resolution.selectedRole().isPresent()) {
+                String directRole = resolution.selectedRole().get();
+                log.debugf("IntentDecisionRouter: high-confidence direct route -> %s", directRole);
+                return completeClassification(userMessage, destructiveFilter.filter(directRole, userMessage));
+            }
+            log.debugf(
+                    "IntentDecisionRouter: action=%s, reason=%s -> proceeding to authoritative LLM/fallback route",
+                    resolution.action(), resolution.reason());
         }
 
         String sanitized = userMessage.replace(DELIM_OPEN, "").replace(DELIM_CLOSE, "");

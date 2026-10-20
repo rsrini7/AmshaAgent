@@ -12,6 +12,7 @@ import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.tools.LanguageIds;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.ToolCapability;
@@ -412,7 +413,7 @@ public class ExecutionFailureRecoveryService {
         }
 
         // Gap 2b: Language-specific structural validation
-        if ("java".equalsIgnoreCase(language)) {
+        if (LanguageIds.JAVA.equalsIgnoreCase(language)) {
             // The code will be wrapped in `public class Main { ... }` by prepareWorkspace()
             // if it lacks a type declaration. That wrapper adds `public static void main(String[] args)`.
             // But if the code already has a type declaration (e.g., `public class Main { ... }`),

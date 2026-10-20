@@ -119,9 +119,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OpenCodeProviderFactory.class,
             OpenRouterProviderFactory.class,
             SarvamProviderFactory.class,
-            com.amsha.llm.providers.routing.AgyProviderFactory.class, // fully qualified to disambiguate
+            com.amsha.llm.providers.routing.AgyProviderFactory.class,
             CerebrasLlmProviderFactory.class,
-            com.amsha.llm.providers.routing.ClaudeCodeProviderFactory.class, // fully qualified to disambiguate
+            com.amsha.llm.providers.routing.ClaudeCodeProviderFactory.class,
             CloudflareLlmProviderFactory.class,
             CodexLlmProviderFactory.class,
             CohereLlmProviderFactory.class,

@@ -17,6 +17,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.amsha.common.util.PathSanitizer;
@@ -299,9 +301,19 @@ class PodmanContainerExecutorTest {
     @Test
     void testReadSandboxOutputTimesOutWhenTheProcessNeverFinishes() throws Exception {
         Process proc = mock(Process.class);
-        when(proc.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
-        when(proc.getErrorStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
-        when(proc.waitFor(anyLong(), any())).thenReturn(false);
+        CountDownLatch drainsStarted = new CountDownLatch(2);
+        when(proc.getInputStream()).thenAnswer(_ -> {
+            drainsStarted.countDown();
+            return new ByteArrayInputStream(new byte[0]);
+        });
+        when(proc.getErrorStream()).thenAnswer(_ -> {
+            drainsStarted.countDown();
+            return new ByteArrayInputStream(new byte[0]);
+        });
+        when(proc.waitFor(anyLong(), any())).thenAnswer(_ -> {
+            assertTrue(drainsStarted.await(5, TimeUnit.SECONDS), "both output drains should start before timeout");
+            return false;
+        });
 
         Exception ex = assertThrows(Exception.class, () -> readOutputMethod().invoke(executor, proc, List.of("echo")));
 

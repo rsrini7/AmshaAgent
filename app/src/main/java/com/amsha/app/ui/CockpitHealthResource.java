@@ -33,6 +33,10 @@ import com.amsha.app.ui.dto.ProviderHealthSummary;
 import com.amsha.app.ui.dto.SmallRyeHealthSummary;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.llm.api.AgentChatModelProvider;
+import com.amsha.llm.api.LlmConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
+import com.amsha.persistence.api.AccessRoles;
+import com.amsha.persistence.api.PersistenceBackend;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.health.HealthCheck;
@@ -54,14 +58,14 @@ public class CockpitHealthResource {
     @Inject
     Instance<DataSource> dataSourceInstance;
 
-    @ConfigProperty(name = "amsha.persistence.backend", defaultValue = "sqlite")
+    @ConfigProperty(name = PersistenceBackend.PROPERTY, defaultValue = PersistenceBackend.SQLITE)
     String runtimeBackend;
 
     @Inject
     @Any
     Instance<AgentChatModelProvider> providers;
 
-    @ConfigProperty(name = "amsha.llm.provider", defaultValue = "groq")
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
     String defaultProviderName;
 
     @Context
@@ -183,7 +187,7 @@ public class CockpitHealthResource {
                     // Metrics might not be enabled or supported on this connection
                 }
             }
-        } else if ("filesystem".equalsIgnoreCase(runtimeBackend) || "fs".equalsIgnoreCase(runtimeBackend)) {
+        } else if (PersistenceBackend.isFilesystem(runtimeBackend)) {
             status = "UP";
             poolEnabled = false;
         } else {
@@ -254,8 +258,8 @@ public class CockpitHealthResource {
     }
 
     private static boolean isClaudeCodeAlias(String name) {
-        return "claude-code".equals(name)
-                || "anthropic".equals(name)
+        return ModelDefaults.PROVIDER_CLAUDE_CODE.equals(name)
+                || ModelDefaults.PROVIDER_ANTHROPIC.equals(name)
                 || "claudecode".equals(name)
                 || "claude".equals(name);
     }
@@ -367,6 +371,6 @@ public class CockpitHealthResource {
     }
 
     private boolean isInternal() {
-        return securityContext != null && securityContext.isUserInRole("internal");
+        return securityContext != null && securityContext.isUserInRole(AccessRoles.INTERNAL);
     }
 }

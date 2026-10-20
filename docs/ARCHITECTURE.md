@@ -13,10 +13,10 @@
 | `amsha-llm-provider-api` | LLM contracts & SPIs — provider-neutral model config, OAuth token extractors (zero-core) |
 | `amsha-llm-providers` | LangChain4j provider adapters implementing the LLM SPIs |
 | `amsha-security-api` | Security contracts — `RiskLevel`, `ToolOperation`, `SecretVault` port, outbound policy decisions (zero-core) |
-| `amsha-security` | Impl: secret vault (AES-GCM-SIV + Argon2id), governed outbound transport, autonomy policy, bootstrap credentials |
+| `amsha-security` | Impl: secret vault (AES-GCM-SIV + Argon2id), autonomy policy, bootstrap credentials, outbound transport orchestration (`GovernedTransportService`), and approval receipts. The canonical `OutboundHttpPolicyService` and `GovernedHttpClient` / `GovernedHttpDnsPinning` / `OutboundHttpException` live in `amsha-core` (`com.amsha.core.security*`) — core cannot depend on this impl module — and security retains thin compatibility wrappers for the named HTTP client types |
 | `amsha-tool-api` | Tool contracts — `AgentTool` SPI, capability/metadata/context/response types (zero-core) |
 | `amsha-tools-builtin` | Built-in `AgentTools` (16 incl. Playwright CLI) + Lucene-backed search |
-| `amsha-classifier-api` | Shadow-classifier SPIs — tool-risk, answer-quality, intent (zero-core; impls in `amsha-local-ml-onnx`) |
+| `amsha-classifier-api` | Shadow-classifier SPIs — tool-risk, answer-quality, intent — **plus the Jev decision-plane seam** (zero-core; classifier impls in `amsha-local-ml-onnx`, and no `DecisionEngine` bean by design — status Deferred) |
 | `amsha-sandbox` | Podman rootless container execution, namespace isolation, image resolution |
 | `amsha-skills` | Skill loading and providers (built-in skills + dynamic SkillsJars) |
 | `amsha-memory` | Tiered memory implementation (Core/Recall/Archival) over `amsha-persistence-api` (strict zero-core) |
@@ -282,6 +282,60 @@ closed, and the interceptors preserve the deterministic guard path. Disable bloc
 new leases immediately while accepted leases retain their result path and drain.
 Internal admin mutations write a mandatory payload-free audit record before changing
 state; audit failure leaves the switch unchanged.
+
+### Jev Decision Plane (Deferred)
+
+`amsha-classifier-api` also carries a provider-neutral typed decision seam: a one-method
+`DecisionEngine.evaluate(DecisionRequest) -> DecisionResult`, a sealed answer vocabulary (`Choice`,
+`Score`, `Noul`), registered `DecisionDefinition`s, deterministic Amsha-owned policies
+(`IntentDecisionPolicy`, `ToolRiskDecisionPolicy`), a payload decoder that fails closed to
+`INFERENCE_ERROR`, a transaction-boundary guard, and a placement validator that forbids remote or
+self-hosted engines at the network-free classifier SPIs. See
+[ADR-jev-decision-plane](./adr/architecture/ADR-jev-decision-plane.md).
+
+![Jev Decision Plane](./assets/amsha_decision_plane.svg)
+
+**The plane is Deferred, and that is enforced in code rather than merely documented.** No production
+`DecisionEngine` bean exists. Enabled shadow classifiers return `NoOpinion(MISSING_MODEL)`; disabled
+classifiers return `DISABLED`. `IntentDecisionRouter.isEnabled()` is false and its evaluation returns a
+`DISABLED` fallback while no engine resolves. Setting
+`AMSHA_ROUTING_INTENT_DECISION_ROUTER_ENABLED=true` on its own is intentionally a no-op: with a resolvable
+engine, direct routing additionally requires `isActivationGateApproved()` — approved candidate evidence, an
+approved cost ceiling, and a non-blank rollout owner. `DecisionPlaneReadiness` (`@Startup`) logs exactly one WARN when a switch is
+enabled with no resolvable engine, so a misconfiguration is visible rather than silent. A non-blank but
+placeholder rollout owner — which satisfies the gate while naming nobody — is announced once at startup by
+`ActivationGateReadiness`, advisory only: it never rejects the value or closes the gate. Do **not** add a
+production `DecisionEngine` bean without reopening the ADR.
+
+**The evaluation path is Accepted and implemented.** Its default-off, internal-only, non-routing
+service builds the configured engine transiently and exposes registered-decision evaluation plus
+the versioned `/evidence/run` corpus endpoint. It never registers a `DecisionEngine` bean, so
+`Instance<DecisionEngine>` stays unsatisfied. Production activation still requires the parent
+Deferred ADR promotion procedure; see the
+[evaluation-path ADR](./adr/architecture/ADR-jev-decision-plane-evaluation-path.md) and the
+[activation plan](./research/Jev-Decision-Plane-Activation-Plan-2026-10-07.md).
+
+The classifier control plane remains independently validatable without a local ONNX model bundle
+(`/api/v1/admin/local-ml/onnx/classifiers*`, `OnnxAdminResource`) — which is also the one part of the
+local-ML stack validatable with **no model bundle**, because those endpoints check `isInternal()` only and
+never `onnxEnabled`. See [Architecture_Invariants](./Architecture_Invariants.md) §27,
+[CONFIGURATION](./CONFIGURATION.md), and [ONNX_LOCAL_ML_GUIDE](./ONNX_LOCAL_ML_GUIDE.md) §7.
+
+**There is deliberately no onboarding or cockpit surface for the decision provider.** `AMSHA_DECISION_PROVIDER`
+and its `amsha.decision.providers.slots.*` companions are environment-only, and the cockpit's
+classifier panel says so on every render. Two independent reasons, and the second is the binding one:
+
+1. Onboarding persists through `SettingsDto` and `LlmConfigurationProvenance`, which are LLM-scoped;
+   a `@ConfigMapping` is not a writable settings target, so there is no path that could set it at runtime.
+2. Offering a "choose your decision provider" control would imply a working plane. The plane is
+   Deferred with no `DecisionEngine` bean, so the choice would change nothing — and §27 treats
+   advancing it as a deliberate ADR change, never a side effect of adding a UI affordance.
+
+Note also that onboarding's `classifier` concern route is an **LLM** provider choice for
+classifier-shaped work, not this decision plane; the two share a word and nothing else.
+
+Provider selection therefore stays a deployment-time `.env` decision. Wiring the mapping to an engine is
+the ADR step, and it is what would make an onboarding control meaningful.
 
 ### Parallel Tool Execution
 
@@ -1151,6 +1205,7 @@ Lifecycle: `@PostConstruct` registers a ready implementation (`effective=request
 | `arc-health-dashboard` | System health & diagnostics: memory, storage, database latency, provider status (`#/health`) |
 | `arc-db-console` | Operator read-only SQL console with AST validation and schema explorer (`#/db-console`) |
 | `arc-model-arena` | Comparative LLM benchmarking, categorical slots, cost estimation, and token bounding (`#/arena`) |
+| `arc-classifier-panel` | Read-only ONNX shadow classifier slot status; no controls, no activation-gate claims (`#/classifiers`) |
 | `arc-settings` | LLM provider switch, API key update, system prompt edit (`#/settings`) |
 | `arc-onboarding` | Durable draft/saga onboarding UI; posts to `/api/v1/onboarding/drafts*` (`#/onboarding`) |
 | `arc-agent-status` | Live agent status via REST poll + SSE |
@@ -1160,6 +1215,8 @@ Lifecycle: `@PostConstruct` registers a ready implementation (`effective=request
 | `arc-skills-panel` | Skill management (`#/skills`) |
 
 **WebSocket protocol:** `{"type":"message","text":"..."}` (client→server), `{"type":"message","role":"assistant","text":"..."}` (server→client).
+
+**Cockpit API contract ownership (decided).** The UI contract is owned by the hand-written client — `ui/src/api/client.ts` together with the DTOs it re-exports from `ui/src/api/types.ts` — not by generated code. `ui/src/api/generated/` is inert: `app/pom.xml`'s `ensure-openapi-yaml` execution writes a 72-byte `paths: {}` document, the `ts-dto` profile's generator manifest lists only `index.ts` and `runtime.ts`, and nothing under `ui/src` imports it. Repairing or retiring that pipeline is **tracked as separate work**; until that decision lands, a new backend surface must be added by hand to `ArcClient` and the DTO types — exactly as `getClassifierRuntimeStatus()` was — and `ui/src/api/generated/` must not be extended. This matches the existing "API/UI contract" verification row in [ADR-MCP-Management-UI-and-Channel-Control](./adr/domain/ADR-MCP-Management-UI-and-Channel-Control.md), which accepts "OpenAPI generation **or equivalent** client/type updates and `ArcClient` methods".
 
 ---
 
@@ -1213,11 +1270,26 @@ The cockpit exposes trace data through the following routes:
 - **Allowlisted Metadata Only**: Rejects arbitrary class loading and raw source code streaming. Strictly allows symbolication for 9 core architectural classes (`AgentLoop`, `MessagePipeline`, `ToolInvocationGuard`, `CheckpointResumeCoordinator`, `ReflexRegistry`, `ApprovalStateMachine`, `AgentCronScheduler`, `GovernedTransportService`, `TraceSymbolicationService`).
 - **Access Control**: Enforces `isInternal()` authorization and strict multi-tenant session ownership checks; unauthorized or cross-tenant requests return 404 non-disclosure.
 
+### 6. Read-Only ONNX Classifier Runtime Status (`GET /api/v1/admin/local-ml/onnx/classifiers`, `#/classifiers`)
+- **What it shows**: the three ONNX classifier runtime slots (`intent`, `tool-risk`, `answer-quality`) with the nine payload-free fields of `OnnxClassifierRuntimeControl.Snapshot` — `classifier`, `startupEnabled`, `requestedEnabled`, `implementationAvailable`, `effectiveEnabled`, `acceptingRequests`, `draining`, `inFlight`, and `revision`. The panel derives its state from `effectiveEnabled`, never from `requestedEnabled`, so a switch that is on while no ready implementation has registered reads as *requested — not in effect* rather than as serving.
+- **Access control and the missing-role path**: the endpoint is guarded by `isInternal()` only and never by `onnxEnabled`, which is what makes it the one part of the local-ML stack validatable with no model bundle. A caller without the `internal` role receives `403`, and the panel renders an explicit *internal role required* notice rather than an empty slot list. That case is kept distinct from `401` (expired session) and from a `403` that is actually a CSRF rejection. A `200` that does not carry all three slots is reported as a malformed contract, not as "nothing configured".
+- **Deliberate scope boundary**: this view reports the classifier slots and nothing else. It makes no claim about the intent router's activation gate, candidate evidence, cost approvals, or rollout ownership, because none of those appear in the response. Reporting them accurately would require a separate read-only API returning safe facts such as `directRoutingPermitted` and `rolloutOwnerConfigured` — and never the rollout owner's name.
+- **No controls**: enable/disable is deliberately absent while the plane is Deferred and no `DecisionEngine` bean exists, since every enable would be rejected with `409 MISSING_READY_IMPLEMENTATION`. See [Jev Decision Plane (Deferred)](#jev-decision-plane-deferred).
+
 ---
 
 ## Governed Outbound HTTP Transport for LLMs & Arena
 
 All outbound model requests from the agent reasoning loop and Model Arena are intercepted at the byte level to prevent SSRF, data exfiltration, and credential leakage:
+
+> **Canonical transport location.** `GovernedHttpClient`, `GovernedHttpDnsPinning` and `OutboundHttpException`
+> live in **`amsha-core`** (`com.amsha.core.security.http`) — they moved down from `amsha-security` because
+> `amsha-core` MUST NOT depend on an impl-tier module (§1.8, Rule 17) and the remote decision engine in core
+> needs the governed transport. `amsha-security` keeps thin backwards-compatible wrappers in
+> `com.amsha.security.http` so existing callers (`llm-providers`, `mcp`, `tools-builtin`, `onboarding`, `app`)
+> compile unchanged; new code SHOULD target the core types. `OutboundHttpPolicyService` also lives in core;
+> `amsha-security` retains transport orchestration (`GovernedTransportService`) and approval receipts
+> (`ApprovalReceiptIssuer`).
 
 ![Governed Outbound Transport for LLMs & Arena](./assets/amsha_governed_transport.svg)
 
