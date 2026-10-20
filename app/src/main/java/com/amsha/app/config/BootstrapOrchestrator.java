@@ -18,13 +18,18 @@ public class BootstrapOrchestrator {
     private static final Logger log = Logger.getLogger(BootstrapOrchestrator.class);
 
     private static final String PROP_DATA_DIR = ConfigKeys.DATA_DIR;
+    private static final String ENV_LD_PRELOAD = "LD_PRELOAD";
+    private static final String ENV_AMSHA_LD_PRELOAD_SET = "AMSHA_LD_PRELOAD_SET";
 
     public static void bootstrap(String[] args) {
         Path binaryDir = resolveBinaryDir();
         drainInputBuffer();
         EnvConfigInitializer.extractEnvExampleIfNeeded(binaryDir);
 
-        reexecWithLdPreloadIfNeeded(args);
+        boolean informational = isInformational(args);
+        if (!informational) {
+            reexecWithLdPreloadIfNeeded(args);
+        }
         EnvConfigInitializer.loadDotEnv(binaryDir);
 
         // Validate .env structure and report issues to user (read-only, no modifications)
@@ -40,7 +45,6 @@ public class BootstrapOrchestrator {
         // this guard `amsha --help` installs @playwright/cli globally and then blocks on
         // the first-run wizard before picocli ever prints usage. Validation and directory
         // provisioning below still run because Quarkus boots afterwards either way.
-        boolean informational = isInformational(args);
         if (!informational) {
             PlaywrightCliInstaller.ensureCliInstalled();
         }
@@ -92,10 +96,11 @@ public class BootstrapOrchestrator {
     }
 
     private static void reexecWithLdPreloadIfNeeded(String[] args) {
-        String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        if (!os.contains("linux")
-                || System.getenv("AMSHA_LD_PRELOAD_SET") != null
-                || System.getenv("LD_PRELOAD") != null) return;
+        if (!shouldReexecWithLdPreload(
+                args,
+                System.getProperty("os.name"),
+                System.getenv(ENV_AMSHA_LD_PRELOAD_SET),
+                System.getenv(ENV_LD_PRELOAD))) return;
 
         String libmPath = findLibm();
         if (libmPath == null) return;
@@ -107,8 +112,8 @@ public class BootstrapOrchestrator {
             ProcessBuilder pb = new ProcessBuilder();
             pb.command().add(command);
             for (String arg : args) pb.command().add(arg);
-            pb.environment().put("LD_PRELOAD", libmPath);
-            pb.environment().put("AMSHA_LD_PRELOAD_SET", "1");
+            pb.environment().put(ENV_LD_PRELOAD, libmPath);
+            pb.environment().put(ENV_AMSHA_LD_PRELOAD_SET, "1");
             pb.inheritIO();
             System.exit(pb.start().waitFor());
         } catch (InterruptedException e) {
@@ -117,6 +122,14 @@ public class BootstrapOrchestrator {
         } catch (Exception e) {
             log.error("Failed to re-exec with LD_PRELOAD", LogUtil.relevantThrowable(e));
         }
+    }
+
+    static boolean shouldReexecWithLdPreload(String[] args, String osName, String amshaLdPreloadSet, String ldPreload) {
+        return !isInformational(args)
+                && osName != null
+                && osName.toLowerCase(Locale.ROOT).contains("linux")
+                && amshaLdPreloadSet == null
+                && ldPreload == null;
     }
 
     private static String findLibm() {
