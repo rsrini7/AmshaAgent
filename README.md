@@ -246,6 +246,7 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 | Doc | What it covers |
 |-----|---------------|
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to set up, change, verify, and submit contributions |
 | [QUICK_START.md](./docs/QUICK_START.md) | Dev mode, packaged JAR, native image, Docker Compose |
 | [ONBOARDING.md](./docs/ONBOARDING.md) | End-to-end CLI/native and web UI onboarding, configuration layers, credentials, recovery |
 | [SETUP.md](./docs/SETUP.md) | Manual setup, prerequisites, OS-specific, troubleshooting |
