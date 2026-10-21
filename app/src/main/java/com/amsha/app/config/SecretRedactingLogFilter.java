@@ -2,15 +2,18 @@ package com.amsha.app.config;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Filter;
 import java.util.logging.LogRecord;
 
 import com.amsha.common.util.SecretRedactor;
 
+import org.jboss.logmanager.ExtLogRecord;
+
 import io.quarkus.logging.LoggingFilter;
 
-/** Sanitizes records emitted by application and dependency loggers before formatting. */
+/** Sanitizes application and dependency log records before output. */
 @LoggingFilter(name = SecretRedactingLogFilter.NAME)
 public final class SecretRedactingLogFilter implements Filter {
 
@@ -20,8 +23,17 @@ public final class SecretRedactingLogFilter implements Filter {
     public boolean isLoggable(LogRecord record) {
         if (record == null) return false;
 
-        record.setMessage(SecretRedactor.redact(record.getMessage()));
-        redactParameters(record);
+        if (record instanceof ExtLogRecord extendedRecord) {
+            record.setMessage(SecretRedactor.redact(extendedRecord.getFormattedMessage()));
+            record.setParameters(null);
+        } else {
+            String message = record.getMessage();
+            String redactedMessage = SecretRedactor.redact(message);
+            if (!Objects.equals(message, redactedMessage)) {
+                record.setMessage(redactedMessage);
+            }
+            redactParameters(record);
+        }
 
         Throwable thrown = record.getThrown();
         if (thrown != null) {
