@@ -222,7 +222,7 @@ export class ArcChatInterface extends LitElement {
       max-width: 100%;
       box-sizing: border-box;
     }
-    .bubble-user { white-space: pre-wrap; }
+    .bubble-user-text { white-space: pre-wrap; }
     .bubble-user {
       background: var(--accent);
       color: white;
@@ -2019,7 +2019,7 @@ export class ArcChatInterface extends LitElement {
                </div>
                 <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">
                   ${m.role === 'user'
-                    ? html`<div>${m.text ? m.text.trim() : ''}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`
+                    ? html`<div class="bubble-user-text">${m.text ? m.text.trim() : ''}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`
                     : html`
                         ${m.text ? this._renderMarkdown(m.id, m.text) : nothing}
                         ${m.audio ? html`<div class="assistant-audio-player"><div class="audio-header"><span class="audio-badge">🎵 Voice Reply</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}
