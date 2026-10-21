@@ -22,6 +22,9 @@ export class ArcHitlPanel extends LitElement {
   @state() private _rejecting = new Set<string>();
   @state() private _error: Record<string, string> = {};
   @state() private _statusUnknown = new Set<string>();
+  @state() private _resolvedElsewhere = new Set<string>();
+  @state() private _statusConflict = new Set<string>();
+  @state() private _statusNotice: Record<string, string> = {};
 
   private _pollTimer?: number;
   private readonly _idempotencyKeys = new Map<string, string>();
@@ -108,6 +111,7 @@ export class ArcHitlPanel extends LitElement {
     .reason-actions { display: flex; gap: 10px; justify-content: flex-end; }
     
     .error-msg { color: #ef4444; font-size: 12px; font-weight: 600; margin-top: 8px; }
+    .status-msg { color: var(--text-muted); font-size: 12px; font-weight: 600; margin-top: 8px; }
   `;
 
   private async _approve(target: PendingApprovalDto | string) {
@@ -123,7 +127,7 @@ export class ArcHitlPanel extends LitElement {
       ? this.approvals.find(it => it.taskId === target) || { taskId: target, toolName: '', params: {}, requestedAt: '', agentName: '' }
       : target;
     const taskId = approval.taskId;
-    const toolName = approval.toolName;
+    const toolName = approval.toolName.trim().startsWith('parallel|') ? 'all' : approval.toolName;
     const requestedAt = approval.requestedAt;
 
     // Ignore a second click that arrives before Lit has re-rendered the
@@ -133,6 +137,8 @@ export class ArcHitlPanel extends LitElement {
 
     this._processing.add(taskId);
     this._statusUnknown.delete(taskId);
+    this._statusConflict.delete(taskId);
+    this._statusNotice = { ...this._statusNotice, [taskId]: '' };
     this._error = { ...this._error, [taskId]: '' };
     this.requestUpdate();
 
@@ -153,11 +159,15 @@ export class ArcHitlPanel extends LitElement {
       }
       this._completeAction(taskId, action);
     } catch (error: unknown) {
-      const reconciled = this._isUncertainFailure(error)
-        ? await this._reconcile(client, taskId, action)
-        : false;
-      if (!reconciled && !this._statusUnknown.has(taskId)) {
-        this._error = { ...this._error, [taskId]: this._errorMessage(error, `${action} failed`) };
+      if (this._isAlreadyResolved(error)) {
+        await this._reconcileResolvedConflict(client, approval);
+      } else {
+        const reconciled = this._isUncertainFailure(error)
+          ? await this._reconcile(client, taskId, action)
+          : false;
+        if (!reconciled && !this._statusUnknown.has(taskId)) {
+          this._error = { ...this._error, [taskId]: this._errorMessage(error, `${action} failed`) };
+        }
       }
     } finally {
       this._processing.delete(taskId);
@@ -197,6 +207,8 @@ export class ArcHitlPanel extends LitElement {
 
   private _completeAction(taskId: string, action: 'approved' | 'rejected') {
     this._statusUnknown.delete(taskId);
+    this._statusConflict.delete(taskId);
+    this._statusNotice = { ...this._statusNotice, [taskId]: '' };
     this._error = { ...this._error, [taskId]: '' };
     for (const k of Array.from(this._idempotencyKeys.keys())) {
       if (k.includes(`:${taskId}:`) || k.endsWith(`:${taskId}`)) {
@@ -208,6 +220,70 @@ export class ArcHitlPanel extends LitElement {
       bubbles: true,
       composed: true,
     }));
+  }
+
+  private _markResolvedElsewhere(approval: PendingApprovalDto) {
+    const taskId = approval.taskId;
+    this._statusUnknown.delete(taskId);
+    this._statusConflict.delete(taskId);
+    this._statusNotice = { ...this._statusNotice, [taskId]: '' };
+    this._resolvedElsewhere.add(this._approvalKey(approval));
+    this._error = { ...this._error, [taskId]: '' };
+    for (const key of Array.from(this._idempotencyKeys.keys())) {
+      if (key.includes(`:${taskId}:`) || key.endsWith(`:${taskId}`)) {
+        this._idempotencyKeys.delete(key);
+      }
+    }
+    this.dispatchEvent(new CustomEvent('approval-action', {
+      detail: { taskId, action: 'resolved' },
+      bubbles: true,
+      composed: true,
+    }));
+    this.requestUpdate();
+  }
+
+  private async _reconcileResolvedConflict(
+    client: ArcClient,
+    approval: PendingApprovalDto,
+  ): Promise<boolean> {
+    const taskId = approval.taskId;
+    try {
+      let result = await client.getHitl(0, 50);
+      let stillPending = result.items.some((item) => this._sameApproval(item, approval));
+      for (let page = 1; !stillPending && page < result.totalPages; page++) {
+        result = await client.getHitl(page, 50);
+        stillPending = result.items.some((item) => this._sameApproval(item, approval));
+      }
+      if (!stillPending) {
+        this._markResolvedElsewhere(approval);
+        return true;
+      }
+      this._statusNotice = {
+        ...this._statusNotice,
+        [taskId]: 'This approval is still pending. Check its status before retrying.',
+      };
+    } catch (_) {
+      this._statusNotice = {
+        ...this._statusNotice,
+        [taskId]: 'Could not confirm this approval status. Check again or refresh the list.',
+      };
+    }
+    this._statusUnknown.add(taskId);
+    this._statusConflict.add(taskId);
+    this.requestUpdate();
+    return false;
+  }
+
+  private _approvalKey(approval: PendingApprovalDto): string {
+    return `${approval.taskId}:${approval.toolName}:${approval.requestedAt}`;
+  }
+
+  private _sameApproval(candidate: PendingApprovalDto, approval: PendingApprovalDto): boolean {
+    if (candidate.taskId === approval.taskId) return true;
+    if (candidate.sessionId !== approval.taskId) return false;
+    const pendingTool = candidate.toolName.trim().replace(/^parallel\|/, '');
+    const requestedTool = approval.toolName.trim().replace(/^parallel\|/, '');
+    return !pendingTool || !requestedTool || pendingTool === requestedTool;
   }
 
   private async _reconcile(
@@ -244,6 +320,11 @@ export class ArcHitlPanel extends LitElement {
     return typeof status !== 'number' || status === 408 || status === 429 || status >= 500;
   }
 
+  private _isAlreadyResolved(error: unknown): boolean {
+    return !!error && typeof error === 'object' && 'status' in error &&
+      (error as { status?: unknown }).status === 409;
+  }
+
   private _errorMessage(error: unknown, fallback: string): string {
     return error instanceof Error && error.message ? error.message : fallback;
   }
@@ -254,10 +335,16 @@ export class ArcHitlPanel extends LitElement {
 
   private async _checkStatus(taskId: string) {
     const action = this._lastActions.get(taskId) || 'approved';
+    const approval = this.approvals.find((item) => item.taskId === taskId);
     this._processing.add(taskId);
     this.requestUpdate();
     try {
-      await this._reconcile(new ArcClient('/api/v1', this._appContext?.apiKey || ''), taskId, action);
+      const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
+      if (this._statusConflict.has(taskId) && approval) {
+        await this._reconcileResolvedConflict(client, approval);
+      } else {
+        await this._reconcile(client, taskId, action);
+      }
     } finally {
       this._processing.delete(taskId);
       this.requestUpdate();
@@ -351,14 +438,18 @@ export class ArcHitlPanel extends LitElement {
               <pre class="params">${this._formatParams(a.params)}</pre>
               
               <div class="actions">
-          ${this.channelCommandPending
+          ${this._resolvedElsewhere.has(this._approvalKey(a))
+            ? html`<span class="status-msg" role="status">This approval was already resolved.</span>`
+            : this.channelCommandPending
             ? html`<span class="empty">Approval action submitted. Waiting for the result...</span>`
             : this._processing.has(a.taskId)
             ? html`<span class="empty">Syncing with cluster...</span>`
             : this._statusUnknown.has(a.taskId)
               ? html`
-                  <span class="empty">Approval status unknown.</span>
-                  <button class="btn btn-approve" @click="${() => this._retry(a.taskId)}">Retry</button>
+                  <span class="empty">${this._statusNotice[a.taskId] || 'Approval status unknown.'}</span>
+                  ${this._statusConflict.has(a.taskId)
+                    ? ''
+                    : html`<button class="btn btn-approve" @click="${() => this._retry(a.taskId)}">Retry</button>`}
                   <button class="btn btn-reject" @click="${() => this._checkStatus(a.taskId)}">Check status</button>
                 `
               : html`

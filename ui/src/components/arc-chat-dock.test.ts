@@ -363,7 +363,7 @@ describe('Chat Dock & HITL Panel integration', () => {
     vi.unstubAllGlobals();
   });
 
-  it('turns a background cron approval frame into an actionable approval message', () => {
+  it('keeps a background cron approval informational without blocking chat', () => {
     const chat = new ArcChatInterface();
 
     (chat as any)._handleFrame({
@@ -379,11 +379,12 @@ describe('Chat Dock & HITL Panel integration', () => {
       isApprovalPrompt: true,
       approvalViaChannel: false,
       targetSessionId: 'cron-cron-1-exec-1',
-      approvalData: { tool: 'sandbox_exec' },
+      text: 'A scheduled task is paused for approval. Review it on the Approvals page.',
     });
-    expect((chat as any)._awaitingApproval).toBe(true);
+    expect((chat as any)._messages[0].approvalData).toBeUndefined();
+    expect((chat as any)._awaitingApproval).toBe(false);
     expect((chat as any)._isTyping).toBe(false);
-    expect((chat as any)._progressPhase).toBe('Waiting for approval');
+    expect((chat as any)._progressPhase).toBe('');
   });
 
   it('replaces an earlier cron approval with the next tool approval in the same session', () => {
@@ -416,16 +417,12 @@ describe('Chat Dock & HITL Panel integration', () => {
     expect((chat as any)._messages).toHaveLength(1);
     expect((chat as any)._messages[0]).toMatchObject({
       id: oldMessageId,
-      text: 'Approval required for sandbox_exec',
+      text: 'A scheduled task is paused for approval. Review it on the Approvals page.',
       approvalViaChannel: false,
       approvalActionPending: undefined,
       targetSessionId: sessionId,
-      approvalData: {
-        tool: 'sandbox_exec',
-        params: { code: 'import math\nprint(math.factorial(11))', language: 'python' },
-      },
     });
-    expect((chat as any)._awaitingApproval).toBe(true);
+    expect((chat as any)._awaitingApproval).toBe(false);
   });
 
   it('keeps earlier interactive approval prompts in chat history', () => {
@@ -463,7 +460,7 @@ describe('Chat Dock & HITL Panel integration', () => {
     });
   });
 
-  it('keeps a cron approval card rendered after an unrelated assistant message', async () => {
+  it('keeps a cron approval notice rendered without an actionable HITL panel', async () => {
     const chat = new ArcChatInterface();
     const cronSessionId = 'cron-cron-1-exec-1';
     (chat as any)._handleFrame({
@@ -486,10 +483,10 @@ describe('Chat Dock & HITL Panel integration', () => {
       return template.values?.some(hasHitlPanel) ?? false;
     };
     vi.spyOn(chat as any, '_renderMarkdown').mockReturnValue('');
-    expect(hasHitlPanel((chat as any).render())).toBe(true);
+    expect(hasHitlPanel((chat as any).render())).toBe(false);
   });
 
-  it('does not route a cron HITL approval through the chat websocket', () => {
+  it('does not approve a cron task from chat', () => {
     const chat = new ArcChatInterface();
     const send = vi.fn();
     (chat as any)._wsStatus = 'open';
@@ -506,14 +503,14 @@ describe('Chat Dock & HITL Panel integration', () => {
 
     expect(send).not.toHaveBeenCalled();
     expect((chat as any)._messages).toHaveLength(1);
-    expect((chat as any)._messages[0].approvalActionPending).toBe('approved');
+    expect((chat as any)._messages[0].approvalActionPending).toBeUndefined();
     expect((chat as any)._awaitingApproval).toBe(false);
-    expect((chat as any)._isTyping).toBe(true);
-    expect((chat as any)._progressPhase).toBe('Executing tool');
+    expect((chat as any)._isTyping).toBe(false);
+    expect((chat as any)._progressPhase).toBe('');
     expect((chat as any)._activeBackgroundCronSessionId).toBe('cron-cron-1-exec-1');
   });
 
-  it('records cron denial on the approval card without a fake chat command', () => {
+  it('does not deny a cron task from chat', () => {
     const chat = new ArcChatInterface();
     const approval = {
       id: 'approval-2', role: 'assistant', text: 'Approval required', timestamp: Date.now(),
@@ -524,7 +521,7 @@ describe('Chat Dock & HITL Panel integration', () => {
     (chat as any)._denyReason = 'Not needed';
     (chat as any)._sendDeny(approval);
     expect((chat as any)._messages).toHaveLength(1);
-    expect((chat as any)._messages[0].approvalActionPending).toBe('rejected');
+    expect((chat as any)._messages[0].approvalActionPending).toBeUndefined();
   });
 
   it('checks backend status without sending another chat message', async () => {
@@ -606,7 +603,7 @@ describe('Chat Dock & HITL Panel integration', () => {
     expect((chat as any)._progressDetail).toBe('Running the approved scheduled task.');
   });
 
-  it('clears the scheduled turn after a background cron completion frame', () => {
+  it('clears tracked background cron progress after its completion frame', () => {
     const chat = new ArcChatInterface();
     const clearWatchdogSpy = vi.spyOn(chat as any, '_clearTurnWatchdog');
 

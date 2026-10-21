@@ -27,6 +27,7 @@ interface ChatMessage {
   approvalViaChannel?: boolean;
   approvalActionPending?: 'approved' | 'rejected';
   approvalActionError?: string;
+  approvalResolved?: boolean;
   historic?: boolean;
   targetSessionId?: string;
   audio?: {
@@ -236,6 +237,19 @@ export class ArcChatInterface extends LitElement {
       border: 1px solid var(--border);
       border-radius: 18px 18px 18px 4px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .scheduled-approval-note,
+    .approval-resolution-note {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .scheduled-approval-note a {
+      color: var(--accent-secondary);
+      font-weight: 600;
     }
     .bubble-system {
       background: transparent; color: var(--text-muted); padding: 4px 12px;
@@ -1160,8 +1174,28 @@ export class ArcChatInterface extends LitElement {
     if (!sessionId) {
       return;
     }
-    if (sessionId.startsWith('cron-')) {
+    const isCronSession = sessionId.startsWith('cron-');
+    if (isCronSession) {
       this._activeBackgroundCronSessionId = sessionId;
+      const existing = this._messages.find(
+        (message) => message.isApprovalPrompt && message.targetSessionId === sessionId,
+      );
+      const approvalMessage: ChatMessage = {
+        id: existing?.id || crypto.randomUUID(),
+        role: 'assistant',
+        text: 'A scheduled task is paused for approval. Review it on the Approvals page.',
+        timestamp: frame.timestamp || Date.now(),
+        isApprovalPrompt: true,
+        approvalViaChannel: false,
+        approvalActionPending: undefined,
+        approvalActionError: undefined,
+        targetSessionId: sessionId,
+      };
+      this._messages = existing
+        ? this._messages.map((message) => message.id === existing.id ? approvalMessage : message)
+        : [...this._messages, approvalMessage];
+      this._scrollToBottom();
+      return;
     }
 
     this._clearTurnWatchdog();
@@ -1176,19 +1210,13 @@ export class ArcChatInterface extends LitElement {
     ].slice(-4);
 
     const tool = frame.toolName || frame.approval?.tool || 'Tool Execution';
-    const isCronSession = sessionId.startsWith('cron-');
-    const existing = isCronSession
-      ? this._messages.find((message) => message.isApprovalPrompt && message.targetSessionId === sessionId)
-      : undefined;
     const approvalMessage: ChatMessage = {
-      id: existing?.id || crypto.randomUUID(),
+      id: crypto.randomUUID(),
       role: 'assistant',
       text: frame.text || `Approval required for ${tool}.`,
       timestamp: frame.timestamp || Date.now(),
       isApprovalPrompt: true,
-      // Cron approvals use the shared HITL REST endpoint; chat-command routing
-      // is reserved for interactive channel approvals.
-      approvalViaChannel: !isCronSession,
+      approvalViaChannel: true,
       approvalActionPending: undefined,
       approvalActionError: undefined,
       approvalData: {
@@ -1197,13 +1225,7 @@ export class ArcChatInterface extends LitElement {
       },
       targetSessionId: sessionId,
     };
-    if (existing) {
-      this._messages = this._messages.map((message) =>
-        message.id === existing.id ? approvalMessage : message,
-      );
-    } else {
-      this._messages = [...this._messages, approvalMessage];
-    }
+    this._messages = [...this._messages, approvalMessage];
     this._scrollToBottom();
   }
 
@@ -1726,9 +1748,29 @@ export class ArcChatInterface extends LitElement {
   private _onHitlAction(e: CustomEvent<{ taskId: string; action: string }>, m: ChatMessage) {
     if (e.detail.action === 'approved') {
       this._sendApprove(m);
-    } else {
+    } else if (e.detail.action === 'rejected') {
       this._sendDeny(m);
+    } else if (e.detail.action === 'resolved') {
+      this._markApprovalResolved(m);
     }
+  }
+
+  private _markApprovalResolved(m: ChatMessage): void {
+    this._clearTurnWatchdog();
+    this._awaitingApproval = false;
+    this._isTyping = true;
+    this._turnStalled = false;
+    this._progressPhase = 'Approval resolved';
+    this._progressDetail = 'Waiting for the run to report its result.';
+    this._progressTrail = [
+      ...this._progressTrail,
+      { phase: this._progressPhase, detail: this._progressDetail },
+    ].slice(-4);
+    this._messages = this._messages.map((message) => message.id === m.id
+      ? { ...message, isApprovalPrompt: false, approvalResolved: true }
+      : message);
+    this._armTurnWatchdog();
+    this._scrollToBottom();
   }
 
   private _markToolExecutionStarted(): void {
@@ -1746,6 +1788,9 @@ export class ArcChatInterface extends LitElement {
   }
 
   private _sendApprove(msg: ChatMessage) {
+    if (msg.targetSessionId?.startsWith('cron-')) {
+      return;
+    }
     const cmd = msg.targetSessionId ? `/approve ${msg.targetSessionId}` : '/approve';
     if (msg.approvalViaChannel) {
       if (this._wsStatus !== 'open' || !this._ws) {
@@ -1775,6 +1820,9 @@ export class ArcChatInterface extends LitElement {
   }
 
   private _sendDeny(msg: ChatMessage) {
+    if (msg.targetSessionId?.startsWith('cron-')) {
+      return;
+    }
     if (!this._showDenyReason) {
       this._showDenyReason = true;
       return;
@@ -2022,6 +2070,9 @@ export class ArcChatInterface extends LitElement {
                     ? html`<div class="bubble-user-text">${m.text ? m.text.trim() : ''}</div>${m.audio ? html`<div class="user-audio-player"><div class="audio-header"><span class="audio-badge">🎤 Voice Message</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}`
                     : html`
                         ${m.text ? this._renderMarkdown(m.id, m.text) : nothing}
+                  ${m.approvalResolved
+                    ? html`<div class="approval-resolution-note" role="status">This approval was already resolved. Waiting for the run status.</div>`
+                    : nothing}
                         ${m.audio ? html`<div class="assistant-audio-player"><div class="audio-header"><span class="audio-badge">🎵 Voice Reply</span><button class="replay-btn" @click=${() => this._replayAudio(m.audio!)} title="Replay voice audio">🔄 Replay</button></div><audio controls preload="metadata" src="${m.audio.url || `data:${m.audio.mimeType};base64,${m.audio.data}`}"></audio></div>` : nothing}
                         ${m.runEvents && m.runEvents.length > 0 && m.runId
                           ? html`
@@ -2033,7 +2084,14 @@ export class ArcChatInterface extends LitElement {
                             `
                           : nothing}
                       `}
-                  ${m.isApprovalPrompt && (this._awaitingApproval || m.approvalViaChannel || m.targetSessionId?.startsWith('cron-'))
+                  ${m.isApprovalPrompt && m.targetSessionId?.startsWith('cron-')
+                    ? html`
+                        <div class="scheduled-approval-note" role="status">
+                          <span>Scheduled runs are reviewed outside chat.</span>
+                          <a href="#/hitl">Open Approvals</a>
+                        </div>
+                      `
+                    : m.isApprovalPrompt && (this._awaitingApproval || m.approvalViaChannel)
                     ? html`
                         <div class="approval-card-wrapper" role="region" aria-label="Action Approval">
                           <arc-hitl-panel
