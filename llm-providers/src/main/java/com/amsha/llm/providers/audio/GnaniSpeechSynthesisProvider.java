@@ -40,7 +40,7 @@ import io.quarkus.runtime.Startup;
 @Unremovable
 @Startup
 public class GnaniSpeechSynthesisProvider implements SpeechSynthesisPort {
-    public static final String PROVIDER_ID = "gnani";
+    public static final String PROVIDER_ID = ConfigKeys.GNANI_PROVIDER_ID;
 
     private static final Logger log = Logger.getLogger(GnaniSpeechSynthesisProvider.class);
     private static final String WAV_FORMAT = "wav";

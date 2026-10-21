@@ -74,6 +74,10 @@ public final class ConfigKeys {
 
     /** Environment-variable name selecting the active speech synthesis provider. */
     public static final String TTS_PROVIDER = "AMSHA_TTS_PROVIDER";
+    /** Environment-variable name enabling optional speech synthesis. */
+    public static final String TTS_ENABLED = "AMSHA_TTS_ENABLED";
+    /** Stable identifier for the Gnani speech provider. */
+    public static final String GNANI_PROVIDER_ID = "gnani";
 
     /** MicroProfile property name selecting the active speech synthesis provider. */
     public static final String TTS_PROVIDER_PROPERTY = "amsha.tts.provider";
@@ -110,6 +114,8 @@ public final class ConfigKeys {
 
     /** Gnani speech API key used by the X-API-Key-ID request header. */
     public static final String GNANI_API_KEY = "AMSHA_GNANI_API_KEY";
+    /** Environment-variable name enabling optional Gnani transcription. */
+    public static final String GNANI_STT_ENABLED = "AMSHA_STT_GNANI_ENABLED";
 
     /** MicroProfile property mapped to the optional Gnani speech API key. */
     public static final String GNANI_API_KEY_PROPERTY = "amsha.gnani.api-key";

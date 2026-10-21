@@ -50,6 +50,32 @@ export class ArcOnboardingStepIntegrations extends LitElement {
         Configure external tools, search APIs, and automation scripts.
       </p>
 
+      <div style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:var(--radius-md);padding:var(--space-3);margin-bottom:var(--space-4)">
+        <strong>Speech services (Gnani)</strong>
+        <p style="font-size:var(--font-size-xs);color:var(--text-muted);line-height:1.6">
+          Gnani speech is an optional cloud service. When enabled, recordings or text are sent to Gnani under your account terms.
+          Set these values in the deployment environment and restart Amsha. This web wizard does not edit the deployment
+          <code>.env</code> file or store a service-wide speech credential.
+        </p>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);font-size:var(--font-size-xs)"><code>AMSHA_GNANI_API_KEY=&lt;api-key&gt;
+# Optional transcription
+AMSHA_STT_GNANI_ENABLED=true
+# Optional language override (default en-IN)
+# AMSHA_STT_GNANI_DEFAULT_LANGUAGE=hi-IN
+# Optional speech replies
+AMSHA_TTS_ENABLED=true
+AMSHA_TTS_PROVIDER=gnani
+# Defaults: timbre-v3.0 model, Shivani voice
+# Optional default reply mode (otherwise TEXT_ONLY)
+# AMSHA_TTS_DEFAULT_OUTPUT_MODE=TEXT_AND_AUDIO</code></pre>
+        <p style="font-size:var(--font-size-xs);color:var(--text-muted);line-height:1.6;margin-bottom:0">
+          Transcription defaults to <code>en-IN</code> and a 30-second maximum. Supported STT languages are
+          <code>bn-IN</code>, <code>en-IN</code>, <code>gu-IN</code>, <code>hi-IN</code>, <code>kn-IN</code>,
+          <code>ml-IN</code>, <code>mr-IN</code>, <code>pa-IN</code>, <code>ta-IN</code>, and <code>te-IN</code>.
+          Speech replies still follow each user's output-mode preference; the default mode remains <code>TEXT_ONLY</code>.
+        </p>
+      </div>
+
       <div style="display:flex;flex-direction:column;gap:var(--space-4);margin-bottom:var(--space-5)">
         <div style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:var(--radius-md);padding:var(--space-3)">
           <label style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--font-size-sm);color:var(--text-primary);font-weight:var(--font-weight-semi)">

@@ -21,6 +21,8 @@ public final class ProviderKeySpecs {
 
     public static final Set<String> LLM_KEYLESS_PROVIDERS = Set.of(
             ModelDefaults.PROVIDER_OLLAMA,
+            ModelDefaults.PROVIDER_OMLX,
+            ModelDefaults.PROVIDER_LLAMACPP,
             ModelDefaults.PROVIDER_CODEX,
             ModelDefaults.PROVIDER_CLAUDE_CODE,
             ModelDefaults.PROVIDER_AGY,
@@ -29,6 +31,7 @@ public final class ProviderKeySpecs {
     public static final Set<String> COMPACTION_CLASSIFIER_KEYLESS_PROVIDERS = Set.of(
             ModelDefaults.PROVIDER_OLLAMA,
             ModelDefaults.PROVIDER_OMLX,
+            ModelDefaults.PROVIDER_LLAMACPP,
             ModelDefaults.PROVIDER_CODEX,
             ModelDefaults.PROVIDER_CLAUDE_CODE,
             ModelDefaults.PROVIDER_AGY,
@@ -149,6 +152,13 @@ public final class ProviderKeySpecs {
             "1. Sign up with your OpenAI-compatible provider",
             "2. Create an API key",
             "3. Add:  AMSHA_GENERIC_OPENAI_API_KEY=your_key_here");
+
+    /** Shared API credential for the optional Gnani speech adapters. */
+    public static final VarSpec GNANI_SPEECH_KEY_SPEC = new VarSpec(
+            ConfigKeys.GNANI_API_KEY,
+            "Gnani API key (required when Gnani STT or TTS is enabled).",
+            "1. Obtain an API key for your Gnani account",
+            "2. Add: AMSHA_GNANI_API_KEY=your_key_here");
 
     // -----------------------------------------------------------------------
     // Key spec resolution — primary LLM

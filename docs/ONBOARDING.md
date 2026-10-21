@@ -10,6 +10,12 @@ where state is stored, and how configuration becomes active at runtime.
 | CLI / native startup | Headless setup, operators, local development | Yes, when values are missing | No web draft |
 | Web UI | Interactive provider, routing, MCP, channel, and feature setup | No | Yes, under `AMSHA_DATA_DIR` |
 
+| Area | CLI / native startup | Web wizard |
+|---|---|---|
+| LLM providers | Selects all 21 public providers from the catalog. | Uses the same catalog; the internal `infinite-loop` test entry is hidden. |
+| Gnani speech | Prompts for the key only when Gnani STT or TTS is explicitly enabled. | Shows the exact environment settings; apply them to the deployment and restart Amsha. |
+| MCP servers | Not configured by the startup wizard. | Remote HTTP/SSE only; local STDIO and Podman setup are outside onboarding. |
+
 The CLI prepares process configuration before Quarkus starts. The web UI runs the
 authenticated, durable onboarding workflow after the server is running. The web
 UI does not edit `.env`.
@@ -99,6 +105,19 @@ The startup bootstrap runs before Quarkus configuration is finalized. It:
 The CLI setup is not the web wizard and does not create a durable onboarding
 draft or promote web selections into the system vault.
 
+The CLI provider menu covers the public LLM entries in
+[`provider-catalog.json`](../llm-providers/src/main/resources/provider-catalog.json).
+The internal `infinite-loop` router is intentionally not a direct provider
+choice. Local providers such as llama.cpp do not require an API key. The CLI
+requests `AMSHA_GNANI_API_KEY` only when Gnani STT is enabled or TTS is enabled
+with `AMSHA_TTS_PROVIDER=gnani`; these speech features remain opt-in.
+
+The CLI does not enable cloud speech automatically. To use Gnani transcription,
+set `AMSHA_STT_GNANI_ENABLED=true`; the default language is `en-IN` and the
+conservative duration limit is 30 seconds. To use Gnani speech replies, set
+`AMSHA_TTS_ENABLED=true` and `AMSHA_TTS_PROVIDER=gnani`. Both adapters use
+`AMSHA_GNANI_API_KEY`. Review Gnani's data terms before enabling either path.
+
 ### JVM development
 
 ```bash
@@ -174,6 +193,20 @@ activates it. With vault priority enabled, provider, model, base URL, and API
 key values are written to system-vault keys used by runtime routing. With vault
 priority disabled, the commit can succeed but the environment remains active;
 the UI displays this warning.
+
+The web wizard's provider list is served from the same provider catalog. Gnani
+is a speech provider rather than an LLM connection, so its setup appears in the
+Integrations step as deployment-environment instructions. The browser does not
+write `.env` or store a service-wide Gnani key. After setting the listed values
+in the deployment environment, restart Amsha for the speech adapters to read
+them. Speech replies still follow each user's output-mode preference; the
+default remains `TEXT_ONLY`. Set a default output mode or select an audio mode
+in Settings to receive generated voice replies.
+
+The MCP step registers remote HTTP/SSE servers. It does not launch local STDIO
+processes or Podman containers. `.mcp.json` import is preview-only and rejects
+STDIO entries rather than executing them. The CLI startup wizard does not
+configure MCP servers.
 
 ## Skip and preconfigured behavior
 
