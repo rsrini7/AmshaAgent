@@ -55,6 +55,9 @@ const HALTED_MESSAGE_PATTERNS = [
 
 @customElement('arc-chat-interface')
 export class ArcChatInterface extends LitElement {
+  private static readonly AUDIO_ONLY_PROMPT =
+    'Please transcribe the attached audio and answer using its spoken content.';
+
   @consume({ context: arcContext, subscribe: true })
   @state()
   private _appContext!: ArcAppContext;
@@ -1343,8 +1346,9 @@ export class ArcChatInterface extends LitElement {
   }
 
   private async _send() {
-    const text = this._input.trim();
     const attachment = this._audioAttachment;
+    const text =
+      this._input.trim() || (attachment ? ArcChatInterface.AUDIO_ONLY_PROMPT : '');
     if ((!text && !attachment) || this._wsStatus !== 'open' || this._encodingAttachment) {
       return;
     }
