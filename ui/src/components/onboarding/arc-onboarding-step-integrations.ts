@@ -11,9 +11,36 @@ export class ArcOnboardingStepIntegrations extends LitElement {
       :host {
         display: block;
       }
+      .setup-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-card);
+        border-radius: var(--radius-md);
+        padding: var(--space-4);
+        margin-bottom: var(--space-4);
+      }
+      .setup-card h3 {
+        margin: 0 0 var(--space-2);
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+      }
+      .setup-card p {
+        color: var(--text-muted);
+        font-size: var(--font-size-xs);
+        line-height: 1.6;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: var(--space-3);
+        font-size: var(--font-size-xs);
+      }
     `
   ];
 
+  // Keep the legacy draft property readable; these deployment settings are not applied by this page.
   @property({ type: Object }) integrations: IntegrationsConfig = {
     playwrightEnabled: false,
     playwrightHeaded: false,
@@ -23,17 +50,6 @@ export class ArcOnboardingStepIntegrations extends LitElement {
     skillsjarsApprovalRequired: true,
     skillsMaxIterations: 10
   };
-
-  private _onChange(key: keyof IntegrationsConfig, value: any) {
-    const updated = { ...this.integrations, [key]: value };
-    this.dispatchEvent(
-      new CustomEvent('update-integrations', {
-        detail: { integrations: updated },
-        bubbles: true,
-        composed: true
-      })
-    );
-  }
 
   private _next() {
     this.dispatchEvent(new CustomEvent('next', { bubbles: true, composed: true }));
@@ -45,75 +61,63 @@ export class ArcOnboardingStepIntegrations extends LitElement {
 
   render() {
     return html`
-      <span class="field-label">Outbound Integrations (Optional)</span>
-      <p style="font-size:var(--font-size-xs);color:var(--text-muted);margin-bottom:var(--space-4)">
-        Configure external tools, search APIs, and automation scripts.
+      <span class="field-label">Integrations (Optional)</span>
+      <p class="status-msg">
+        These integrations read deployment settings at startup. This browser wizard cannot write the server's
+        <code>.env</code> file or activate them. Configure them with the startup CLI or your deployment environment,
+        then restart Amsha. Do not paste service credentials into this page.
       </p>
 
-      <div style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:var(--radius-md);padding:var(--space-3);margin-bottom:var(--space-4)">
-        <strong>Speech services (Gnani)</strong>
-        <p style="font-size:var(--font-size-xs);color:var(--text-muted);line-height:1.6">
-          Gnani speech is an optional cloud service. When enabled, recordings or text are sent to Gnani under your account terms.
-          Set these values in the deployment environment and restart Amsha. This web wizard does not edit the deployment
-          <code>.env</code> file or store a service-wide speech credential.
+      <section class="setup-card">
+        <h3>Search, GitHub, and browser automation</h3>
+        <p>Only set the keys for tools you plan to use. Playwright stays disabled unless you explicitly enable it.</p>
+        <pre><code>AMSHA_TOOLS_BRAVE_API_KEY=&lt;optional-brave-key&gt;
+AMSHA_TOOLS_SERPER_API_KEY=&lt;optional-serper-key&gt;
+AMSHA_TOOLS_GITHUB_TOKEN=&lt;optional-github-token&gt;
+AMSHA_TOOLS_PLAYWRIGHT_ENABLED=false
+AMSHA_TOOLS_PLAYWRIGHT_HEADLESS=true
+AMSHA_TOOLS_PLAYWRIGHT_MCP_ENABLED=false</code></pre>
+      </section>
+
+      <section class="setup-card">
+        <h3>Speech: local, OMLX, or Gnani</h3>
+        <p>
+          Local ONNX Whisper and OMLX Whisper are available for transcription. Gnani is an optional cloud tier; it
+          receives audio only after governed media checks and only when enabled. The conservative Gnani duration cap
+          is 30 seconds and its default language is <code>en-IN</code> (Indian English).
         </p>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);font-size:var(--font-size-xs)"><code>AMSHA_GNANI_API_KEY=&lt;api-key&gt;
-# Optional transcription
+        <pre><code># Choose the local ONNX transcription path
+AMSHA_STT_LOCAL_ENABLED=true
+AMSHA_ONNX_ENABLED=true
+
+# Or enable OMLX transcription
+AMSHA_STT_ENABLED=true
+
+# Optional Gnani cloud transcription
 AMSHA_STT_GNANI_ENABLED=true
-# Optional language override (default en-IN)
-# AMSHA_STT_GNANI_DEFAULT_LANGUAGE=hi-IN
-# Optional speech replies
+AMSHA_STT_GNANI_DEFAULT_LANGUAGE=en-IN
+AMSHA_GNANI_API_KEY=&lt;gnani-key&gt;
+
+# Optional Gnani speech replies; OMLX remains the default TTS provider
 AMSHA_TTS_ENABLED=true
-AMSHA_TTS_PROVIDER=gnani
-# Defaults: timbre-v3.0 model, Shivani voice
-# Optional default reply mode (otherwise TEXT_ONLY)
-# AMSHA_TTS_DEFAULT_OUTPUT_MODE=TEXT_AND_AUDIO</code></pre>
-        <p style="font-size:var(--font-size-xs);color:var(--text-muted);line-height:1.6;margin-bottom:0">
-          Transcription defaults to <code>en-IN</code> and a 30-second maximum. Supported STT languages are
-          <code>bn-IN</code>, <code>en-IN</code>, <code>gu-IN</code>, <code>hi-IN</code>, <code>kn-IN</code>,
-          <code>ml-IN</code>, <code>mr-IN</code>, <code>pa-IN</code>, <code>ta-IN</code>, and <code>te-IN</code>.
-          Speech replies still follow each user's output-mode preference; the default mode remains <code>TEXT_ONLY</code>.
+AMSHA_TTS_PROVIDER=gnani</code></pre>
+        <p>
+          Choose a transcription path based on your data-egress requirements. Gnani speech configuration and limits
+          are documented in <code>docs/CONFIGURATION.md</code>.
         </p>
-      </div>
+      </section>
 
-      <div style="display:flex;flex-direction:column;gap:var(--space-4);margin-bottom:var(--space-5)">
-        <div style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:var(--radius-md);padding:var(--space-3)">
-          <label style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--font-size-sm);color:var(--text-primary);font-weight:var(--font-weight-semi)">
-            <input type="checkbox" ?checked="${this.integrations.playwrightEnabled}"
-                   @change="${(e: any) => this._onChange('playwrightEnabled', e.target.checked)}" />
-            Enable Playwright Browser Tool
-          </label>
-        </div>
-
-        <div>
-          <span class="field-label">Brave Search API Key</span>
-          <input class="field-input" type="password" placeholder="Enter Brave Search API key"
-                 .value="${this.integrations.braveApiKeyVaultRef || ''}"
-                 @input="${(e: any) => this._onChange('braveApiKeyVaultRef', e.target.value)}" />
-        </div>
-
-        <div>
-          <span class="field-label">Serper Search API Key</span>
-          <input class="field-input" type="password" placeholder="Enter Serper API key"
-                 .value="${this.integrations.serperApiKeyVaultRef || ''}"
-                 @input="${(e: any) => this._onChange('serperApiKeyVaultRef', e.target.value)}" />
-        </div>
-
-        <div>
-          <span class="field-label">GitHub Token</span>
-          <input class="field-input" type="password" placeholder="Enter GitHub Personal Access Token"
-                 .value="${this.integrations.githubTokenVaultRef || ''}"
-                 @input="${(e: any) => this._onChange('githubTokenVaultRef', e.target.value)}" />
-        </div>
-
-        <div style="background:var(--bg-elevated);border:1px solid var(--border-card);border-radius:var(--radius-md);padding:var(--space-3)">
-          <label style="display:flex;align-items:center;gap:var(--space-2);font-size:var(--font-size-sm);color:var(--text-primary)">
-            <input type="checkbox" ?checked="${this.integrations.skillsjarsApprovalRequired}"
-                   @change="${(e: any) => this._onChange('skillsjarsApprovalRequired', e.target.checked)}" />
-            Require approval for sensitive tools
-          </label>
-        </div>
-      </div>
+      <section class="setup-card">
+        <h3>Embeddings</h3>
+        <p>
+          Embedding routing is configured separately from chat models. Supported providers include Ollama, Jina,
+          OpenAI, and ONNX; ONNX requires a verified local model bundle.
+        </p>
+        <pre><code>AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS=ollama
+# For Jina or OpenAI, choose the provider above and set its key:
+AMSHA_EMBEDDING_JINA_API_KEY=&lt;optional-jina-key&gt;
+AMSHA_EMBEDDING_OPENAI_API_KEY=&lt;optional-openai-key&gt;</code></pre>
+      </section>
 
       <div class="btn-row">
         <button class="btn-ghost" @click="${this._back}">← Back</button>

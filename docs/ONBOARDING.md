@@ -8,17 +8,18 @@ where state is stored, and how configuration becomes active at runtime.
 | Path | Best for | Writes `.env` | Stores durable onboarding state |
 |---|---|---:|---:|
 | CLI / native startup | Headless setup, operators, local development | Yes, when values are missing | No web draft |
-| Web UI | Interactive provider, routing, MCP, channel, and feature setup | No | Yes, under `AMSHA_DATA_DIR` |
+| Web UI | Interactive LLM connections, routes, profiles, and remote MCP setup; deployment-only settings guidance | No | Yes, under `AMSHA_DATA_DIR` |
 
 | Area | CLI / native startup | Web wizard |
 |---|---|---|
-| LLM providers | Selects all 21 public providers from the catalog. | Uses the same catalog; the internal `infinite-loop` test entry is hidden. |
-| Gnani speech | Prompts for the key only when Gnani STT or TTS is explicitly enabled. | Shows the exact environment settings; apply them to the deployment and restart Amsha. |
-| MCP servers | Not configured by the startup wizard. | Remote HTTP/SSE only; local STDIO and Podman setup are outside onboarding. |
+| LLM providers | Selects all 21 public providers from the catalog. | Uses the same catalog; the internal `infinite-loop` test entry is hidden. CLI OAuth providers require host-side login first. |
+| Integrations and channels | Prompts for selected optional credentials such as search, GitHub, Telegram, and Gnani when enabled. | Shows deployment settings; it does not collect credentials or activate deployment integrations. |
+| Speech and embeddings | Prompts for a selected provider's missing key; other provider selection and local model setup use `.env`. | Documents OMLX, ONNX, Gnani, Jina, and OpenAI options; configure the deployment and restart Amsha. |
+| Identity providers | Configure OIDC or GitHub OAuth in `.env` before startup. | Shows the server-side environment contract; it cannot change authentication settings. |
+| MCP servers | Not configured by the startup wizard. | Remote HTTP/SSE only; local STDIO and Podman setup is outside onboarding. |
 
-The CLI prepares process configuration before Quarkus starts. The web UI runs the
-authenticated, durable onboarding workflow after the server is running. The web
-UI does not edit `.env`.
+The CLI prepares process configuration before Quarkus starts. The web UI runs an authenticated, durable onboarding workflow after the server is running.
+The web UI does not edit `.env`; its commit flow applies LLM/profile/routing and remote MCP setup. Integrations, speech, channels, identity, and runtime feature settings shown in the wizard must be configured in the deployment environment.
 
 ## Files and configuration layers
 
@@ -167,46 +168,26 @@ a clean test, point `AMSHA_DATA_DIR` at a new isolated directory.
 
 ### Draft and commit flow
 
-The UI creates or resumes a durable draft and advances through this plan:
+The web UI creates or resumes a durable draft and advances through this plan:
 
 ```text
 welcome → connections → routes → persona-routing → mcp → integrations
 → advanced-settings → memory → security → channels → identity → review → complete
 ```
 
-The draft stores non-secret selections and opaque references. Provider API keys,
-MCP headers, and other credentials are scrubbed before persistence and stored in
-the encrypted vault. The UI never receives environment credentials back as
-plaintext.
+Drafts store non-secret selections and opaque vault references. Provider API keys and MCP headers are scrubbed before persistence and stored in the encrypted vault. Legacy drafts containing plaintext in a field named `*VaultRef` are scrubbed on read before they are returned to the browser.
 
-The connections catalog controls whether a provider needs an API-key field.
-Generic OpenAI connections require a valid absolute HTTP(S) endpoint. Ollama
-and OMLX are keyless when configured as local providers.
+The Connections step uses the same provider catalog as the CLI. Generic OpenAI connections require an absolute HTTP(S) endpoint. Ollama and OMLX are keyless local providers. For providers marked `CLI_OAUTH`, complete the provider's supported login on the Amsha host first; the web wizard cannot start the OAuth flow.
 
-Claude Code is also keyless in the wizard and uses `CLI_OAUTH`: runtime
-readiness comes from the system-vault Claude OAuth token or the local Claude
-Code credentials file (`~/.claude/credentials.json`). Status exposes only
-configured/missing credential state; it never returns the token.
+At Review, the commit flow validates and activates the selected LLM configuration and profile/routing topology. With `AMSHA_LLM_VAULT_PRIORITY=true`, provider, model, base URL, and API key values are written to system-vault keys used by runtime routing. With vault priority disabled, the environment remains active and the UI displays a warning. Remote HTTP/SSE MCP servers are also registered by the MCP step; local STDIO processes and Podman containers are not launched by onboarding.
 
-At Review, the selected LLM configuration is validated and the commit saga
-activates it. With vault priority enabled, provider, model, base URL, and API
-key values are written to system-vault keys used by runtime routing. With vault
-priority disabled, the commit can succeed but the environment remains active;
-the UI displays this warning.
+The `advanced`, `memory`, and `security` form values are not runtime controls in the current web wizard. Integrations, channels, and identity are environment guides only; those settings are not activated by committing the draft. Configure the corresponding deployment variables and restart Amsha.
 
-The web wizard's provider list is served from the same provider catalog. Gnani
-is a speech provider rather than an LLM connection, so its setup appears in the
-Integrations step as deployment-environment instructions. The browser does not
-write `.env` or store a service-wide Gnani key. After setting the listed values
-in the deployment environment, restart Amsha for the speech adapters to read
-them. Speech replies still follow each user's output-mode preference; the
-default remains `TEXT_ONLY`. Set a default output mode or select an audio mode
-in Settings to receive generated voice replies.
+Speech and embedding choices are separate from chat-model routes. The Integrations step documents OMLX and local ONNX transcription, optional Gnani cloud STT/TTS, and Ollama/Jina/OpenAI/ONNX embeddings. Gnani uses `AMSHA_GNANI_API_KEY`; STT defaults to `en-IN` (Indian English) and a 30-second maximum. Review Gnani's data terms before enabling cloud processing.
 
-The MCP step registers remote HTTP/SSE servers. It does not launch local STDIO
-processes or Podman containers. `.mcp.json` import is preview-only and rejects
-STDIO entries rather than executing them. The CLI startup wizard does not
-configure MCP servers.
+The Channels step lists deployment configuration for Telegram and web authentication. The Identity step lists the complete OIDC and GitHub OAuth environment settings. The browser never collects these deployment credentials or edits `.env`.
+
+Speech replies still follow each user's output-mode preference; the default remains `TEXT_ONLY`. Select an audio mode in Settings to receive generated voice replies.
 
 ## Skip and preconfigured behavior
 

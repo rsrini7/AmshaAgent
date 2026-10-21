@@ -489,6 +489,16 @@ export class ArcOnboardingStepConnections extends LitElement {
             `
           : ''}
 
+        ${activeProvider.authScheme === 'CLI_OAUTH'
+          ? html`
+              <p class="status-msg" role="note" style="margin-bottom:var(--space-4)">
+                This provider uses CLI OAuth. The web wizard cannot open the provider login flow. Complete the
+                provider's supported CLI login on the Amsha host first, then select the provider here. The server
+                uses its local OAuth credential; it is not copied into this browser draft.
+              </p>
+            `
+          : ''}
+
         ${(activeProvider.defaultBaseUrl || activeProvider.attributes?.hasBaseUrl === 'true')
           ? html`
               <div style="margin-bottom:var(--space-4)">
