@@ -120,6 +120,31 @@ governed media download and before the Whisper request** — never inside the Te
 * If `ffmpeg` is missing or the transcode fails, the turn degrades safely to its text fallback
   rather than sending an undecodable payload to Whisper.
 
+## Gnani Speech Adapters — Opt-in
+
+`GnaniAudioTranscriptionProvider` is the priority-40 cloud tier behind the governed
+transcription cascade. It sends audio only when `amsha.stt.gnani.enabled=true`, after
+the local and OMLX tiers report `UNSUPPORTED`. The adapter uses a supported request or channel hint when available; otherwise it
+uses the code default `en-IN` (Indian English), which operators may override with
+another supported code. It measures duration locally and caps duration at 30 seconds,
+and treats every upstream HTTP 400 as `FAILED` until Gnani publishes stable error
+discriminators. The configured API key and HTTP bodies are never logged.
+
+`GnaniSpeechSynthesisProvider` is selected through `amsha.tts.provider=gnani` and
+returns WAV only. Set `amsha.tts.enabled=true` as well; both switches are required.
+Version 1 uses Timbre v3.0 so each allowlisted voice supports all 10 documented
+languages. Both adapters remain disabled by default while API key scope and data
+processing terms are open.
+
+| Property | Environment variable | Default |
+|---|---|---|
+| `amsha.gnani.api-key` | `AMSHA_GNANI_API_KEY` | *(empty)* |
+| `amsha.stt.gnani.enabled` | `AMSHA_STT_GNANI_ENABLED` | `false` |
+| `amsha.stt.gnani.default-language` | `AMSHA_STT_GNANI_DEFAULT_LANGUAGE` | `en-IN` (Indian English; override with a supported code) |
+| `amsha.stt.gnani.max-duration` | `AMSHA_STT_GNANI_MAX_DURATION` | `PT30S` |
+| `amsha.tts.gnani.model` | `AMSHA_TTS_GNANI_MODEL` | `timbre-v3.0` |
+| `amsha.tts.gnani.voice` | `AMSHA_TTS_GNANI_VOICE` | `Shivani` |
+
 ## Governed Speech Synthesis (P8 / Issue 12) — DISABLED by default
 
 `OmlxSpeechSynthesisProvider` implements the `SpeechSynthesisPort` execution seam for
@@ -132,6 +157,7 @@ bypassed. The actor is resolved from the session (`WorkspaceContext.getUserIdOrU
 
 | Property | Environment variable | Default |
 |---|---|---|
+| `amsha.tts.provider` | `AMSHA_TTS_PROVIDER` | `omlx` |
 | `amsha.tts.enabled` | `AMSHA_TTS_ENABLED` | `false` |
 | `amsha.tts.model` | `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` |
 | `amsha.tts.voice` | `AMSHA_TTS_VOICE` | *(empty — field omitted)* |
@@ -144,7 +170,7 @@ bypassed. The actor is resolved from the session (`WorkspaceContext.getUserIdOrU
 
 The OMLX API key and base URL are reused from `AMSHA_OMLX_API_KEY` and
 `AMSHA_OMLX_BASE_URL` (the key is optional — `not-needed` is treated as absent). The
-response stream is capped at `amsha.tts.max-bytes` by `BoundedAudioSubscriber`, which
+response stream is capped at `amsha.tts.max-bytes` by `BoundedResponseSubscriber`, which
 cancels upstream the moment the bound is exceeded (no post-allocation check). The
 `default-output-mode` and `max-input-chars` keys are consumed by `amsha-core`
 (`SpeechOutputPolicy` / `SpeechReplyService`); see the core module README for the

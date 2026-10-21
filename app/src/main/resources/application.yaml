@@ -276,7 +276,7 @@ smallrye:
   # ---------------------------------------------------------------------------
   log:
     console:
-      enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+      enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
     category:
       "dev.langchain4j.model.chat.listener.ListenersUtil":
@@ -356,7 +356,7 @@ smallrye:
       darken: 0
       filter: secret-redaction
     file:
-      enabled: true
+      enable: true
       path: "./amsha-prod-sqlite.log"
       level: DEBUG
       format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
@@ -843,6 +843,10 @@ amsha:
     max-transcript-chars: ${AMSHA_STT_MAX_TRANSCRIPT_CHARS:12000}
     ffmpeg-path: ${AMSHA_STT_FFMPEG_PATH:ffmpeg}
     allow-fallback-on-failure: ${AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE:false}
+    gnani:
+      enabled: ${AMSHA_STT_GNANI_ENABLED:false}
+      default-language: ${AMSHA_STT_GNANI_DEFAULT_LANGUAGE:en-IN}
+      max-duration: ${AMSHA_STT_GNANI_MAX_DURATION:PT30S}
     local:
       enabled: ${AMSHA_STT_LOCAL_ENABLED:false}
       bundle-id: "${AMSHA_STT_LOCAL_BUNDLE_ID:whisper-tiny-en-v1}"
@@ -853,7 +857,11 @@ amsha:
     # P8 speech synthesis (Issue 12). Output-only; disabled by default. V1 supports only the
     # directly verified WAV format from the OMLX Qwen3-TTS model — any other response_format is
     # reported UNSUPPORTED rather than attempted. Never shares routing with P7 audio input.
+    provider: ${AMSHA_TTS_PROVIDER:omlx}
     enabled: ${AMSHA_TTS_ENABLED:false}
+    gnani:
+      model: ${AMSHA_TTS_GNANI_MODEL:timbre-v3.0}
+      voice: ${AMSHA_TTS_GNANI_VOICE:Shivani}
     model: ${AMSHA_TTS_MODEL:Qwen3-TTS-12Hz-1.7B-Base-bf16}
     voice: ${AMSHA_TTS_VOICE:}
     response-format: ${AMSHA_TTS_RESPONSE_FORMAT:wav}
@@ -864,6 +872,8 @@ amsha:
     # Resolved output mode for inbound-audio turns when the user gives no explicit directive.
     # One of TEXT_ONLY | TEXT_AND_AUDIO | AUDIO_ONLY. Default TEXT_ONLY (fail closed).
     default-output-mode: ${AMSHA_TTS_DEFAULT_OUTPUT_MODE:TEXT_ONLY}
+  gnani:
+    api-key: ${AMSHA_GNANI_API_KEY:}
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -1366,7 +1376,7 @@ mp:
   quarkus:
     log:
       console:
-        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+        enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: ERROR
       category:
         "io.quarkus":
@@ -1378,7 +1388,7 @@ mp:
         "com.amsha":
           level: DEBUG
       file:
-        enabled: true
+        enable: true
         path: ./amsha-cli-sqlite.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
@@ -1420,9 +1430,9 @@ mp:
     log:
       level: INFO                          # set to INFO to avoid infrastructure flood
       console:
-        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+        enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       file:
-        enabled: true
+        enable: true
         path: ./amsha-dev-sqlite.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
@@ -1670,10 +1680,10 @@ mp:
       clean-at-start: ${AMSHA_FLYWAY_CLEAN_AT_START:true}
     log:
       console:
-        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+        enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
       file:
-        enabled: true
+        enable: true
         path: "./amsha-postgresql-postgres.log"
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
@@ -1695,10 +1705,10 @@ mp:
       enabled: false
     log:
       console:
-        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+        enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
       file:
-        enabled: true
+        enable: true
         path: "./amsha-filesystem-fs.log"
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"

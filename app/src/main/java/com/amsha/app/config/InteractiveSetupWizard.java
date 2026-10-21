@@ -42,6 +42,7 @@ public class InteractiveSetupWizard {
             ConfigKeys.NVIDIA_API_KEY,
             ConfigKeys.CEREBRAS_API_KEY,
             ConfigKeys.OMLX_API_KEY,
+            ConfigKeys.GNANI_API_KEY,
             ConfigKeys.EMBEDDING_JINA_API_KEY,
             ConfigKeys.EMBEDDING_OPENAI_API_KEY,
             VaultConstants.VAULT_PEPPER,

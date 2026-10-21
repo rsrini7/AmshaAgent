@@ -262,7 +262,7 @@ class OmlxSpeechSynthesisProviderTest {
     void streamedResponseOverTheBoundIsMappedToTooLarge() {
         // ResponseTooLargeException extends IOException, and send(...) declares no checked exception,
         // so it has to be raised from an Answer rather than doThrow(...).
-        stubSendThrowsUndeclared(new OmlxSpeechSynthesisProvider.ResponseTooLargeException("too big"));
+        stubSendThrowsUndeclared(new BoundedResponseSubscriber.ResponseTooLargeException("too big"));
 
         SpeechSynthesisResult result = provider.synthesize(request("r-stream", "wav"));
 
@@ -423,6 +423,7 @@ class OmlxSpeechSynthesisProviderTest {
         assertEquals(
                 1.0,
                 registry.get("amsha.tts.synthesis.total")
+                        .tag("provider", OmlxSpeechSynthesisProvider.PROVIDER_ID)
                         .tag("status", "synthesized")
                         .counter()
                         .count(),
@@ -430,11 +431,13 @@ class OmlxSpeechSynthesisProviderTest {
         assertEquals(
                 1.0,
                 registry.get("amsha.tts.synthesis.total")
+                        .tag("provider", OmlxSpeechSynthesisProvider.PROVIDER_ID)
                         .tag("status", "unsupported")
                         .counter()
                         .count(),
                 0.0);
         assertNotNull(registry.find("amsha.tts.synthesis.duration")
+                .tag("provider", OmlxSpeechSynthesisProvider.PROVIDER_ID)
                 .tag("status", "synthesized")
                 .timer());
 

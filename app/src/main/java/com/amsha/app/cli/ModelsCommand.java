@@ -126,7 +126,7 @@ public class ModelsCommand implements Runnable {
 
         private static void checkFfmpegNotice() {
             String configuredFfmpeg =
-                    System.getProperty("amsha.stt.ffmpeg-path", System.getenv(ConfigKeys.STT_FFMPEG_PATH));
+                    System.getProperty(ConfigKeys.STT_FFMPEG_PATH_PROPERTY, System.getenv(ConfigKeys.STT_FFMPEG_PATH));
             if (!LocalAudioTranscoder.isFfmpegAvailable(configuredFfmpeg)) {
                 System.out.println();
                 System.out.println("  ⚠️  Notice: ffmpeg was not detected on your system.");

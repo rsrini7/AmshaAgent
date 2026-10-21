@@ -3,6 +3,7 @@ package com.amsha.channel.telegram;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -47,7 +48,7 @@ public class TelegramMediaResolver {
             return null;
         }
         long size = knownSize(photo.getFileSize());
-        return resolveMedia(fileId, AttachmentType.IMAGE, MediaTypes.JPEG, "photo_" + fileId + ".jpg", size);
+        return resolveMedia(fileId, AttachmentType.IMAGE, MediaTypes.JPEG, "photo_" + fileId + ".jpg", size, Map.of());
     }
 
     /** Resolves a Telegram document with a conservative type derived from MIME/name. */
@@ -62,7 +63,7 @@ public class TelegramMediaResolver {
         String fileName = safeFileName(document.getFileName(), "document_" + fileId);
         String mimeType = normalizeMimeType(document.getMimeType(), detectMimeType(fileName));
         AttachmentType type = typeFor(mimeType, fileName);
-        return resolveMedia(fileId, type, mimeType, fileName, knownSize(document.getFileSize()));
+        return resolveMedia(fileId, type, mimeType, fileName, knownSize(document.getFileSize()), Map.of());
     }
 
     /** Resolves a Telegram audio descriptor into an audio reference. */
@@ -76,7 +77,13 @@ public class TelegramMediaResolver {
         }
         String fileName = safeFileName(audio.getTitle(), "audio_" + fileId + ".mp3");
         String mimeType = normalizeMimeType(audio.getMimeType(), fallbackAudioMimeType(fileName));
-        return resolveMedia(fileId, AttachmentType.AUDIO, mimeType, fileName, knownSize(audio.getFileSize()));
+        return resolveMedia(
+                fileId,
+                AttachmentType.AUDIO,
+                mimeType,
+                fileName,
+                knownSize(audio.getFileSize()),
+                durationMetadata(audio.getDurationSeconds()));
     }
 
     /** Resolves a Telegram voice note into an OGG audio reference. */
@@ -90,7 +97,19 @@ public class TelegramMediaResolver {
         }
         String mimeType = normalizeMimeType(voice.getMimeType(), MediaTypes.OGG);
         return resolveMedia(
-                fileId, AttachmentType.AUDIO, mimeType, "voice_" + fileId + ".ogg", knownSize(voice.getFileSize()));
+                fileId,
+                AttachmentType.AUDIO,
+                mimeType,
+                "voice_" + fileId + ".ogg",
+                knownSize(voice.getFileSize()),
+                durationMetadata(voice.getDuration()));
+    }
+
+    private static Map<String, String> durationMetadata(Number declaredDuration) {
+        if (declaredDuration == null || declaredDuration.longValue() <= 0) {
+            return Map.of();
+        }
+        return Map.of(MediaAttachment.DECLARED_DURATION_SECONDS, Long.toString(declaredDuration.longValue()));
     }
 
     /**
@@ -105,6 +124,17 @@ public class TelegramMediaResolver {
      */
     public MediaAttachment resolveMedia(
             String fileId, AttachmentType type, String mimeType, String fileName, long sizeBytes) {
+        return resolveMedia(fileId, type, mimeType, fileName, sizeBytes, Map.of());
+    }
+
+    /** Creates an opaque Telegram reference with additional non-secret metadata. */
+    public MediaAttachment resolveMedia(
+            String fileId,
+            AttachmentType type,
+            String mimeType,
+            String fileName,
+            long sizeBytes,
+            Map<String, String> additionalMetadata) {
         Objects.requireNonNull(fileId, "fileId must not be null");
         Objects.requireNonNull(type, "type must not be null");
         Objects.requireNonNull(mimeType, "mimeType must not be null");
@@ -114,15 +144,14 @@ public class TelegramMediaResolver {
         long safeSize = sizeBytes >= 0 ? sizeBytes : -1L;
         String attachmentId = UUID.randomUUID().toString();
         String reference = "telegram://file/" + validId;
+        Map<String, String> metadata = new HashMap<>();
+        if (additionalMetadata != null) {
+            metadata.putAll(additionalMetadata);
+        }
+        metadata.put("file_id", validId);
         log.debugf("Created Telegram media reference type=%s size=%d", type, safeSize);
         return MediaAttachment.ofUri(
-                attachmentId,
-                type,
-                normalizedMime,
-                safeName,
-                safeSize,
-                URI.create(reference),
-                Map.of("file_id", validId));
+                attachmentId, type, normalizedMime, safeName, safeSize, URI.create(reference), metadata);
     }
 
     private static AttachmentType typeFor(String mimeType, String fileName) {

@@ -1,6 +1,8 @@
 package com.amsha.llm.api.audio;
 
 import java.time.Duration;
+import java.util.IllformedLocaleException;
+import java.util.Locale;
 
 /** Payload-safe result of a provider transcription attempt. */
 public record AudioTranscriptionResult(
@@ -32,8 +34,17 @@ public record AudioTranscriptionResult(
                 throw new IllegalArgumentException("failureReason must be a categorical tag");
             }
         }
-        if (language != null && !language.isBlank() && !language.matches("[A-Za-z]{2,16}")) {
-            throw new IllegalArgumentException("language must be a bounded language tag");
+        if (language != null && !language.isBlank() && !isValidLanguageTag(language)) {
+            throw new IllegalArgumentException("language must be a valid BCP-47 language tag");
+        }
+    }
+
+    private static boolean isValidLanguageTag(String language) {
+        try {
+            new Locale.Builder().setLanguageTag(language).build();
+            return true;
+        } catch (IllformedLocaleException _) {
+            return false;
         }
     }
 

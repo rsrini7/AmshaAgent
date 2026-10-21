@@ -14,6 +14,7 @@ import java.util.Base64;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.core.security.http.GovernedHttpClient;
@@ -212,6 +213,42 @@ class GovernedHttpClientTest {
                 HttpRequest.newBuilder(URI.create(baseUrl + "/redirect")).GET().build();
         HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, resp.statusCode());
+    }
+
+    @Test
+    void crossOriginRedirect_doesNotForwardApiKeyId() throws Exception {
+        HttpServer destination = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        AtomicReference<String> receivedKeyId = new AtomicReference<>();
+        destination.createContext("/capture", exchange -> {
+            receivedKeyId.set(exchange.getRequestHeaders().getFirst(HttpProtocol.HEADER_X_API_KEY_ID));
+            exchange.sendResponseHeaders(200, 0);
+            exchange.getResponseBody().close();
+        });
+        destination.start();
+        try {
+            String destinationUrl =
+                    "http://127.0.0.1:" + destination.getAddress().getPort() + "/capture";
+            server.createContext("/redirect-with-key-id", exchange -> {
+                exchange.getResponseHeaders().add("Location", destinationUrl);
+                exchange.sendResponseHeaders(302, -1);
+                exchange.close();
+            });
+            GovernedHttpClient client = GovernedHttpClient.builder(alwaysAllow)
+                    .purpose(OutboundPurpose.PROVIDER_API_CALL)
+                    .actor("u")
+                    .build();
+            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/redirect-with-key-id"))
+                    .header(HttpProtocol.HEADER_X_API_KEY_ID, "test-placeholder")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(200, response.statusCode());
+            assertNull(receivedKeyId.get());
+        } finally {
+            destination.stop(0);
+        }
     }
 
     @Test

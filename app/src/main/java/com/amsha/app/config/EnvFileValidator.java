@@ -51,6 +51,7 @@ public class EnvFileValidator {
             ConfigKeys.NVIDIA_API_KEY,
             ConfigKeys.CEREBRAS_API_KEY,
             ConfigKeys.SARVAM_API_KEY,
+            ConfigKeys.GNANI_API_KEY,
             ConfigKeys.OPENCODE_API_KEY,
             ConfigKeys.HUGGINGFACE_API_KEY,
             ConfigKeys.MISTRAL_API_KEY,

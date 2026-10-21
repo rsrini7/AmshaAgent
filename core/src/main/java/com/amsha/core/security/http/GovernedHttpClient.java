@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
+import com.amsha.common.http.HttpProtocol;
 import com.amsha.core.security.OutboundHttpPolicyService;
 import com.amsha.llm.api.NetworkProfilePolicy;
 import com.amsha.persistence.api.LlmConnectionDto;
@@ -212,6 +213,7 @@ public final class GovernedHttpClient {
                 || "mcp-session-id".equalsIgnoreCase(name)
                 || "x-subscription-token".equalsIgnoreCase(name)
                 || "x-api-key".equalsIgnoreCase(name)
+                || HttpProtocol.HEADER_X_API_KEY_ID.equalsIgnoreCase(name)
                 || "x-goog-api-key".equalsIgnoreCase(name);
     }
 

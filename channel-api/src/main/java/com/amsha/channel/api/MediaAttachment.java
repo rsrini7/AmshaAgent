@@ -36,6 +36,8 @@ public record MediaAttachment(
 
     /** Hard upper bound for inline data carried by this channel-neutral contract. */
     public static final long MAX_INLINE_DATA_BYTES = 50L * 1024L * 1024L;
+    /** Metadata key for a channel-declared audio duration measured in seconds. */
+    public static final String DECLARED_DURATION_SECONDS = "declared_duration_seconds";
 
     private static final Set<String> ALLOWED_SCHEMES = Set.of("http", "https", "telegram", "attachment");
     private static final Set<String> FORBIDDEN_QUERY_PARAMETER_NAMES = Set.of(

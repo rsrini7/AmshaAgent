@@ -72,6 +72,63 @@ public final class ConfigKeys {
     /** OMLX API key (optional for the local server). */
     public static final String OMLX_API_KEY = "AMSHA_OMLX_API_KEY";
 
+    /** Environment-variable name selecting the active speech synthesis provider. */
+    public static final String TTS_PROVIDER = "AMSHA_TTS_PROVIDER";
+
+    /** MicroProfile property name selecting the active speech synthesis provider. */
+    public static final String TTS_PROVIDER_PROPERTY = "amsha.tts.provider";
+
+    /** Compatibility default for speech synthesis provider selection. */
+    public static final String DEFAULT_TTS_PROVIDER = "omlx";
+
+    /** MicroProfile property shared by optional speech synthesis adapters. */
+    public static final String TTS_ENABLED_PROPERTY = "amsha.tts.enabled";
+
+    /** Shared STT timeout property for governed transcription adapters. */
+    public static final String STT_TIMEOUT_PROPERTY = "amsha.stt.timeout";
+
+    /** Shared STT payload byte limit for governed transcription adapters. */
+    public static final String STT_MAX_BYTES_PROPERTY = "amsha.stt.max-bytes";
+
+    /** Shared STT transcript character limit for governed transcription adapters. */
+    public static final String STT_MAX_TRANSCRIPT_CHARS_PROPERTY = "amsha.stt.max-transcript-chars";
+
+    /** Shared path property for local audio normalization tools. */
+    public static final String STT_FFMPEG_PATH_PROPERTY = "amsha.stt.ffmpeg-path";
+
+    /** Shared TTS timeout property for synthesis adapters. */
+    public static final String TTS_TIMEOUT_PROPERTY = "amsha.tts.timeout";
+
+    /** Shared TTS text character limit for synthesis adapters. */
+    public static final String TTS_MAX_INPUT_CHARS_PROPERTY = "amsha.tts.max-input-chars";
+
+    /** Shared TTS audio response byte limit for synthesis adapters. */
+    public static final String TTS_MAX_BYTES_PROPERTY = "amsha.tts.max-bytes";
+
+    /** Shared concurrent TTS request limit for synthesis adapters. */
+    public static final String TTS_MAX_CONCURRENT_PROPERTY = "amsha.tts.max-concurrent";
+
+    /** Gnani speech API key used by the X-API-Key-ID request header. */
+    public static final String GNANI_API_KEY = "AMSHA_GNANI_API_KEY";
+
+    /** MicroProfile property mapped to the optional Gnani speech API key. */
+    public static final String GNANI_API_KEY_PROPERTY = "amsha.gnani.api-key";
+
+    /** Property enabling Gnani as an explicit cloud-tier transcription provider. */
+    public static final String GNANI_STT_ENABLED_PROPERTY = "amsha.stt.gnani.enabled";
+
+    /** Property supplying the required default Gnani STT language code. */
+    public static final String GNANI_STT_DEFAULT_LANGUAGE_PROPERTY = "amsha.stt.gnani.default-language";
+
+    /** Property bounding Gnani STT clip duration before cloud egress. */
+    public static final String GNANI_STT_MAX_DURATION_PROPERTY = "amsha.stt.gnani.max-duration";
+
+    /** Property selecting the Gnani Timbre model. */
+    public static final String GNANI_TTS_MODEL_PROPERTY = "amsha.tts.gnani.model";
+
+    /** Property selecting the configured Gnani TTS fallback voice. */
+    public static final String GNANI_TTS_VOICE_PROPERTY = "amsha.tts.gnani.voice";
+
     /** Sarvam AI API key. */
     public static final String SARVAM_API_KEY = "AMSHA_SARVAM_API_KEY";
 

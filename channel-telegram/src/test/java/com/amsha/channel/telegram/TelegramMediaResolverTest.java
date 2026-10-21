@@ -77,6 +77,7 @@ class TelegramMediaResolverTest {
         audio.setFileId("audio_99");
         audio.setTitle("Song Title");
         audio.setMimeType("audio/mpeg");
+        audio.setDurationSeconds(180);
 
         IncomingAudio genericAudio = new IncomingAudio();
         genericAudio.setFileId("audio_100");
@@ -86,6 +87,7 @@ class TelegramMediaResolverTest {
         IncomingVoice voice = new IncomingVoice();
         voice.setFileId("voice_88");
         voice.setMimeType("application/octet-stream");
+        voice.setDuration(12);
 
         MediaAttachment audioAttachment = resolver.resolveAudio(audio);
         MediaAttachment genericAudioAttachment = resolver.resolveAudio(genericAudio);
@@ -94,9 +96,11 @@ class TelegramMediaResolverTest {
         assertEquals(AttachmentType.AUDIO, audioAttachment.type());
         assertEquals("Song Title", audioAttachment.fileName());
         assertEquals(-1L, audioAttachment.sizeBytes());
+        assertEquals("180", audioAttachment.metadata().get(MediaAttachment.DECLARED_DURATION_SECONDS));
         assertEquals("audio/ogg", genericAudioAttachment.mimeType());
         assertEquals("audio/ogg", voiceAttachment.mimeType());
         assertEquals("voice_voice_88.ogg", voiceAttachment.fileName());
+        assertEquals("12", voiceAttachment.metadata().get(MediaAttachment.DECLARED_DURATION_SECONDS));
     }
 
     @Test

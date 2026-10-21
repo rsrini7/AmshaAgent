@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 import com.amsha.llm.api.audio.AudioTranscriptionPort;
 import com.amsha.llm.api.audio.AudioTranscriptionRequest;
@@ -81,7 +82,7 @@ public class LocalOnnxAudioTranscriptionAdapter implements AudioTranscriptionPor
             @ConfigProperty(name = "amsha.stt.local.max-audio-bytes", defaultValue = "26214400") long maxAudioBytes,
             @ConfigProperty(name = "amsha.stt.local.max-transcript-chars", defaultValue = "12000")
                     int maxTranscriptChars,
-            @ConfigProperty(name = "amsha.stt.ffmpeg-path", defaultValue = "ffmpeg") String ffmpegPath) {
+            @ConfigProperty(name = ConfigKeys.STT_FFMPEG_PATH_PROPERTY, defaultValue = "ffmpeg") String ffmpegPath) {
         this.bundleRegistry = Objects.requireNonNull(bundleRegistry, "bundleRegistry");
         this.runtimeManager = Objects.requireNonNull(runtimeManager, "runtimeManager");
         this.leaseManager = Objects.requireNonNull(leaseManager, "leaseManager");

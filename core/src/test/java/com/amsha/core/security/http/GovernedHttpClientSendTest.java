@@ -1040,6 +1040,7 @@ class GovernedHttpClientSendTest {
                 "mcp-session-id",
                 "x-subscription-token",
                 "x-api-key",
+                "x-api-key-id",
                 "x-goog-api-key")) {
             assertTrue(invokeStaticBoolean("isSensitiveHeader", name), name + " must be sensitive");
         }

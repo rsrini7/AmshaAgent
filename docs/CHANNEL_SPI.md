@@ -71,7 +71,7 @@ public interface ChannelSender {
 
 #### Audio Delivery Contracts & Limits
 
-1. **Fallback Safety**: If `sendAudio()` returns `false` or throws an exception, `AgentDispatchHandler` automatically falls back to `sendRaw(text)` plaintext delivery so no turn response is dropped.
+1. **Fallback Safety**: If `sendAudio()` returns `false` or throws an exception, `AgentDispatchHandler` automatically falls back to `sendRaw(text)` plaintext delivery so no turn response is dropped. Speech synthesis provider selection (OMLX or Gnani) is core-side; channel implementations receive only finalized audio bytes.
 2. **WebSocket Channel (`WebChannelSender`)**:
    - Emits a JSON frame containing Base64-encoded audio payload with MIME type and safe sanitized file name.
    - Vert.x server configuration (`WebsocketServerCustomizer`) enforces a **36 MiB** frame buffer ceiling to safely transmit large audio replies and 25 MiB attachments.

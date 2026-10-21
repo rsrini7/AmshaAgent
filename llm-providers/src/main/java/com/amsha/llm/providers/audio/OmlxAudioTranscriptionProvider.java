@@ -70,13 +70,15 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
             ObjectMapper objectMapper,
             @ConfigProperty(name = "amsha.stt.enabled", defaultValue = "false") boolean enabled,
             @ConfigProperty(name = "amsha.stt.model", defaultValue = DEFAULT_MODEL) String model,
-            @ConfigProperty(name = "amsha.stt.timeout", defaultValue = DEFAULT_TIMEOUT) Duration configuredTimeout,
-            @ConfigProperty(name = "amsha.stt.max-bytes", defaultValue = "26214400") long maxBytes,
-            @ConfigProperty(name = "amsha.stt.max-transcript-chars", defaultValue = "12000") int maxTranscriptChars,
+            @ConfigProperty(name = ConfigKeys.STT_TIMEOUT_PROPERTY, defaultValue = DEFAULT_TIMEOUT)
+                    Duration configuredTimeout,
+            @ConfigProperty(name = ConfigKeys.STT_MAX_BYTES_PROPERTY, defaultValue = "26214400") long maxBytes,
+            @ConfigProperty(name = ConfigKeys.STT_MAX_TRANSCRIPT_CHARS_PROPERTY, defaultValue = "12000")
+                    int maxTranscriptChars,
             @ConfigProperty(name = ConfigKeys.OMLX_API_KEY, defaultValue = "not-needed") String apiKey,
             @ConfigProperty(name = ConfigKeys.OMLX_BASE_URL, defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
                     String baseUrl,
-            @ConfigProperty(name = "amsha.stt.ffmpeg-path", defaultValue = "ffmpeg") String ffmpegPath) {
+            @ConfigProperty(name = ConfigKeys.STT_FFMPEG_PATH_PROPERTY, defaultValue = "ffmpeg") String ffmpegPath) {
         this.governedTransport = governedTransport;
         this.objectMapper = objectMapper;
         this.enabled = enabled;

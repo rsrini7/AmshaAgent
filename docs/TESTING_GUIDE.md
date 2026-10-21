@@ -97,6 +97,12 @@ Derive a fresh exact count with `mise run test:summary`
 ./mvnw clean test -pl core -am -Dtest=GovernanceLayerTest "-Dsurefire.failIfNoSpecifiedTests=false"
 ./mvnw clean test -pl core -am -Dtest=AuditHmacChainTest "-Dsurefire.failIfNoSpecifiedTests=false"
 ./mvnw clean test -pl app  -am -Dtest=AgentResourceTest  "-Dsurefire.failIfNoSpecifiedTests=false"
+
+# Gnani speech adapters and provider-selection seams
+./mvnw clean test -pl llm-providers -am -Dtest="GnaniApiContractTest,GnaniAudioTranscriptionProviderTest,GnaniSpeechSynthesisProviderTest,AudioDurationProbeTest,BoundedResponseSubscriberTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl llm-provider-api -am -Dtest=AudioTranscriptionContractTest "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl core -am -Dtest="SpeechReplyServiceTest,MultimodalAudioTranscriptionTest" "-Dsurefire.failIfNoSpecifiedTests=false"
+./mvnw clean test -pl app -am -Dtest=SpeechReplyCdiSelectionTest "-Dsurefire.failIfNoSpecifiedTests=false"
 ```
 
 ### 1.4 Phase 64 - run specific new/modified test classes
@@ -1839,6 +1845,10 @@ curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION_OTHER/run" \
 ```bash
 grep -i "vector search" amsha-prod-sqlite.log | tail -3
 ```
+
+The log filename is relative to the process working directory.
+Run this command from the directory where the production process was launched,
+or provide the log file path explicitly.
 
 **Expect:** `vector search enabled (vec0 loaded)` **OR** `vector search disabled - vec0 extension not loaded`
 

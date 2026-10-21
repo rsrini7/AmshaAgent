@@ -12,6 +12,8 @@ package com.amsha.llm.api.audio;
  * seeded as an {@code AUDIO} chat profile. See the P8 speech output decision.
  */
 public interface SpeechSynthesisPort {
+    /** Stable provider identifier used by explicit TTS selection. */
+    String providerId();
 
     /**
      * Returns whether this adapter can attempt the declared request.

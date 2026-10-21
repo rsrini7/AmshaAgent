@@ -8,8 +8,8 @@
   ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
-  ![Java Tests](https://img.shields.io/badge/Tests-9720_passed_%C2%B7_15_skipped_of_9735-brightgreen.svg?style=flat)
-  ![Java Coverage](https://img.shields.io/badge/Coverage-86.69%25-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9779_passed_%C2%B7_7_skipped_of_9786-brightgreen.svg?style=flat)
+  ![Java Coverage](https://img.shields.io/badge/Coverage-86.88%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-201_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-59.64%25-yellow.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
@@ -89,6 +89,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Hexagonal persistence** — SQLite (default), PostgreSQL, or filesystem with aligned identity, memory, audit, MCP, and self-evolution stores; backend switching requires explicit data migration
 - **Podman rootless sandbox** for code execution (Python, Java, Go, Node, Bash)
 - **Multimodal media ingestion** — channel attachments (`image/document/audio`) via `MediaAttachment` → governed `MediaDownloadPort` with streaming size limits, MIME allowlist, SSRF/redirect revalidation, and temp-file `DownloadedMedia` cleanup (`amsha.media.*`); Telegram emits opaque `telegram://file/<file_id>` references resolved through the governed `GovernedTelegramMediaResolver` boundary
+- **Opt-in cloud speech** — Gnani STT as a priority-40 transcription fallback and Gnani Timbre v3.0 TTS selected through `AMSHA_TTS_PROVIDER=gnani`, both behind the existing governed speech ports. STT measures duration locally and both enforce byte caps; TTS emits WAV only and every failure preserves the text response. Adapters are disabled by default pending retention and key-scope confirmation; see the [Gnani ADR](./docs/adr/providers/ADR-Gnani-AI-Provider.md)
 - **Browser and web tools** — optional Playwright automation, lightweight web fetch, and Brave/Serper real-time search
 - **AES-256-GCM-SIV vault** with Argon2id key derivation — secrets never stored in plaintext
 - **Secret-safe application logging** — console and file filters redact credential-shaped URLs, bearer values, assignments, formatted parameters, and throwable cause/suppressed chains before rendering
@@ -129,7 +130,7 @@ Local ONNX bundles are downloaded only when explicitly installed; inference does
 | BGE reranker | Optional RAG cross-encoder reranking | `mise run models:install-bge-reranker` |
 | Whisper tiny.en | Optional in-process speech-to-text | `mise run models:provision-local-whisper` |
 
-Packaged binaries also support `models install <mpnet|bge-reranker|whisper|all>`. See the [ONNX Local ML guide](./docs/ONNX_LOCAL_ML_GUIDE.md) for bundle verification, configuration, fallback behavior, and model-specific requirements. The local ML module also has a [module README](./local-ml-onnx/README.md).
+Packaged binaries also support `models install <mpnet|bge-reranker|whisper|all>`. See the [ONNX Local ML guide](./docs/ONNX_LOCAL_ML_GUIDE.md) for bundle verification, configuration, fallback behavior, and model-specific requirements. The local ML module also has a [module README](./local-ml-onnx/README.md). For opt-in cloud transcription or synthesis, the Gnani adapters sit behind the same speech ports and remain disabled by default; see the [Gnani speech documentation](./llm-providers/README.md#gnani-speech-adapters--opt-in).
 
 ## Project Map
 

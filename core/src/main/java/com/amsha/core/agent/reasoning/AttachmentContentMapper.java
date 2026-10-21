@@ -137,24 +137,37 @@ final class AttachmentContentMapper {
                 return null;
             }
             AudioTranscriptionRequest request = AudioTranscriptionRequest.ofInline(
-                    attachment.attachmentId(), attachment.mimeType(), mediaBytes, null, TRANSCRIPTION_TIMEOUT);
+                    attachment.attachmentId(),
+                    attachment.mimeType(),
+                    mediaBytes,
+                    null,
+                    TRANSCRIPTION_TIMEOUT,
+                    declaredDuration(attachment));
             result = transcriptionPort.transcribe(request);
         } catch (RuntimeException e) {
             log.warnf("Audio transcription failed for %s: %s", attachment.attachmentId(), LogUtil.rootMessage(e));
-            return null;
+            return transcriptionFailure(attachment, meterRegistry);
         }
         if (result == null || result.status() != AudioTranscriptionResult.Status.TRANSCRIBED) {
+            if (result != null && result.status() == AudioTranscriptionResult.Status.TOO_LARGE) {
+                MultimodalMetrics.recordIngestion(
+                        meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+                MultimodalMetrics.recordFallback(meterRegistry, "audio_too_large", attachment.type());
+                return String.format(
+                        "[Attached Audio: %s - Audio exceeds the configured size or duration limit]",
+                        MultimodalMetrics.sanitizeName(attachment.fileName()));
+            }
             String status = result != null ? result.status().name() : "null";
             String reason = result != null ? result.failureReason() : "null";
             log.warnf(
                     "Audio transcription returned status=%s, reason=%s for attachment %s",
                     status, reason, attachment.attachmentId());
-            return null;
+            return transcriptionFailure(attachment, meterRegistry);
         }
         String transcript = result.transcript();
         if (transcript == null || transcript.isBlank()) {
             log.warnf("Audio transcription produced empty transcript for attachment %s", attachment.attachmentId());
-            return null;
+            return transcriptionFailure(attachment, meterRegistry);
         }
         String bounded = transcript.strip();
         if (bounded.length() > MAX_TRANSCRIPT_CHARS) {
@@ -164,6 +177,28 @@ final class AttachmentContentMapper {
         MultimodalMetrics.recordIngestion(
                 meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "success");
         return "[Audio transcript: " + bounded + "]";
+    }
+
+    private static String transcriptionFailure(MediaAttachment attachment, MeterRegistry meterRegistry) {
+        MultimodalMetrics.recordIngestion(
+                meterRegistry, attachment.type(), MultimodalMetrics.resolveSource(attachment), "fallback");
+        MultimodalMetrics.recordFallback(meterRegistry, "transcription_failed", attachment.type());
+        return String.format(
+                "[Attached Audio: %s - Audio transcription could not be completed. Please try again later or provide a text transcript.]",
+                MultimodalMetrics.sanitizeName(attachment.fileName()));
+    }
+
+    private static Duration declaredDuration(MediaAttachment attachment) {
+        String value = attachment.metadata().get(MediaAttachment.DECLARED_DURATION_SECONDS);
+        if (value == null) {
+            return null;
+        }
+        try {
+            long seconds = Long.parseLong(value);
+            return seconds < 0 ? null : Duration.ofSeconds(seconds);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     static String fallbackUnsupported(

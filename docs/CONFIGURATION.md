@@ -637,12 +637,14 @@ the request before authentication or resource handling.
 
 ## Observability
 
-Application logs are written to a profile/backend-specific file in the process
-working directory. SQLite filenames follow `amsha-<profile>-sqlite.log`
-(for example, `amsha-prod-sqlite.log` and `amsha-dev-sqlite.log`). The
-PostgreSQL and filesystem profiles use `amsha-postgresql-postgres.log` and
-`amsha-filesystem-fs.log`. Set `AMSHA_LOG_CONSOLE_ENABLED=true` to also print
-application logs in the terminal; it defaults to `false`.
+Application logs are written to a profile- or backend-specific file in the
+process working directory. The production SQLite profile writes
+`amsha-prod-sqlite.log`; `%cli`, `%dev`, `%test`, and `%staging` use
+`amsha-cli-sqlite.log`, `amsha-dev-sqlite.log`, `amsha-test-sqlite.log`, and
+`amsha-staging-sqlite.log`. PostgreSQL and filesystem profiles write
+`amsha-postgresql-postgres.log` and `amsha-filesystem-fs.log`. File logging is
+enabled by default. Console logging is off by default; set
+`AMSHA_LOG_CONSOLE_ENABLED=true` to mirror logs to the console.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -670,7 +672,14 @@ Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDown
 
 | Variable | Default | Description |
 |---|---|---|
-| `AMSHA_TTS_ENABLED` | `false` | Enables the optional OMLX Qwen3-TTS output path. |
+| `AMSHA_TTS_ENABLED` | `false` | Enables the optional speech synthesis output path using the adapter selected by `AMSHA_TTS_PROVIDER`. |
+| `AMSHA_TTS_PROVIDER` | `omlx` | Selects exactly one speech synthesis adapter by stable provider ID (`omlx` or `gnani`); unknown or duplicate IDs preserve text fallback. |
+| `AMSHA_GNANI_API_KEY` | *(empty)* | Optional speech credential sent only in Gnani's `X-API-Key-ID` header; key scope and processing terms remain release gates. |
+| `AMSHA_STT_GNANI_ENABLED` | `false` | Enables Gnani only as the priority-40 cloud-tier transcription provider. |
+| `AMSHA_STT_GNANI_DEFAULT_LANGUAGE` | `en-IN` | Gnani STT language when the request has no language hint; defaults to Indian English and accepts a supported override. |
+| `AMSHA_STT_GNANI_MAX_DURATION` | `PT30S` | Measured audio duration cap; values above 30 seconds are clamped to the conservative cap. |
+| `AMSHA_TTS_GNANI_MODEL` | `timbre-v3.0` | Timbre model. The first adapter release supports v3.0 and its cross-language voice catalog. |
+| `AMSHA_TTS_GNANI_VOICE` | `Shivani` | Validated Timbre v3.0 fallback voice for generic Amsha voice preferences. |
 | `AMSHA_TTS_MODEL` | `Qwen3-TTS-12Hz-1.7B-Base-bf16` | OMLX model identifier for TTS synthesis. |
 | `AMSHA_TTS_VOICE` | *(empty)* | Optional voice identifier; omitted from the provider request when blank. |
 | `AMSHA_TTS_RESPONSE_FORMAT` | `wav` | TTS response format. V1 supports WAV only; other values fail closed as `UNSUPPORTED`. |
@@ -692,7 +701,7 @@ Constants and port live in `amsha-security-api` (`MediaBudgetLimits`, `MediaDown
 | `AMSHA_STT_FFMPEG_PATH` | `ffmpeg` | Executable used to transcode compressed audio to mono 16 kHz WAV. |
 | `AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE` | `false` | Allows the composite STT port to try a lower-priority provider after a failure or timeout. Keep false to prevent unintended audio egress. |
 
-Both STT and TTS reuse `AMSHA_OMLX_API_KEY` and `AMSHA_OMLX_BASE_URL` for the OMLX provider. STT is an execution port, not a chat-model capability: local ONNX Whisper has priority over OMLX, while `UNSUPPORTED` results may cascade and failures/timeouts cascade only when explicitly enabled. TTS is output-only, governed, and currently emits WAV only; it does not create an `AUDIO` model route.
+OMLX STT and TTS reuse `AMSHA_OMLX_API_KEY` and `AMSHA_OMLX_BASE_URL`. STT is an execution port, not a chat-model capability: local ONNX Whisper has priority over OMLX, and the opt-in priority-40 Gnani tier follows OMLX. `UNSUPPORTED` results may cascade; failures and timeouts cascade only when `AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE=true`. Gnani STT also requires `AMSHA_STT_GNANI_ENABLED=true` and `AMSHA_GNANI_API_KEY`, measures duration locally, and caps requests at `AMSHA_STT_GNANI_MAX_DURATION`. Gnani TTS requires `AMSHA_TTS_ENABLED=true` and `AMSHA_TTS_PROVIDER=gnani`. TTS is output-only, governed, and emits WAV only for both providers; it does not create an `AUDIO` model route. Production Gnani egress remains gated on retention and key-scope confirmation.
 
 ## Retry
 

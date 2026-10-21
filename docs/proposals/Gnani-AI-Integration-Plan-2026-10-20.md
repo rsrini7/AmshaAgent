@@ -1,6 +1,6 @@
 # Gnani AI Speech Integration Plan
 
-- **Status**: Proposed; upstream data terms, duration contract, and 400 error discriminators unresolved
+- **Status**: Implemented behind disabled-by-default gates; upstream data terms, key scope, duration contract, and 400 error discriminators unresolved
 - **Updated**: 2026-10-20
 - **ADR**: [Gnani AI speech integration](../adr/providers/ADR-Gnani-AI-Provider.md)
 - **Research**: [Gnani AI integration research](../research/Gnani-AI-Integration-Research-2026-10-20.md)
@@ -25,7 +25,7 @@ No API-specific audio/transcript retention terms or cross-service key scope have
 
 - `AMSHA_GNANI_API_KEY`: secret credential sent as `X-API-Key-ID`; required when Gnani is enabled; never log, echo, or place in metric tags; redact the header from errors. Whether one key serves both STT and TTS remains an open gate.
 - `amsha.stt.gnani.enabled` (`AMSHA_STT_GNANI_ENABLED`): default `false`; the explicit cloud-tier egress switch.
-- `amsha.stt.gnani.default-language` (`AMSHA_STT_GNANI_DEFAULT_LANGUAGE`): default empty; required when Gnani is enabled; must be in the STT language enum.
+- `amsha.stt.gnani.default-language` (`AMSHA_STT_GNANI_DEFAULT_LANGUAGE`): default `en-IN` (Indian English); may be overridden with a supported STT language code.
 - `amsha.stt.gnani.max-duration` (`AMSHA_STT_GNANI_MAX_DURATION`): default `PT30S`; applied to measured duration, not the sender-declared value.
 - `amsha.stt.max-bytes` (`AMSHA_STT_MAX_BYTES`): remains the hard byte cap and defense-in-depth bound.
 - `amsha.tts.provider` (`AMSHA_TTS_PROVIDER`): default `omlx`; selects exactly one `SpeechSynthesisPort` by `providerId()`.
@@ -43,7 +43,7 @@ Document every new property in `application.yaml`, `.env.example`, `docs/CONFIGU
 - Preflight before egress: MIME allowlist (WAV, MP3, OGG, FLAC, AAC, M4A), STT language enum, byte cap, and measured duration. Unsupported format or language returns UNSUPPORTED before any request is sent. A local over-cap check returns TOO_LARGE.
 - Measure actual duration from the governed audio bytes or temp file using the existing FFmpeg/PCM path (`amsha.stt.ffmpeg-path`) or an equivalent bounded probe. `IncomingVoice.getDuration()` is only a declared hint. A declared value over 30 seconds may reject early; a value at or under 30 seconds never authorizes egress. If measurement fails, return FAILED with a payload-safe reason and do not send.
 - Do not classify upstream HTTP 400s as TOO_LARGE or UNSUPPORTED. The published schema only exposes generic `INVALID_REQUEST_ERROR` plus free text; treat upstream 400s as FAILED and never parse or log the raw body. Add stable-code mapping only if Gnani publishes documented discriminators.
-- Set `language_code` deterministically. Use a supported request/user/channel hint when present; otherwise require `amsha.stt.gnani.default-language` before enabling Gnani. Document an empty default and reject configuration if Gnani is enabled without a valid language. Do not silently default to English.
+- Set `language_code` deterministically. Use a supported request/user/channel hint when present; otherwise use the code default `en-IN` (Indian English), overridable through `amsha.stt.gnani.default-language`. Reject an unsupported language before egress. Until a request or channel language hint is wired, clips without a hint are submitted as Indian English and may be transcribed incorrectly when spoken in another language.
 - Add optional `declaredDuration` to `AudioTranscriptionRequest`. `TelegramMediaResolver.resolveVoice` writes `IncomingVoice.getDuration()` as `declared_duration_seconds` into `MediaAttachment.metadata`; `resolveMedia` must accept metadata and update all four callers (`resolvePhoto`, `resolveDocument`, `resolveAudio`, `resolveVoice`). `AttachmentContentMapper` validates and forwards the hint. `DownloadedMedia` stays the governed bytes/file container. Measurement remains mandatory when the hint is absent.
 - Validate outbound STT language against Gnani's current OpenAPI enum. For result metadata, either widen `AudioTranscriptionResult` to accept RFC 5646/BCP-47 region subtags such as `hi-IN`, or normalize to a language-only tag before construction; choose one and test `hi-IN`.
 
