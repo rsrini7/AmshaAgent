@@ -166,9 +166,9 @@ public class SmartWebFetchTool implements AgentTool {
                     400, "Unsupported URL scheme. Only http:// and https:// are allowed. Got: " + sanitizeUrl(url));
         }
 
-        String ssrfError = rejectPrivateHost(url);
-        if (ssrfError != null) {
-            return ToolResponse.failure(403, ssrfError);
+        ToolResponse ssrfFailure = rejectPrivateHost(url);
+        if (ssrfFailure != null) {
+            return ssrfFailure;
         }
 
         int maxChars = MAX_CONTENT_CHARS;
@@ -202,7 +202,14 @@ public class SmartWebFetchTool implements AgentTool {
                             case TIMEOUT -> 504;
                             default -> 502;
                         };
-                return ToolResponse.failure(code, "Web fetch blocked: " + e.getMessage());
+                String errorCode =
+                        switch (e.category()) {
+                            case DNS_REBINDING -> ToolResponse.ERROR_CODE_PRIVATE_NETWORK_BLOCKED;
+                            case POLICY_DENIED, HITL_REQUIRED, REDIRECT_DENIED, TLS_TRUST ->
+                                ToolResponse.ERROR_CODE_OUTBOUND_POLICY_BLOCKED;
+                            default -> null;
+                        };
+                return ToolResponse.failure(code, "Web fetch blocked: " + e.getMessage(), errorCode, null, null);
             } catch (IllegalArgumentException e) {
                 return ToolResponse.failure(400, "Invalid URL: " + e.getMessage());
             } catch (Exception e) {
@@ -267,9 +274,9 @@ public class SmartWebFetchTool implements AgentTool {
      * Fetches a URL via GovernedTransportService and processes text content.
      */
     private ToolResponse fetchUrl(String url, int maxChars, ToolExecutionContext ctx) throws Exception {
-        String ssrfError = rejectPrivateHost(url);
-        if (ssrfError != null) {
-            return ToolResponse.failure(403, ssrfError);
+        ToolResponse ssrfFailure = rejectPrivateHost(url);
+        if (ssrfFailure != null) {
+            return ssrfFailure;
         }
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -304,9 +311,9 @@ public class SmartWebFetchTool implements AgentTool {
             int statusCode = response.statusCode();
 
             // Post-response IP validation: catch DNS rebinding + redirects to internal IPs
-            String rebindError = rejectPrivateHost(responseUrl);
-            if (rebindError != null) {
-                return ToolResponse.failure(403, rebindError);
+            ToolResponse rebindFailure = rejectPrivateHost(responseUrl);
+            if (rebindFailure != null) {
+                return rebindFailure;
             }
 
             if (statusCode == 404) {
@@ -355,16 +362,16 @@ public class SmartWebFetchTool implements AgentTool {
         }
     }
 
-    /** Returns an error message if the host resolves to a private/internal IP; null otherwise. */
-    static String rejectPrivateHost(String url) {
+    /** Returns a typed failure if the URL is invalid or resolves to a private/internal IP. */
+    static ToolResponse rejectPrivateHost(String url) {
         try {
             URI uri = URI.create(url);
             String host = uri.getHost();
             if (host == null || host.isBlank()) {
-                return "Invalid URL: missing host";
+                return ToolResponse.failure(400, "Invalid URL: missing host");
             }
             if (OutboundHttpPolicyService.isBlockedLiteralAddress(host)) {
-                return "Access to private/internal network hosts is not allowed: " + host;
+                return privateNetworkBlocked(host);
             }
 
             InetAddress[] addrs = InetAddress.getAllByName(host);
@@ -375,14 +382,23 @@ public class SmartWebFetchTool implements AgentTool {
                         || addr.isAnyLocalAddress()
                         || addr.isMulticastAddress()
                         || OutboundHttpPolicyService.isBlockedLiteralAddress(addr.getHostAddress())) {
-                    return "Access to private/internal network hosts is not allowed: " + host;
+                    return privateNetworkBlocked(host);
                 }
             }
         } catch (IllegalArgumentException e) {
-            return "Invalid URL: " + e.getMessage();
+            return ToolResponse.failure(400, "Invalid URL: " + e.getMessage());
         } catch (Exception _) {
             // DNS failure — the real request will fail anyway
         }
         return null;
+    }
+
+    private static ToolResponse privateNetworkBlocked(String host) {
+        return ToolResponse.failure(
+                403,
+                "Access to private/internal network hosts is not allowed: " + host,
+                ToolResponse.ERROR_CODE_PRIVATE_NETWORK_BLOCKED,
+                null,
+                null);
     }
 }
