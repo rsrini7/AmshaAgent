@@ -276,7 +276,7 @@ smallrye:
   # ---------------------------------------------------------------------------
   log:
     console:
-      enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+      enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
     category:
       "dev.langchain4j.model.chat.listener.ListenersUtil":
@@ -356,7 +356,7 @@ smallrye:
       darken: 0
       filter: secret-redaction
     file:
-      enable: true
+      enabled: true
       path: "./amsha-prod-sqlite.log"
       level: DEBUG
       format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
@@ -1376,7 +1376,7 @@ mp:
   quarkus:
     log:
       console:
-        enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: ERROR
       category:
         "io.quarkus":
@@ -1388,7 +1388,7 @@ mp:
         "com.amsha":
           level: DEBUG
       file:
-        enable: true
+        enabled: true
         path: ./amsha-cli-sqlite.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
@@ -1430,9 +1430,9 @@ mp:
     log:
       level: INFO                          # set to INFO to avoid infrastructure flood
       console:
-        enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       file:
-        enable: true
+        enabled: true
         path: ./amsha-dev-sqlite.log
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
@@ -1680,10 +1680,10 @@ mp:
       clean-at-start: ${AMSHA_FLYWAY_CLEAN_AT_START:true}
     log:
       console:
-        enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
       file:
-        enable: true
+        enabled: true
         path: "./amsha-postgresql-postgres.log"
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
@@ -1705,10 +1705,10 @@ mp:
       enabled: false
     log:
       console:
-        enable: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+        enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
       level: INFO
       file:
-        enable: true
+        enabled: true
         path: "./amsha-filesystem-fs.log"
         level: DEBUG
         format: "%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p [%c{3.}] [sid=%X{sessionId}] [trace=%X{traceId}] [span=%X{spanId}] (%t) %s%e%n"
