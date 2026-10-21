@@ -2215,7 +2215,7 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 1. **Explicit vs. Default Resolution**: `SpeechOutputPolicy.resolve` inspects user text directives first (`"reply audio"`, `"audio only"`, `"no audio"`). When text lacks explicit directives:
    - If the user sent voice-only input (blank text with `inboundAudioPresent = true`), the policy falls back to `amsha.tts.default-output-mode` (`TEXT_ONLY`, `AUDIO_ONLY`, or `TEXT_AND_AUDIO`).
    - Blank voice-only turns MUST NOT be classified as trivial greetings or simple conversational turns in `IntentClassificationService.isSimpleConversational()`.
-2. **Deterministic Text Projection**: `SpeechReplyService.projectSpeakableText()` strips markdown code blocks, tables, and internal artifacts before passing prose to the OMLX `OmlxSpeechSynthesisProvider` through `SpeechSynthesisPort`.
+2. **Deterministic Text Projection**: `SpeakableTextProjector.project(...)` (invoked by `SpeechReplyService`) strips markdown code blocks, tables, and internal artifacts before passing prose to the OMLX `OmlxSpeechSynthesisProvider` through `SpeechSynthesisPort`.
 
 ### 25.1a Speech provider boundaries
 

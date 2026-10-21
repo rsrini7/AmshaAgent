@@ -113,7 +113,7 @@
     <!-- Speech Reply Service & Projection -->
     <rect x="40" y="414" width="250" height="88" rx="8" fill="#24507a" stroke="#71b7ee" stroke-width="0.7"/>
     <text x="165" y="436" text-anchor="middle" font-size="13" font-weight="600" fill="#acd9f7">SpeechReplyService</text>
-    <text x="165" y="454" text-anchor="middle" font-size="10" fill="#c0e2f8">projectSpeakableText()</text>
+    <text x="165" y="454" text-anchor="middle" font-size="10" fill="#c0e2f8">SpeakableTextProjector.project()</text>
     <text x="165" y="468" text-anchor="middle" font-size="10" fill="#90caf9">Strips code blocks, tables &amp; artifacts</text>
     <text x="165" y="482" text-anchor="middle" font-size="10" fill="#90caf9">Passes clean prose to TTS port</text>
 
