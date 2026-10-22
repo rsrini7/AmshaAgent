@@ -10,10 +10,11 @@
 - **Research**: [Quarkus 3.38 Upgrade Research](../../research/explorations/Quarkus-Upgrade-Research.md)
 - **Related invariants**: [Architecture Invariants](../../Architecture_Invariants.md)
 
-> **Platform note (2026-09-29).** The reactor has since moved past this ADR's endpoint: commit `be5c8eba8`
-> (2026-09-12) bumped `quarkus.platform.version` from `3.38.3` to **`3.39.3`**. The "Current platform" line
-> above therefore records the *completed checkpoint*, not today's build. This ADR is retained as the staged
-> completed migration decision; a 3.39 stream ADR has not been written.
+> **Platform note (2026-10-22).** The reactor has since moved past this ADR's endpoint: commit `be5c8eba8`
+> (2026-09-12) bumped `quarkus.platform.version` from `3.38.3` to `3.39.3`, and on 2026-10-22 it was
+> bumped to **`3.40.1.1`** (Quarkus 3.40 LTS line, tracked in `.scratch/quarkus-upgrade/issues/10-quarkus-340-lts.md`).
+> The "Current platform" line above therefore records the *completed checkpoint*, not today's build. This ADR
+> is retained as the staged completed migration decision.
 
 ## 1. Decision summary
 

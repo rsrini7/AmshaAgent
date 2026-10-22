@@ -48,12 +48,12 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-    <quarkus.platform.version>3.39.3</quarkus.platform.version>
+    <quarkus.platform.version>3.40.1.1</quarkus.platform.version>
     <quarkus.version>${quarkus.platform.version}</quarkus.version>
     <!-- Aligned to quarkus-bom managed value (Issue 02): the previous
          1.78.1 pin silently downgraded the platform's Bouncy Castle. Re-checked per
-         ADR rule 5 at each checkpoint (aligned to 1.85.2 for the 3.39.3 checkpoint). -->
-    <bouncycastle.version>1.85.2</bouncycastle.version>
+         ADR rule 5 at each checkpoint (aligned to 1.86 for the 3.40.1.1 checkpoint). -->
+    <bouncycastle.version>1.86</bouncycastle.version>
     <archunit.version>1.5.0</archunit.version>
     <errorprone.version>2.49.0</errorprone.version>
     <quarkus-jdbi.version>1.10.1</quarkus-jdbi.version>

@@ -1,25 +1,29 @@
 # Dependency Upgrade Policy
 
-Reviewed 2026-09-12. This policy records the dependency boundary used for
-routine maintenance after the Quarkus 3.39.3 staging migration.
+Reviewed 2026-10-22. This policy records the dependency boundary used for
+routine maintenance after the Quarkus 3.40.1.1 LTS migration checkpoint.
 
 ## Platform policy
 
-- Quarkus upgrades prioritize LTS releases. The official [Quarkus security page](https://quarkus.io/security/) currently lists the 3.33 and 3.27 lines as LTS; Maven Central currently publishes `3.33.3.1` as the latest 3.33 patch.
+- Quarkus upgrades prioritize LTS releases. Use the official [Quarkus security page](https://quarkus.io/security/) to confirm active support lines and patch status before each migration (Quarkus 3.40.x LTS is the active baseline line as of 2026-10-22); confirm the exact stable platform version and published member BOMs before changing the platform pin.
 - On 2026-09-12, **Path A (Quarkus 3.39.3 staging checkpoint)** was ratified as an authorized regular-stream staging step toward Quarkus 3.40 LTS. Quarkus 3.39 serves as the upstream foundation for 3.40 LTS; this staging step validates integration changes (Quarkiverse MCP Server 2.0.0, LangChain4j 1.19.0, Camel 4.22.0, Bouncy Castle 1.85.2) before 3.40 LTS freezes.
 - `3.39.0.CR1` and other release candidates remain excluded from production dependency updates.
 - Quarkus, Camel, LangChain4j, and MCP member BOMs move only with the selected Quarkus platform.
 
-### Next LTS backlog target
+### Current LTS baseline
 
-Quarkus `3.40 LTS` is tracked as the next target for **September 2026
-(targeted)**. It is not an available upgrade until the final platform and
-member BOMs are published and the official support/security pages identify the
-line as LTS. See the local Quarkus 3.40 LTS backlog issue at `.scratch/quarkus-upgrade/issues/10-quarkus-340-lts.md` when the working tracker is available.
+Quarkus `3.40.1.1` is the current platform baseline after the 2026-10-22 migration
+checkpoint. See the official [Quarkus 3.40 LTS announcement](https://quarkus.io/blog/quarkus-3-40-released/)
+and [3.40.1.1 LTS release](https://quarkus.io/blog/quarkus-3-40-1-1-released/).
+The Quarkus, LangChain4j, Camel, and MCP member BOMs use the same `3.40.1.1`
+platform line; their managed runtime families resolve to Camel Quarkus `3.40.0`
+(Camel `4.22.1`), LangChain4j core `1.19.3` / extension `1.13.3`, and MCP Server `2.0.1`.
 
-Advancing from 3.39.3 to 3.40 LTS must begin with a fresh updater dry-run and
-migration-guide review, then prove JVM, persistence, native, REST, delegation, ML,
-and release evidence gates before changing the platform pin.
+The macOS arm64 JVM verification and native build are the current local platform
+coverage. Linux and Windows native build/runtime validation remains pending; keep
+that status visible and do not imply cross-platform native validation is complete.
+The ordered migration evidence is in the local tracker at
+`.scratch/quarkus-upgrade/issues/10-quarkus-340-lts.md`.
 
 ## Routine independent updates
 
@@ -53,7 +57,7 @@ before changing:
 | Apache Lucene | `10.5.1` | Native image initialization, reflection, FS search, and full FS validation |
 | DJL Hugging Face tokenizers | `0.36.0` | MPNet tokenization, truncation/max-sequence, and embedding regression tests |
 | ONNX Runtime | `1.29.0` | Native library loading, model inference, provenance, and ONNX release gates |
-| Bouncy Castle | `1.85.2` | Platform-managed by `quarkus-bom:3.39.3`. Root `pom.xml` `<bouncycastle.version>` bumped from `1.84` to `1.85.2` on 2026-09-12 (plan §3, invariant 6 / §7, criterion 3). Silent-downgrade risk is **resolved and closed**; version alignment plus local macOS arm64 native builds/smoke verification passed. Explicit provider-initialization coverage and the multi-platform native matrix remain deferred to CI before production promotion. |
+| Bouncy Castle | `1.86` | Platform-managed by `quarkus-bom:3.40.1.1`. Root `pom.xml` `<bouncycastle.version>` aligned to `1.86` on 2026-10-22 (Issue 10 §2.3 / §4.3). Silent-downgrade risk is **resolved and closed**; version alignment plus local macOS arm64 native builds/smoke verification passed. Explicit provider-initialization coverage and the multi-platform native matrix remain deferred to CI before production promotion. |
 | Bucket4j | `8.19.0` | Rate-limit, authentication, and REST behavior tests |
 | OpenAPI Generator | `7.25.0` | Generated TypeScript DTO diff, UI type-check, UI build, and UI tests |
 

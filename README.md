@@ -3,9 +3,9 @@
   <p><strong>A secure, stateful, and financially governed multi-agent AI kernel designed for enterprise deployment.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
-  ![Quarkus](https://img.shields.io/badge/Quarkus-3.39.3-blue.svg?style=flat&logo=quarkus)
-  ![LangChain4J](https://img.shields.io/badge/LangChain4j-1.19.0-FC4C02?style=flat&logo=langchain)
-  ![Native Image Ready](https://img.shields.io/badge/Native_Image-Ready-orange.svg?style=flat&logo=graalvm)
+  ![Quarkus](https://img.shields.io/badge/Quarkus-3.40.1.1-blue.svg?style=flat&logo=quarkus)
+  ![LangChain4J](https://img.shields.io/badge/LangChain4j-1.19.3-FC4C02?style=flat&logo=langchain)
+  ![Native Image macOS tested](https://img.shields.io/badge/Native_Image-macOS_tested-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   ![Java Tests](https://img.shields.io/badge/Tests-9774_passed_%C2%B7_15_skipped_of_9789-brightgreen.svg?style=flat)
@@ -16,11 +16,19 @@
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
 
+> **Development status:** Amsha Agent is in active development. Contributions are
+> welcome, including bug reports, documentation, tests, and implementation work;
+> see [CONTRIBUTING.md](./CONTRIBUTING.md).
+>
+> **Native platform status:** The latest GraalVM native-image changes have been
+> tested on macOS arm64 only. Linux and Windows native build and runtime testing
+> remain pending.
+
 ---
 
 > **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~400 MB binary.
 
-**Stack**: JDK 25 · Quarkus 3.39.3 · LangChain4J 1.19.0 · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
+**Stack**: JDK 25 · Quarkus 3.40.1.1 · LangChain4J 1.19.3 · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
 
 ### Native binary size
 
@@ -95,7 +103,7 @@ See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 - **Secret-safe application logging** — console and file filters redact credential-shaped URLs, bearer values, assignments, formatted parameters, and throwable cause/suppressed chains before rendering
 - **Tamper-evident HMAC audit chain** — every action logged as append-only, verifiable record
 - **MemGPT-style three-tier memory** — prompt-injected Core context, exact-turn Recall history, and semantic Archival knowledge; retrieval combines FTS5 and sqlite-vec with Reciprocal Rank Fusion and an optional local cross-encoder reranker
-- **Opt-in in-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding + optional cross-encoder reranking (`bge-reranker-v1`, BGE Reranker) runs verified local bundles without Python containers, downloads, or external inference sidecars; Linux native records and signed release provenance remain open gates
+- **Opt-in in-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding + optional cross-encoder reranking (`bge-reranker-v1`, BGE Reranker) runs verified local bundles without Python containers, downloads, or external inference sidecars; GraalVM native-image changes are tested on macOS arm64; Linux and Windows native build/runtime validation remains pending
 - **Vector index descriptor fingerprinting & non-destructive safety** — 15-field `EmbeddingIndexDescriptor` validates model, tokenizer, pooling, and dimension compatibility across SQLite (`sqlite-vec`), PostgreSQL (`pgvector`), and Lucene Filesystem backends; mismatched indices degrade non-destructively to BM25/FTS5 keyword search without auto-deleting vectors
 - **Non-authoritative classifier shadow path** — disabled-by-default intent, tool-risk, and answer-quality adapters emit bounded payload-free comparisons without changing routing, authorization, retry, or answer behavior; reproducible review/training/export tooling is present, while human-approved datasets and promoted models remain pending
 - **classifier safety gate** — core now provides ordered post-policy tool-risk and answer-quality SPIs with monotonic risk upgrades, existing HITL preservation, and one pre-tool retry budget; no active ONNX implementation is wired, so model evidence remains required before behavioral activation
@@ -176,7 +184,7 @@ All roles have `garuda` for delegation. Tool schemas assembled dynamically at ru
 ## Module Reference
 
 ```
-amsha-parent/               ← Root POM: Java 25, Quarkus 3.39.3
+amsha-parent/               ← Root POM: Java 25, Quarkus 3.40.1.1
 │
 app/                  ← Main deployable: CLI, REST, scheduler, security wiring
 core/                 ← Agent loop, state machine, reflexes, routing, governance
@@ -306,4 +314,4 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-29; UI 2026-09-30): 8,530 Java tests at 84.17% line coverage and 195 UI tests at 59.26% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.
+> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.40.1.1 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-29; UI 2026-09-30): 8,530 Java tests at 84.17% line coverage and 195 UI tests at 59.26% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.
