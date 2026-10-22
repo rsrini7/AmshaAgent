@@ -96,6 +96,8 @@ class MediaTagValuesTest {
         assertEquals("unknown", MediaTagValues.resolveReason(null));
         assertEquals("unknown", MediaTagValues.resolveReason(" "));
         assertEquals("unsupported_modality", MediaTagValues.resolveReason("UNSUPPORTED_MODALITY"));
+        assertEquals("audio_too_large", MediaTagValues.resolveReason("audio_too_large"));
+        assertEquals("transcription_failed", MediaTagValues.resolveReason("transcription_failed"));
         assertEquals("oversized", MediaTagValues.resolveReason("Oversized"));
         assertEquals("cumulative_exceeded", MediaTagValues.resolveReason("cumulative_exceeded"));
         assertEquals("count_exceeded", MediaTagValues.resolveReason("count_exceeded"));

@@ -21,6 +21,9 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 public sealed interface ToolResponse
         permits ToolResponse.ToolSuccess, ToolResponse.ToolFailure, ToolResponse.ToolPending {
 
+    String ERROR_CODE_PRIVATE_NETWORK_BLOCKED = "PRIVATE_NETWORK_BLOCKED";
+    String ERROR_CODE_OUTBOUND_POLICY_BLOCKED = "OUTBOUND_POLICY_BLOCKED";
+
     /** Common output or message from the tool. */
     String output();
 

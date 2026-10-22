@@ -9,7 +9,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -216,7 +215,12 @@ public class OnboardingCommitSaga {
         for (Map.Entry<String, Object> entry : map.entrySet()) {
             String key = entry.getKey();
             Object val = entry.getValue();
-            if (val instanceof String str && isSecretKey(key) && !str.isBlank() && !str.startsWith("vault-key-")) {
+            if (val instanceof String str
+                    && OnboardingSelectionScrubber.isSecretValue(key, val)
+                    && !str.isBlank()
+                    && !str.startsWith("vault-key-")
+                    && !str.startsWith("mcp-header-")
+                    && !str.startsWith("staged-ref-")) {
                 String vaultRef = "vault-key-"
                         + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
                 vault.store(vaultRef, str.getBytes(StandardCharsets.UTF_8), ownerId);
@@ -227,18 +231,6 @@ public class OnboardingCommitSaga {
             }
         }
         return copy;
-    }
-
-    private static boolean isSecretKey(String key) {
-        if (key == null) return false;
-        String lower = key.toLowerCase(Locale.ROOT);
-        return (lower.contains("secret")
-                        || lower.contains("token")
-                        || lower.contains("password")
-                        || lower.contains("key")
-                        || lower.contains("pass"))
-                && !lower.endsWith("vaultref")
-                && !lower.endsWith("ref");
     }
 
     @SuppressWarnings("unchecked")

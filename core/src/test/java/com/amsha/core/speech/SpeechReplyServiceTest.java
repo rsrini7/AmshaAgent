@@ -14,6 +14,7 @@ import jakarta.enterprise.inject.Instance;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
@@ -30,60 +31,73 @@ import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 
 class SpeechReplyServiceTest {
-
     private static final ChannelUser USER = new ChannelUser("u1", "chat1", "User 1", ChannelType.TELEGRAM);
+    private static final String OMLX_PROVIDER = "omlx";
 
     private final SpeechSynthesisPort port = mock(SpeechSynthesisPort.class);
     private final Instance<SpeechSynthesisPort> portInstance = mock(Instance.class);
     private final ChannelSender sender = mock(ChannelSender.class);
     private final UserPreferenceService userPreferenceService = mock(UserPreferenceService.class);
-    private final SpeechReplyService service =
-            new SpeechReplyService(portInstance, userPreferenceService, 1200, "wav", Duration.ofSeconds(120));
+    private final SpeechReplyService service = newService(OMLX_PROVIDER);
 
     @Test
     void textOnlyModeReturnsFalseWithoutResolvingPort() {
         assertFalse(service.deliver(sender, USER, OutputMode.TEXT_ONLY, "hello"));
-        verify(portInstance, never()).isResolvable();
+        verify(portInstance, never()).stream();
     }
 
     @Test
     void nullOrBlankAnswerReturnsFalse() {
         assertFalse(service.deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, null));
-        assertFalse(service.deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, "   "));
-        verify(portInstance, never()).isResolvable();
+        assertFalse(service.deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, " "));
+        verify(portInstance, never()).stream();
     }
 
     @Test
-    void portUnavailableReturnsFalseSoTextFallbackApplies() {
-        when(portInstance.isResolvable()).thenReturn(false);
+    void missingSelectedProviderPreservesTextFallback() {
+        when(portInstance.stream()).thenReturn(Stream.empty());
+
         assertFalse(service.deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, "hello world"));
     }
 
     @Test
-    void synthesizedAudioIsDeliveredViaSender() {
-        when(portInstance.isResolvable()).thenReturn(true);
-        when(portInstance.get()).thenReturn(port);
+    void unknownProviderIdPreservesTextFallback() {
+        when(port.providerId()).thenReturn(OMLX_PROVIDER);
         when(port.supports(any(SpeechSynthesisRequest.class))).thenReturn(true);
-        when(port.synthesize(any(SpeechSynthesisRequest.class)))
-                .thenReturn(SpeechSynthesisResult.synthesized(wavBytes(16), "audio/wav", Duration.ofMillis(5)));
+        when(portInstance.stream()).thenReturn(Stream.of(port));
+
+        assertFalse(newService("gnani").deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, "hello world"));
+        verify(port, never()).synthesize(any(SpeechSynthesisRequest.class));
+    }
+
+    @Test
+    void duplicateProviderIdsPreserveTextFallback() {
+        SpeechSynthesisPort duplicate = mock(SpeechSynthesisPort.class);
+        when(port.providerId()).thenReturn(OMLX_PROVIDER);
+        when(duplicate.providerId()).thenReturn(OMLX_PROVIDER);
+        when(port.supports(any(SpeechSynthesisRequest.class))).thenReturn(true);
+        when(duplicate.supports(any(SpeechSynthesisRequest.class))).thenReturn(true);
+        when(portInstance.stream()).thenReturn(Stream.of(port, duplicate));
+
+        assertFalse(service.deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, "hello world"));
+        verify(port, never()).synthesize(any(SpeechSynthesisRequest.class));
+    }
+
+    @Test
+    void synthesizedAudioIsDeliveredViaSender() {
+        stubAvailablePort();
         when(sender.sendAudio(any(), any(), any(), any())).thenReturn(true);
 
         assertTrue(service.deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, "hello world"));
-
         verify(sender).sendAudio(USER, wavBytes(16), "audio/wav", "amsha-reply.wav");
     }
 
     @Test
-    void injectedFormatAndTimeoutReachTheSynthesisRequest() {
-        when(portInstance.isResolvable()).thenReturn(true);
-        when(portInstance.get()).thenReturn(port);
-        when(port.supports(any(SpeechSynthesisRequest.class))).thenReturn(true);
-        when(port.synthesize(any(SpeechSynthesisRequest.class)))
-                .thenReturn(SpeechSynthesisResult.synthesized(wavBytes(16), "audio/wav", Duration.ofMillis(5)));
+    void injectedFormatAndTimeoutReachSynthesisRequest() {
+        stubAvailablePort();
         when(sender.sendAudio(any(), any(), any(), any())).thenReturn(true);
 
         assertTrue(service.deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, "hello world"));
-
         ArgumentCaptor<SpeechSynthesisRequest> requestCaptor = ArgumentCaptor.forClass(SpeechSynthesisRequest.class);
         verify(port).synthesize(requestCaptor.capture());
         assertEquals("wav", requestCaptor.getValue().responseFormat());
@@ -92,11 +106,7 @@ class SpeechReplyServiceTest {
 
     @Test
     void audioOnlyModeIsDeliveredViaSender() {
-        when(portInstance.isResolvable()).thenReturn(true);
-        when(portInstance.get()).thenReturn(port);
-        when(port.supports(any(SpeechSynthesisRequest.class))).thenReturn(true);
-        when(port.synthesize(any(SpeechSynthesisRequest.class)))
-                .thenReturn(SpeechSynthesisResult.synthesized(wavBytes(16), "audio/wav", Duration.ofMillis(5)));
+        stubAvailablePort();
         when(sender.sendAudio(any(), any(), any(), any())).thenReturn(true);
 
         assertTrue(service.deliver(sender, USER, OutputMode.AUDIO_ONLY, "hello world"));
@@ -105,9 +115,7 @@ class SpeechReplyServiceTest {
 
     @Test
     void synthesisFailureReturnsFalseSoTextFallbackApplies() {
-        when(portInstance.isResolvable()).thenReturn(true);
-        when(portInstance.get()).thenReturn(port);
-        when(port.supports(any(SpeechSynthesisRequest.class))).thenReturn(true);
+        stubAvailablePort();
         when(port.synthesize(any(SpeechSynthesisRequest.class)))
                 .thenReturn(SpeechSynthesisResult.failure(
                         SpeechSynthesisResult.Status.FAILED, "provider_error", Duration.ofMillis(5)));
@@ -117,36 +125,50 @@ class SpeechReplyServiceTest {
     }
 
     @Test
-    void eventLoopGuardFailsClosedToText() throws Exception {
+    void synthesisIsSkippedOnVertxEventLoop() throws Exception {
         Vertx vertx = Vertx.vertx();
         try {
             CountDownLatch latch = new CountDownLatch(1);
-            boolean[] onLoop = {false};
-            boolean[] result = {true};
-            vertx.runOnContext(v -> {
+            boolean[] onLoop = new boolean[1];
+            boolean[] result = new boolean[1];
+            vertx.runOnContext(_ -> {
                 onLoop[0] = Context.isOnEventLoopThread();
                 result[0] = service.deliver(sender, USER, OutputMode.TEXT_AND_AUDIO, "hello world");
                 latch.countDown();
             });
-            assertTrue(latch.await(10, TimeUnit.SECONDS), "event loop task completed in time");
-            assertTrue(onLoop[0], "sanity: handler actually ran on the event loop");
-            assertFalse(result[0], "audio must be skipped on the event loop (fail closed to text)");
-            verify(portInstance, never()).isResolvable();
+
+            assertTrue(latch.await(10, TimeUnit.SECONDS));
+            assertTrue(onLoop[0]);
+            assertFalse(result[0]);
+            verify(portInstance, never()).stream();
         } finally {
             vertx.close().toCompletionStage().toCompletableFuture().get(10, TimeUnit.SECONDS);
         }
     }
 
-    private static byte[] wavBytes(int len) {
-        byte[] b = new byte[len];
-        b[0] = 'R';
-        b[1] = 'I';
-        b[2] = 'F';
-        b[3] = 'F';
-        b[8] = 'W';
-        b[9] = 'A';
-        b[10] = 'V';
-        b[11] = 'E';
-        return b;
+    private void stubAvailablePort() {
+        when(port.providerId()).thenReturn(OMLX_PROVIDER);
+        when(portInstance.stream()).thenReturn(Stream.of(port));
+        when(port.supports(any(SpeechSynthesisRequest.class))).thenReturn(true);
+        when(port.synthesize(any(SpeechSynthesisRequest.class)))
+                .thenReturn(SpeechSynthesisResult.synthesized(wavBytes(16), "audio/wav", Duration.ofMillis(5)));
+    }
+
+    private SpeechReplyService newService(String selectedProviderId) {
+        return new SpeechReplyService(
+                portInstance, userPreferenceService, selectedProviderId, 1200, "wav", Duration.ofSeconds(120));
+    }
+
+    private static byte[] wavBytes(int length) {
+        byte[] bytes = new byte[length];
+        bytes[0] = 'R';
+        bytes[1] = 'I';
+        bytes[2] = 'F';
+        bytes[3] = 'F';
+        bytes[8] = 'W';
+        bytes[9] = 'A';
+        bytes[10] = 'V';
+        bytes[11] = 'E';
+        return bytes;
     }
 }

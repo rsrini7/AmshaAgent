@@ -225,12 +225,20 @@ public class ToolResultProcessor {
     }
 
     private StepDecision handleWebFetchOutcome(
-            AgentExecutionContext _ctx,
+            AgentExecutionContext ctx,
             Map<String, Object> params,
             ToolResponse res,
             String obs,
             List<ReasoningStep> history) {
         if (res != null && !res.success()) {
+            String policyDenial = webFetchPolicyDenialMessage(res.errorCode());
+            if (policyDenial != null) {
+                if (ctx.sessionId() != null) {
+                    writer.saveAnswer(ctx.sessionId(), policyDenial);
+                }
+                return StepDecision.terminal(AgentResult.finished(policyDenial, List.copyOf(history)));
+            }
+
             String url = WebRetrievalFallbackPolicy.urlFrom(params);
             if (!url.isBlank()) {
                 boolean browserFailed = WebRetrievalFallbackPolicy.browserAttemptFailed(history, url);
@@ -248,6 +256,16 @@ public class ToolResultProcessor {
                 history.add(fallbackStep);
                 return StepDecision.retryEngine(fallbackGoal, 0);
             }
+        }
+        return null;
+    }
+
+    private static String webFetchPolicyDenialMessage(String errorCode) {
+        if (ToolResponse.ERROR_CODE_PRIVATE_NETWORK_BLOCKED.equals(errorCode)) {
+            return "That URL points to a private or link-local network address, so Amsha blocked access to protect internal services and cloud metadata. I did not retry through a browser or search.";
+        }
+        if (ToolResponse.ERROR_CODE_OUTBOUND_POLICY_BLOCKED.equals(errorCode)) {
+            return "Amsha's outbound security policy blocked that request, so I stopped without retrying through a browser or search.";
         }
         return null;
     }

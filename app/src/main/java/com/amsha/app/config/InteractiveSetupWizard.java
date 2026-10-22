@@ -42,6 +42,7 @@ public class InteractiveSetupWizard {
             ConfigKeys.NVIDIA_API_KEY,
             ConfigKeys.CEREBRAS_API_KEY,
             ConfigKeys.OMLX_API_KEY,
+            ConfigKeys.GNANI_API_KEY,
             ConfigKeys.EMBEDDING_JINA_API_KEY,
             ConfigKeys.EMBEDDING_OPENAI_API_KEY,
             VaultConstants.VAULT_PEPPER,
@@ -162,8 +163,9 @@ public class InteractiveSetupWizard {
         System.err.println("  │  14. Cloudflare Workers AI - Serverless inference");
         System.err.println("  │  15. Cohere - Command R+ & Enterprise models");
         System.err.println("  │  16. Codex CLI - ChatGPT Plus OAuth (zero-config)");
+        CliLlmProviderMenu.printAdditionalProviders();
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-16, Default: 1]: ");
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-21, Default: 1]: ");
         String provider =
                 switch (choice != null ? choice.trim() : "") {
                     case "2" -> ModelDefaults.PROVIDER_OPENROUTER;
@@ -181,7 +183,7 @@ public class InteractiveSetupWizard {
                     case "14" -> ModelDefaults.PROVIDER_CLOUDFLARE;
                     case "15" -> ModelDefaults.PROVIDER_COHERE;
                     case "16" -> ModelDefaults.PROVIDER_CODEX;
-                    default -> ModelDefaults.PROVIDER_GROQ;
+                    default -> CliLlmProviderMenu.providerForAdditionalChoice(choice);
                 };
         System.setProperty(ConfigKeys.LLM_PROVIDER, provider);
         System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, provider);

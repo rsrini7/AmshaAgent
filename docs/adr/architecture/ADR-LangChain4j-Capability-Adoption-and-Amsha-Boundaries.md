@@ -127,9 +127,12 @@ The decision fixes ownership and model roles:
 - `SpeechSynthesisPort`, `SpeechSynthesisRequest`, and
   `SpeechSynthesisResult` belong to `llm-provider-api` under
   `com.amsha.llm.api.audio`.
-- The OMLX Qwen3-TTS adapter belongs to `llm-providers` and all provider egress
-  uses `GovernedTransportService` with `OutboundPurpose.PROVIDER_API_CALL`
-  (`preApproved=false`; HITL is never bypassed).
+- The default OMLX Qwen3-TTS adapter and the opt-in Gnani Timbre adapter belong
+  to `llm-providers`; all provider egress uses `GovernedTransportService` with
+  `OutboundPurpose.PROVIDER_API_CALL` (`preApproved=false`; HITL is never bypassed).
+- `SpeechReplyService` selects exactly one adapter by `providerId()` through
+  `amsha.tts.provider` (default `omlx`); unknown or duplicate IDs preserve text
+  fallback, so adding an implementation never activates it implicitly.
 - Output-mode resolution and speakable-text projection belong to `amsha-core`.
 - Channel delivery uses the channel API; Telegram maps the bounded result to
   Camel `OutgoingAudioMessage`.
@@ -146,7 +149,7 @@ acceptance criteria live in
 §2–§6. The binding invariants are:
 
 1. Execution port, not persistence — no SQLite/PostgreSQL/filesystem state.
-2. Amsha-owned seam — core consumes only the port via `Instance<SpeechSynthesisPort>`.
+2. Amsha-owned seam — core consumes only the port and selects exactly one adapter by provider ID; additional implementations do not become implicit defaults.
 3. Governed provider egress with `preApproved=false`; HITL never bypassed.
 4. Fail closed to text for every disabled/unsupported/oversized/timed-out/denied/failed case.
 5. Bounded memory, time, bytes, and concurrency; bounded streaming body handler.

@@ -1,6 +1,8 @@
 package com.amsha.llm.providers.config;
 
 import com.amsha.llm.providers.ChatModelFactory;
+import com.amsha.llm.providers.audio.GnaniAudioTranscriptionProvider;
+import com.amsha.llm.providers.audio.GnaniSpeechSynthesisProvider;
 import com.amsha.llm.providers.audio.OmlxAudioTranscriptionProvider;
 import com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider;
 import com.amsha.llm.providers.catalog.LiveProviderCatalogService;
@@ -97,6 +99,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             KimchiResponsesChatModel.class,
             NvidiaMessageSanitizer.class,
             AgyProviderFactory.class,
+            GnaniAudioTranscriptionProvider.class,
+            GnaniSpeechSynthesisProvider.class,
             OmlxAudioTranscriptionProvider.class,
             OmlxSpeechSynthesisProvider.class,
             CerebrasProviderFactory.class,
@@ -150,8 +154,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         classNames = {
             "com.amsha.llm.providers.SpecializedChatModelFactory",
             "com.amsha.llm.providers.catalog.StaticProviderCatalogAdapter$RawProvider",
-            "com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider$BoundedAudioSubscriber",
-            "com.amsha.llm.providers.audio.OmlxSpeechSynthesisProvider$ResponseTooLargeException",
+            "com.amsha.llm.providers.audio.BoundedResponseSubscriber",
+            "com.amsha.llm.providers.audio.BoundedResponseSubscriber$ResponseTooLargeException",
+            "com.amsha.llm.providers.audio.BoundedResponseSubscriber$BoundedResponseHandler",
+            "com.amsha.llm.providers.audio.GnaniAudioTranscriptionProvider$AudioTooLargeException",
             "com.amsha.llm.providers.wrapper.AgyResponsesChatModel$SseAccumulator",
             "com.amsha.llm.providers.wrapper.AgyResponsesChatModel$ToolExecutionRequestBuilder",
             "com.amsha.llm.providers.wrapper.ClaudeCodeResponsesChatModel$ClaudeSseAccumulator",

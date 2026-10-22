@@ -7,6 +7,7 @@ Welcome to the Amsha Agent architecture, operator, and developer documentation.
 ## Current implementation guides
 
 - [ONNX Local ML guide](ONNX_LOCAL_ML_GUIDE.md) — MPNet embeddings, BGE reranking, local Whisper, installation, and configuration.
+- [Gnani speech adapters](../llm-providers/README.md#gnani-speech-adapters--opt-in) — opt-in cloud STT/TTS configuration; disabled by default pending retention and key-scope confirmation.
 - [Local ML module README](../local-ml-onnx/README.md) — module configuration and packaged model commands.
 - [Jev decision-plane ADR](adr/architecture/ADR-jev-decision-plane.md) — current Deferred status and promotion gates.
 - [Jev evaluation path ADR](adr/architecture/ADR-jev-decision-plane-evaluation-path.md) — accepted default-off, internal-only, non-routing evaluation path.
@@ -126,6 +127,9 @@ Decisions that define the system structure and operational boundaries:
   - [OpenRouter](adr/providers/ADR-OpenRouter-Provider.md)
   - [Sarvam](adr/providers/ADR-Sarvam-Provider.md)
 
+- **Speech Provider Specifications**:
+  - [Gnani AI speech integration](adr/providers/ADR-Gnani-AI-Provider.md) — Proposed decision; opt-in STT/TTS execution adapters are implemented behind disabled-by-default gates, with production egress pending retention/key-scope confirmation. Hosted-agent management and unverified chat surfaces remain deferred.
+
 ### Features & Tools Decisions (`docs/adr/features/`, `docs/adr/tools/`)
 - [ADR-amsha-visual-cockpit](adr/features/ADR-amsha-visual-cockpit.md) — Visual cockpit UI architecture and real-time state streaming (Status: Accepted).
 - [ADR-Tools-Builtin-and-Sandbox-Modularization](adr/tools/ADR-Tools-Builtin-and-Sandbox-Modularization.md) — Built-in tool and sandbox extraction (Status: Implemented).
@@ -156,6 +160,8 @@ Evaluations of alternatives and boundaries that document why specific approaches
 - **Provider & JVM LLM Evaluations**:
   - [Evaluated Providers Closeout](research/providers/Evaluated-Providers-Closeout.md)
   - [JVM LLM In-Process Options](research/providers/JVM-LLMs.md)
+- **Speech API Evaluation**:
+  - [Gnani AI Integration Research](research/Gnani-AI-Integration-Research-2026-10-20.md)
 - **Architectural Explorations**:
   - [Deeplearning4j Exploration](research/explorations/Deeplearning4j.md)
   - [Langgraph4j Exploration](research/explorations/Langgraph4j.md)
@@ -170,6 +176,8 @@ Evaluations of alternatives and boundaries that document why specific approaches
 ---
 
 ## 6. Active RFC Proposals (`docs/proposals/`)
+
+- [Gnani AI Integration Plan](proposals/Gnani-AI-Integration-Plan-2026-10-20.md) — Opt-in speech adapters have landed behind disabled-by-default gates; open contract and production-egress gates remain.
 
 Living refactoring proposals and version migration plans:
 

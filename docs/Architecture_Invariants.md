@@ -2215,7 +2215,7 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 1. **Explicit vs. Default Resolution**: `SpeechOutputPolicy.resolve` inspects user text directives first (`"reply audio"`, `"audio only"`, `"no audio"`). When text lacks explicit directives:
    - If the user sent voice-only input (blank text with `inboundAudioPresent = true`), the policy falls back to `amsha.tts.default-output-mode` (`TEXT_ONLY`, `AUDIO_ONLY`, or `TEXT_AND_AUDIO`).
    - Blank voice-only turns MUST NOT be classified as trivial greetings or simple conversational turns in `IntentClassificationService.isSimpleConversational()`.
-2. **Deterministic Text Projection**: `SpeechReplyService.projectSpeakableText()` strips markdown code blocks, tables, and internal artifacts before passing prose to the OMLX `OmlxSpeechSynthesisProvider` through `SpeechSynthesisPort`.
+2. **Deterministic Text Projection**: `SpeakableTextProjector.project(...)` (invoked by `SpeechReplyService`) strips markdown code blocks, tables, and internal artifacts before passing prose to the provider selected through `SpeechSynthesisPort` (`omlx` by default or opt-in `gnani`).
 
 ### 25.1a Speech provider boundaries
 
@@ -2223,6 +2223,12 @@ Before adding a SkillsJar dependency to `app/pom.xml`, the skill's `SKILL.md` in
 - `CompositeAudioTranscriptionPort` orders available adapters by priority: local ONNX Whisper (`100`) before OMLX Whisper (`50`). `UNSUPPORTED` results may proceed to the next adapter; `FAILED` and `TIMEOUT` results stop the cascade unless `amsha.stt.allow-fallback-on-failure=true` explicitly permits it. The default is fail-closed to avoid unexpected audio egress.
 - Every transcription adapter enforces bounded audio and transcript sizes, uses governed media/transport boundaries, and releases temporary or request-owned audio data after the operation. Local ONNX inference remains disabled unless both `amsha.stt.local.enabled` and `amsha.onnx.enabled` are enabled.
 - `OmlxSpeechSynthesisProvider` is output-only, is not an `AUDIO` route, and currently accepts WAV only. TTS is attempted only for eligible finished turns; approval, intermediate, and failed responses remain text. Provider egress remains governed and a synthesis or delivery failure must preserve the text response.
+
+Gnani-specific constraints extend these boundaries:
+
+- Gnani transcription has priority `40`, after local ONNX (`100`) and OMLX (`50`). It is an explicit cloud-tier fallback enabled only by `amsha.stt.gnani.enabled=true`. `TOO_LARGE` remains terminal; only `UNSUPPORTED` advances the provider cascade by default.
+- Gnani measures actual duration before egress, caps it at 30 seconds until the upstream contract is clarified, and removes its temporary input and normalized WAV files on success and failure.
+- `SpeechSynthesisPort` implementations expose stable `providerId()` values. `SpeechReplyService` selects exactly one adapter through `amsha.tts.provider` (default `omlx`); missing, unknown, or duplicate matches preserve text fallback. Gnani TTS is output-only and WAV-only in the initial release.
 
 ### 25.2 Channel Audio Fallback Guarantee
 

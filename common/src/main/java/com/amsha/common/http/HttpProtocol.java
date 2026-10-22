@@ -27,6 +27,8 @@ public final class HttpProtocol {
 
     /** {@code Authorization} request header name. */
     public static final String HEADER_AUTHORIZATION = "Authorization";
+    /** {@code X-API-Key-ID} request header name used by key-id authenticated APIs. */
+    public static final String HEADER_X_API_KEY_ID = "X-API-Key-ID";
 
     // -- Media types -------------------------------------------------------
 

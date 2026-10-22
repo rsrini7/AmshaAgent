@@ -126,7 +126,11 @@ class OnboardingCoordinatorExtensionTest {
         coordinator = new OnboardingCoordinator();
         coordinator.draftStore = draftStore;
         coordinator.bootstrapStateStore = mock(BootstrapStateStorePort.class);
-        coordinator.extensions = exts;
+        coordinator.draftSecretMigrator = new OnboardingDraftSecretMigrator();
+        coordinator.draftSecretMigrator.draftStore = draftStore;
+        coordinator.draftSecretMigrator.scrubber = scrubber;
+        coordinator.extensionSteps = new OnboardingExtensionSteps();
+        coordinator.extensionSteps.extensions = exts;
         coordinator.scrubber = scrubber;
         coordinator.commitSaga = commitSaga;
         coordinator.profileExporter = new OnboardingProfileExporter();
@@ -1047,7 +1051,8 @@ class OnboardingCoordinatorExtensionTest {
         OnboardingCoordinator restartedCoordinator = new OnboardingCoordinator();
         restartedCoordinator.draftStore = draftStore;
         restartedCoordinator.bootstrapStateStore = mock(BootstrapStateStorePort.class);
-        restartedCoordinator.extensions = exts;
+        restartedCoordinator.draftSecretMigrator = coordinator.draftSecretMigrator;
+        restartedCoordinator.extensionSteps = coordinator.extensionSteps;
         restartedCoordinator.scrubber = scrubber;
         restartedCoordinator.commitSaga = restartedSaga;
 

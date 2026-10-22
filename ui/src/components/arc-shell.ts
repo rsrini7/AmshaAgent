@@ -63,6 +63,7 @@ export class ArcShell extends LitElement {
   @state() private _isNavOpen = false;
   @state() private _chatWsStatus: string = 'closed';
   @state() private _dockWidth = 400;
+  @state() private _showConveyor = false;
   @state() private _traceEvents: AgentTraceEvent[] = [];
   @state() private _currentRunId = '';
   @state() private _isReplayMode = false;
@@ -112,6 +113,11 @@ export class ArcShell extends LitElement {
       scrollbar-width: thin;
       scrollbar-color: var(--border) transparent;
     }
+
+    .cockpit-canvas-area[hidden],
+    .cockpit-splitter[hidden] {
+      display: none;
+    }
     .cockpit-canvas-area::-webkit-scrollbar { width: 6px; height: 6px; }
     .cockpit-canvas-area::-webkit-scrollbar-track { background: transparent; }
     .cockpit-canvas-area::-webkit-scrollbar-thumb {
@@ -142,6 +148,13 @@ export class ArcShell extends LitElement {
       border-left: 1px solid var(--border);
       scrollbar-width: thin;
       scrollbar-color: var(--border) transparent;
+    }
+
+    .cockpit-dock-area.chat-only {
+      flex: 1;
+      min-width: 0;
+      max-width: none;
+      border-left: 0;
     }
     .cockpit-dock-area::-webkit-scrollbar { width: 6px; height: 6px; }
     .cockpit-dock-area::-webkit-scrollbar-track { background: transparent; }
@@ -194,6 +207,21 @@ export class ArcShell extends LitElement {
       gap: 0.75rem;
       min-width: 0;
       flex-shrink: 0;
+    }
+
+    .layout-toggle {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font-size: var(--font-size-sm);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .layout-toggle:hover {
+      border-color: var(--accent-secondary);
     }
     .connection-pill {
       display: inline-flex;
@@ -762,7 +790,7 @@ export class ArcShell extends LitElement {
 
     return html`
       <div class="cockpit-container" style="display: ${this._route === '#/chat' ? 'flex' : 'none'}">
-        <div class="cockpit-canvas-area" role="region" aria-label="Visual Cockpit Canvas">
+        <div class="cockpit-canvas-area" role="region" aria-label="Visual Cockpit Canvas" ?hidden=${!this._showConveyor}>
           <arc-flow-canvas
             .events=${this._activeRunEvents}
             .runId=${this._isReplayMode ? this._replayRunId : this._currentRunId}
@@ -776,6 +804,7 @@ export class ArcShell extends LitElement {
         </div>
         <div
           class="cockpit-splitter"
+          ?hidden=${!this._showConveyor}
           role="separator"
           tabindex="0"
           aria-orientation="vertical"
@@ -786,7 +815,7 @@ export class ArcShell extends LitElement {
           @pointerdown=${(e: PointerEvent) => this._onSplitterPointerDown(e)}
           @keydown=${(e: KeyboardEvent) => this._onSplitterKeyDown(e)}
         ></div>
-        <div class="cockpit-dock-area" style="width: ${this._dockWidth}px;">
+        <div class="cockpit-dock-area ${this._showConveyor ? '' : 'chat-only'}" style="width: ${this._showConveyor ? `${this._dockWidth}px` : '100%'};">
           <arc-chat-interface
             class="content-area"
             style="display: flex; flex: 1;"
@@ -892,6 +921,15 @@ export class ArcShell extends LitElement {
                     </div>
                 </div>
                 <div class="topbar-right">
+                  ${this._route === '#/chat' ? html`
+                    <button
+                      class="layout-toggle"
+                      aria-label="${this._showConveyor ? 'Hide execution conveyor and expand chat' : 'Show execution conveyor'}"
+                      aria-pressed="${!this._showConveyor}"
+                      title="${this._showConveyor ? 'Expand chat to fill the center' : 'Show the execution conveyor'}"
+                      @click=${() => (this._showConveyor = !this._showConveyor)}
+                    >${this._showConveyor ? 'Chat only' : 'Show Conveyor'}</button>
+                  ` : nothing}
                   <div class="connection-pill">
                     <div
                       class="status-dot"

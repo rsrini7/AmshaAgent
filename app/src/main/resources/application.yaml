@@ -215,69 +215,11 @@ quarkus:
   thread-pool:
     core-threads: 1   # minimize platform threads; virtual threads handle concurrency
 
-smallrye:
-  context-propagation:
-    managed-executor:
-      max-async: 20
-
-  transaction-manager:
-    default-transaction-timeout: 300
-    enable-recovery: false
-
-  # ---------------------------------------------------------------------------
-  # INPUT VALIDATION
-  # ---------------------------------------------------------------------------
-  hibernate-validator:
-    fail-fast: true
-
-  # ---------------------------------------------------------------------------
-  # OPENAPI
-  # ---------------------------------------------------------------------------
-  smallrye-openapi:
-    info-title: "Amsha Agent API"
-    info-version: "0.1.0"
-    info-description: "Autonomous multi-agent framework - Java 21 + Quarkus + LangChain4J"
-    store-schema-directory: target
-    schema-filename: openapi
-    open-api-version: 3.0.3
-
-
-  # ---------------------------------------------------------------------------
-  # NATIVE IMAGE
-  # ---------------------------------------------------------------------------
-  native:
-    # Set encoding to UTF-8 for Windows console support (§Cosmetic-Fix)
-    additional-build-args: "-Dfile.encoding=UTF-8,-Dstdout.encoding=UTF-8"
-    # QuarkusJsonCodecFactory$ObjectMapperHolder must initialize at RUN time:
-    # its static mapper pulls the container ObjectMapper and registers the
-    # LangChain4j ChatMessage mixins. Build-time init freezes a mixin-less
-    # mapper -> native writes type-less chat-memory JSON that its own reader
-    # then rejects (InvalidTypeIdException, missing 'type').
-    initialize-at-runtime: io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder
-    # native-image-xmx: 4g # require 8GB machine with podman
-    resources:
-      includes:
-        - "META-INF/services/*"
-        - "META-INF/native-image/**"
-        - "META-INF/skills/**"
-        - "skills/**"
-        - "templates/**"
-        - "prompts/**"
-        - "env-example"
-        - "native/vec0/**"
-        - "provider-catalog.json"
-        # The versioned decision-evidence corpus. Quarkus includes no resources by default, so a
-        # classpath corpus is absent from a native image unless it is named here (and in app/pom.xml's
-        # native profile). See DecisionEvidenceCorpusRegistry.
-        - "decision-evidence/**"
 
   # ---------------------------------------------------------------------------
   # LOGGING
   # ---------------------------------------------------------------------------
   log:
-    console:
-      enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
-      level: INFO
     category:
       "dev.langchain4j.model.chat.listener.ListenersUtil":
         level: ERROR
@@ -351,6 +293,8 @@ smallrye:
       "com.arjuna.ats.arjuna":
         level: ERROR
     console:
+      enabled: ${AMSHA_LOG_CONSOLE_ENABLED:false}
+      level: INFO
       # sessionId from MDC rendered in every log line (Fix C4)
       format: "%d{HH:mm:ss} %-5p [%c{2.}] [sid=%X{sessionId}] (%t) %s%e%n"
       darken: 0
@@ -371,6 +315,61 @@ smallrye:
 # with per-provider keys under `amsha.embedding.{provider}.{key}`.
 # See .env.example for full details.
 # =============================================================================
+smallrye:
+  context-propagation:
+    managed-executor:
+      max-async: 20
+
+  transaction-manager:
+    default-transaction-timeout: 300
+    enable-recovery: false
+
+  # ---------------------------------------------------------------------------
+  # INPUT VALIDATION
+  # ---------------------------------------------------------------------------
+  hibernate-validator:
+    fail-fast: true
+
+  # ---------------------------------------------------------------------------
+  # OPENAPI
+  # ---------------------------------------------------------------------------
+  smallrye-openapi:
+    info-title: "Amsha Agent API"
+    info-version: "0.1.0"
+    info-description: "Autonomous multi-agent framework - Java 21 + Quarkus + LangChain4J"
+    store-schema-directory: target
+    schema-filename: openapi
+    open-api-version: 3.0.3
+
+
+  # ---------------------------------------------------------------------------
+  # NATIVE IMAGE
+  # ---------------------------------------------------------------------------
+  native:
+    # Set encoding to UTF-8 for Windows console support (§Cosmetic-Fix)
+    additional-build-args: "-Dfile.encoding=UTF-8,-Dstdout.encoding=UTF-8"
+    # QuarkusJsonCodecFactory$ObjectMapperHolder must initialize at RUN time:
+    # its static mapper pulls the container ObjectMapper and registers the
+    # LangChain4j ChatMessage mixins. Build-time init freezes a mixin-less
+    # mapper -> native writes type-less chat-memory JSON that its own reader
+    # then rejects (InvalidTypeIdException, missing 'type').
+    initialize-at-runtime: io.quarkiverse.langchain4j.QuarkusJsonCodecFactory$ObjectMapperHolder
+    # native-image-xmx: 4g # require 8GB machine with podman
+    resources:
+      includes:
+        - "META-INF/services/*"
+        - "META-INF/native-image/**"
+        - "META-INF/skills/**"
+        - "skills/**"
+        - "templates/**"
+        - "prompts/**"
+        - "env-example"
+        - "native/vec0/**"
+        - "provider-catalog.json"
+        # The versioned decision-evidence corpus. Quarkus includes no resources by default, so a
+        # classpath corpus is absent from a native image unless it is named here (and in app/pom.xml's
+        # native profile). See DecisionEvidenceCorpusRegistry.
+        - "decision-evidence/**"
 amsha:
   data-dir: "${AMSHA_DATA_DIR:./data}"
   test-data-collection:
@@ -843,6 +842,10 @@ amsha:
     max-transcript-chars: ${AMSHA_STT_MAX_TRANSCRIPT_CHARS:12000}
     ffmpeg-path: ${AMSHA_STT_FFMPEG_PATH:ffmpeg}
     allow-fallback-on-failure: ${AMSHA_STT_ALLOW_FALLBACK_ON_FAILURE:false}
+    gnani:
+      enabled: ${AMSHA_STT_GNANI_ENABLED:false}
+      default-language: ${AMSHA_STT_GNANI_DEFAULT_LANGUAGE:en-IN}
+      max-duration: ${AMSHA_STT_GNANI_MAX_DURATION:PT30S}
     local:
       enabled: ${AMSHA_STT_LOCAL_ENABLED:false}
       bundle-id: "${AMSHA_STT_LOCAL_BUNDLE_ID:whisper-tiny-en-v1}"
@@ -853,7 +856,11 @@ amsha:
     # P8 speech synthesis (Issue 12). Output-only; disabled by default. V1 supports only the
     # directly verified WAV format from the OMLX Qwen3-TTS model — any other response_format is
     # reported UNSUPPORTED rather than attempted. Never shares routing with P7 audio input.
+    provider: ${AMSHA_TTS_PROVIDER:omlx}
     enabled: ${AMSHA_TTS_ENABLED:false}
+    gnani:
+      model: ${AMSHA_TTS_GNANI_MODEL:timbre-v3.0}
+      voice: ${AMSHA_TTS_GNANI_VOICE:Shivani}
     model: ${AMSHA_TTS_MODEL:Qwen3-TTS-12Hz-1.7B-Base-bf16}
     voice: ${AMSHA_TTS_VOICE:}
     response-format: ${AMSHA_TTS_RESPONSE_FORMAT:wav}
@@ -864,6 +871,8 @@ amsha:
     # Resolved output mode for inbound-audio turns when the user gives no explicit directive.
     # One of TEXT_ONLY | TEXT_AND_AUDIO | AUDIO_ONLY. Default TEXT_ONLY (fail closed).
     default-output-mode: ${AMSHA_TTS_DEFAULT_OUTPUT_MODE:TEXT_ONLY}
+  gnani:
+    api-key: ${AMSHA_GNANI_API_KEY:}
   infinite-loop:
     llm:
       providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
@@ -1463,9 +1472,6 @@ mp:
 
 "%test":
   quarkus:
-    log:
-      file:
-        path: ./amsha-test-sqlite.log
     mcp:
       server:
         stdio:
@@ -1483,6 +1489,8 @@ mp:
       locations: db/migration/sqlite
       clean-at-start: true   # tests always need a clean schema
     log:
+      file:
+        path: ./amsha-test-sqlite.log
       category:
         "com.amsha":
           level: INFO

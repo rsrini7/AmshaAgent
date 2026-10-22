@@ -379,17 +379,17 @@ A profile that is selectable but permanently broken is worse than no profile, so
   `.scratch/lc4j-capability-adoption/issues/11-p7-audio-transcription-port.md` (local tracker artifact).
 
 Audio input is an execution/port concern, not a model-profile concern: Whisper is an STT
-execution port and is **never** registered as an `AUDIO` chat profile. Text-to-speech
-(`Qwen3-TTS-12Hz-1.7B-Base-bf16`) is a separate future output capability and is out of scope for
-the audio-input routing matrix.
+execution port and is **never** registered as an `AUDIO` chat profile. Text-to-speech is a
+separate output capability and is out of scope for the audio-input routing matrix; see
+[Speech Output Policy](#speech-output-policy-p8--issue-12).
 
 ## Speech Output Policy (P8 / Issue 12)
 
-When `amsha.tts.enabled=true` and `SpeechSynthesisPort` is resolvable, `SpeechReplyService`
-synthesizes an optional audio reply for *finished* agent turns only. Approval prompts,
-intermediate statuses, and failures are never synthesized — they are delivered as text.
-Synthesis and channel delivery run off the Vert.x event loop; an event-loop call fails
-closed to text rather than blocking.
+When `amsha.tts.enabled=true` and the adapter selected by `amsha.tts.provider` resolves as
+`SpeechSynthesisPort`, `SpeechReplyService` synthesizes an optional audio reply for *finished*
+agent turns only. Approval prompts, intermediate statuses, and failures are never synthesized
+— they are delivered as text. Synthesis and channel delivery run off the Vert.x event loop;
+an event-loop call fails closed to text rather than blocking.
 
 `SpeechOutputPolicy.resolve(...)` decides the `OutputMode` for one turn, highest precedence first:
 
@@ -401,6 +401,8 @@ closed to text rather than blocking.
 
 | Property | Environment variable | Default | Description |
 |---|---|---|---|
+| `amsha.tts.enabled` | `AMSHA_TTS_ENABLED` | `false` | Enables optional speech synthesis through the selected adapter. |
+| `amsha.tts.provider` | `AMSHA_TTS_PROVIDER` | `omlx` | Selects exactly one `SpeechSynthesisPort` adapter (`omlx` or `gnani`); unknown or duplicate IDs preserve text fallback. |
 | `amsha.tts.default-output-mode` | `AMSHA_TTS_DEFAULT_OUTPUT_MODE` | `TEXT_ONLY` | Mode for inbound-audio turns with no explicit directive: `TEXT_ONLY`, `TEXT_AND_AUDIO`, `AUDIO_ONLY`. |
 | `amsha.tts.max-input-chars` | `AMSHA_TTS_MAX_INPUT_CHARS` | `1200` | Max speakable chars projected before synthesis; longer answers are truncated at a sentence boundary. |
 

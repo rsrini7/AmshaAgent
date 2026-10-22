@@ -5,12 +5,14 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.channel.api.preference.UserPreferenceService;
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 import com.amsha.llm.api.audio.SpeechSynthesisPort;
 import com.amsha.llm.api.audio.SpeechSynthesisRequest;
@@ -44,6 +46,7 @@ public class SpeechReplyService {
     private static final int DEFAULT_MAX_INPUT_CHARS = 1200;
 
     private final int maxInputChars;
+    private final String selectedProviderId;
     private final Instance<SpeechSynthesisPort> speechPort;
     private final UserPreferenceService userPreferenceService;
     private final String responseFormat;
@@ -54,12 +57,16 @@ public class SpeechReplyService {
     public SpeechReplyService(
             Instance<SpeechSynthesisPort> speechPort,
             UserPreferenceService userPreferenceService,
-            @ConfigProperty(name = "amsha.tts.max-input-chars", defaultValue = "1200") int maxInputChars,
+            @ConfigProperty(name = ConfigKeys.TTS_PROVIDER_PROPERTY, defaultValue = ConfigKeys.DEFAULT_TTS_PROVIDER)
+                    String selectedProviderId,
+            @ConfigProperty(name = ConfigKeys.TTS_MAX_INPUT_CHARS_PROPERTY, defaultValue = "1200") int maxInputChars,
             @ConfigProperty(name = "amsha.tts.response-format", defaultValue = DEFAULT_RESPONSE_FORMAT)
                     String responseFormat,
-            @ConfigProperty(name = "amsha.tts.timeout", defaultValue = "PT120S") Duration timeout) {
+            @ConfigProperty(name = ConfigKeys.TTS_TIMEOUT_PROPERTY, defaultValue = "PT120S") Duration timeout) {
         this.speechPort = speechPort;
         this.userPreferenceService = userPreferenceService;
+        this.selectedProviderId =
+                selectedProviderId == null ? "" : selectedProviderId.trim().toLowerCase(Locale.ROOT);
         this.maxInputChars = maxInputChars > 0 ? maxInputChars : DEFAULT_MAX_INPUT_CHARS;
         // The format is shared with the provider's config; the channel derives the real extension
         // from the MIME type, so this file name is advisory and stays consistent with the format.
@@ -134,15 +141,29 @@ public class SpeechReplyService {
     }
 
     private SpeechSynthesisPort resolvePort() {
-        if (speechPort == null || !speechPort.isResolvable()) {
+        if (speechPort == null || selectedProviderId.isBlank()) {
             return null;
         }
         try {
-            return speechPort.get();
+            List<SpeechSynthesisPort> matches = speechPort.stream()
+                    .filter(port -> port != null && selectedProviderId.equals(normalizedProviderId(port)))
+                    .toList();
+            if (matches.size() != 1) {
+                log.debugf(
+                        "[TTS] Selected provider '%s' matched %d adapters; falling back to text",
+                        selectedProviderId, matches.size());
+                return null;
+            }
+            return matches.getFirst();
         } catch (RuntimeException e) {
             log.debugf("[TTS] Speech synthesis port unavailable: %s", LogUtil.rootMessage(e));
             return null;
         }
+    }
+
+    private static String normalizedProviderId(SpeechSynthesisPort port) {
+        String providerId = port.providerId();
+        return providerId == null ? "" : providerId.trim().toLowerCase(Locale.ROOT);
     }
 
     /** Returns only a categorical status or failure tag; never text, payload, or user data. */

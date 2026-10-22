@@ -372,7 +372,7 @@ public class OnboardingSelectionScrubber {
         for (Map.Entry<String, Object> entry : map.entrySet()) {
             String k = entry.getKey();
             Object v = entry.getValue();
-            if (isSecretKey(k) && !(v instanceof Map<?, ?>)) {
+            if (isSecretValue(k, v) && !(v instanceof Map<?, ?>)) {
                 String secretValue = encodeSecretValue(v);
                 if (secretValue != null) {
                     String refKey = k.endsWith("VaultRef") ? k : k + "VaultRef";
@@ -410,7 +410,10 @@ public class OnboardingSelectionScrubber {
      */
     private String encodeSecretValue(Object value) {
         if (value instanceof String str) {
-            if (str.isBlank() || str.startsWith("vault-key-") || str.startsWith("mcp-header-")) {
+            if (str.isBlank()
+                    || str.startsWith("vault-key-")
+                    || str.startsWith("mcp-header-")
+                    || str.startsWith("staged-ref-")) {
                 return null;
             }
             return str;
@@ -488,5 +491,31 @@ public class OnboardingSelectionScrubber {
                         || lower.contains("key")
                         || lower.contains("pass"))
                 && !lower.endsWith("vaultref");
+    }
+
+    /**
+     * Recognizes plaintext submitted through legacy UI fields named {@code *VaultRef}.
+     * A real vault reference is retained; a credential placed in that field is scrubbed.
+     */
+    static boolean isSecretValue(String key, Object value) {
+        if (isSecretKey(key)) {
+            return true;
+        }
+        if (key == null || value == null) {
+            return false;
+        }
+        String lower = key.toLowerCase(Locale.ROOT);
+        if (!lower.endsWith("vaultref") || isVaultReference(value)) {
+            return false;
+        }
+        String baseKey = key.substring(0, key.length() - "VaultRef".length());
+        return isSecretKey(baseKey);
+    }
+
+    private static boolean isVaultReference(Object value) {
+        return value instanceof String reference
+                && (reference.startsWith("vault-key-")
+                        || reference.startsWith("mcp-header-")
+                        || reference.startsWith("staged-ref-"));
     }
 }

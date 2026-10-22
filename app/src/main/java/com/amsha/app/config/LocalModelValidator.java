@@ -34,7 +34,8 @@ public final class LocalModelValidator {
             if (!Files.exists(manifest)) {
                 printMissingWhisperBanner(whisperDir);
             }
-            String ffmpegPath = System.getProperty("amsha.stt.ffmpeg-path", System.getenv(ConfigKeys.STT_FFMPEG_PATH));
+            String ffmpegPath =
+                    System.getProperty(ConfigKeys.STT_FFMPEG_PATH_PROPERTY, System.getenv(ConfigKeys.STT_FFMPEG_PATH));
             if (!LocalAudioTranscoder.isFfmpegAvailable(ffmpegPath)) {
                 printMissingFfmpegBanner(ffmpegPath != null && !ffmpegPath.isBlank() ? ffmpegPath : "ffmpeg");
             }

@@ -1,7 +1,6 @@
 package com.amsha.onboarding;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.time.Duration;
@@ -14,10 +13,6 @@ import java.util.UUID;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.llm.api.NetworkProfilePolicy;
-import com.amsha.onboarding.spi.OnboardingContext;
-import com.amsha.onboarding.spi.OnboardingExtension;
-import com.amsha.onboarding.spi.OnboardingInput;
-import com.amsha.onboarding.spi.OnboardingStepDescriptor;
 import com.amsha.onboarding.spi.OnboardingValidationResult;
 import com.amsha.onboarding.spi.PreparedOnboardingStep;
 import com.amsha.persistence.api.BootstrapStateDto;
@@ -72,10 +67,13 @@ public class OnboardingCoordinator {
     BootstrapStateStorePort bootstrapStateStore;
 
     @Inject
-    Instance<OnboardingExtension> extensions;
+    OnboardingSelectionScrubber scrubber;
 
     @Inject
-    OnboardingSelectionScrubber scrubber;
+    OnboardingDraftSecretMigrator draftSecretMigrator;
+
+    @Inject
+    OnboardingExtensionSteps extensionSteps;
 
     @Inject
     OnboardingCommitSaga commitSaga;
@@ -94,7 +92,7 @@ public class OnboardingCoordinator {
      * CREDENTIAL_ISSUED -> CLAIMED bootstrap transition for the authenticated owner.
      */
     public OnboardingDraftDto getOrCreateFirstRunDraft(String ownerId) {
-        Optional<OnboardingDraftDto> existing = draftStore.findActiveByOwner(ownerId, Instant.now());
+        Optional<OnboardingDraftDto> existing = loadActiveDraft(ownerId);
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -116,18 +114,18 @@ public class OnboardingCoordinator {
                 now,
                 now);
         if (!draftStore.save(draft)) {
-            return draftStore.findActiveByOwner(ownerId, Instant.now()).orElse(draft);
+            return loadActiveDraft(ownerId).orElse(draft);
         }
         incrementCounter("amsha.onboarding.draft.created");
         return draft;
     }
 
     public Optional<OnboardingDraftDto> findActive(String ownerId) {
-        return draftStore.findActiveByOwner(ownerId, Instant.now());
+        return loadActiveDraft(ownerId);
     }
 
     public Optional<OnboardingDraftDto> findById(String draftId) {
-        return draftStore.findById(draftId);
+        return loadDraftById(draftId);
     }
 
     /**
@@ -137,14 +135,14 @@ public class OnboardingCoordinator {
     public Optional<OnboardingDraftDto> advanceStep(String draftId, String currentStepId) {
         int idx = PLAN.indexOf(currentStepId);
         if (idx < 0 || idx >= PLAN.size() - 1) {
-            return draftStore.findById(draftId);
+            return loadDraftById(draftId);
         }
         String next = PLAN.get(idx + 1);
         return moveToStep(draftId, next);
     }
 
     public Optional<OnboardingDraftDto> moveToStep(String draftId, String targetStepId) {
-        Optional<OnboardingDraftDto> existing = draftStore.findById(draftId);
+        Optional<OnboardingDraftDto> existing = loadDraftById(draftId);
         if (existing.isEmpty() || !PLAN.contains(targetStepId)) {
             return existing;
         }
@@ -171,14 +169,14 @@ public class OnboardingCoordinator {
         if (draftStore.update(updated, d.revision())) {
             return Optional.of(updated);
         }
-        return draftStore.findById(draftId);
+        return loadDraftById(draftId);
     }
 
     /**
      * Atomically updates both the current step ID and the selections payload in a single database update.
      */
     public Optional<OnboardingDraftDto> updateStep(String draftId, String targetStepId, List<String> selections) {
-        Optional<OnboardingDraftDto> existing = draftStore.findById(draftId);
+        Optional<OnboardingDraftDto> existing = loadDraftById(draftId);
         if (existing.isEmpty() || !PLAN.contains(targetStepId)) return existing;
         OnboardingDraftDto d = existing.get();
 
@@ -251,7 +249,7 @@ public class OnboardingCoordinator {
         if (draftStore.update(updated, d.revision())) {
             return Optional.of(updated);
         }
-        return draftStore.findById(draftId);
+        return loadDraftById(draftId);
     }
 
     /**
@@ -265,7 +263,7 @@ public class OnboardingCoordinator {
      * Updates the draft's selected non-secret IDs (provider/model/connection/profile/route references).
      */
     public Optional<OnboardingDraftDto> updateSelections(String draftId, List<String> selections) {
-        Optional<OnboardingDraftDto> existing = draftStore.findById(draftId);
+        Optional<OnboardingDraftDto> existing = loadDraftById(draftId);
         if (existing.isEmpty()) return existing;
         OnboardingDraftDto d = existing.get();
         OnboardingDraftDto updated = new OnboardingDraftDto(
@@ -286,14 +284,14 @@ public class OnboardingCoordinator {
         if (draftStore.update(updated, d.revision())) {
             return Optional.of(updated);
         }
-        return draftStore.findById(draftId);
+        return loadDraftById(draftId);
     }
 
     /**
      * Finalizes the draft: marks it COMPLETED. Activates LLM settings from selections.
      */
     public Optional<OnboardingDraftDto> commit(String draftId) {
-        Optional<OnboardingDraftDto> existing = draftStore.findById(draftId);
+        Optional<OnboardingDraftDto> existing = loadDraftById(draftId);
         if (existing.isEmpty()) return existing;
         OnboardingDraftDto d = existing.get();
         if (!"review".equals(d.currentStepId())) {
@@ -319,11 +317,11 @@ public class OnboardingCoordinator {
             incrementCounter("amsha.onboarding.draft.committed");
             return Optional.of(updated);
         }
-        return draftStore.findById(draftId);
+        return loadDraftById(draftId);
     }
 
     public boolean discard(String draftId, String ownerId) {
-        Optional<OnboardingDraftDto> draft = draftStore.findById(draftId);
+        Optional<OnboardingDraftDto> draft = loadDraftById(draftId);
         if (draft.isEmpty() || !draft.get().ownerId().equals(ownerId)) {
             return false;
         }
@@ -343,7 +341,7 @@ public class OnboardingCoordinator {
      */
     public Optional<OnboardingDraftDto> updateConnectionNetworkProfile(
             String draftId, int connectionIndex, String networkProfileJson) {
-        Optional<OnboardingDraftDto> existing = draftStore.findById(draftId);
+        Optional<OnboardingDraftDto> existing = loadDraftById(draftId);
         if (existing.isEmpty()
                 || networkProfileJson == null
                 || networkProfileJson.isBlank()
@@ -398,39 +396,17 @@ public class OnboardingCoordinator {
     // ---- extension discovery and saga lifecycle ----
 
     public List<String> effectivePlan() {
-        List<String> merged = new ArrayList<>(PLAN);
-        for (OnboardingExtension ext : extensions) {
-            OnboardingStepDescriptor d = ext.descriptor();
-            if (d.optional() && !merged.contains(d.extensionId())) {
-                int insertIdx = Math.min(d.order() / 10, merged.size() - 1);
-                if (insertIdx < 0) insertIdx = 0;
-                merged.add(insertIdx, d.extensionId());
-            }
-        }
-        return List.copyOf(merged);
-    }
-
-    private Optional<OnboardingExtension> extensionForStep(String stepId) {
-        for (OnboardingExtension ext : extensions) {
-            if (ext.descriptor().extensionId().equals(stepId)) {
-                return Optional.of(ext);
-            }
-        }
-        return Optional.empty();
+        return extensionSteps.effectivePlan(PLAN);
     }
 
     public Optional<PreparedOnboardingStep> prepareExtension(
             String draftId, String stepId, String ownerId, String sessionId) {
-        return extensionForStep(stepId).map(ext -> ext.prepare(new OnboardingContext(ownerId, sessionId, stepId)));
+        return extensionSteps.prepare(stepId, ownerId, sessionId);
     }
 
     public Optional<OnboardingValidationResult> validateExtension(
             String draftId, String stepId, String ownerId, String sessionId, String jsonPayload) {
-        return extensionForStep(stepId).map(ext -> {
-            OnboardingContext ctx = new OnboardingContext(ownerId, sessionId, stepId);
-            PreparedOnboardingStep prepared = ext.prepare(ctx);
-            return ext.validate(ctx, prepared, new OnboardingInput(stepId, jsonPayload));
-        });
+        return extensionSteps.validate(stepId, ownerId, sessionId, jsonPayload);
     }
 
     /** Delegates crash-safe commit to the saga. */
@@ -452,7 +428,7 @@ public class OnboardingCoordinator {
     // ---- O5: re-onboarding, export/import ----
 
     public OnboardingDraftDto getOrCreateReonboardingDraft(String ownerId, OnboardingDraftPurpose purpose) {
-        Optional<OnboardingDraftDto> existing = draftStore.findActiveByOwner(ownerId, Instant.now());
+        Optional<OnboardingDraftDto> existing = loadActiveDraft(ownerId);
         if (existing.isPresent() && existing.get().purpose() == purpose) {
             return existing.get();
         }
@@ -474,7 +450,7 @@ public class OnboardingCoordinator {
                 now,
                 now);
         if (!draftStore.save(draft)) {
-            return draftStore.findActiveByOwner(ownerId, Instant.now()).orElse(draft);
+            return loadActiveDraft(ownerId).orElse(draft);
         }
         return draft;
     }
@@ -490,14 +466,21 @@ public class OnboardingCoordinator {
     public OnboardingDraftDto importProfilesToDraft(
             String ownerId, Map<String, Object> data, LlmProfileStorePort profileStore) {
         profileExporter.validateImportPayload(ownerId, data, profileStore);
-        OnboardingDraftDto draft =
-                draftStore.findActiveByOwner(ownerId, Instant.now()).orElseGet(() -> getOrCreateFirstRunDraft(ownerId));
+        OnboardingDraftDto draft = loadActiveDraft(ownerId).orElseGet(() -> getOrCreateFirstRunDraft(ownerId));
         OnboardingDraftDto updated =
                 OnboardingResourceHelper.buildImportedReviewDraft(draft, data, objectMapper, scrubber);
         if (draftStore.update(updated, draft.revision())) {
-            return draftStore.findById(draft.draftId()).orElse(updated);
+            return loadDraftById(draft.draftId()).orElse(updated);
         }
         return updated;
+    }
+
+    private Optional<OnboardingDraftDto> loadDraftById(String draftId) {
+        return draftSecretMigrator.findById(draftId);
+    }
+
+    private Optional<OnboardingDraftDto> loadActiveDraft(String ownerId) {
+        return draftSecretMigrator.findActiveByOwner(ownerId);
     }
 
     private void confirmBootstrapIfNeeded(String ownerId) {

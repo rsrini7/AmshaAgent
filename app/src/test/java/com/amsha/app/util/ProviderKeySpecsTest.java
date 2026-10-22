@@ -20,7 +20,7 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("mistral"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("cloudflare"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("cohere"));
-        assertNotNull(ProviderKeySpecs.llmKeySpecFor("omlx"));
+        assertNull(ProviderKeySpecs.llmKeySpecFor("omlx"));
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("generic-openai"));
         assertNull(ProviderKeySpecs.llmKeySpecFor("ollama"));
         assertNull(ProviderKeySpecs.llmKeySpecFor("codex"));
@@ -86,6 +86,7 @@ class ProviderKeySpecsTest {
     @Test
     void testKeylessHelpers() {
         assertTrue(ProviderKeySpecs.isLlmKeyless("ollama"));
+        assertTrue(ProviderKeySpecs.isLlmKeyless("omlx"));
         assertTrue(ProviderKeySpecs.isLlmKeyless("CODEX"));
         assertFalse(ProviderKeySpecs.isLlmKeyless("groq"));
         assertFalse(ProviderKeySpecs.isLlmKeyless(null));

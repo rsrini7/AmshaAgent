@@ -14,6 +14,11 @@
   <artifactId>amsha-app</artifactId>
 
   <dependencies>
+
+    <dependency>
+      <groupId>org.jboss.logmanager</groupId>
+      <artifactId>jboss-logmanager</artifactId>
+    </dependency>
     <dependency>
       <groupId>com.amsha</groupId>
       <artifactId>amsha-channel-api</artifactId>

@@ -11,9 +11,36 @@ export class ArcOnboardingStepIdentity extends LitElement {
       :host {
         display: block;
       }
+      .setup-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-card);
+        border-radius: var(--radius-md);
+        padding: var(--space-4);
+        margin-bottom: var(--space-4);
+      }
+      .setup-card h3 {
+        margin: 0 0 var(--space-2);
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+      }
+      .setup-card p {
+        color: var(--text-muted);
+        font-size: var(--font-size-xs);
+        line-height: 1.6;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: var(--space-3);
+        font-size: var(--font-size-xs);
+      }
     `
   ];
 
+  // Keep the legacy draft contract readable; identity configuration is deployment-level.
   @property({ type: Object }) identity: IdentityConfig = {
     oidcClientId: '',
     oidcClientSecretVaultRef: '',
@@ -23,17 +50,6 @@ export class ArcOnboardingStepIdentity extends LitElement {
     oidcjwksUrl: '',
     oidcRedirectUri: ''
   };
-
-  private _onChange(key: keyof IdentityConfig, value: any) {
-    const updated = { ...this.identity, [key]: value };
-    this.dispatchEvent(
-      new CustomEvent('update-identity', {
-        detail: { identity: updated },
-        bubbles: true,
-        composed: true
-      })
-    );
-  }
 
   private _next() {
     this.dispatchEvent(new CustomEvent('next', { bubbles: true, composed: true }));
@@ -45,40 +61,33 @@ export class ArcOnboardingStepIdentity extends LitElement {
 
   render() {
     return html`
-      <span class="field-label">External Identity & OIDC (Optional)</span>
-      <p style="font-size:var(--font-size-xs);color:var(--text-muted);margin-bottom:var(--space-4)">
-        Configure external Identity Provider (IDP) protocols for OAuth and single-sign-on (SSO).
+      <span class="field-label">External Identity (Optional)</span>
+      <p class="status-msg">
+        Identity-provider settings are read by the server at startup. The browser wizard cannot safely update the
+        deployment's authentication configuration. Configure these values in the deployment environment and restart
+        Amsha; never paste client secrets here.
       </p>
 
-      <div style="display:flex;flex-direction:column;gap:var(--space-4);margin-bottom:var(--space-5)">
-        <div>
-          <span class="field-label">OIDC Client ID</span>
-          <input class="field-input" type="text" placeholder="Enter Client ID"
-                 .value="${this.identity.oidcClientId || ''}"
-                 @input="${(e: any) => this._onChange('oidcClientId', e.target.value)}" />
-        </div>
+      <section class="setup-card">
+        <h3>Generic OIDC</h3>
+        <pre><code>AMSHA_AUTH_IDP_OIDC_ENABLED=true
+AMSHA_AUTH_IDP_OIDC_CLIENT_ID=&lt;client-id&gt;
+AMSHA_AUTH_IDP_OIDC_CLIENT_SECRET=&lt;client-secret&gt;
+AMSHA_AUTH_IDP_OIDC_ISSUER=&lt;issuer-url&gt;
+AMSHA_AUTH_IDP_OIDC_AUTHORIZATION_URL=&lt;authorization-url&gt;
+AMSHA_AUTH_IDP_OIDC_TOKEN_URL=&lt;token-url&gt;
+AMSHA_AUTH_IDP_OIDC_USERINFO_URL=&lt;userinfo-url&gt;
+AMSHA_AUTH_IDP_OIDC_JWKS_URL=&lt;jwks-url&gt;
+AMSHA_AUTH_IDP_OIDC_REDIRECT_URI=&lt;registered-redirect-uri&gt;</code></pre>
+      </section>
 
-        <div>
-          <span class="field-label">OIDC Client Secret</span>
-          <input class="field-input" type="password" placeholder="Enter Client Secret"
-                 .value="${this.identity.oidcClientSecretVaultRef || ''}"
-                 @input="${(e: any) => this._onChange('oidcClientSecretVaultRef', e.target.value)}" />
-        </div>
-
-        <div>
-          <span class="field-label">Authorization URL</span>
-          <input class="field-input" type="url" placeholder="https://idp.example.com/oauth/authorize"
-                 .value="${this.identity.oidcAuthUrl || ''}"
-                 @input="${(e: any) => this._onChange('oidcAuthUrl', e.target.value)}" />
-        </div>
-
-        <div>
-          <span class="field-label">Token URL</span>
-          <input class="field-input" type="url" placeholder="https://idp.example.com/oauth/token"
-                 .value="${this.identity.oidcTokenUrl || ''}"
-                 @input="${(e: any) => this._onChange('oidcTokenUrl', e.target.value)}" />
-        </div>
-      </div>
+      <section class="setup-card">
+        <h3>GitHub identity</h3>
+        <pre><code>AMSHA_AUTH_IDP_GITHUB_ENABLED=true
+AMSHA_AUTH_IDP_GITHUB_CLIENT_ID=&lt;client-id&gt;
+AMSHA_AUTH_IDP_GITHUB_CLIENT_SECRET=&lt;client-secret&gt;
+AMSHA_AUTH_IDP_GITHUB_REDIRECT_URI=&lt;registered-redirect-uri&gt;</code></pre>
+      </section>
 
       <div class="btn-row">
         <button class="btn-ghost" @click="${this._back}">← Back</button>

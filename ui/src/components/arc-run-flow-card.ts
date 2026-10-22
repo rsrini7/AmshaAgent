@@ -144,6 +144,7 @@ export class ArcRunFlowCard extends LitElement {
   @property({ type: String }) runId = '';
   @property({ type: Number }) turnNumber = 1;
   @state() private _showStats = false;
+  @state() private _showFlowDetails = false;
 
   static styles = css`
     :host {
@@ -175,6 +176,12 @@ export class ArcRunFlowCard extends LitElement {
       align-items: center;
       gap: 8px;
       font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .turn-badge {
@@ -296,61 +303,84 @@ export class ArcRunFlowCard extends LitElement {
 
     return html`
       <div class="card" role="region" aria-label="Run Flow Summary">
-        <div class="card-header">
-          <div class="header-left">
-            <span class="turn-badge">Turn ${displayTurn}</span>
-            <span class="run-id" title="${displayRunId}">Run: ${displayRunId.slice(0, 8)}</span>
-          </div>
-          <button
-            class="toggle-btn turn-stats-toggle"
-            @click="${() => (this._showStats = !this._showStats)}"
-            aria-expanded="${this._showStats}"
-          >
-            ${this._showStats ? '▲ Hide Stats' : '▼ Turn Stats'}
-          </button>
-        </div>
-
-        <div class="stages-bar">
-          ${stages.map(
-            (s) => html`
-              <span
-                class="stage-chip ${s.observed ? 'observed' : 'not-observed'}"
-                title="${s.label}: ${s.status}"
-              >
-                <span class="stage-dot"></span>
-                <span class="stage-name">${s.label}</span>
-                <span class="stage-status">(${s.status})</span>
-              </span>
-            `
-          )}
-        </div>
-
-        ${this._showStats
+        ${this._showFlowDetails
           ? html`
-              <div class="stats-panel">
-                <div class="stat-item">
-                  <span class="stat-label">Guard Decision</span>
-                  <span class="stat-value stat-guard">${stats.guardDecision}</span>
+              <div class="card-header">
+                <div class="header-left">
+                  <span class="turn-badge">Turn ${displayTurn}</span>
+                  <span class="run-id" title="${displayRunId}">Run: ${displayRunId.slice(0, 8)}</span>
                 </div>
-                <div class="stat-item">
-                  <span class="stat-label">Latency</span>
-                  <span class="stat-value stat-latency">${stats.latencyMs}ms</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Prompt Tokens</span>
-                  <span class="stat-value stat-prompt-tokens">${stats.promptTokens}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Completion Tokens</span>
-                  <span class="stat-value stat-completion-tokens">${stats.completionTokens}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Total Tokens</span>
-                  <span class="stat-value stat-total-tokens">${stats.totalTokens}</span>
+                <div class="header-actions">
+                  <button
+                    class="toggle-btn turn-stats-toggle"
+                    @click="${() => (this._showStats = !this._showStats)}"
+                    aria-expanded="${this._showStats}"
+                  >
+                    ${this._showStats ? '▲ Hide Stats' : '▼ Turn Stats'}
+                  </button>
+                  <button
+                    class="toggle-btn flow-details-toggle"
+                    @click="${() => (this._showFlowDetails = false)}"
+                    aria-expanded="true"
+                    aria-label="Hide turn and execution details"
+                  >
+                    Hide Details
+                  </button>
                 </div>
               </div>
+
+              <div class="stages-bar">
+                ${stages.map(
+                  (s) => html`
+                    <span
+                      class="stage-chip ${s.observed ? 'observed' : 'not-observed'}"
+                      title="${s.label}: ${s.status}"
+                    >
+                      <span class="stage-dot"></span>
+                      <span class="stage-name">${s.label}</span>
+                      <span class="stage-status">(${s.status})</span>
+                    </span>
+                  `
+                )}
+              </div>
+
+              ${this._showStats
+                ? html`
+                    <div class="stats-panel">
+                      <div class="stat-item">
+                        <span class="stat-label">Guard Decision</span>
+                        <span class="stat-value stat-guard">${stats.guardDecision}</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-label">Latency</span>
+                        <span class="stat-value stat-latency">${stats.latencyMs}ms</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-label">Prompt Tokens</span>
+                        <span class="stat-value stat-prompt-tokens">${stats.promptTokens}</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-label">Completion Tokens</span>
+                        <span class="stat-value stat-completion-tokens">${stats.completionTokens}</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-label">Total Tokens</span>
+                        <span class="stat-value stat-total-tokens">${stats.totalTokens}</span>
+                      </div>
+                    </div>
+                  `
+                : nothing}
             `
-          : nothing}
+          : html`
+              <button
+                class="toggle-btn flow-details-toggle collapsed"
+                @click="${() => (this._showFlowDetails = true)}"
+                aria-expanded="false"
+                aria-label="Show turn and execution details"
+              >
+                Show details
+              </button>
+            `}
       </div>
     `;
   }

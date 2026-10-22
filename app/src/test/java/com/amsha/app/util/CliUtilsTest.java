@@ -264,9 +264,8 @@ class CliUtilsTest {
     }
 
     @Test
-    void llmKeySpecFor_omlx() {
-        assertEquals(
-                "AMSHA_OMLX_API_KEY", ProviderKeySpecs.llmKeySpecFor("omlx").key());
+    void llmKeySpecFor_omlx_returnsNullForKeylessProvider() {
+        assertNull(ProviderKeySpecs.llmKeySpecFor("omlx"));
     }
 
     @Test

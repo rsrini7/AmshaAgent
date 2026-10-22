@@ -1,7 +1,9 @@
 package com.amsha.app.config;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.PrintWriter;
@@ -9,6 +11,7 @@ import java.io.StringWriter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
+import org.jboss.logmanager.ExtLogRecord;
 import org.junit.jupiter.api.Test;
 
 class SecretRedactingLogFilterTest {
@@ -16,6 +19,21 @@ class SecretRedactingLogFilterTest {
     private static final String TOKEN = "123456789:AAExampleTelegramCredential_123456789";
 
     private final SecretRedactingLogFilter filter = new SecretRedactingLogFilter();
+
+    @Test
+    void preservesPrintfFormattingWhileRedactingParameters() {
+        ExtLogRecord record = new ExtLogRecord(
+                Level.INFO,
+                "Decision-evidence corpus v%d loaded: bot-token=%s",
+                ExtLogRecord.FormatStyle.PRINTF,
+                "test");
+        record.setParameters(new Object[] {3, TOKEN});
+
+        assertTrue(filter.isLoggable(record));
+
+        assertEquals("Decision-evidence corpus v3 loaded: bot-token=[REDACTED]", record.getFormattedMessage());
+        assertNull(record.getParameters());
+    }
 
     @Test
     void redactsMessageParametersAndThrowableChain() {

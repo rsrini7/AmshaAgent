@@ -151,6 +151,10 @@ public class CliUtils {
         VarSpec embeddingKeySpec = ProviderKeySpecs.embeddingKeySpecFor(embeddingProvider);
         if (embeddingKeySpec != null && !isSet(embeddingKeySpec.key())) missing.add(embeddingKeySpec);
 
+        if (isGnaniSpeechEnabled() && !isSet(ConfigKeys.GNANI_API_KEY)) {
+            missing.add(ProviderKeySpecs.GNANI_SPEECH_KEY_SPEC);
+        }
+
         // 2. Security keys
         for (VarSpec spec : CORE_VARS) {
             if (!isSet(spec.key())) missing.add(spec);
@@ -192,6 +196,25 @@ public class CliUtils {
         }
 
         return missing;
+    }
+
+    private static boolean isGnaniSpeechEnabled() {
+        boolean sttEnabled = isTrue(ConfigKeys.GNANI_STT_ENABLED_PROPERTY, ConfigKeys.GNANI_STT_ENABLED);
+        boolean ttsEnabled = isTrue(ConfigKeys.TTS_ENABLED_PROPERTY, ConfigKeys.TTS_ENABLED);
+        String ttsProvider = configuredValue(ConfigKeys.TTS_PROVIDER_PROPERTY, ConfigKeys.TTS_PROVIDER);
+        return sttEnabled || (ttsEnabled && ConfigKeys.GNANI_PROVIDER_ID.equalsIgnoreCase(ttsProvider));
+    }
+
+    private static boolean isTrue(String propertyKey, String environmentKey) {
+        return "true".equalsIgnoreCase(configuredValue(propertyKey, environmentKey));
+    }
+
+    private static String configuredValue(String propertyKey, String environmentKey) {
+        return Optional.ofNullable(System.getProperty(propertyKey))
+                .or(() -> Optional.ofNullable(System.getProperty(environmentKey)))
+                .or(() -> Optional.ofNullable(System.getenv(environmentKey)))
+                .orElse("")
+                .trim();
     }
 
     private static boolean isExplicitOptOut(String key) {

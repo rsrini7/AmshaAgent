@@ -18,6 +18,7 @@ import java.util.List;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.llm.api.LlmProviderDescriptor;
 import com.amsha.llm.api.LlmProviderOnboardingAdapter;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.llm.api.ModelEntry;
 
 import org.jboss.logging.Logger;
@@ -40,7 +41,9 @@ public class ProviderCatalogResource {
 
     @GET
     public Response getCatalog() {
-        List<LlmProviderDescriptor> descriptors = providerAdapter.descriptors();
+        List<LlmProviderDescriptor> descriptors = providerAdapter.descriptors().stream()
+                .filter(descriptor -> !ModelDefaults.PROVIDER_INFINITE_LOOP.equals(descriptor.id()))
+                .toList();
         if (descriptors.isEmpty()) {
             log.warnf("Provider catalog requested but no provider descriptors are available");
             return Response.status(404)

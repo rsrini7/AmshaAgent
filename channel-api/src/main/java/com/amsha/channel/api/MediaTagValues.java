@@ -42,6 +42,8 @@ public final class MediaTagValues {
             "extraction_error",
             "transport_unsupported",
             "unsupported_type",
+            "audio_too_large",
+            "transcription_failed",
             "unknown");
 
     private MediaTagValues() {}

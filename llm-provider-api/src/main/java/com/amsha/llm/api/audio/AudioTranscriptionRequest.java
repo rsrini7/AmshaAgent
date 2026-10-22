@@ -12,7 +12,8 @@ public record AudioTranscriptionRequest(
         byte[] inlineData,
         Path tempFilePath,
         String languageHint,
-        Duration timeout) {
+        Duration timeout,
+        Duration declaredDuration) {
 
     public AudioTranscriptionRequest {
         if (requestId == null || requestId.isBlank()) {
@@ -33,8 +34,23 @@ public record AudioTranscriptionRequest(
         if (timeout == null || timeout.isZero() || timeout.isNegative()) {
             throw new IllegalArgumentException("timeout must be positive");
         }
+        if (declaredDuration != null && declaredDuration.isNegative()) {
+            throw new IllegalArgumentException("declaredDuration must be non-negative");
+        }
         languageHint = languageHint == null || languageHint.isBlank() ? null : languageHint.trim();
         inlineData = inlineData == null ? null : inlineData.clone();
+    }
+
+    /** Creates a request without a sender-declared duration hint. */
+    public AudioTranscriptionRequest(
+            String requestId,
+            String mimeType,
+            long declaredBytes,
+            byte[] inlineData,
+            Path tempFilePath,
+            String languageHint,
+            Duration timeout) {
+        this(requestId, mimeType, declaredBytes, inlineData, tempFilePath, languageHint, timeout, null);
     }
 
     @Override
@@ -45,8 +61,20 @@ public record AudioTranscriptionRequest(
     /** Creates an inline request for already-bounded bytes. */
     public static AudioTranscriptionRequest ofInline(
             String requestId, String mimeType, byte[] data, String languageHint, Duration timeout) {
+        return ofInline(requestId, mimeType, data, languageHint, timeout, null);
+    }
+
+    /** Creates an inline request with an optional sender-declared duration hint. */
+    public static AudioTranscriptionRequest ofInline(
+            String requestId,
+            String mimeType,
+            byte[] data,
+            String languageHint,
+            Duration timeout,
+            Duration declaredDuration) {
         Objects.requireNonNull(data, "data must not be null");
-        return new AudioTranscriptionRequest(requestId, mimeType, data.length, data, null, languageHint, timeout);
+        return new AudioTranscriptionRequest(
+                requestId, mimeType, data.length, data, null, languageHint, timeout, declaredDuration);
     }
 
     /** Creates a request backed by a governed temporary file. */
@@ -57,7 +85,26 @@ public record AudioTranscriptionRequest(
             Path tempFilePath,
             String languageHint,
             Duration timeout) {
+        return ofTempFile(requestId, mimeType, declaredBytes, tempFilePath, languageHint, timeout, null);
+    }
+
+    /** Creates a governed temporary-file request with an optional duration hint. */
+    public static AudioTranscriptionRequest ofTempFile(
+            String requestId,
+            String mimeType,
+            long declaredBytes,
+            Path tempFilePath,
+            String languageHint,
+            Duration timeout,
+            Duration declaredDuration) {
         return new AudioTranscriptionRequest(
-                requestId, mimeType, declaredBytes, null, Objects.requireNonNull(tempFilePath), languageHint, timeout);
+                requestId,
+                mimeType,
+                declaredBytes,
+                null,
+                Objects.requireNonNull(tempFilePath),
+                languageHint,
+                timeout,
+                declaredDuration);
     }
 }

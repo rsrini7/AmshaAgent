@@ -131,7 +131,9 @@ export class ArcOnboardingStepMcp extends LitElement {
   render() {
     return html`
       <p style="font-size:var(--font-size-sm);color:var(--text-muted);line-height:1.6;margin-bottom:var(--space-5)">
-        Connect external tool servers (MCP) to extend your agents with web search, code execution, databases, and more.
+        Connect remote HTTP/SSE tool servers (MCP) to extend your agents with web search and databases. This onboarding step
+        accepts remote endpoints and protected headers. Local STDIO processes and Podman containers are outside this
+        onboarding flow. MCP configuration import is preview-only and rejects STDIO entries without launching them.
       </p>
 
       ${this.mcpServers?.length
@@ -199,7 +201,7 @@ export class ArcOnboardingStepMcp extends LitElement {
                       <span
                         style="font-size:var(--font-size-sm);font-weight:var(--font-weight-medium);color:var(--text-primary)"
                       >
-                        ${t === 'sse' ? 'http/sse' : t}
+                        ${t === 'sse' ? 'HTTP / SSE' : t}
                       </span>
                     </div>
                   `

@@ -4,21 +4,15 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.Flow;
 import java.util.concurrent.Semaphore;
 
 import com.amsha.channel.api.MediaTypes;
@@ -55,6 +49,7 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
+    public static final String PROVIDER_ID = ConfigKeys.DEFAULT_TTS_PROVIDER;
 
     private static final Logger log = Logger.getLogger(OmlxSpeechSynthesisProvider.class);
     private static final String DEFAULT_MODEL = "Qwen3-TTS-12Hz-1.7B-Base-bf16";
@@ -89,7 +84,7 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
     public OmlxSpeechSynthesisProvider(
             GovernedTransportService governedTransport,
             ObjectMapper objectMapper,
-            @ConfigProperty(name = "amsha.tts.enabled", defaultValue = "false") boolean enabled,
+            @ConfigProperty(name = ConfigKeys.TTS_ENABLED_PROPERTY, defaultValue = "false") boolean enabled,
             @ConfigProperty(name = "amsha.tts.model", defaultValue = DEFAULT_MODEL) String model,
             // Optional: when unset, effectiveVoice() falls back to the per-request voice, then to the
             // model default. Injected as Optional<String> so a config source that omits amsha.tts.voice
@@ -97,10 +92,11 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
             // @ConfigProperty defaultValue is silently dropped by SmallRye and would throw instead.
             @ConfigProperty(name = "amsha.tts.voice") Optional<String> voice,
             @ConfigProperty(name = "amsha.tts.response-format", defaultValue = SUPPORTED_FORMAT) String responseFormat,
-            @ConfigProperty(name = "amsha.tts.timeout", defaultValue = DEFAULT_TIMEOUT) Duration configuredTimeout,
-            @ConfigProperty(name = "amsha.tts.max-input-chars", defaultValue = "1200") int maxInputChars,
-            @ConfigProperty(name = "amsha.tts.max-bytes", defaultValue = "8388608") long maxBytes,
-            @ConfigProperty(name = "amsha.tts.max-concurrent", defaultValue = "1") int maxConcurrent,
+            @ConfigProperty(name = ConfigKeys.TTS_TIMEOUT_PROPERTY, defaultValue = DEFAULT_TIMEOUT)
+                    Duration configuredTimeout,
+            @ConfigProperty(name = ConfigKeys.TTS_MAX_INPUT_CHARS_PROPERTY, defaultValue = "1200") int maxInputChars,
+            @ConfigProperty(name = ConfigKeys.TTS_MAX_BYTES_PROPERTY, defaultValue = "8388608") long maxBytes,
+            @ConfigProperty(name = ConfigKeys.TTS_MAX_CONCURRENT_PROPERTY, defaultValue = "1") int maxConcurrent,
             @ConfigProperty(name = ConfigKeys.OMLX_API_KEY, defaultValue = "not-needed") String apiKey,
             @ConfigProperty(name = ConfigKeys.OMLX_BASE_URL, defaultValue = ModelDefaults.DEFAULT_OMLX_BASE_URL)
                     String baseUrl) {
@@ -117,6 +113,11 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
         this.concurrent = new Semaphore(Math.max(1, maxConcurrent));
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
+    }
+
+    @Override
+    public String providerId() {
+        return PROVIDER_ID;
     }
 
     @Override
@@ -155,6 +156,8 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
     }
 
     private SpeechSynthesisResult synthesizeBounded(SpeechSynthesisRequest request, long started) {
+        BoundedResponseSubscriber.BoundedResponseHandler responseHandler =
+                BoundedResponseSubscriber.handler(effectiveMaxBytes());
         try {
             HttpRequest httpRequest = buildRequest(request);
             HttpResponse<byte[]> response = governedTransport.send(
@@ -164,11 +167,15 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
                     actorUserId(),
                     false,
                     httpRequest,
-                    boundedAudio(effectiveMaxBytes()));
+                    responseHandler);
             return parseResponse(response, started);
-        } catch (ResponseTooLargeException e) {
+        } catch (BoundedResponseSubscriber.ResponseTooLargeException e) {
+            // Defense in depth for transports that surface the subscriber exception directly.
             return failure(SpeechSynthesisResult.Status.TOO_LARGE, "response_too_large", started);
         } catch (OutboundHttpException e) {
+            if (responseHandler.exceeded()) {
+                return failure(SpeechSynthesisResult.Status.TOO_LARGE, "response_too_large", started);
+            }
             return mapGovernedFailure(e, started);
         } catch (IOException e) {
             log.debugf("[TTS] Synthesis request/response processing failed: %s", LogUtil.rootMessage(e));
@@ -183,6 +190,7 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
         return switch (e.category()) {
             case TIMEOUT -> failure(SpeechSynthesisResult.Status.TIMEOUT, "provider_timeout", started);
             case HITL_REQUIRED -> failure(SpeechSynthesisResult.Status.FAILED, "hitl_required", started);
+            // Preserve explicit overflow mapping for transports that report this category directly.
             case OVERSIZED_PAYLOAD -> failure(SpeechSynthesisResult.Status.TOO_LARGE, "response_too_large", started);
             case POLICY_DENIED, DNS_REBINDING, REDIRECT_DENIED, REDIRECT_LIMIT, TLS_TRUST ->
                 failure(SpeechSynthesisResult.Status.FAILED, "policy_denied", started);
@@ -256,10 +264,6 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
         return UNKNOWN_ACTOR.equals(userId) ? null : userId;
     }
 
-    private static HttpResponse.BodyHandler<byte[]> boundedAudio(long limit) {
-        return responseInfo -> new BoundedAudioSubscriber(limit);
-    }
-
     private Duration effectiveTimeout(Duration requested) {
         Duration configured = configuredTimeout == null || configuredTimeout.isNegative() || configuredTimeout.isZero()
                 ? Duration.parse(DEFAULT_TIMEOUT)
@@ -308,83 +312,12 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
         String status = result.status().name().toLowerCase(Locale.ROOT);
         try {
             MeterRegistry registry = meterRegistry.get();
-            registry.counter("amsha.tts.synthesis.total", "status", status).increment();
-            registry.timer("amsha.tts.synthesis.duration", "status", status).record(duration);
+            registry.counter("amsha.tts.synthesis.total", "provider", PROVIDER_ID, "status", status)
+                    .increment();
+            registry.timer("amsha.tts.synthesis.duration", "provider", PROVIDER_ID, "status", status)
+                    .record(duration);
         } catch (RuntimeException e) {
             log.debugf("[TTS] Metrics unavailable: %s", LogUtil.rootMessage(e));
-        }
-    }
-
-    /** Signals that the response exceeded the configured byte bound while streaming. */
-    static final class ResponseTooLargeException extends IOException {
-        ResponseTooLargeException(String message) {
-            super(message);
-        }
-    }
-
-    /**
-     * Streams an HTTP response body into a bounded buffer, cancelling upstream the moment the limit
-     * is exceeded. The check happens per chunk before it is appended, so the buffer never grows past
-     * the configured bound; this is not a post-allocation size check.
-     */
-    static final class BoundedAudioSubscriber implements HttpResponse.BodySubscriber<byte[]> {
-
-        private final long limit;
-        private final ByteArrayOutputStream buffer;
-        private final CompletableFuture<byte[]> future = new CompletableFuture<>();
-        private Flow.Subscription subscription;
-        private long received;
-
-        BoundedAudioSubscriber(long limit) {
-            this.limit = limit;
-            this.buffer = new ByteArrayOutputStream();
-        }
-
-        @Override
-        public CompletionStage<byte[]> getBody() {
-            return future;
-        }
-
-        @Override
-        public void onSubscribe(Flow.Subscription subscribed) {
-            this.subscription = subscribed;
-            subscribed.request(Long.MAX_VALUE);
-        }
-
-        @Override
-        public void onNext(List<ByteBuffer> items) {
-            if (future.isDone()) {
-                return;
-            }
-            for (ByteBuffer item : items) {
-                int remaining = item.remaining();
-                if (received + remaining > limit) {
-                    abort();
-                    return;
-                }
-                received += remaining;
-                byte[] chunk = new byte[remaining];
-                item.get(chunk);
-                buffer.write(chunk, 0, remaining);
-            }
-        }
-
-        @Override
-        public void onError(Throwable throwable) {
-            future.completeExceptionally(throwable);
-        }
-
-        @Override
-        public void onComplete() {
-            future.complete(buffer.toByteArray());
-        }
-
-        private void abort() {
-            if (subscription != null) {
-                subscription.cancel();
-            }
-            buffer.reset();
-            future.completeExceptionally(new ResponseTooLargeException("synthesis response exceeds configured bound"));
         }
     }
 }
