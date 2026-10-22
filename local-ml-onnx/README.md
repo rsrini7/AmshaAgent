@@ -148,17 +148,17 @@ For distribution environments where Python, `mise`, or repo scripts are not pres
 
 ```bash
 # List local model bundles and their installation status
-./amsha models list
+./amsha-sqlite models list
 
 # Install pinned and SHA-256 verified model bundles
-./amsha models install whisper          # Local speech-to-text (~43 MB)
-./amsha models install mpnet            # Local dense embeddings (~436 MB)
-./amsha models install bge-reranker     # Local cross-encoder reranking (~1.1 GB)
-./amsha models install all              # Install all supported local models
+./amsha-sqlite models install whisper       # Local speech-to-text (~43 MB)
+./amsha-sqlite models install mpnet         # Local dense embeddings (~436 MB)
+./amsha-sqlite models install bge-reranker  # Local cross-encoder reranking (~1.1 GB)
+./amsha-sqlite models install all           # Install all supported local models
 
 # Verify integrity of installed model files
-./amsha models verify whisper
-./amsha models verify mpnet
+./amsha-sqlite models verify whisper
+./amsha-sqlite models verify mpnet
 ```
 
 For MPNet's embedding-space settings and the RAG provider switch, follow the

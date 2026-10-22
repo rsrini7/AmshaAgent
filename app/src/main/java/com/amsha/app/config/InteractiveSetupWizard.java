@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.amsha.app.cli.CliArguments;
 import com.amsha.app.util.CliUtils;
 import com.amsha.app.util.ProviderKeySpecs;
 import com.amsha.app.util.VarSpec;
@@ -33,6 +34,9 @@ import org.jboss.logging.Logger;
 public class InteractiveSetupWizard {
 
     private static final Logger log = Logger.getLogger(InteractiveSetupWizard.class);
+    private static final String YES_RESPONSE_PREFIX = "y";
+    private static final String TELEGRAM_ENV_PREFIX = "TELEGRAM_";
+    private static final String AMSHA_TELEGRAM_ENV_PREFIX = "AMSHA_TELEGRAM_";
 
     private static final Set<String> SENSITIVE_KEYS = Set.of(
             ConfigKeys.GROQ_API_KEY,
@@ -81,7 +85,7 @@ public class InteractiveSetupWizard {
             VaultConstants.API_KEYS_ADMIN);
 
     public static void run(Path binaryDir, String[] args) {
-        if (args != null && args.length > 0 && "models".equalsIgnoreCase(args[0])) {
+        if (args != null && args.length > 0 && CliArguments.COMMAND_MODELS.equalsIgnoreCase(args[0])) {
             return;
         }
 
@@ -166,25 +170,7 @@ public class InteractiveSetupWizard {
         CliLlmProviderMenu.printAdditionalProviders();
         System.err.println("  │");
         String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-21, Default: 1]: ");
-        String provider =
-                switch (choice != null ? choice.trim() : "") {
-                    case "2" -> ModelDefaults.PROVIDER_OPENROUTER;
-                    case "3" -> ModelDefaults.PROVIDER_OPENAI;
-                    case "4" -> ModelDefaults.PROVIDER_OLLAMA;
-                    case "5" -> ModelDefaults.PROVIDER_NVIDIA;
-                    case "6" -> ModelDefaults.PROVIDER_GEMINI;
-                    case "7" -> ModelDefaults.PROVIDER_CEREBRAS;
-                    case "8" -> ModelDefaults.PROVIDER_OMLX;
-                    case "9" -> ModelDefaults.PROVIDER_GENERIC_OPENAI;
-                    case "10" -> ModelDefaults.PROVIDER_SARVAM;
-                    case "11" -> ModelDefaults.PROVIDER_OPENCODE;
-                    case "12" -> ModelDefaults.PROVIDER_HUGGINGFACE;
-                    case "13" -> ModelDefaults.PROVIDER_MISTRAL;
-                    case "14" -> ModelDefaults.PROVIDER_CLOUDFLARE;
-                    case "15" -> ModelDefaults.PROVIDER_COHERE;
-                    case "16" -> ModelDefaults.PROVIDER_CODEX;
-                    default -> CliLlmProviderMenu.providerForAdditionalChoice(choice);
-                };
+        String provider = CliLlmProviderMenu.providerForChoice(choice);
         System.setProperty(ConfigKeys.LLM_PROVIDER, provider);
         System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, provider);
         System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, provider);
@@ -197,7 +183,7 @@ public class InteractiveSetupWizard {
                 .orElse(ModelDefaults.PROVIDER_GROQ);
         EnvConfigInitializer.patchEnvFile(
                 envFile, ConfigKeys.LLM_PROVIDER, provider, EnvConfigInitializer.PatchMode.UPDATE);
-        boolean infiniteLoop = provider.equalsIgnoreCase("infinite-loop");
+        boolean infiniteLoop = ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(provider);
         patchProviderList(
                 envFile,
                 ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS,
@@ -286,7 +272,7 @@ public class InteractiveSetupWizard {
         String providers = Arrays.stream(configured.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
-                .filter(value -> !value.equalsIgnoreCase("infinite-loop"))
+                .filter(value -> !ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(value))
                 .collect(Collectors.joining(","));
         return providers.isBlank() ? fallback : providers;
     }
@@ -311,7 +297,7 @@ public class InteractiveSetupWizard {
         String resp = readLineWithFallback(System.console(), "  └─ Use a single key for all? [Y/n]: ");
         if (resp == null
                 || resp.trim().isEmpty()
-                || resp.trim().toLowerCase(Locale.ROOT).startsWith("y")) {
+                || resp.trim().toLowerCase(Locale.ROOT).startsWith(YES_RESPONSE_PREFIX)) {
             String provider = System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ)
                     .toLowerCase(Locale.ROOT);
             String key = readPasswordWithFallback(
@@ -437,10 +423,10 @@ public class InteractiveSetupWizard {
         System.err.println("  ┌─ Telegram Integration");
         String response = readLineWithFallback(System.console(), "  └─ Enable Telegram? [y/N]: ");
         boolean enabled =
-                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
+                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith(YES_RESPONSE_PREFIX);
         EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_TELEGRAM_ENABLED", String.valueOf(enabled), EnvConfigInitializer.PatchMode.UPDATE);
-        System.setProperty("AMSHA_TELEGRAM_ENABLED", String.valueOf(enabled));
+                envFile, ConfigKeys.TELEGRAM_ENABLED, String.valueOf(enabled), EnvConfigInitializer.PatchMode.UPDATE);
+        System.setProperty(ConfigKeys.TELEGRAM_ENABLED, String.valueOf(enabled));
         return enabled;
     }
 
@@ -448,7 +434,7 @@ public class InteractiveSetupWizard {
         System.err.println("  ┌─ " + label);
         String response = readLineWithFallback(System.console(), "  └─ Configure " + key + "? [y/N]: ");
         boolean enabled =
-                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
+                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith(YES_RESPONSE_PREFIX);
         if (!enabled) {
             EnvConfigInitializer.patchEnvFile(envFile, key, "none", EnvConfigInitializer.PatchMode.UPDATE);
             System.setProperty(key, "none");
@@ -481,7 +467,7 @@ public class InteractiveSetupWizard {
     }
 
     private static boolean isTelegramKey(String key) {
-        return key.startsWith("TELEGRAM_") || key.startsWith("AMSHA_TELEGRAM_");
+        return key.startsWith(TELEGRAM_ENV_PREFIX) || key.startsWith(AMSHA_TELEGRAM_ENV_PREFIX);
     }
 
     @SuppressWarnings("java:S2119")

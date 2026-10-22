@@ -58,12 +58,22 @@ public class SqliteVectorIndexCompatibilityInitializer {
     void onStart(@Observes @Priority(Interceptor.Priority.APPLICATION + 300) StartupEvent event) {
         if (!ftsInterceptor.isVectorSearchEnabled()) return;
         if (descriptorSources.isUnsatisfied() || descriptorSources.isAmbiguous()) {
+            markUnavailable();
             log.warn("SQLite vector descriptor source unavailable or ambiguous; vector search remains disabled");
             return;
         }
-        EmbeddingIndexDescriptor descriptor =
-                descriptorSources.get().activeDescriptor().orElse(null);
+        EmbeddingIndexDescriptor descriptor;
+        try {
+            descriptor = descriptorSources.get().activeDescriptor().orElse(null);
+        } catch (RuntimeException e) {
+            markUnavailable();
+            log.warnf(
+                    "SQLite embedding provider could not be initialized; vector search remains disabled: %s",
+                    LogUtil.rootMessage(e));
+            return;
+        }
         if (descriptor == null) {
+            markUnavailable();
             log.warn("SQLite active embedding descriptor unavailable; vector search remains disabled");
             return;
         }
@@ -77,6 +87,11 @@ public class SqliteVectorIndexCompatibilityInitializer {
         }
         verify(VectorIndexNamespace.RAG_GLOBAL, descriptor);
         verify(VectorIndexNamespace.ARCHIVAL, descriptor);
+    }
+
+    private void markUnavailable() {
+        metadata.markUnavailable(VectorIndexNamespace.RAG_GLOBAL);
+        metadata.markUnavailable(VectorIndexNamespace.ARCHIVAL);
     }
 
     private void verify(VectorIndexNamespace namespace, EmbeddingIndexDescriptor descriptor) {

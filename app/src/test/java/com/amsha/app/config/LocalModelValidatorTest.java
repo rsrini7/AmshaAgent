@@ -2,18 +2,22 @@ package com.amsha.app.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockStatic;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import com.amsha.app.cli.ModelInstaller;
 import com.amsha.localml.onnx.LocalAudioTranscoder;
 
 import org.junit.jupiter.api.AfterEach;
@@ -45,14 +49,15 @@ class LocalModelValidatorTest {
     private static final String FFMPEG_PATH = "amsha.stt.ffmpeg-path";
     private static final String ONNX_ENABLED = "amsha.onnx.enabled";
     private static final String EMBEDDING_MODEL = "amsha.embedding.onnx.model";
+    private static final String EMBEDDING_PROVIDERS_PROPERTY = "amsha.infinite-loop.embedding.providers";
+    private static final String EMBEDDING_PROVIDERS_ENV = "AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS";
     private static final String MODEL_ROOT = "amsha.onnx.model-root";
     private static final String OS_NAME = "os.name";
 
     private static final String MPNET = "all-mpnet-base-v2-e8c3b32";
     private static final String WHISPER = "whisper-tiny-en-v1";
 
-    private static final String WHISPER_BANNER_TITLE = "Local Whisper Model Bundle Not Found";
-    private static final String EMBEDDING_BANNER_TITLE = "Local Embedding Model Bundle Not Found";
+    private static final String WHISPER_BANNER_TITLE = "Local Whisper Model Bundle Missing or Incomplete";
     private static final String FFMPEG_BANNER_TITLE = "ffmpeg Executable Not Found or Not Runnable";
 
     @TempDir
@@ -69,7 +74,15 @@ class LocalModelValidatorTest {
         originalOsName = System.getProperty(OS_NAME);
         // Snapshot every property this class touches so @AfterEach restores rather than clobbers: a bare
         // clearProperty would erase a value another test class had deliberately installed.
-        for (String key : new String[] {MODEL_ROOT, STT_ENABLED, FFMPEG_PATH, ONNX_ENABLED, EMBEDDING_MODEL}) {
+        for (String key : new String[] {
+            MODEL_ROOT,
+            STT_ENABLED,
+            FFMPEG_PATH,
+            ONNX_ENABLED,
+            EMBEDDING_MODEL,
+            EMBEDDING_PROVIDERS_PROPERTY,
+            EMBEDDING_PROVIDERS_ENV
+        }) {
             originalProperties.put(key, System.getProperty(key));
         }
         capturedErr = new ByteArrayOutputStream();
@@ -80,6 +93,8 @@ class LocalModelValidatorTest {
         System.setProperty(FFMPEG_PATH, "");
         System.setProperty(ONNX_ENABLED, "false");
         System.setProperty(EMBEDDING_MODEL, "");
+        System.clearProperty(EMBEDDING_PROVIDERS_PROPERTY);
+        System.setProperty(EMBEDDING_PROVIDERS_ENV, "ollama");
     }
 
     @AfterEach
@@ -105,23 +120,41 @@ class LocalModelValidatorTest {
     private void validate(String[] args, boolean ffmpegAvailable) {
         try (MockedStatic<LocalAudioTranscoder> ffmpeg = mockStatic(LocalAudioTranscoder.class)) {
             ffmpeg.when(() -> LocalAudioTranscoder.isFfmpegAvailable(any())).thenReturn(ffmpegAvailable);
-            LocalModelValidator.validateLocalModels(modelRoot, args);
+            try {
+                LocalModelValidator.validateLocalModels(modelRoot, args);
+            } catch (LocalModelValidator.StartupPreflightException failure) {
+                if (!failure.getMessage().contains("Whisper model bundle")) {
+                    throw failure;
+                }
+            }
         }
     }
 
     private void writeBundleManifest(String bundleDirName) throws Exception {
         Path dir = modelRoot.resolve(bundleDirName);
         Files.createDirectories(dir);
-        Files.writeString(dir.resolve("manifest.json"), "{}");
+        ModelInstaller.findModel(bundleDirName).ifPresent(entry -> {
+            for (ModelInstaller.ModelFileSpec file : entry.files()) {
+                try (RandomAccessFile modelFile =
+                        new RandomAccessFile(dir.resolve(file.fileName()).toFile(), "rw")) {
+                    modelFile.setLength(file.expectedBytes());
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        });
+        Files.writeString(dir.resolve(ModelInstaller.MANIFEST_FILE_NAME), "{}");
     }
 
     private void enableStt() {
         System.setProperty(STT_ENABLED, "true");
+        System.setProperty(ONNX_ENABLED, "true");
     }
 
     private void enableEmbedding() {
         System.setProperty(ONNX_ENABLED, "true");
         System.setProperty(EMBEDDING_MODEL, MPNET);
+        System.setProperty(EMBEDDING_PROVIDERS_ENV, "onnx");
     }
 
     @Test
@@ -163,13 +196,26 @@ class LocalModelValidatorTest {
     @DisplayName("whisper banner appears when STT is enabled and the bundle is missing")
     void whisperBannerAppearsWhenBundleMissing() {
         enableStt();
-        validate(NO_ARGS, true);
+        LocalModelValidator.StartupPreflightException missingBundle;
+        try (MockedStatic<LocalAudioTranscoder> ffmpeg = mockStatic(LocalAudioTranscoder.class)) {
+            ffmpeg.when(() -> LocalAudioTranscoder.isFfmpegAvailable(any())).thenReturn(true);
+            missingBundle = assertThrows(
+                    LocalModelValidator.StartupPreflightException.class,
+                    () -> LocalModelValidator.validateLocalModels(modelRoot, NO_ARGS));
+        }
 
         String out = stderr();
+        assertTrue(missingBundle.getMessage().contains(ModelInstaller.WHISPER_BUNDLE_ID));
         assertTrue(out.contains(WHISPER_BANNER_TITLE), out);
-        assertTrue(out.contains("./amsha models install whisper"), out);
+        assertTrue(out.contains("./amsha-sqlite models install whisper"), out);
         assertTrue(out.contains(modelRoot.resolve(WHISPER).toString()), out);
-        assertFalse(out.contains(FFMPEG_BANNER_TITLE), "ffmpeg is available, so that banner must not print");
+        assertFalse(out.contains(FFMPEG_BANNER_TITLE), "ffmpeg is available, so the banner must not print");
+
+        System.setProperty(ONNX_ENABLED, "false");
+        LocalModelValidator.StartupPreflightException onnxDisabled = assertThrows(
+                LocalModelValidator.StartupPreflightException.class,
+                () -> LocalModelValidator.validateLocalModels(modelRoot, NO_ARGS));
+        assertTrue(onnxDisabled.getMessage().contains("AMSHA_ONNX_ENABLED=true"));
     }
 
     @Test
@@ -261,66 +307,95 @@ class LocalModelValidatorTest {
     }
 
     @Test
-    @DisplayName("embedding banner appears when ONNX is enabled with a model name and the bundle is missing")
-    void embeddingBannerAppearsWhenBundleMissing() {
+    @DisplayName("selected ONNX provider fails early with model installation instructions")
+    void onnxPreflightExplainsHowToInstallMissingBundle() {
         enableEmbedding();
-        validate(NO_ARGS, true);
-
-        String out = stderr();
-        assertTrue(out.contains(EMBEDDING_BANNER_TITLE), out);
-        assertTrue(out.contains("./amsha models install mpnet"), out);
-        assertTrue(out.contains(modelRoot.resolve(MPNET).toString()), out);
+        LocalModelValidator.StartupPreflightException exception =
+                assertThrows(LocalModelValidator.StartupPreflightException.class, () -> validate(NO_ARGS, true));
+        assertTrue(exception.getMessage().contains("bundle '" + MPNET + "' is missing"));
+        assertTrue(exception.getMessage().contains("./amsha-sqlite models install mpnet"));
+        assertTrue(exception.getMessage().contains("./amsha-sqlite models verify mpnet"));
+        assertTrue(exception.getMessage().contains(modelRoot.resolve(MPNET).toString()));
     }
 
     @Test
-    @DisplayName("embedding banner is suppressed when the manifest exists")
-    void embeddingBannerSuppressedWhenManifestPresent() throws Exception {
+    @DisplayName("selected ONNX provider passes preflight when its bundle manifest exists")
+    void onnxPreflightPassesWhenBundleManifestExists() throws Exception {
         enableEmbedding();
-        writeBundleManifest(MPNET);
+        String customModel = "custom-embedding";
+        System.setProperty(EMBEDDING_MODEL, customModel);
+        writeBundleManifest(customModel);
         validate(NO_ARGS, true);
-
-        assertFalse(stderr().contains(EMBEDDING_BANNER_TITLE), stderr());
+        assertFalse(stderr().contains("ONNX embedding slot unavailable"), stderr());
     }
 
     @Test
-    @DisplayName("embedding checks are skipped when the ONNX flag is not true")
-    void embeddingSkippedWhenOnnxFlagNotTrue() {
+    @DisplayName("selected ONNX provider reports when ONNX is disabled")
+    void onnxPreflightExplainsDisabledRuntime() {
+        System.setProperty(EMBEDDING_PROVIDERS_ENV, "onnx");
         System.setProperty(ONNX_ENABLED, "false");
         System.setProperty(EMBEDDING_MODEL, MPNET);
-        validate(NO_ARGS, true);
-
-        assertFalse(stderr().contains(EMBEDDING_BANNER_TITLE), stderr());
+        LocalModelValidator.StartupPreflightException exception =
+                assertThrows(LocalModelValidator.StartupPreflightException.class, () -> validate(NO_ARGS, true));
+        assertTrue(exception.getMessage().contains("AMSHA_ONNX_ENABLED is not true"));
     }
 
     @Test
-    @DisplayName("embedding checks are skipped when the model name is blank")
-    void embeddingSkippedWhenModelNameBlank() {
+    @DisplayName("selected ONNX provider requires a model ID")
+    void onnxPreflightRequiresModelId() {
+        System.setProperty(EMBEDDING_PROVIDERS_ENV, "onnx");
         System.setProperty(ONNX_ENABLED, "true");
-        System.setProperty(EMBEDDING_MODEL, "   ");
-        validate(NO_ARGS, true);
-
-        assertFalse(stderr().contains(EMBEDDING_BANNER_TITLE), stderr());
+        System.setProperty(EMBEDDING_MODEL, " ");
+        LocalModelValidator.StartupPreflightException exception =
+                assertThrows(LocalModelValidator.StartupPreflightException.class, () -> validate(NO_ARGS, true));
+        assertTrue(exception.getMessage().contains("AMSHA_EMBEDDING_ONNX_MODEL is blank"));
     }
 
     @Test
-    @DisplayName("embedding checks are skipped when the model name is absent")
-    void embeddingSkippedWhenModelNameAbsent() {
+    @DisplayName("ONNX preflight is optional when ONNX is not selected")
+    void onnxPreflightIsOptionalWhenProviderIsNotSelected() {
         System.setProperty(ONNX_ENABLED, "true");
+        System.setProperty(EMBEDDING_MODEL, MPNET);
         validate(NO_ARGS, true);
-
-        assertFalse(stderr().contains(EMBEDDING_BANNER_TITLE), stderr());
+        assertFalse(stderr().contains("ONNX embedding slot unavailable"), stderr());
     }
 
     @Test
-    @DisplayName("both banners can appear together when both subsystems are enabled")
-    void bothBannersAppearTogether() {
-        enableStt();
+    @DisplayName("missing optional ONNX embedding uses fallback without initializing native runtime")
+    void missingOnnxBundleWithFallbackSkipsRuntimeInitialization() {
         enableEmbedding();
+        System.setProperty(EMBEDDING_PROVIDERS_ENV, "onnx,ollama");
+
         validate(NO_ARGS, false);
 
+        assertTrue(stderr().contains("Continuing with configured provider(s): ollama"), stderr());
+        assertFalse(LocalModelValidator.shouldInitializeOnnxRuntime());
+    }
+
+    @Test
+    @DisplayName("installed ONNX embedding initializes native runtime")
+    void installedOnnxBundleRequiresRuntimeInitialization() throws Exception {
+        enableEmbedding();
+        String customModel = "custom-embedding";
+        System.setProperty(EMBEDDING_PROVIDERS_ENV, "onnx,ollama");
+        System.setProperty(EMBEDDING_MODEL, customModel);
+        writeBundleManifest(customModel);
+
+        validate(NO_ARGS, false);
+
+        assertTrue(LocalModelValidator.shouldInitializeOnnxRuntime());
+    }
+
+    @Test
+    @DisplayName("missing Whisper and ONNX models both give actionable startup feedback")
+    void bothModelWarningsAppearTogether() {
+        enableStt();
+        enableEmbedding();
+        System.setProperty(EMBEDDING_PROVIDERS_ENV, "ollama,onnx");
+        validate(NO_ARGS, false);
         String out = stderr();
         assertTrue(out.contains(WHISPER_BANNER_TITLE), out);
-        assertTrue(out.contains(EMBEDDING_BANNER_TITLE), out);
+        assertTrue(out.contains("ONNX embedding slot unavailable"), out);
         assertTrue(out.contains(FFMPEG_BANNER_TITLE), out);
     }
 
@@ -332,7 +407,9 @@ class LocalModelValidatorTest {
         enableStt();
         try (MockedStatic<LocalAudioTranscoder> ffmpeg = mockStatic(LocalAudioTranscoder.class)) {
             ffmpeg.when(() -> LocalAudioTranscoder.isFfmpegAvailable(any())).thenReturn(true);
-            LocalModelValidator.validateLocalModels(Path.of("/definitely/not/a/real/dir"), NO_ARGS);
+            assertThrows(
+                    LocalModelValidator.StartupPreflightException.class,
+                    () -> LocalModelValidator.validateLocalModels(Path.of("/definitely/not/a/real/dir"), NO_ARGS));
         }
 
         assertTrue(stderr().contains(WHISPER_BANNER_TITLE), stderr());

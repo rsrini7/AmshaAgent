@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import com.amsha.app.cli.CliArguments;
 import com.amsha.common.config.ConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.security.api.VaultConstants;
@@ -35,6 +36,19 @@ import com.amsha.security.api.VaultConstants;
  * </ul>
  */
 public class CliUtils {
+
+    private static final String TELEGRAM_ENABLED_ENV = "AMSHA_TELEGRAM_ENABLED";
+    private static final String TELEGRAM_ALLOWED_USER_IDS_ENV = "AMSHA_TELEGRAM_ALLOWED_USER_IDS";
+    private static final String TELEGRAM_ALLOWED_USERS_ENV = "AMSHA_TELEGRAM_ALLOWED_USERS";
+    private static final String VALUE_TRUE = Boolean.TRUE.toString();
+    private static final String VALUE_NONE = "none";
+    private static final String VALUE_FALSE = Boolean.FALSE.toString();
+    private static final String VALUE_SKIP = "skip";
+    private static final String PLACEHOLDER_CHANGEME = "changeme";
+    private static final String PLACEHOLDER_START = "<";
+    private static final String PLACEHOLDER_YOUR_PREFIX = "your_";
+    private static final String PLACEHOLDER_HERE_SUFFIX = "_here";
+    private static final String PLACEHOLDER_REPEATED_X_REGEX = ".*x{8,}.*";
 
     // -------------------------------------------------------------------------
     // Required vars per mode
@@ -97,12 +111,12 @@ public class CliUtils {
                 "2. Send /newbot and follow the prompts",
                 "3. Copy the token and add:  TELEGRAM_BOT_TOKEN=123456:ABCdef..."),
         new VarSpec(
-                "AMSHA_TELEGRAM_ALLOWED_USER_IDS",
+                TELEGRAM_ALLOWED_USER_IDS_ENV,
                 "Comma-separated numeric Telegram user IDs allowed to use the bot.",
                 "Find your user ID by messaging @userinfobot on Telegram.",
                 "Add:  AMSHA_TELEGRAM_ALLOWED_USER_IDS=123456789"),
         new VarSpec(
-                "AMSHA_TELEGRAM_ALLOWED_USERS",
+                TELEGRAM_ALLOWED_USERS_ENV,
                 "Comma-separated Telegram usernames (without @) allowed to use the bot.",
                 "Add:  AMSHA_TELEGRAM_ALLOWED_USERS=yourusername"),
     };
@@ -116,7 +130,7 @@ public class CliUtils {
      * Called by BinaryBootstrap for interactive first-run setup.
      */
     public static List<VarSpec> getMissingVarSpecs(String[] args) {
-        if (args != null && args.length > 0 && "models".equalsIgnoreCase(args[0])) {
+        if (args != null && args.length > 0 && CliArguments.COMMAND_MODELS.equalsIgnoreCase(args[0])) {
             return List.of();
         }
 
@@ -160,8 +174,8 @@ public class CliUtils {
             if (!isSet(spec.key())) missing.add(spec);
         }
 
-        boolean attachMode = args != null && args.length > 0 && "attach".equalsIgnoreCase(args[0]);
-        if (attachMode || !isExplicitOptOut("AMSHA_TELEGRAM_ENABLED")) {
+        boolean attachMode = args != null && args.length > 0 && CliArguments.COMMAND_ATTACH.equalsIgnoreCase(args[0]);
+        if (attachMode || !isExplicitOptOut(TELEGRAM_ENABLED_ENV)) {
             for (VarSpec spec : TELEGRAM_VARS) {
                 if (!isSet(spec.key())) missing.add(spec);
             }
@@ -206,7 +220,7 @@ public class CliUtils {
     }
 
     private static boolean isTrue(String propertyKey, String environmentKey) {
-        return "true".equalsIgnoreCase(configuredValue(propertyKey, environmentKey));
+        return VALUE_TRUE.equalsIgnoreCase(configuredValue(propertyKey, environmentKey));
     }
 
     private static String configuredValue(String propertyKey, String environmentKey) {
@@ -220,7 +234,9 @@ public class CliUtils {
     private static boolean isExplicitOptOut(String key) {
         String val = System.getProperty(key, System.getenv(key));
         return val != null
-                && (val.equalsIgnoreCase("none") || val.equalsIgnoreCase("false") || val.equalsIgnoreCase("skip"));
+                && (val.equalsIgnoreCase(VALUE_NONE)
+                        || val.equalsIgnoreCase(VALUE_FALSE)
+                        || val.equalsIgnoreCase(VALUE_SKIP));
     }
 
     /**
@@ -234,14 +250,12 @@ public class CliUtils {
      * @param args the raw CLI args passed to {@code main()}
      */
     public static void validateRequiredEnvVars(String[] args) {
-        String mode = args.length > 0 ? args[0].toLowerCase(Locale.ROOT) : "";
+        String mode = args != null && args.length > 0 ? args[0].toLowerCase(Locale.ROOT) : "";
 
         // No validation needed for help/version flags or models management command
-        if (mode.equals("--help")
-                || mode.equals("-h")
-                || mode.equals("--version")
-                || mode.equals("-v")
-                || mode.equals("models")) {
+        if (CliArguments.isHelpOption(mode)
+                || CliArguments.isVersionOption(mode)
+                || CliArguments.COMMAND_MODELS.equalsIgnoreCase(mode)) {
             return;
         }
 
@@ -260,11 +274,11 @@ public class CliUtils {
             missing.add(providerKeySpec);
         }
 
-        if (mode.equals("attach")) {
+        if (CliArguments.COMMAND_ATTACH.equalsIgnoreCase(mode)) {
             for (VarSpec spec : TELEGRAM_VARS) {
                 if (!isSet(spec.key())) missing.add(spec);
             }
-        } else if (mode.equals("serve")) {
+        } else if (CliArguments.COMMAND_SERVE.equalsIgnoreCase(mode)) {
             warnTelegramIfPartial();
         }
 
@@ -328,11 +342,11 @@ public class CliUtils {
      * </ol>
      */
     private static void warnTelegramIfPartial() {
-        String val = System.getProperty("AMSHA_TELEGRAM_ENABLED", System.getenv("AMSHA_TELEGRAM_ENABLED"));
-        boolean enabled = "true".equalsIgnoreCase(val);
+        String val = System.getProperty(TELEGRAM_ENABLED_ENV, System.getenv(TELEGRAM_ENABLED_ENV));
+        boolean enabled = VALUE_TRUE.equalsIgnoreCase(val);
         boolean hasToken = isSet(ConfigKeys.TELEGRAM_BOT_TOKEN);
-        boolean hasUserIds = isSet("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
-        boolean hasUsers = isSet("AMSHA_TELEGRAM_ALLOWED_USERS");
+        boolean hasUserIds = isSet(TELEGRAM_ALLOWED_USER_IDS_ENV);
+        boolean hasUsers = isSet(TELEGRAM_ALLOWED_USERS_ENV);
 
         // Case 0: nothing Telegram-related set at all - gentle info nudge
         if (!enabled && !hasToken && !hasUserIds && !hasUsers) {
@@ -353,8 +367,8 @@ public class CliUtils {
         if (enabled) {
             List<String> missingKeys = new ArrayList<>();
             if (!hasToken) missingKeys.add(ConfigKeys.TELEGRAM_BOT_TOKEN);
-            if (!hasUserIds) missingKeys.add("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
-            if (!hasUsers) missingKeys.add("AMSHA_TELEGRAM_ALLOWED_USERS");
+            if (!hasUserIds) missingKeys.add(TELEGRAM_ALLOWED_USER_IDS_ENV);
+            if (!hasUsers) missingKeys.add(TELEGRAM_ALLOWED_USERS_ENV);
             if (!missingKeys.isEmpty()) {
                 System.err.println();
                 System.err.println("  WARN: AMSHA_TELEGRAM_ENABLED=true but Telegram vars are missing:");
@@ -402,12 +416,12 @@ public class CliUtils {
     private static boolean isSet(String key) {
         String val = System.getProperty(key, System.getenv(key));
         if (val == null || val.isBlank()) return false;
-        if (val.contains("changeme")) return false;
-        if (val.contains("<")) return false;
-        if (val.contains("your_") && val.contains("_here")) return false;
+        if (val.contains(PLACEHOLDER_CHANGEME)) return false;
+        if (val.contains(PLACEHOLDER_START)) return false;
+        if (val.contains(PLACEHOLDER_YOUR_PREFIX) && val.contains(PLACEHOLDER_HERE_SUFFIX)) return false;
         // Catch repeated-x placeholders like jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-        if (val.equalsIgnoreCase("none")) return false;
-        if (val.matches(".*x{8,}.*")) return false;
+        if (val.equalsIgnoreCase(VALUE_NONE)) return false;
+        if (val.matches(PLACEHOLDER_REPEATED_X_REGEX)) return false;
         return true;
     }
 }

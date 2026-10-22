@@ -494,6 +494,7 @@ class ModelInstallerTest {
         ModelInstaller.installBundle(entry, modelRoot, sink(captured));
 
         assertEquals(1, requests.get());
+        assertTrue(captured.toString(StandardCharsets.UTF_8).contains("Downloaded"));
         Path bundleDir = modelRoot.resolve(entry.id());
         assertEquals(PAYLOAD.length, Files.size(bundleDir.resolve(FILE_NAME)));
         assertTrue(Files.exists(bundleDir.resolve("manifest.json")));

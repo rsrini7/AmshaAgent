@@ -377,7 +377,7 @@ See `.mise/tasks/headroom/README.md` for setup and usage.
 | `AMSHA_AUTH_IDP_GITHUB_CLIENT_SECRET` | — | GitHub OAuth client secret. |
 | `AMSHA_AUTH_IDP_GITHUB_REDIRECT_URI` | *(derived)* | Fixed, pre-registered redirect URI sent to GitHub. Defaults to the server-derived callback. |
 | `AMSHA_PII_MODE` | `REDACT_AND_FORWARD` | PII mode: REDACT_AND_FORWARD, BLOCK_AND_NOTIFY, OFF |
-| `AMSHA_AUTO_SEED_SECRETS` | `false` | Auto-seed development secrets on startup |
+| `AMSHA_AUTO_SEED_SECRETS` | `false` | Set `true` on first boot with a new vault to seed the stable `AMSHA_AUDIT_HMAC_KEY` from the environment before startup validation; keep the key unchanged or pre-provision the vault, then disable if desired. Also seeds configured optional tool secrets. |
 
 ## Embedding
 

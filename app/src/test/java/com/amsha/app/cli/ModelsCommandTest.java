@@ -4,10 +4,12 @@ import picocli.CommandLine;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
 import com.amsha.app.config.LocalModelValidator;
+import com.amsha.common.config.ConfigKeys;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -71,12 +73,44 @@ class ModelsCommandTest {
         try {
             System.setErr(new PrintStream(errContent));
             CommandLine cmd = new CommandLine(new ModelsCommand());
-            cmd.execute("install", "invalid-model-name");
+            int code = cmd.execute("install", "invalid-model-name");
+            Assertions.assertEquals(2, code);
             String err = errContent.toString();
             Assertions.assertTrue(err.contains("Unknown model 'invalid-model-name'"));
             Assertions.assertTrue(err.contains("whisper-tiny-en-v1"));
         } finally {
             System.setErr(orig);
+        }
+    }
+
+    @Test
+    void testInstallFailureReturnsNonZeroWithoutNetworkAccess() throws Exception {
+        Path blockedRoot = tempModelRoot.resolve("model-root-file");
+        Files.writeString(blockedRoot, "not a directory");
+        String originalModelRoot = System.getProperty(MODEL_ROOT_PROPERTY);
+        ByteArrayOutputStream errContent = new ByteArrayOutputStream();
+        PrintStream originalErr = System.err;
+        try {
+            System.setProperty(MODEL_ROOT_PROPERTY, blockedRoot.toString());
+            System.setErr(new PrintStream(errContent));
+            CommandLine cmd = new CommandLine(new ModelsCommand());
+
+            int code = cmd.execute("install", "mpnet");
+
+            Assertions.assertEquals(1, code);
+            String error = errContent.toString();
+            Assertions.assertTrue(error.contains("could not be installed"), error);
+            Assertions.assertTrue(error.contains("models install mpnet"), error);
+            Assertions.assertTrue(error.contains(ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS), error);
+            Assertions.assertTrue(
+                    error.contains(blockedRoot.toAbsolutePath().normalize().toString()), error);
+        } finally {
+            if (originalModelRoot == null) {
+                System.clearProperty(MODEL_ROOT_PROPERTY);
+            } else {
+                System.setProperty(MODEL_ROOT_PROPERTY, originalModelRoot);
+            }
+            System.setErr(originalErr);
         }
     }
 

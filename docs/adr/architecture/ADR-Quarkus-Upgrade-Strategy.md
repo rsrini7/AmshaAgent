@@ -591,7 +591,7 @@ These are the durable takeaways that apply to every future checkpoint:
 | Updater patches need hunk-level triage | Alias rewrite, out-of-scope jandex/pin removals, TC2 version injection — all observed in real dry runs | Never apply raw; review every hunk against the effective POM |
 | Run updater from `app/pom.xml` | Aggregator root reports zero extensions | Always `-f app/pom.xml -DplatformVersion=X.Y.Z.W` |
 | mise strips exported env vars | Smoke runner silently fell back to `.env` while child held a different key → deterministic 401 | Deliver keys via `.env` only; never trust shell exports through mise |
-| Native smoke children have console logging off | Failures look silent without file-log injection | Set `QUARKUS_LOG_FILE_ENABLE=true` + `QUARKUS_LOG_FILE_PATH` for any debug run |
+| Native smoke children have console logging off | Failures look silent without file-log injection | Set `QUARKUS_LOG_FILE_ENABLED=true` + `QUARKUS_LOG_FILE_PATH` for any debug run |
 | QLC codec mixins stripped by native DCE | Chat-memory JSON written type-less, rejected on read (InvalidTypeIdException) | Register LC4J message types + mixin classes in `CoreReflectionConfig`; guarded by `ChatMessageJsonRoundTripTest` |
 | TC2 `PostgreSQLContainer` is non-generic | Compile break on migration to TC2 | Drop `<?>` and diamond at adoption time |
 | Camel test artifact removed in CQ 3.34 | `camel-quarkus-junit5` dead once member BOM brings CQ ≥ 3.34 | Rename to `camel-quarkus-junit`; migrate imports to `junit6.*` |

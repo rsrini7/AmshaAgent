@@ -25,6 +25,12 @@ separate values generated using `openssl rand -base64 32`. Keep them stable acro
 restarts. See the [configuration reference](./CONFIGURATION.md) for keyless
 providers and all startup requirements.
 
+The template enables `AMSHA_AUTO_SEED_SECRETS=true` for a fresh local data
+directory. On first boot this stores the stable audit key in the vault before
+startup validation. Keep the value stable; if you already provisioned the vault,
+you can turn auto-seeding off. When startup fails, the binary prints the reason
+and the diagnostic log path in the terminal.
+
 ```bash
 # Start in chat mode with hot reload; dev mode runs without sandbox isolation.
 ./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
@@ -89,12 +95,39 @@ If the browser loses the owner cookie, `bootstrap/status` remains `CLAIMED` and 
 
 ## Optional local ONNX models
 
-Local embedding, reranking, and speech-to-text bundles are installed explicitly;
-the application does not fetch model files during inference. For example, install
-the MPNet embedding bundle with `mise run models:install-mpnet`, or use the
-packaged binary's `models install mpnet` command. Model files remain under
-gitignored `data/models/`. See the [ONNX Local ML guide](./ONNX_LOCAL_ML_GUIDE.md)
-for configuration, other model bundles, and vector-space compatibility requirements.
+Local embedding, reranking, and speech-to-text models are installed explicitly;
+Amsha does not fetch model files during inference. The packaged binary includes
+model-management commands, so Mise is not required:
+
+```bash
+./amsha-sqlite models list
+./amsha-sqlite models install mpnet       # ONNX embeddings
+./amsha-sqlite models install whisper     # local speech-to-text
+./amsha-sqlite models install bge-reranker
+./amsha-sqlite models install all
+./amsha-sqlite models verify all
+```
+
+Downloads need an internet connection. MPNet is about 436 MB, Whisper about
+43 MB, and BGE reranker about 1.1 GB. Files are stored under the configured
+`AMSHA_ONNX_MODEL_ROOT` or `AMSHA_DATA_DIR` (default `data/models/`). A failed
+install reports the model, cause, and retry command. Partial files are removed;
+complete files that pass SHA-256 verification are kept and reused on retry.
+
+Downloads are optional until the matching feature is enabled. MPNet is needed
+for ONNX embeddings; Whisper is needed only when `AMSHA_STT_LOCAL_ENABLED=true`,
+and BGE reranking only when `AMSHA_RAG_RERANKER_ENABLED=true`. If MPNet cannot
+be downloaded, choose another provider in
+`AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS`, such as `ollama`, `jina`, or `openai`.
+If no embedding provider is available, vector search reports that it is
+unavailable and retrieval continues with keyword search. You can disable local
+speech-to-text or reranking if those models are unavailable; reranking then
+continues through the configured hybrid retrieval path.
+
+If a feature is explicitly enabled with a required model missing and no
+compatible fallback is configured, startup stops with the reason, install
+command, and fallback guidance. The CLI also prints the diagnostic log path so
+you can inspect the full startup details.
 
 ## Docker Compose
 

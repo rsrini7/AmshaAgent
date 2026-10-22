@@ -3,6 +3,7 @@ package com.amsha.app.security;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -11,6 +12,7 @@ import java.security.Security;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.security.api.SecretVault;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -59,9 +61,8 @@ class StartupSecurityValidatorTest {
 
         IllegalStateException ex =
                 assertThrows(IllegalStateException.class, () -> validator.onStart(new StartupEvent()));
-        assertEquals(
-                "FATAL: amsha-audit-hmac-key is not present in SecretVault. Provision this key before deploying to production.",
-                ex.getMessage());
+        assertTrue(ex.getMessage().contains("FATAL: amsha-audit-hmac-key is not present in SecretVault."));
+        assertTrue(ex.getMessage().contains(ConfigKeys.AUTO_SEED_SECRETS_ENV + "=true"));
     }
 
     @Test
@@ -107,6 +108,7 @@ class StartupSecurityValidatorTest {
     void testProdProfile_validSecrets_doesNotThrow() throws Exception {
         injectFields("prod", "prod-secure-pepper-000000000000000000000000000000", true);
         // Test: inject allowlist fields so the new allowlist check passes
+        setField("telegramEnabled", true);
         setField("allowedUserIds", Optional.of(List.of(123L)));
         setField("allowedUsers", Optional.empty());
 

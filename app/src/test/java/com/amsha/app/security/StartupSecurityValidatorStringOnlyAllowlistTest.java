@@ -1,5 +1,6 @@
 package com.amsha.app.security;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
@@ -56,6 +57,7 @@ class StartupSecurityValidatorStringOnlyAllowlistTest {
         StartupSecurityValidator real = ClientProxy.unwrap(validator);
         real.profile = "staging";
         real.pepper = "staging-secure-pepper-00000000000000";
+        real.telegramEnabled = true;
         real.allowedUserIds = Optional.empty();
         real.allowedUsers = Optional.of(List.of("alice"));
 
@@ -67,10 +69,23 @@ class StartupSecurityValidatorStringOnlyAllowlistTest {
         StartupSecurityValidator real = ClientProxy.unwrap(validator);
         real.profile = "staging";
         real.pepper = "staging-secure-pepper-00000000000000";
+        real.telegramEnabled = true;
         real.allowedUserIds = Optional.empty();
         real.allowedUsers = Optional.of(List.of("alice"));
 
         var ex = assertThrows(DeploymentException.class, () -> real.onStart(new StartupEvent()));
         assertTrue(ex.getMessage().contains("numeric"), "Exception message must reference 'numeric' Telegram user IDs");
+    }
+
+    @Test
+    void disabledTelegramDoesNotBlockStartupOnPlaceholderUsername() {
+        StartupSecurityValidator real = ClientProxy.unwrap(validator);
+        real.profile = "staging";
+        real.pepper = "staging-secure-pepper-00000000000000";
+        real.telegramEnabled = false;
+        real.allowedUserIds = Optional.empty();
+        real.allowedUsers = Optional.of(List.of("mock-telegram-user"));
+
+        assertDoesNotThrow(() -> real.onStart(new StartupEvent()));
     }
 }

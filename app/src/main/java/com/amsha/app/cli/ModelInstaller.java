@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import com.amsha.localml.onnx.OnnxModelBundleIds;
 import com.amsha.localml.onnx.OnnxModelRootResolver;
 
 /**
@@ -28,6 +29,20 @@ import com.amsha.localml.onnx.OnnxModelRootResolver;
  * Ensures strict cryptographic SHA-256 and byte-count integrity with atomic file replacement.
  */
 public final class ModelInstaller {
+
+    public static final String SELECTOR_ALL = "all";
+    public static final String SELECTOR_WHISPER = "whisper";
+    public static final String SELECTOR_MPNET = "mpnet";
+    public static final String SELECTOR_RERANKER = "bge-reranker";
+
+    public static final String WHISPER_BUNDLE_ID = OnnxModelBundleIds.WHISPER;
+    public static final String MPNET_BUNDLE_ID = OnnxModelBundleIds.MPNET;
+    public static final String RERANKER_BUNDLE_ID = OnnxModelBundleIds.RERANKER;
+    public static final String MANIFEST_FILE_NAME = OnnxModelBundleIds.MANIFEST_FILE_NAME;
+
+    private static final int DOWNLOAD_PROGRESS_INTERVAL_PERCENT = 25;
+    private static final String EXECUTABLE_AMSHA_PREFIX = "amsha";
+    private static final String OS_WINDOWS_FRAGMENT = "win";
 
     public record ModelFileSpec(String fileName, String remoteUrl, long expectedBytes, String expectedSha256) {}
 
@@ -173,8 +188,8 @@ public final class ModelInstaller {
             """;
 
     private static final ModelCatalogEntry WHISPER_ENTRY = new ModelCatalogEntry(
-            "whisper-tiny-en-v1",
-            List.of("whisper", "whisper-tiny", "stt"),
+            WHISPER_BUNDLE_ID,
+            List.of(SELECTOR_WHISPER, "whisper-tiny", "stt"),
             "Local offline Whisper audio transcription",
             "~43 MB",
             List.of(
@@ -206,8 +221,8 @@ public final class ModelInstaller {
             WHISPER_MANIFEST);
 
     private static final ModelCatalogEntry MPNET_ENTRY = new ModelCatalogEntry(
-            "all-mpnet-base-v2-e8c3b32",
-            List.of("mpnet", "embedding", "embeddings"),
+            MPNET_BUNDLE_ID,
+            List.of(SELECTOR_MPNET, "embedding", "embeddings"),
             "Local dense vector embeddings",
             "~436 MB",
             List.of(
@@ -224,8 +239,8 @@ public final class ModelInstaller {
             MPNET_MANIFEST);
 
     private static final ModelCatalogEntry RERANKER_ENTRY = new ModelCatalogEntry(
-            "bge-reranker-v1",
-            List.of("reranker", "bge-reranker", "cross-encoder"),
+            RERANKER_BUNDLE_ID,
+            List.of("reranker", SELECTOR_RERANKER, "cross-encoder"),
             "Local cross-encoder candidate reranker",
             "~1.1 GB",
             List.of(
@@ -247,6 +262,27 @@ public final class ModelInstaller {
 
     public static List<ModelCatalogEntry> allModels() {
         return CATALOG;
+    }
+
+    public static String launcherCommand() {
+        String processCommand = ProcessHandle.current().info().command().orElse("");
+        if (!processCommand.isBlank()) {
+            Path commandPath = Path.of(processCommand);
+            Path executable = commandPath.getFileName();
+            if (executable != null && executable.toString().startsWith(EXECUTABLE_AMSHA_PREFIX)) {
+                String launchPath = commandPath.getParent() == null
+                        ? System.getProperty("os.name", "")
+                                        .toLowerCase(Locale.ROOT)
+                                        .contains(OS_WINDOWS_FRAGMENT)
+                                ? ".\\" + commandPath
+                                : "./" + commandPath
+                        : processCommand;
+                return launchPath.chars().anyMatch(Character::isWhitespace)
+                        ? "\"" + launchPath.replace("\"", "\\\"") + "\""
+                        : launchPath;
+            }
+        }
+        return "./amsha-sqlite";
     }
 
     public static Optional<ModelCatalogEntry> findModel(String query) {
@@ -274,7 +310,7 @@ public final class ModelInstaller {
         if (!Files.isDirectory(bundleDir)) {
             return ModelStatus.MISSING;
         }
-        Path manifest = bundleDir.resolve("manifest.json");
+        Path manifest = bundleDir.resolve(MANIFEST_FILE_NAME);
         if (!Files.exists(manifest)) {
             return ModelStatus.INCOMPLETE;
         }
@@ -331,7 +367,7 @@ public final class ModelInstaller {
                 allValid = false;
             }
         }
-        Path manifest = bundleDir.resolve("manifest.json");
+        Path manifest = bundleDir.resolve(MANIFEST_FILE_NAME);
         if (Files.exists(manifest)) {
             out.println("  verified   manifest.json");
         } else {
@@ -355,7 +391,7 @@ public final class ModelInstaller {
             installFile(file, bundleDir, client, out);
         }
 
-        Path manifest = bundleDir.resolve("manifest.json");
+        Path manifest = bundleDir.resolve(MANIFEST_FILE_NAME);
         Files.writeString(
                 manifest,
                 entry.manifestJson(),
@@ -395,10 +431,14 @@ public final class ModelInstaller {
         try {
             HttpResponse<InputStream> resp = client.send(req, HttpResponse.BodyHandlers.ofInputStream());
             if (resp.statusCode() != 200) {
+                try (InputStream _ = resp.body()) {
+                    // Close the response body before reporting the HTTP status.
+                }
                 throw new IOException("HTTP download failed: status " + resp.statusCode() + " for " + file.remoteUrl());
             }
             MessageDigest digest = createSha256Digest();
             long totalRead = 0;
+            int nextProgressPercent = DOWNLOAD_PROGRESS_INTERVAL_PERCENT;
             try (InputStream in = resp.body();
                     OutputStream fos =
                             Files.newOutputStream(partial, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
@@ -408,18 +448,28 @@ public final class ModelInstaller {
                     digest.update(buf, 0, read);
                     fos.write(buf, 0, read);
                     totalRead += read;
+                    if (file.expectedBytes() > 0) {
+                        int progressPercent = (int) (totalRead * 100.0 / file.expectedBytes());
+                        if (progressPercent >= nextProgressPercent) {
+                            out.printf(
+                                    "  Downloaded %s of %s (%d%%)%n",
+                                    formatBytes(Math.min(totalRead, file.expectedBytes())),
+                                    formatBytes(file.expectedBytes()),
+                                    Math.min(progressPercent, 100));
+                            nextProgressPercent = (progressPercent / DOWNLOAD_PROGRESS_INTERVAL_PERCENT + 1)
+                                    * DOWNLOAD_PROGRESS_INTERVAL_PERCENT;
+                        }
+                    }
                 }
             }
 
             if (totalRead != file.expectedBytes()) {
-                Files.deleteIfExists(partial);
                 throw new IOException("Downloaded file size mismatch for " + file.fileName() + ": expected "
                         + file.expectedBytes() + " bytes, received " + totalRead);
             }
 
             String computed = HexFormat.of().formatHex(digest.digest());
             if (!computed.equalsIgnoreCase(file.expectedSha256())) {
-                Files.deleteIfExists(partial);
                 throw new IOException("SHA-256 checksum mismatch for " + file.fileName() + ": expected "
                         + file.expectedSha256() + ", got " + computed);
             }
@@ -430,11 +480,19 @@ public final class ModelInstaller {
                     file.fileName(), formatBytes(totalRead), computed.substring(0, 16));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            Files.deleteIfExists(partial);
+            deletePartialWithoutMasking(partial, e);
             throw new IOException("Download interrupted for " + file.fileName(), e);
-        } catch (Exception e) {
-            Files.deleteIfExists(partial);
+        } catch (IOException | RuntimeException e) {
+            deletePartialWithoutMasking(partial, e);
             throw e;
+        }
+    }
+
+    private static void deletePartialWithoutMasking(Path partial, Exception originalFailure) {
+        try {
+            Files.deleteIfExists(partial);
+        } catch (IOException cleanupFailure) {
+            originalFailure.addSuppressed(cleanupFailure);
         }
     }
 

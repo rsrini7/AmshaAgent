@@ -10,6 +10,7 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
@@ -53,7 +54,7 @@ public class DevSecretSeeder {
     @Inject
     SecretVault secretVault;
 
-    @ConfigProperty(name = "amsha.auto-seed-secrets", defaultValue = "false")
+    @ConfigProperty(name = ConfigKeys.AUTO_SEED_SECRETS_PROPERTY, defaultValue = "false")
     boolean autoSeedEnabled;
 
     @ConfigProperty(name = "quarkus.profile", defaultValue = "dev")

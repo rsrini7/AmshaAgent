@@ -99,11 +99,11 @@ class InfiniteLoopEmbeddingModelProviderTest {
     @Test
     void testThrowsWhenNoValidSlots() {
         provider.loopProviders = "unsupported";
-        System.setProperty("amsha.test.force-error", "true");
+        System.setProperty(InfiniteLoopEmbeddingModelProvider.TEST_FORCE_ERROR_PROPERTY, "true");
         try {
             assertThrows(IllegalStateException.class, () -> provider.embeddingModel());
         } finally {
-            System.clearProperty("amsha.test.force-error");
+            System.clearProperty(InfiniteLoopEmbeddingModelProvider.TEST_FORCE_ERROR_PROPERTY);
         }
     }
 }

@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
+import com.amsha.app.cli.CliArguments;
 import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
 
@@ -18,6 +19,11 @@ public class BootstrapOrchestrator {
     private static final Logger log = Logger.getLogger(BootstrapOrchestrator.class);
 
     private static final String PROP_DATA_DIR = ConfigKeys.DATA_DIR;
+    private static final String PROPERTY_NATIVE_IMAGE_CODE = "org.graalvm.nativeimage.imagecode";
+    private static final String PROPERTY_OS_NAME = "os.name";
+    private static final String PROPERTY_PLAYWRIGHT_BROWSERS_PATH = "PLAYWRIGHT_BROWSERS_PATH";
+    private static final String OS_LINUX = "linux";
+    private static final String VEC0_LIBRARY_PATH_FRAGMENT = "vec0";
     private static final String ENV_LD_PRELOAD = "LD_PRELOAD";
     private static final String ENV_AMSHA_LD_PRELOAD_SET = "AMSHA_LD_PRELOAD_SET";
 
@@ -74,14 +80,18 @@ public class BootstrapOrchestrator {
      * {@link com.amsha.app.util.CliUtils#validateRequiredEnvVars(String[])} and
      * {@link LocalModelValidator#validateLocalModels(Path, String[])}.
      */
+    public static void bootstrapModelManagement() {
+        Path binaryDir = resolveBinaryDir();
+        EnvConfigInitializer.loadDotEnv(binaryDir);
+        configureDataDirectory(binaryDir);
+    }
+
     private static boolean isInformational(String[] args) {
-        if (args == null || args.length == 0) return false;
-        String mode = args[0].toLowerCase(Locale.ROOT);
-        return mode.equals("--help") || mode.equals("-h") || mode.equals("--version") || mode.equals("-v");
+        return CliArguments.isInformational(args);
     }
 
     private static Path resolveBinaryDir() {
-        if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
+        if (System.getProperty(PROPERTY_NATIVE_IMAGE_CODE) != null) {
             String command = ProcessHandle.current().info().command().orElse("");
             if (!command.isEmpty()) {
                 try {
@@ -98,7 +108,7 @@ public class BootstrapOrchestrator {
     private static void reexecWithLdPreloadIfNeeded(String[] args) {
         if (!shouldReexecWithLdPreload(
                 args,
-                System.getProperty("os.name"),
+                System.getProperty(PROPERTY_OS_NAME),
                 System.getenv(ENV_AMSHA_LD_PRELOAD_SET),
                 System.getenv(ENV_LD_PRELOAD))) return;
 
@@ -127,7 +137,7 @@ public class BootstrapOrchestrator {
     static boolean shouldReexecWithLdPreload(String[] args, String osName, String amshaLdPreloadSet, String ldPreload) {
         return !isInformational(args)
                 && osName != null
-                && osName.toLowerCase(Locale.ROOT).contains("linux")
+                && osName.toLowerCase(Locale.ROOT).contains(OS_LINUX)
                 && amshaLdPreloadSet == null
                 && ldPreload == null;
     }
@@ -146,12 +156,8 @@ public class BootstrapOrchestrator {
     }
 
     private static void provisionDataDirectory(Path binaryDir) {
-        String rawDataDir = System.getProperty(
-                PROP_DATA_DIR,
-                System.getenv()
-                        .getOrDefault(PROP_DATA_DIR, binaryDir.resolve("data").toString()));
+        Path dirPath = resolveDataDirectory(binaryDir);
         try {
-            Path dirPath = Path.of(rawDataDir).toAbsolutePath().normalize();
             if (!Files.exists(dirPath)) {
                 Files.createDirectories(dirPath);
                 Files.createDirectories(dirPath.resolve("workspaces"));
@@ -160,6 +166,18 @@ public class BootstrapOrchestrator {
         } catch (IOException e) {
             System.err.println("[Amsha Agent] ⚠️  Warning: Failed to create data directory: " + e.getMessage());
         }
+    }
+
+    private static void configureDataDirectory(Path binaryDir) {
+        System.setProperty(PROP_DATA_DIR, resolveDataDirectory(binaryDir).toString());
+    }
+
+    private static Path resolveDataDirectory(Path binaryDir) {
+        String rawDataDir = System.getProperty(
+                PROP_DATA_DIR,
+                System.getenv()
+                        .getOrDefault(PROP_DATA_DIR, binaryDir.resolve("data").toString()));
+        return Path.of(rawDataDir).toAbsolutePath().normalize();
     }
 
     private static void provisionNativeLibraries(Path binaryDir) {
@@ -171,7 +189,7 @@ public class BootstrapOrchestrator {
                                 binaryDir.resolve("lib/vec0").toString()));
         try {
             Path absVecPath = Path.of(vecPath).toAbsolutePath().normalize();
-            if (vecPath.contains("vec0")) {
+            if (vecPath.contains(VEC0_LIBRARY_PATH_FRAGMENT)) {
                 Vec0NativeLibraryInstaller.performInstallation(absVecPath.toString());
             }
             System.setProperty("AMSHA_RAG_VEC_PATH", absVecPath.toString());
@@ -182,7 +200,7 @@ public class BootstrapOrchestrator {
 
     private static void normalizePlaywrightPath(Path binaryDir) {
         System.setProperty("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "0");
-        String path = System.getProperty("PLAYWRIGHT_BROWSERS_PATH");
+        String path = System.getProperty(PROPERTY_PLAYWRIGHT_BROWSERS_PATH);
         if (path != null && !path.isBlank()) {
             Path p = Path.of(path);
             if (!p.isAbsolute()) {

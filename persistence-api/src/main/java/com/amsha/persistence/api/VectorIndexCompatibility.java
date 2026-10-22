@@ -7,6 +7,8 @@ import java.util.Optional;
 public record VectorIndexCompatibility(
         VectorIndexNamespace namespace, Status status, String activeFingerprint, Optional<String> storedFingerprint) {
 
+    private static final String UNAVAILABLE_FINGERPRINT = "provider-unavailable";
+
     public enum Status {
         INITIALIZED,
         MATCH,
@@ -24,6 +26,10 @@ public record VectorIndexCompatibility(
 
     public boolean vectorEnabled() {
         return status == Status.INITIALIZED || status == Status.MATCH;
+    }
+
+    public static VectorIndexCompatibility unavailable(VectorIndexNamespace namespace) {
+        return new VectorIndexCompatibility(namespace, Status.UNAVAILABLE, UNAVAILABLE_FINGERPRINT, Optional.empty());
     }
 
     public static VectorIndexCompatibility assess(

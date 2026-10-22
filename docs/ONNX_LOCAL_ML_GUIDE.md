@@ -140,11 +140,49 @@ AMSHA_EMBEDDING_ONNX_SPACE_REVISION=e8c3b32edf5434bc2275fc9bab85f82640a19130
 AMSHA_EMBED_DIMENSIONS=768
 ```
 
-Install the pinned development embedding bundle before enabling the slot:
+Install the pinned embedding bundle before enabling the slot. The source checkout
+uses Mise; the packaged binary has the same installer built in and does not need
+Mise or an LLM provider configured. Downloading requires an internet connection and about
+436 MB of free disk space:
 
 ```bash
+# Source checkout
 mise run models:install-mpnet
+
+# Packaged binary, run from the directory containing amsha-sqlite
+./amsha-sqlite models install mpnet
+./amsha-sqlite models verify mpnet
 ```
+
+The binary also provides `models list` and accepts `whisper`, `bge-reranker`, and
+`all` as install targets. `all` downloads about 1.6 GB. Run `./amsha-sqlite`
+without arguments for the command and option guide. Model management reads `.env`
+from the binary directory and stores bundles under `AMSHA_ONNX_MODEL_ROOT` (or
+`AMSHA_DATA_DIR/models` when the model root is not set).
+
+The binary shows download progress. If a download fails, it reports the failure,
+storage directory, and retry command. It cleans up the incomplete file when
+possible and keeps complete verified files; retry reuses those files and starts
+the failed file again. Check internet access, disk space, and write permission
+for the model directory.
+
+Model bundles are optional until their feature is enabled:
+
+- If MPNet is unavailable, remove `onnx` from
+  `AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS` or add another configured provider
+  such as `ollama`, `jina`, or `openai`. With another provider configured, Amsha
+  skips the unavailable ONNX slot and continues with the configured provider.
+- Whisper requires `AMSHA_ONNX_ENABLED=true` and
+  `AMSHA_STT_LOCAL_ENABLED=true`. Install it with
+  `./amsha-sqlite models install whisper`, or leave local transcription disabled.
+- BGE reranking is optional. If its bundle is unavailable, retrieval continues
+  with hybrid search; install it with `./amsha-sqlite models install bge-reranker`
+  or set `AMSHA_RAG_RERANKER_ENABLED=false`.
+
+Before Quarkus starts, the binary checks enabled local features for missing or
+incomplete bundles and prints an actionable preflight error. Startup failures
+also print the active file-log path when configured; see the logging guidance in
+the [Quick Start](./QUICK_START.md).
 
 Install the pinned cross-encoder reranking bundle (used only when reranking is enabled):
 

@@ -494,7 +494,7 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   # Keep redirected process output separate from the Quarkus file appender.
   # Writing both sinks to one file duplicates readiness records with different
   # prefixes and makes the exact-once JEV-12 check ambiguous.
-  export QUARKUS_LOG_FILE_ENABLE=true
+  export QUARKUS_LOG_FILE_ENABLED=true
   export QUARKUS_LOG_FILE_PATH="$log_file"
   # Publish the resolved path so validators can assert startup diagnostics
   # (for example the deferred decision-plane warning) without scraping stdout.

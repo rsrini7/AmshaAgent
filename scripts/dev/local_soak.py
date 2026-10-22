@@ -131,7 +131,7 @@ def build_child_env(env_file: Path, data_dir: Path, port: int, log_path: Path) -
     environment.update({
         "QUARKUS_HTTP_PORT": str(port),
         "AMSHA_DATA_DIR": str(data_dir),
-        "QUARKUS_LOG_FILE_ENABLE": "true",
+        "QUARKUS_LOG_FILE_ENABLED": "true",
         "QUARKUS_LOG_FILE_PATH": str(log_path),
         "AMSHA_TELEGRAM_ENABLED": "false",
         "OTEL_SDK_DISABLED": "true",

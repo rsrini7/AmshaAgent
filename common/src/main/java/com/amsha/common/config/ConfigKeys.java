@@ -23,6 +23,18 @@ public final class ConfigKeys {
     /** Selected LLM provider id (read as both a system property and an environment variable). */
     public static final String LLM_PROVIDER = "AMSHA_LLM_PROVIDER";
 
+    /** Environment variable controlling first-run system-secret seeding. */
+    public static final String AUTO_SEED_SECRETS_ENV = "AMSHA_AUTO_SEED_SECRETS";
+
+    /** MicroProfile property controlling first-run system-secret seeding. */
+    public static final String AUTO_SEED_SECRETS_PROPERTY = "amsha.auto-seed-secrets";
+
+    /** Environment variable enabling the Telegram channel. */
+    public static final String TELEGRAM_ENABLED = "AMSHA_TELEGRAM_ENABLED";
+
+    /** MicroProfile property enabling the Telegram channel. */
+    public static final String TELEGRAM_ENABLED_PROPERTY = "amsha.channel.telegram.enabled";
+
     // -- Provider credentials / endpoints ---------------------------------
 
     /** Cloudflare account id used to build the Workers AI endpoint. */
