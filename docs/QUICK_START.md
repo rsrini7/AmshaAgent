@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - **JDK 25** (Temurin or GraalVM)
-- **Docker or Podman** (optional, for sandbox isolation)
+- **Git** (to clone the repository)
+- **Rootless Podman** (optional, for sandboxed code execution; not needed in dev mode)
 - **Mise** (recommended for task automation)
 
 ## 30-Second Setup (Dev Mode)
@@ -12,13 +13,20 @@
 git clone https://github.com/rsrini7/AmshaAgent.git
 cd AmshaAgent
 
-# Copy and configure .env
+# Copy the configuration template, then edit .env before starting.
 cp .env.example .env
-# Edit .env. For a Groq development setup, set AMSHA_GROQ_API_KEY and the
-# required stable security values: AMSHA_VAULT_PEPPER, AMSHA_AUDIT_HMAC_KEY,
-# AMSHA_API_KEYS_INTERNAL, and AMSHA_AUTH_HMAC_KEY.
+```
 
-# Start in chat mode with hot reload
+For Groq, set `AMSHA_LLM_PROVIDER=groq` and `AMSHA_GROQ_API_KEY` in `.env`.
+The template selects `infinite-loop` by default. Replace the security-key
+placeholders for `AMSHA_VAULT_PEPPER`, `AMSHA_AUDIT_HMAC_KEY`,
+`AMSHA_API_KEYS_INTERNAL`, `AMSHA_API_KEYS_CI`, and `AMSHA_AUTH_HMAC_KEY` with
+separate values generated using `openssl rand -base64 32`. Keep them stable across
+restarts. See the [configuration reference](./CONFIGURATION.md) for keyless
+providers and all startup requirements.
+
+```bash
+# Start in chat mode with hot reload; dev mode runs without sandbox isolation.
 ./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
 ```
 

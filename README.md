@@ -59,16 +59,12 @@ responses.
 ## Quick Start
 
 ```bash
-# Prerequisites: JDK 25, Docker/Podman (optional for sandbox)
+# Prerequisites: JDK 25 and Git. Rootless Podman is optional for sandboxed code execution.
 git clone https://github.com/rsrini7/AmshaAgent.git
 cd AmshaAgent
 
-# Copy and edit .env (see docs/CONFIGURATION.md for all variables)
+# Copy the configuration template, then edit .env before starting.
 cp .env.example .env
-# At minimum for a Groq development setup: AMSHA_GROQ_API_KEY=gsk_...,
-# AMSHA_VAULT_PEPPER, AMSHA_AUDIT_HMAC_KEY, AMSHA_API_KEYS_INTERNAL, and
-# AMSHA_AUTH_HMAC_KEY must be set to strong stable values. See the configuration
-# reference for keyless providers and the complete startup requirements.
 
 # Dev mode (hot reload, no sandbox isolation)
 ./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
@@ -78,8 +74,15 @@ cp .env.example .env
 java --enable-native-access=ALL-UNNAMED -jar app/target/quarkus-app/quarkus-run.jar chat
 ```
 
-See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
+For a Groq setup, set `AMSHA_LLM_PROVIDER=groq` and `AMSHA_GROQ_API_KEY` in `.env`;
+the template defaults to the keyless `infinite-loop` provider. Also replace the
+security-key placeholders for `AMSHA_VAULT_PEPPER`, `AMSHA_AUDIT_HMAC_KEY`,
+`AMSHA_API_KEYS_INTERNAL`, `AMSHA_API_KEYS_CI`, and `AMSHA_AUTH_HMAC_KEY`. Generate
+each security value with `openssl rand -base64 32` and keep it stable across
+restarts. See [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) for keyless providers
+and the full configuration reference.
 
+See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
 ---
 
 ## Key Capabilities
