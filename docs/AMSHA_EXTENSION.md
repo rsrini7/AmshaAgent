@@ -953,4 +953,4 @@ If your new class is used reflectively at runtime (e.g., Jackson deserialization
 
 ---
 
-*Last updated: Amsha Agent V0.1.0 · Quarkus 3.39.3 · JDK 25 · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider)*
+*Last updated: Amsha Agent V0.1.0 · Quarkus 3.40.1.1 · JDK 25 · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider)*

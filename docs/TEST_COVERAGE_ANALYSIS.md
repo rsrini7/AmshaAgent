@@ -7,7 +7,7 @@
 > **UI companion snapshot (2026-09-30)**: Vitest recorded **195 passing tests**, 0 failures and 0 errors, with **59.26% line coverage** (4,838/8,163 lines). UI and Java percentages have different denominators and are measured by separate pipelines.
 > **Gate Ratchet**: Root `pom.xml` `<jacoco.minimum.line.coverage>` permanently locked at **`0.82`** (82.00%). These two badges are no longer hand-maintained: `mise run quality:coverage-sync` rewrites both from the same Surefire/Failsafe and JaCoCo reports the gate reads, and fails loudly if a badge cannot be found rather than leaving it stale. Because the task overwrites a committed number, it also **refuses to publish a smaller total**: a module that declares `src/test` but reported no tests (what `./mvnw -pl core test` leaves behind — 3,625 instead of 9,463) aborts the sync by name, as does any decrease below the published figure unless `--allow-decrease` is passed for a deliberate test removal.  
 > **Test Suite (2026-09-16)**: **8,301 passing Java tests** recorded across 28 child modules with 0 failures and 0 errors.
-> **Scope**: Multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator, JDK 25, Quarkus 3.39.3).  
+> **Scope**: Multi-module Maven reactor (28 modules / 29 reactor projects including the root aggregator, JDK 25, Quarkus 3.40.1.1).<br>
 > **Method**: Full-reactor test execution + JaCoCo 0.8.15 line/branch/method analysis, cross-referenced with a static test-reference scan.
 
 ---
@@ -2475,7 +2475,7 @@ indirect). **Reactor: 80.55% → 80.80%** (48,330 → 48,479 / 59,997), confirme
 
 | Class | Line | Why it cannot fire |
 |---|---|---|
-| `GovernedLangChainHttpClient` | 290 | `buildHttpRequest`'s `else { throw new IllegalArgumentException("Unsupported HTTP method: …") }`. In langchain4j **1.19.0** `HttpMethod` is a closed three-value enum (GET, POST, DELETE) and `HttpRequest.Builder.build()` rejects a null method (`IllegalArgumentException: method cannot be null`), so no value can reach the `else` |
+| `GovernedLangChainHttpClient` | 290 | `buildHttpRequest`'s `else { throw new IllegalArgumentException("Unsupported HTTP method: …") }`. In langchain4j **1.19.3** `HttpMethod` is a closed three-value enum (GET, POST, DELETE) and `HttpRequest.Builder.build()` rejects a null method (`IllegalArgumentException: method cannot be null`), so no value can reach the `else` |
 | `LiveProviderCatalogService` | 188, 189 | `catch (Exception _)` around `URI.create(probeUrl).getHost()`. `probeUrl` derives from `effBaseUrl`, which already passed `URI.create` at line 125, and appending one of the four real path suffixes cannot turn a valid URI invalid |
 
 The 188/189 finding is **measured, not assumed**. A throwaway `java Probe.java` enumerated 145 curated
@@ -2512,7 +2512,7 @@ metric. Recorded here as a known gap.
 - **A class re-defined via `defineClass` is invisible to JaCoCo.** Verify behaviour if you like, but do not expect
   the report to move. Check with a single-class run against a fresh `jacoco.exec` before investing in scaffolding.
 - **Check the resolved dependency version before declaring an enum closed.** `~/.m2` held five
-  `langchain4j-http-client` versions; the reactor resolves **1.19.0**, and only that version's `HttpMethod` decides
+  `langchain4j-http-client` versions; the reactor resolves **1.19.3**, and only that version's `HttpMethod` decides
   whether line 290 is reachable. `./mvnw -o -pl <module> dependency:tree -Dincludes=<g>:<a>` settles it in seconds.
 - **A literal-IP base URL never reaches the probe.** `LiveProviderCatalogService` rejects blocked literal addresses
   up front (`Custom base URL host is blocked: 127.0.0.1`), so a test that wants the Ollama no-auth arm must pass a

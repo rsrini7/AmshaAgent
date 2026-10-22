@@ -203,6 +203,6 @@
     <text x="90" y="636" fill="#c2c0b6">compile dependency</text>
     <line x1="250" y1="632" x2="290" y2="632" stroke="#9c9a92" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
     <text x="300" y="636" fill="#c2c0b6">optional / build-time / CDI-discovered</text>
-    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.39.3 · Governed LLM Transport · Health Cockpit · Read-Only DB · Model Arena</text>
+    <text x="40" y="658" fill="#888">28 modules · JDK 25 · Quarkus 3.40.1.1 · Governed LLM Transport · Health Cockpit · Read-Only DB · Model Arena</text>
   </g>
 </svg>
