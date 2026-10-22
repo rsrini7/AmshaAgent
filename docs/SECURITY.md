@@ -1,5 +1,7 @@
 # Security
 
+For private vulnerability disclosure, see the repository [security policy](../SECURITY.md).
+
 Amsha Agent is built with a defense-in-depth security posture. This document covers the cryptographic vault, sandbox isolation, audit chain, and governance system. For the architectural overview (agent loop, message pipeline, tool governance decision tree), see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ---

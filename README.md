@@ -1,6 +1,6 @@
 <div align="center">
   <h1>🛡️ Amsha Agent V0.1.0</h1>
-  <p><strong>A secure, stateful, and financially governed multi-agent AI kernel designed for enterprise deployment.</strong></p>
+  <p><strong>Self-hosted multi-agent AI platform built with Java 25 and Quarkus, featuring governed tool execution, session-isolated CDI state, optional rootless Podman sandboxing, and SQLite, PostgreSQL, and filesystem persistence.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
   ![Quarkus](https://img.shields.io/badge/Quarkus-3.40.1.1-blue.svg?style=flat&logo=quarkus)
@@ -8,6 +8,7 @@
   ![Native Image macOS tested](https://img.shields.io/badge/Native_Image-macOS_tested-orange.svg?style=flat&logo=graalvm)
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
+  [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
   ![Java Tests](https://img.shields.io/badge/Tests-9774_passed_%C2%B7_15_skipped_of_9789-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-86.58%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-201_passing-brightgreen.svg?style=flat)
@@ -26,7 +27,7 @@
 
 ---
 
-> **A self-hosted, production-grade agentic AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, Podman sandbox, hexagonal persistence (SQLite / PostgreSQL / FS). Runs as a single ~400 MB binary.
+> **A self-hosted multi-agent AI platform** — ReAct agent loop, 12 specialist personas, HITL governance, optional rootless Podman code sandbox, and hexagonal persistence (SQLite / PostgreSQL / filesystem). Runs as a single ~400 MB binary.
 
 **Stack**: JDK 25 · Quarkus 3.40.1.1 · LangChain4J 1.19.3 · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
 
@@ -283,7 +284,8 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 | Doc | What it covers |
 |-----|---------------|
-| [SECURITY.md](./docs/SECURITY.md) | Vault, sandbox isolation, audit chain, HITL governance, 10 guard layers |
+| [Security policy](./SECURITY.md) | How to report a security vulnerability privately |
+| [Security overview](./docs/SECURITY.md) | Vault, sandbox isolation, audit chain, HITL governance, and guard layers |
 
 ### 🧪 Testing
 
@@ -311,7 +313,10 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 |-----|---------------|
 | [FAQ.md](./docs/FAQ.md) | Architecture Q&A, rationale, operational guidance |
 | [AGENTS.md](./AGENTS.md) | Developer guide for AI coding agents — invariants, patterns, rules |
+| [LICENCE.md](./LICENCE.md) | MIT License |
 
 ---
 
-> **Last updated**: Amsha Agent V0.1.0 · Quarkus 3.40.1.1 · JDK 25 · 28 Maven modules · 21 tools · 20 reflexes · 22 LLM providers (21 external adapters plus the internal `infinite-loop` provider). Recorded test snapshot (Java 2026-09-29; UI 2026-09-30): 8,530 Java tests at 84.17% line coverage and 195 UI tests at 59.26% line coverage; re-run the clean commands in [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) for current values.
+> **Version:** Amsha Agent V0.1.0 · Quarkus 3.40.1.1 · JDK 25.
+>
+> The README badges show the maintained Java and UI headline test and coverage figures. [TESTING_GUIDE.md](./docs/TESTING_GUIDE.md) records dated run snapshots and the commands to reproduce them.

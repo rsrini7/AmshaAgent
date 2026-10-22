@@ -61,4 +61,4 @@ Include:
 - Screenshots or a short recording for UI changes.
 - Any configuration, migration, compatibility, or operational impact.
 
-Do not include secrets, private user data, generated native binaries, or unrelated formatting changes. For suspected security vulnerabilities, do not publish exploit details in a public issue; use the repository host's private vulnerability-reporting feature if enabled, or contact the maintainers privately.
+Do not include secrets, private user data, generated native binaries, or unrelated formatting changes. For suspected security vulnerabilities, do not publish exploit details in a public issue. Follow the repository [security policy](./SECURITY.md) to report them privately.
