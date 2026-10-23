@@ -116,8 +116,8 @@ public class AuditHashUtil {
         } catch (IllegalStateException | SecurityException e) {
             throw new IllegalStateException(
                     "Audit HMAC key unavailable. Chain integrity cannot be guaranteed. "
-                            + "This usually means AMSHA_VAULT_PEPPER has changed or the database is incompatible. "
-                            + "Ensure your pepper is correct, or delete 'amsha.db' to start fresh.",
+                            + "Verify AMSHA_VAULT_PEPPER matches the value used to create the stored data. "
+                            + "Restore the original pepper, or back up and move the data directory before starting with a fresh store.",
                     e);
         } catch (Exception e) {
             // Check if it's a shutdown race

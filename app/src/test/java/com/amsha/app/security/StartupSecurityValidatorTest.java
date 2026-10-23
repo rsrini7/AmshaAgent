@@ -14,6 +14,8 @@ import java.util.Optional;
 
 import com.amsha.common.config.ConfigKeys;
 import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,10 +34,12 @@ class StartupSecurityValidatorTest {
         setField("vault", vault);
     }
 
-    private void injectFields(String profile, String pepper, boolean hmacKeyExists) throws Exception {
+    private VaultKey injectFields(String profile, String pepper, boolean hmacKeyExists) throws Exception {
         setField("profile", profile);
         setField("pepper", pepper);
-        when(vault.systemKeyExists("amsha-audit-hmac-key")).thenReturn(hmacKeyExists);
+        VaultKey hmacKey = hmacKeyExists ? new VaultKey(new byte[32]) : null;
+        when(vault.retrieveSystemKey(VaultConstants.AUDIT_HMAC_KEY_NAME)).thenReturn(Optional.ofNullable(hmacKey));
+        return hmacKey;
     }
 
     private void setField(String fieldName, Object value) throws Exception {
@@ -106,13 +110,28 @@ class StartupSecurityValidatorTest {
 
     @Test
     void testProdProfile_validSecrets_doesNotThrow() throws Exception {
-        injectFields("prod", "prod-secure-pepper-000000000000000000000000000000", true);
+        VaultKey hmacKey = injectFields("prod", "prod-secure-pepper-000000000000000000000000000000", true);
         // Test: inject allowlist fields so the new allowlist check passes
         setField("telegramEnabled", true);
         setField("allowedUserIds", Optional.of(List.of("123")));
         setField("allowedUsers", Optional.empty());
 
         assertDoesNotThrow(() -> validator.onStart(new StartupEvent()));
+        assertTrue(hmacKey.isDestroyed());
+    }
+
+    @Test
+    void testProdProfile_undecryptableAuditKeyShowsRecoverySteps() throws Exception {
+        injectFields("prod", "prod-secure-pepper-000000000000000000000000000000", false);
+        when(vault.retrieveSystemKey(VaultConstants.AUDIT_HMAC_KEY_NAME))
+                .thenThrow(new SecurityException("ciphertext unavailable"));
+
+        IllegalStateException exception =
+                assertThrows(IllegalStateException.class, () -> validator.onStart(new StartupEvent()));
+
+        assertTrue(exception.getMessage().contains("AMSHA_VAULT_PEPPER"));
+        assertTrue(exception.getMessage().contains("Restore the original pepper"));
+        assertTrue(exception.getMessage().contains("Do not discard the backup"));
     }
 
     @Test

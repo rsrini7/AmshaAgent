@@ -12,6 +12,7 @@ import java.util.Optional;
 import com.amsha.common.config.ConfigKeys;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -74,11 +75,28 @@ public class StartupSecurityValidator {
     }
 
     private void validateHmacKey() {
-        if (!vault.systemKeyExists(VaultConstants.AUDIT_HMAC_KEY_NAME)) {
+        Optional<VaultKey> auditKey;
+        try {
+            auditKey = vault.retrieveSystemKey(VaultConstants.AUDIT_HMAC_KEY_NAME);
+        } catch (SecurityException | IllegalStateException e) {
+            throw new IllegalStateException(
+                    "[SECURITY] Stored audit HMAC key cannot be decrypted. "
+                            + "AMSHA_VAULT_PEPPER must match the value used to create this data. "
+                            + "Restore the original pepper to keep existing data. For a disposable install, "
+                            + "stop the process, back up and move the data directory, then start with a fresh one. "
+                            + "Do not discard the backup.",
+                    e);
+        }
+        if (auditKey.isEmpty()) {
             throw new IllegalStateException("FATAL: " + VaultConstants.AUDIT_HMAC_KEY_NAME
                     + " is not present in SecretVault. For first boot, set " + ConfigKeys.AUTO_SEED_SECRETS_ENV
                     + "=true with a stable " + VaultConstants.AUDIT_HMAC_KEY
                     + " value, or provision this key before deploying to production.");
+        }
+        try (VaultKey key = auditKey.get()) {
+            if (key.get().length == 0) {
+                throw new IllegalStateException("[SECURITY] Stored audit HMAC key is empty.");
+            }
         }
     }
 

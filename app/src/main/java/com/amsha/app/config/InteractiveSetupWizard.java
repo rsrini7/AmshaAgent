@@ -145,6 +145,10 @@ public class InteractiveSetupWizard {
                 if (spec.key().equals(VaultConstants.TOOLS_BRAVE_API_KEY)
                         && !promptOptionalModule(envFile, spec.key(), "Brave Search Integration")) continue;
 
+                if (spec.key().equals(VaultConstants.VAULT_PEPPER)) {
+                    System.err.println(
+                            "  Note: the vault pepper decrypts stored secrets. Keep the original when reusing a data directory.");
+                }
                 promptVariable(envFile, spec);
             }
         }

@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,7 +48,8 @@ class StartupSecurityValidatorUnknownProfileTest {
 
     @BeforeEach
     void setup() {
-        when(vault.systemKeyExists("amsha-audit-hmac-key")).thenReturn(true);
+        when(vault.retrieveSystemKey(VaultConstants.AUDIT_HMAC_KEY_NAME))
+                .thenReturn(Optional.of(new VaultKey(new byte[32])));
     }
 
     @Test
