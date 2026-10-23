@@ -4,6 +4,7 @@ import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { SseStatus } from '../api/sse';
 import { ROUTES } from '../routes';
+import { LOGO_SVG_SRC } from '../branding';
 import './arc-connection-badge';
 
 @customElement('arc-nav')
@@ -109,12 +110,10 @@ export class ArcNav extends LitElement {
       justify-content: center;
     }
     .logo-icon {
-      color: var(--accent);
-      font-size: 1.3rem;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 26px;
+      height: 26px;
+      display: block;
+      flex-shrink: 0;
     }
     .logo-text {
       background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
@@ -229,7 +228,7 @@ export class ArcNav extends LitElement {
     return html`
       <div class="nav-header">
         <div class="logo" title="${this.collapsed ? 'Amsha Agent' : ''}">
-          <span class="logo-icon">⬡</span>
+          <img class="logo-icon" src="${LOGO_SVG_SRC}" alt="" width="26" height="26" />
           ${!this.collapsed ? html`<span class="logo-text">Amsha Agent</span>` : nothing}
         </div>
         <button

@@ -9,6 +9,7 @@ import DOMPurify from 'dompurify';
 import { AgentTraceEvent } from '../types/trace';
 import { PendingApprovalDto } from '../api/types';
 import { ArcClient, readPersistedOwnerApiKey, readCsrfTokenFromCookie } from '../api/client';
+import { LOGO_SVG_SRC } from '../branding';
 import './arc-run-flow-card';
 import './arc-hitl-panel';
 
@@ -212,8 +213,10 @@ export class ArcChatInterface extends LitElement {
       width: 28px; height: 28px; border-radius: 50%;
       background: var(--bg-elevated); border: 1px solid var(--border);
       display: flex; align-items: center; justify-content: center;
-      color: var(--accent); font-size: 14px; flex-shrink: 0;
+      flex-shrink: 0;
     }
+
+    .avatar-img { width: 20px; height: 20px; display: block; }
 
     .bubble { 
       padding: 6px 12px; border-radius: 12px;
@@ -2063,7 +2066,7 @@ export class ArcChatInterface extends LitElement {
           ` : html`
             <div class="msg-group msg-group-${m.role === 'user' ? 'user' : 'assistant'}">
                <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
-                 ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> Amsha Agent` : 'You'}
+                 ${m.role === 'assistant' ? html`<div class="avatar"><img class="avatar-img" src="${LOGO_SVG_SRC}" alt="" width="20" height="20" /></div> Amsha Agent` : 'You'}
                </div>
                 <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">
                   ${m.role === 'user'
