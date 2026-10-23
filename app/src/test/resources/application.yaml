@@ -16,12 +16,12 @@ amsha:
   compaction:
     groq:
       api-key: "test-compaction-key"
-      model: "llama-3.1-8b-instant"
+      model: "openai/gpt-oss-20b"
       base-url: "https://api.groq.com/openai/v1"
   classifier:
     groq:
       api-key: "test-classifier-key"
-      model: "llama-3.1-8b-instant"
+      model: "openai/gpt-oss-20b"
       base-url: "https://api.groq.com/openai/v1"
   embedding:
     ollama:

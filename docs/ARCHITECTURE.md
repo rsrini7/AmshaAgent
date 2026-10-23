@@ -477,7 +477,7 @@ Core memory modifications are governed by a token-bucket rate limiter (e.g., max
 
 ### Context Compaction
 
-`CompactionHandler` (priority 60) runs before agent dispatch when token/message count exceeds threshold. Uses a separate lighter LLM (`llama-3.1-8b-instant` via Groq by default) to summarize older turns.
+`CompactionHandler` (priority 60) runs before agent dispatch when token/message count exceeds threshold. Uses a separate lighter LLM (`openai/gpt-oss-20b` via Groq by default) to summarize older turns.
 
 `CompactionService.compact()`:
 1. Preserves all raw historical turns to the **Recall Memory** store (`recall_messages`) before summarizing.
@@ -745,7 +745,7 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 
 | Provider | Default Model | Notes |
 |---|---|---|
-| Groq | `meta-llama/llama-4-scout-17b-16e-instruct` | Default; OpenAI-compatible API |
+| Groq | `openai/gpt-oss-120b` | Default; OpenAI-compatible API |
 | OpenAI | `gpt-4o-mini` | Official OpenAI API |
 | Ollama | `mistral-small:latest` | Local inference |
 | OpenRouter | `minimax/minimax-m3:free` | Unified multi-model API |

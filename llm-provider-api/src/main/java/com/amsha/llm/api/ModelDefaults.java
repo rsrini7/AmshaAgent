@@ -73,7 +73,7 @@ public final class ModelDefaults {
 
     // ── Default Model Names ──────────────────────────────────────
 
-    public static final String DEFAULT_GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+    public static final String DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
     public static final String DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
     public static final String DEFAULT_OLLAMA_MODEL = "mistral-small:latest";
     public static final String DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5";

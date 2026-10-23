@@ -1,6 +1,6 @@
 <div align="center">
   <img src="docs/assets/amsha_bee_shield.svg" width="96" height="96" alt="Amsha Agent logo: a crowned queen bee with attendant bees and honeycomb inside a dark shield">
-  <h1>Amsha Agent V0.1.0</h1>
+  <h1>Amsha Agent</h1>
   <p><em>The crowned queen bee honours Bhramari Devi, the Hindu bee goddess.</em></p>
   <p><strong>Self-hosted multi-agent AI platform built with Java 25 and Quarkus, featuring governed tool execution, session-isolated CDI state, optional rootless Podman sandboxing, and SQLite, PostgreSQL, and filesystem persistence.</strong></p>
 

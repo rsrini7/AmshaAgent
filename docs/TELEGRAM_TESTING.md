@@ -200,7 +200,7 @@ Send a free-text message (not a command). In logs:
 INFO  [IntentClassificationHandler] Classified message as role 'coordinator' for chat <chatId>
 ```
 
-The classifier uses `llama-3.1-8b-instant` via Groq (OpenAI-compatible namespace - accessed via
+The classifier uses `openai/gpt-oss-20b` via Groq (OpenAI-compatible namespace - accessed via
 `quarkus.langchain4j.openai.*` config, not `quarkus.langchain4j.groq.*`). Defaults to
 `coordinator` on any error or rate limit.
 
@@ -781,7 +781,7 @@ Logs show two separate `Resolved session` entries with the same UUID, processed 
 ## 13. Context Compaction & Long-Term Memory
 
 Compaction triggers when the chat window approaches the max (20 messages). The oldest messages
-are summarised by `ContextCompactionService` (using `llama-3.1-8b-instant`), stored in
+are summarised by `ContextCompactionService` (using `openai/gpt-oss-20b`), stored in
 `compaction_summary` (SQLite), and indexed in `compaction_summary_fts` (FTS5).
 
 ---

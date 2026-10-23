@@ -3,7 +3,7 @@
 - **Status**: Approved
 - **Date**: 2026-08-19
 - **Provider ID**: `groq`
-- **Default Model**: `meta-llama/llama-4-scout-17b-16e-instruct`
+- **Default Model**: `openai/gpt-oss-120b`
 - **Default Base URL**: `https://api.groq.com/openai/v1`
 - **Credential Type**: `API_KEY` (`AMSHA_GROQ_API_KEY`)
 

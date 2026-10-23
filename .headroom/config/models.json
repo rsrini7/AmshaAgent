@@ -1,7 +1,8 @@
 {
   "openai": {
     "context_limits": {
-      "meta-llama/llama-4-scout-17b-16e-instruct": 8192,
+      "openai/gpt-oss-120b": 131072,
+      "openai/gpt-oss-20b": 131072,
       "llama-3.1-8b-instant": 4096,
       "llama-3.3-70b-versatile": 8192,
       "deepseek/deepseek-chat-v3-0324": 8192,

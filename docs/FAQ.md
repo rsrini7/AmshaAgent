@@ -172,7 +172,7 @@ Spring AI is a strong alternative but is more opinionated toward the Spring ecos
 
 ### Q: Why Groq as the default LLM provider instead of OpenAI or a local model?
 
-Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. Amsha Agent V0.1.0 defaults to `meta-llama/llama-4-scout-17b-16e-instruct` for reasoning and `llama-3.1-8b-instant` for intent classification and compaction - both available on Groq.
+Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. Amsha Agent V0.1.0 defaults to `openai/gpt-oss-120b` for reasoning and `openai/gpt-oss-20b` for intent classification and compaction - both available on Groq.
 
 Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for fully air-gapped deployments. Switching is a two-line change in `application.yaml`.
 
@@ -214,7 +214,7 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 
 Direct access is intentionally narrow. If any persona requests a known tool it does not own, the loop delegates through `garuda` to the tool's owner; approval-resume and parallel-batch paths use the same rule. This preserves least privilege without granting every persona every tool.
 
-The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
+The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `openai/gpt-oss-20b` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 
 ---
 
@@ -492,7 +492,7 @@ The first response is an approval task. Approve it through the MCP approval endp
 
 Amsha Agent uses a rolling window `ChatMemoryStore` capped at `amsha.chat-memory.max-messages` (default 20). When the window fills, the `CompactionHandler` in the message pipeline triggers `ContextCompactionService` if the message count exceeds `amsha.memory.compaction.threshold` (default 5 above the keep-recent count).
 
-Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `CompactionSummaryDto`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`amsha-fts.db`) so it can be recalled later via `MemorySearchTool`.
+Compaction uses `openai/gpt-oss-20b` to summarize the oldest messages into a `CompactionSummaryDto`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`amsha-fts.db`) so it can be recalled later via `MemorySearchTool`.
 
 ---
 

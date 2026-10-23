@@ -431,7 +431,7 @@ amsha:
     groq:
       api-key: "${AMSHA_CLASSIFIER_GROQ_API_KEY:${AMSHA_GROQ_API_KEY:}}"
       base-url: "${AMSHA_CLASSIFIER_GROQ_BASE_URL:${AMSHA_GROQ_BASE_URL:https://api.groq.com/openai/v1}}"
-      model: "${AMSHA_CLASSIFIER_GROQ_MODEL:llama-3.1-8b-instant}"
+      model: "${AMSHA_CLASSIFIER_GROQ_MODEL:openai/gpt-oss-20b}"
     ollama:
       base-url: "${AMSHA_CLASSIFIER_OLLAMA_BASE_URL:${AMSHA_OLLAMA_BASE_URL:http://localhost:11434}}"
       model: "${AMSHA_CLASSIFIER_OLLAMA_MODEL:mistral-small:latest}"
@@ -807,7 +807,7 @@ amsha:
     groq:
       api-key: "${AMSHA_GROQ_API_KEY:}"
       base-url: "${AMSHA_GROQ_BASE_URL:https://api.groq.com/openai/v1}"
-      model: "${AMSHA_GROQ_MODEL:meta-llama/llama-4-scout-17b-16e-instruct}"
+      model: "${AMSHA_GROQ_MODEL:openai/gpt-oss-120b}"
     ollama:
       base-url: "${AMSHA_OLLAMA_BASE_URL:http://localhost:11434}"
       model: "${AMSHA_OLLAMA_MODEL:mistral-small:latest}"
@@ -965,7 +965,7 @@ amsha:
     groq:
       api-key: "${AMSHA_COMPACTION_GROQ_API_KEY:${AMSHA_GROQ_API_KEY:}}"
       base-url: "${AMSHA_COMPACTION_GROQ_BASE_URL:${AMSHA_GROQ_BASE_URL:https://api.groq.com/openai/v1}}"
-      model: "${AMSHA_COMPACTION_GROQ_MODEL:llama-3.1-8b-instant}"
+      model: "${AMSHA_COMPACTION_GROQ_MODEL:openai/gpt-oss-20b}"
     ollama:
       base-url: "${AMSHA_COMPACTION_OLLAMA_BASE_URL:${AMSHA_OLLAMA_BASE_URL:http://localhost:11434}}"
       model: "${AMSHA_COMPACTION_OLLAMA_MODEL:mistral-small:latest}"

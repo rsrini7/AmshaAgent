@@ -5,7 +5,7 @@
     "tag": "Fast inference",
     "icon": "G",
     "color": "#f55036",
-    "defaultModel": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "defaultModel": "openai/gpt-oss-120b",
     "embeddingCapable": false,
     "requiresApiKey": true,
     "hasBaseUrl": true

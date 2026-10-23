@@ -37,7 +37,7 @@ and CDI `Instance<T>` multi-bean discovery.
 
 | Provider | Provider ID | Default Model | Default Base URL |
 |---|---|---|---|
-| Groq | `groq` | `meta-llama/llama-4-scout-17b-16e-instruct` | `https://api.groq.com/openai/v1` |
+| Groq | `groq` | `openai/gpt-oss-120b` | `https://api.groq.com/openai/v1` |
 | OpenAI | `openai` | `gpt-4o-mini` | `https://api.openai.com/v1` |
 | Ollama | `ollama` | `mistral-small:latest` | `http://localhost:11434` |
 | OpenRouter | `openrouter` | `minimax/minimax-m3:free` | `https://openrouter.ai/api/v1` |

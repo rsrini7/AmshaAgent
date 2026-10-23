@@ -82,7 +82,7 @@ amsha.llm.persona.models.brahma.model=deepseek-coder-33b
 **Example:** Kailasa (debugging group) uses fast Llama:
 ```bash
 amsha.llm.group.models.kailasa.provider=groq
-amsha.llm.group.models.kailasa.model=meta-llama/llama-4-scout-17b-16e-instruct
+amsha.llm.group.models.kailasa.model=openai/gpt-oss-120b
 ```
 
 ### Multi-Model Failover
@@ -177,7 +177,7 @@ provider in the list has its own slot with independent health tracking.
 |---|---|---|
 | `AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS` | `groq,ollama` | Comma-separated compaction providers (slot order) |
 | `AMSHA_COMPACTION_GROQ_API_KEY` | — | Groq API key for the compaction slot |
-| `AMSHA_COMPACTION_GROQ_MODEL` | `llama-3.1-8b-instant` | Compaction model on Groq |
+| `AMSHA_COMPACTION_GROQ_MODEL` | `openai/gpt-oss-20b` | Compaction model on Groq |
 | `AMSHA_COMPACTION_GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq base URL for compaction |
 | `AMSHA_COMPACTION_GROQ_MAX_RETRIES` | `3` | Max retries for the Groq compaction slot |
 | `AMSHA_COMPACTION_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the compaction slot |
@@ -203,7 +203,7 @@ when all slots are exhausted.
 |---|---|---|
 | `AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | `groq,ollama` | Comma-separated classifier providers (slot order) |
 | `AMSHA_CLASSIFIER_GROQ_API_KEY` | — | Groq API key for the classifier slot |
-| `AMSHA_CLASSIFIER_GROQ_MODEL` | `llama-3.1-8b-instant` | Classifier model on Groq |
+| `AMSHA_CLASSIFIER_GROQ_MODEL` | `openai/gpt-oss-20b` | Classifier model on Groq |
 | `AMSHA_CLASSIFIER_GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq base URL for classifier |
 | `AMSHA_CLASSIFIER_GROQ_MAX_RETRIES` | `3` | Max retries for the Groq classifier slot |
 | `AMSHA_CLASSIFIER_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the classifier slot |
@@ -323,7 +323,7 @@ variables are required (replace `{PROVIDER}` with the provider name, e.g., `GROQ
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_GROQ_API_KEY` | — | Groq API key for the main LLM slot |
-| `AMSHA_GROQ_MODEL` | — | Groq model for the main LLM slot |
+| `AMSHA_GROQ_MODEL` | — | Groq model for the main LLM slot; choose one available to your account from the [Groq model list](https://console.groq.com/docs/models.md) |
 | `AMSHA_GEMINI_MODEL` | — | Gemini model for the main LLM slot |
 | `AMSHA_OPENROUTER_API_KEY` | — | OpenRouter API key for the main LLM slot |
 | `AMSHA_OPENROUTER_MODEL` | — | OpenRouter model for the main LLM slot |
