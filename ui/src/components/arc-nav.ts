@@ -85,6 +85,7 @@ export class ArcNav extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: var(--space-2);
       padding: var(--space-2) var(--space-2) var(--space-6);
       min-height: 36px;
     }
@@ -98,14 +99,17 @@ export class ArcNav extends LitElement {
     .logo {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: var(--space-2);
       font-weight: 700;
-      font-size: 1.25rem;
+      font-size: 1rem;
       letter-spacing: -0.02em;
+      flex: 1 1 auto;
       min-width: 0;
+      overflow: hidden;
       cursor: default;
     }
     :host([collapsed]) .logo {
+      flex: 0 0 auto;
       padding: 0;
       justify-content: center;
     }
@@ -116,6 +120,9 @@ export class ArcNav extends LitElement {
       flex-shrink: 0;
     }
     .logo-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
       background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -227,7 +234,7 @@ export class ArcNav extends LitElement {
   render() {
     return html`
       <div class="nav-header">
-        <div class="logo" title="${this.collapsed ? 'Amsha Agent' : ''}">
+        <div class="logo" title="Amsha Agent">
           <img class="logo-icon" src="${LOGO_SVG_SRC}" alt="" width="26" height="26" />
           ${!this.collapsed ? html`<span class="logo-text">Amsha Agent</span>` : nothing}
         </div>
