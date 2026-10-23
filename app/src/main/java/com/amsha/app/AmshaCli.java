@@ -8,11 +8,13 @@ import picocli.CommandLine.Command;
 import jakarta.inject.Inject;
 
 import java.io.PrintStream;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.amsha.app.cli.AttachCommand;
 import com.amsha.app.cli.ChatCommand;
 import com.amsha.app.cli.CliArguments;
 import com.amsha.app.cli.CliStartupFailureReporter;
+import com.amsha.app.cli.CliStartupRecovery;
 import com.amsha.app.cli.ModelInstaller;
 import com.amsha.app.cli.ModelsCommand;
 import com.amsha.app.config.AppBootstrap;
@@ -60,6 +62,8 @@ public class AmshaCli implements Runnable, QuarkusApplication {
 
     private static volatile int exitStatus = EXIT_STATUS_NOT_SET;
 
+    private static final AtomicReference<Throwable> QUARKUS_EXIT_FAILURE = new AtomicReference<>();
+
     private static void setExitStatus(int code) {
         exitStatus = code;
     }
@@ -105,12 +109,17 @@ public class AmshaCli implements Runnable, QuarkusApplication {
             }
 
             exitStatus = EXIT_STATUS_NOT_SET;
+            QUARKUS_EXIT_FAILURE.set(null);
             stage = "Quarkus runtime startup";
             String quarkusStage = stage;
             Quarkus.run(
                     AmshaCli.class,
                     (code, failure) -> handleQuarkusExit(code, failure, quarkusStage, System.err),
                     args);
+            Throwable quarkusFailure = QUARKUS_EXIT_FAILURE.get();
+            if (quarkusFailure != null) {
+                return CliStartupRecovery.offerRecovery(quarkusFailure, args, System.err);
+            }
             if (exitStatus == EXIT_STATUS_NOT_SET) {
                 CliStartupFailureReporter.report(
                         stage,
@@ -126,7 +135,7 @@ public class AmshaCli implements Runnable, QuarkusApplication {
             throw fatalFailure;
         } catch (Throwable failure) {
             CliStartupFailureReporter.report(stage, failure, System.err);
-            return 1;
+            return CliStartupRecovery.offerRecovery(failure, args, System.err);
         }
     }
 
@@ -140,6 +149,7 @@ public class AmshaCli implements Runnable, QuarkusApplication {
         if (failure != null) {
             CliStartupFailureReporter.report(stage, failure, errorOutput);
         }
+        QUARKUS_EXIT_FAILURE.set(failure);
         setExitStatus(code);
     }
 

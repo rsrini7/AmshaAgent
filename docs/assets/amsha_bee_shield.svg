@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="beeShieldTitle beeShieldDesc">
   <title id="beeShieldTitle">Amsha Agent logo</title>
-  <desc id="beeShieldDesc">A gold bee centred inside a dark heraldic shield with gold trim.</desc>
+  <desc id="beeShieldDesc">A crowned gold queen bee with two attendant bees over a faint honeycomb inside a dark heraldic shield with gold trim, honouring Bhramari Devi.</desc>
   <defs>
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFD166"/>
@@ -14,12 +14,40 @@
     <clipPath id="abdomen">
       <ellipse cx="64" cy="74" rx="13" ry="18"/>
     </clipPath>
+    <clipPath id="shieldInner">
+      <path d="M64 15 L105 28 V60 C105 87 86 104.5 64 113.5 C42 104.5 23 87 23 60 V28 Z"/>
+    </clipPath>
+    <pattern id="hexagons" width="28" height="49" patternUnits="userSpaceOnUse" patternTransform="scale(0.6) translate(6 2)">
+      <path d="M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z" fill="#F4A62A" fill-opacity="0.1"/>
+    </pattern>
   </defs>
 
   <path d="M64 6 L114 22 V60 C114 92 92 112 64 122 C36 112 14 92 14 60 V22 Z"
         fill="url(#shield)" stroke="url(#gold)" stroke-width="4" stroke-linejoin="round"/>
+  <g clip-path="url(#shieldInner)">
+    <rect x="10" y="10" width="108" height="108" fill="url(#hexagons)"/>
+  </g>
   <path d="M64 15 L105 28 V60 C105 87 86 104.5 64 113.5 C42 104.5 23 87 23 60 V28 Z"
         fill="none" stroke="#F4A62A" stroke-opacity="0.55" stroke-width="1.5"/>
+
+  <g transform="translate(38 40) rotate(18) scale(0.8)">
+    <g fill="#F7FBFF" fill-opacity="0.9" stroke="url(#gold)" stroke-width="0.9">
+      <ellipse cx="-3.8" cy="-0.5" rx="4.2" ry="2.3" transform="rotate(-32 -3.8 -0.5)"/>
+      <ellipse cx="3.8" cy="-0.5" rx="4.2" ry="2.3" transform="rotate(32 3.8 -0.5)"/>
+    </g>
+    <ellipse cx="0" cy="0.5" rx="3.2" ry="4.6" fill="url(#gold)"/>
+    <rect x="-3.2" y="-0.2" width="6.4" height="1.7" fill="#101820"/>
+    <circle cx="0" cy="-4.6" r="2" fill="url(#gold)"/>
+  </g>
+  <g transform="translate(90 40) rotate(-18) scale(0.8)">
+    <g fill="#F7FBFF" fill-opacity="0.9" stroke="url(#gold)" stroke-width="0.9">
+      <ellipse cx="-3.8" cy="-0.5" rx="4.2" ry="2.3" transform="rotate(-32 -3.8 -0.5)"/>
+      <ellipse cx="3.8" cy="-0.5" rx="4.2" ry="2.3" transform="rotate(32 3.8 -0.5)"/>
+    </g>
+    <ellipse cx="0" cy="0.5" rx="3.2" ry="4.6" fill="url(#gold)"/>
+    <rect x="-3.2" y="-0.2" width="6.4" height="1.7" fill="#101820"/>
+    <circle cx="0" cy="-4.6" r="2" fill="url(#gold)"/>
+  </g>
 
   <g fill="#F7FBFF" fill-opacity="0.9" stroke="url(#gold)" stroke-width="2">
     <ellipse cx="44" cy="58" rx="14" ry="7.5" transform="rotate(-34 44 58)"/>

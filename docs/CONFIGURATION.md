@@ -379,6 +379,10 @@ See `.mise/tasks/headroom/README.md` for setup and usage.
 | `AMSHA_PII_MODE` | `REDACT_AND_FORWARD` | PII mode: REDACT_AND_FORWARD, BLOCK_AND_NOTIFY, OFF |
 | `AMSHA_AUTO_SEED_SECRETS` | `false` | Set `true` on first boot with a new vault to seed the stable `AMSHA_AUDIT_HMAC_KEY` from the environment before startup validation; keep the key unchanged or pre-provision the vault, then disable if desired. Also seeds configured optional tool secrets. |
 
+### Lost vault pepper recovery
+
+If the configured `AMSHA_VAULT_PEPPER` cannot decrypt the stored audit key, restore the original pepper to keep existing data. For a local SQLite install, an interactive terminal offers `BACKUP` to move the configured `AMSHA_DATA_DIR` to a timestamped sibling directory, or `DELETE` to permanently erase that directory. Type the selected word to confirm; pressing Enter cancels. Stop other Amsha processes using the directory first. The native CLI restarts after a successful reset. Automatic first-boot seeding also requires `AMSHA_AUTO_SEED_SECRETS=true` and a stable Base64-encoded `AMSHA_AUDIT_HMAC_KEY` in `.env`. The selected action recursively affects `AMSHA_DATA_DIR`, including workspace or model paths located inside it. PostgreSQL and filesystem installs require separate recovery steps.
+
 ## Embedding
 
 Embedding uses a multi-slot infinite-loop failover. Each provider in the list

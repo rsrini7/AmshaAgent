@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.common.config.ConfigKeys;
+import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
 import com.amsha.security.api.VaultKey;
@@ -37,6 +38,9 @@ public class StartupSecurityValidator {
 
     @ConfigProperty(name = QUARKUS_PROFILE_PROPERTY)
     String profile;
+
+    @ConfigProperty(name = PersistenceBackend.PROPERTY, defaultValue = PersistenceBackend.SQLITE)
+    String persistenceBackend;
 
     @Inject
     SecretVault vault;
@@ -78,14 +82,14 @@ public class StartupSecurityValidator {
         Optional<VaultKey> auditKey;
         try {
             auditKey = vault.retrieveSystemKey(VaultConstants.AUDIT_HMAC_KEY_NAME);
-        } catch (SecurityException | IllegalStateException e) {
-            throw new IllegalStateException(
-                    "[SECURITY] Stored audit HMAC key cannot be decrypted. "
-                            + "AMSHA_VAULT_PEPPER must match the value used to create this data. "
-                            + "Restore the original pepper to keep existing data. For a disposable install, "
-                            + "stop the process, back up and move the data directory, then start with a fresh one. "
-                            + "Do not discard the backup.",
+        } catch (SecurityException e) {
+            throw new VaultUnlockFailureException(
+                    persistenceBackend,
+                    System.getProperty(
+                            ConfigKeys.DATA_DIR, System.getenv().getOrDefault(ConfigKeys.DATA_DIR, "./data")),
                     e);
+        } catch (IllegalStateException e) {
+            throw new IllegalStateException(VaultUnlockFailureException.DIAGNOSTIC, e);
         }
         if (auditKey.isEmpty()) {
             throw new IllegalStateException("FATAL: " + VaultConstants.AUDIT_HMAC_KEY_NAME
