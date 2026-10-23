@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 
 import com.amsha.common.config.ConfigKeys;
+import com.amsha.security.api.VaultConstants;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -244,6 +245,10 @@ class InteractiveSetupWizardTest {
 
     @Test
     void testHelperMethodsViaReflection() throws Exception {
+        String authHmacKey = VaultConstants.AUTH_HMAC_KEY;
+        assertTrue(InteractiveSetupWizard.isAutoGeneratableKey(authHmacKey));
+        assertTrue(InteractiveSetupWizard.isSensitiveKey(authHmacKey));
+
         Method llmKey = InteractiveSetupWizard.class.getDeclaredMethod("llmApiKeyForProvider", String.class);
         llmKey.setAccessible(true);
         assertEquals("AMSHA_OPENROUTER_API_KEY", llmKey.invoke(null, "openrouter"));

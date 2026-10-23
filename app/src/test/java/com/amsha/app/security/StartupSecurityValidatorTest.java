@@ -109,10 +109,24 @@ class StartupSecurityValidatorTest {
         injectFields("prod", "prod-secure-pepper-000000000000000000000000000000", true);
         // Test: inject allowlist fields so the new allowlist check passes
         setField("telegramEnabled", true);
-        setField("allowedUserIds", Optional.of(List.of(123L)));
+        setField("allowedUserIds", Optional.of(List.of("123")));
         setField("allowedUsers", Optional.empty());
 
         assertDoesNotThrow(() -> validator.onStart(new StartupEvent()));
+    }
+
+    @Test
+    void invalidTelegramUserIdShowsActionableStartupError() throws Exception {
+        injectFields("prod", "prod-secure-pepper-000000000000000000000000000000", true);
+        setField("telegramEnabled", true);
+        setField("allowedUserIds", Optional.of(List.of("<telegram-user-ids-comma-seperated>")));
+        setField("allowedUsers", Optional.empty());
+
+        IllegalStateException exception =
+                assertThrows(IllegalStateException.class, () -> validator.onStart(new StartupEvent()));
+
+        assertTrue(exception.getMessage().contains(ConfigKeys.TELEGRAM_ALLOWED_USER_IDS_ENV));
+        assertTrue(exception.getMessage().contains("comma-separated numeric Telegram user IDs"));
     }
 
     @Test

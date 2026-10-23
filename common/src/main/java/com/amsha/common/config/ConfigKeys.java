@@ -35,6 +35,15 @@ public final class ConfigKeys {
     /** MicroProfile property enabling the Telegram channel. */
     public static final String TELEGRAM_ENABLED_PROPERTY = "amsha.channel.telegram.enabled";
 
+    /** Environment variable containing comma-separated numeric Telegram user IDs. */
+    public static final String TELEGRAM_ALLOWED_USER_IDS_ENV = "AMSHA_TELEGRAM_ALLOWED_USER_IDS";
+    /** MicroProfile property containing numeric Telegram user IDs. */
+    public static final String TELEGRAM_ALLOWED_USER_IDS_PROPERTY = "amsha.channel.telegram.allowed-user-ids";
+    /** Environment variable containing the deprecated Telegram username allowlist. */
+    public static final String TELEGRAM_ALLOWED_USERS_ENV = "AMSHA_TELEGRAM_ALLOWED_USERS";
+    /** MicroProfile property containing the deprecated Telegram username allowlist. */
+    public static final String TELEGRAM_ALLOWED_USERS_PROPERTY = "amsha.channel.telegram.allowed-users";
+
     // -- Provider credentials / endpoints ---------------------------------
 
     /** Cloudflare account id used to build the Workers AI endpoint. */

@@ -37,9 +37,9 @@ import com.amsha.security.api.VaultConstants;
  */
 public class CliUtils {
 
-    private static final String TELEGRAM_ENABLED_ENV = "AMSHA_TELEGRAM_ENABLED";
-    private static final String TELEGRAM_ALLOWED_USER_IDS_ENV = "AMSHA_TELEGRAM_ALLOWED_USER_IDS";
-    private static final String TELEGRAM_ALLOWED_USERS_ENV = "AMSHA_TELEGRAM_ALLOWED_USERS";
+    private static final String TELEGRAM_ENABLED_ENV = ConfigKeys.TELEGRAM_ENABLED;
+    private static final String TELEGRAM_ALLOWED_USER_IDS_ENV = ConfigKeys.TELEGRAM_ALLOWED_USER_IDS_ENV;
+    private static final String TELEGRAM_ALLOWED_USERS_ENV = ConfigKeys.TELEGRAM_ALLOWED_USERS_ENV;
     private static final String VALUE_TRUE = Boolean.TRUE.toString();
     private static final String VALUE_NONE = "none";
     private static final String VALUE_FALSE = Boolean.FALSE.toString();
@@ -114,11 +114,11 @@ public class CliUtils {
                 TELEGRAM_ALLOWED_USER_IDS_ENV,
                 "Comma-separated numeric Telegram user IDs allowed to use the bot.",
                 "Find your user ID by messaging @userinfobot on Telegram.",
-                "Add:  AMSHA_TELEGRAM_ALLOWED_USER_IDS=123456789"),
+                "Add:  " + TELEGRAM_ALLOWED_USER_IDS_ENV + "=123456789"),
         new VarSpec(
                 TELEGRAM_ALLOWED_USERS_ENV,
                 "Comma-separated Telegram usernames (without @) allowed to use the bot.",
-                "Add:  AMSHA_TELEGRAM_ALLOWED_USERS=yourusername"),
+                "Add:  " + TELEGRAM_ALLOWED_USERS_ENV + "=yourusername"),
     };
 
     // -------------------------------------------------------------------------
@@ -356,8 +356,8 @@ public class CliUtils {
                     "        To enable: set these in your .env and run ./amsha attach (or amsha.exe attach):");
             System.err.println("          AMSHA_TELEGRAM_ENABLED=true");
             System.err.println("          TELEGRAM_BOT_TOKEN=<token from @BotFather>");
-            System.err.println("          AMSHA_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>");
-            System.err.println("          AMSHA_TELEGRAM_ALLOWED_USERS=<your @username without @>");
+            System.err.println("          " + TELEGRAM_ALLOWED_USER_IDS_ENV + "=<your numeric Telegram user ID>");
+            System.err.println("          " + TELEGRAM_ALLOWED_USERS_ENV + "=<your @username without @>");
             System.err.println("        Continuing in HTTP/MCP-only mode.");
             System.err.println();
             return;
@@ -382,8 +382,8 @@ public class CliUtils {
             if (hasToken && (!hasUserIds || !hasUsers)) {
                 System.err.println();
                 System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but access-control vars are missing.");
-                if (!hasUserIds) System.err.println("        - AMSHA_TELEGRAM_ALLOWED_USER_IDS is not set");
-                if (!hasUsers) System.err.println("        - AMSHA_TELEGRAM_ALLOWED_USERS is not set");
+                if (!hasUserIds) System.err.println("        - " + TELEGRAM_ALLOWED_USER_IDS_ENV + " is not set");
+                if (!hasUsers) System.err.println("        - " + TELEGRAM_ALLOWED_USERS_ENV + " is not set");
                 System.err.println("        Without these, the bot may respond to messages from anyone.");
                 System.err.println("        Find your user ID by messaging @userinfobot on Telegram.");
                 System.err.println();

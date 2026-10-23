@@ -1,5 +1,6 @@
 <div align="center">
-  <h1>🛡️ Amsha Agent V0.1.0</h1>
+  <img src="docs/assets/amsha_bee_shield.svg" width="96" height="96" alt="Amsha Agent logo: a gold bee inside a dark shield">
+  <h1>Amsha Agent V0.1.0</h1>
   <p><strong>Self-hosted multi-agent AI platform built with Java 25 and Quarkus, featuring governed tool execution, session-isolated CDI state, optional rootless Podman sandboxing, and SQLite, PostgreSQL, and filesystem persistence.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
@@ -9,7 +10,7 @@
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
-  ![Java Tests](https://img.shields.io/badge/Tests-9774_passed_%C2%B7_15_skipped_of_9789-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9778_passed_%C2%B7_15_skipped_of_9793-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-86.58%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-201_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-59.64%25-yellow.svg?style=flat)

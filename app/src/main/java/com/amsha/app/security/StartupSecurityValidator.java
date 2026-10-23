@@ -28,8 +28,8 @@ public class StartupSecurityValidator {
     private static final String DNS_TTL_DEFAULT = "30";
     private static final String VAULT_PEPPER_PROPERTY = "amsha.vault.pepper";
     private static final String QUARKUS_PROFILE_PROPERTY = "quarkus.profile";
-    private static final String TELEGRAM_ALLOWED_USER_IDS_PROPERTY = "amsha.channel.telegram.allowed-user-ids";
-    private static final String TELEGRAM_ALLOWED_USERS_PROPERTY = "amsha.channel.telegram.allowed-users";
+    private static final String TELEGRAM_ALLOWED_USER_IDS_PROPERTY = ConfigKeys.TELEGRAM_ALLOWED_USER_IDS_PROPERTY;
+    private static final String TELEGRAM_ALLOWED_USERS_PROPERTY = ConfigKeys.TELEGRAM_ALLOWED_USERS_PROPERTY;
 
     @ConfigProperty(name = VAULT_PEPPER_PROPERTY)
     String pepper;
@@ -44,7 +44,7 @@ public class StartupSecurityValidator {
     boolean telegramEnabled;
 
     @ConfigProperty(name = TELEGRAM_ALLOWED_USER_IDS_PROPERTY)
-    Optional<List<Long>> allowedUserIds;
+    Optional<List<String>> allowedUserIds;
 
     @ConfigProperty(name = TELEGRAM_ALLOWED_USERS_PROPERTY)
     Optional<List<String>> allowedUsers;
@@ -82,8 +82,27 @@ public class StartupSecurityValidator {
         }
     }
 
+    private static boolean isNumericTelegramUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        try {
+            Long.parseLong(userId.trim());
+            return true;
+        } catch (NumberFormatException _) {
+            return false;
+        }
+    }
+
     private void validateAllowlist() {
         boolean hasUserIds = allowedUserIds.isPresent() && !allowedUserIds.get().isEmpty();
+        if (hasUserIds && allowedUserIds.get().stream().anyMatch(userId -> !isNumericTelegramUserId(userId))) {
+            throw new IllegalStateException("[SECURITY] Invalid configuration for "
+                    + ConfigKeys.TELEGRAM_ALLOWED_USER_IDS_ENV
+                    + " ("
+                    + TELEGRAM_ALLOWED_USER_IDS_PROPERTY
+                    + "). Replace placeholders with comma-separated numeric Telegram user IDs, or disable Telegram.");
+        }
         boolean hasUsernames =
                 allowedUsers.isPresent() && allowedUsers.get().stream().anyMatch(s -> s != null && !s.isBlank());
 

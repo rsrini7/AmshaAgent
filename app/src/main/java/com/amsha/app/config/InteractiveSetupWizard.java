@@ -51,6 +51,7 @@ public class InteractiveSetupWizard {
             ConfigKeys.EMBEDDING_OPENAI_API_KEY,
             VaultConstants.VAULT_PEPPER,
             VaultConstants.AUDIT_HMAC_KEY,
+            VaultConstants.AUTH_HMAC_KEY,
             VaultConstants.API_KEYS_INTERNAL,
             VaultConstants.API_KEYS_CI,
             ConfigKeys.TELEGRAM_BOT_TOKEN,
@@ -80,6 +81,7 @@ public class InteractiveSetupWizard {
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
             VaultConstants.VAULT_PEPPER,
             VaultConstants.AUDIT_HMAC_KEY,
+            VaultConstants.AUTH_HMAC_KEY,
             VaultConstants.API_KEYS_INTERNAL,
             VaultConstants.API_KEYS_CI,
             VaultConstants.API_KEYS_ADMIN);
@@ -446,14 +448,13 @@ public class InteractiveSetupWizard {
     private static void promptVariable(Path envFile, VarSpec spec) {
         System.err.println("  ┌─ " + spec.key());
         System.err.println("  │  " + spec.description());
-        String prompt = "  └─ Enter value"
-                + (AUTO_GENERATABLE_KEYS.contains(spec.key()) ? " (Enter to auto-generate): " : ": ");
-        String value = SENSITIVE_KEYS.contains(spec.key())
+        String prompt = "  └─ Enter value" + (isAutoGeneratableKey(spec.key()) ? " (Enter to auto-generate): " : ": ");
+        String value = isSensitiveKey(spec.key())
                 ? readPasswordWithFallback(System.console(), prompt)
                 : readLineWithFallback(System.console(), prompt);
 
         if (value == null || value.isBlank()) {
-            if (AUTO_GENERATABLE_KEYS.contains(spec.key())) {
+            if (isAutoGeneratableKey(spec.key())) {
                 value = generateRandomValue();
                 System.err.println("     ✓ Auto-generated");
             } else {
@@ -471,6 +472,14 @@ public class InteractiveSetupWizard {
     }
 
     @SuppressWarnings("java:S2119")
+    static boolean isAutoGeneratableKey(String key) {
+        return AUTO_GENERATABLE_KEYS.contains(key);
+    }
+
+    static boolean isSensitiveKey(String key) {
+        return SENSITIVE_KEYS.contains(key);
+    }
+
     private static String generateRandomValue() {
         byte[] bytes = new byte[32];
         // Instantiate SecureRandom locally — NOT as a static field.

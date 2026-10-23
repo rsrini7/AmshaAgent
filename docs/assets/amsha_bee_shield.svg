@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="beeShieldTitle beeShieldDesc">
+  <title id="beeShieldTitle">Amsha Agent logo</title>
+  <desc id="beeShieldDesc">A gold bee centred inside a dark heraldic shield with gold trim.</desc>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD166"/>
+      <stop offset="0.5" stop-color="#F4A62A"/>
+      <stop offset="1" stop-color="#D9820B"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B2733"/>
+      <stop offset="1" stop-color="#0D141B"/>
+    </linearGradient>
+    <clipPath id="abdomen">
+      <ellipse cx="64" cy="74" rx="13" ry="18"/>
+    </clipPath>
+  </defs>
+
+  <path d="M64 6 L114 22 V60 C114 92 92 112 64 122 C36 112 14 92 14 60 V22 Z"
+        fill="url(#shield)" stroke="url(#gold)" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M64 15 L105 28 V60 C105 87 86 104.5 64 113.5 C42 104.5 23 87 23 60 V28 Z"
+        fill="none" stroke="#F4A62A" stroke-opacity="0.55" stroke-width="1.5"/>
+
+  <g fill="#F7FBFF" fill-opacity="0.9" stroke="url(#gold)" stroke-width="2">
+    <ellipse cx="44" cy="58" rx="14" ry="7.5" transform="rotate(-34 44 58)"/>
+    <ellipse cx="84" cy="58" rx="14" ry="7.5" transform="rotate(34 84 58)"/>
+  </g>
+
+  <ellipse cx="64" cy="74" rx="13" ry="18" fill="url(#gold)"/>
+  <g clip-path="url(#abdomen)" fill="#101820">
+    <rect x="49" y="63" width="30" height="6.5"/>
+    <rect x="49" y="74" width="30" height="6.5"/>
+    <rect x="49" y="85" width="30" height="6.5"/>
+  </g>
+
+  <path d="M64 96 L61.5 90.5 H66.5 Z" fill="#B8760A"/>
+
+  <circle cx="64" cy="48" r="8" fill="url(#gold)"/>
+  <circle cx="61" cy="47" r="1.7" fill="#101820"/>
+  <circle cx="67" cy="47" r="1.7" fill="#101820"/>
+
+  <g fill="none" stroke="url(#gold)" stroke-width="2.2" stroke-linecap="round">
+    <path d="M60 42 C57 35 53 32 49 33"/>
+    <path d="M68 42 C71 35 75 32 79 33"/>
+  </g>
+
+  <g stroke="#8A5A00" stroke-width="0.8" stroke-linejoin="round">
+    <path d="M56.5 38.5 L57.6 27.5 L60.8 32 L64 26 L67.2 32 L70.4 27.5 L71.5 38.5 Z" fill="url(#gold)"/>
+    <rect x="56.5" y="38.5" width="15" height="2.6" rx="1" fill="#B8760A"/>
+    <circle cx="57.6" cy="26.8" r="1.4" fill="url(#gold)"/>
+    <circle cx="64" cy="25.2" r="1.4" fill="url(#gold)"/>
+    <circle cx="70.4" cy="26.8" r="1.4" fill="url(#gold)"/>
+  </g>
+</svg>

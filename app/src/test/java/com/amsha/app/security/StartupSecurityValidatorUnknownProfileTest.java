@@ -55,7 +55,7 @@ class StartupSecurityValidatorUnknownProfileTest {
 
         real.profile = "production"; // typo - not in denylist
         real.pepper = "dev-pepper-insecure";
-        real.allowedUserIds = Optional.of(List.of(123L));
+        real.allowedUserIds = Optional.of(List.of("123"));
         real.allowedUsers = Optional.empty();
 
         assertThrows(IllegalStateException.class, () -> real.onStart(new StartupEvent()));
