@@ -119,12 +119,15 @@ public class CliUtils {
                 "3. Copy the token and add:  TELEGRAM_BOT_TOKEN=123456:ABCdef..."),
         new VarSpec(
                 TELEGRAM_ALLOWED_USER_IDS_ENV,
-                "Comma-separated numeric Telegram user IDs allowed to use the bot.",
-                "Find your user ID by messaging @userinfobot on Telegram.",
+                "Numeric Telegram account IDs, not visible @usernames. IDs provide stronger account-level protection; "
+                        + "when any IDs are set, only matching IDs are allowed and the username list is ignored. "
+                        + "Find your ID by messaging @userinfobot.",
+                "Find your numeric Telegram account ID by messaging @userinfobot; do not enter your visible @username here.",
                 "Add:  " + TELEGRAM_ALLOWED_USER_IDS_ENV + "=123456789"),
         new VarSpec(
                 TELEGRAM_ALLOWED_USERS_ENV,
-                "Comma-separated Telegram usernames (without @) allowed to use the bot.",
+                "Comma-separated public Telegram usernames (without @). Used only when no numeric user IDs are set; "
+                        + "usernames can change.",
                 "Add:  " + TELEGRAM_ALLOWED_USERS_ENV + "=yourusername"),
     };
 

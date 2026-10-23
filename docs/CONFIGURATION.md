@@ -522,8 +522,8 @@ schema) and must match the model used by every active provider.
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | `mock-telegram-token` | Telegram bot token from @BotFather |
 | `AMSHA_TELEGRAM_ENABLED` | `false` | Enable Telegram bot |
-| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | — | Comma-separated numeric Telegram user IDs |
-| `AMSHA_TELEGRAM_ALLOWED_USERS` | `mock-telegram-user` | Comma-separated @usernames |
+| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | — | Numeric Telegram account IDs. When set, only matching IDs are allowed and usernames are ignored. Find an ID via @userinfobot. |
+| `AMSHA_TELEGRAM_ALLOWED_USERS` | `mock-telegram-user` | Public usernames without `@`; used only when no numeric IDs are configured. Usernames can change. |
 | `AMSHA_TELEGRAM_BASE_URI` | `https://api.telegram.org` | Telegram Bot API base URI for getFile and file downloads |
 | `AMSHA_CHANNEL_TELEGRAM_MAX_LENGTH` | `4096` | Max Telegram message length |
 

@@ -412,7 +412,9 @@ public class InteractiveSetupWizard {
     private static void promptVariable(Path envFile, VarSpec spec) {
         System.err.println("  ┌─ " + spec.key());
         System.err.println("  │  " + spec.description());
-        String prompt = "  └─ Enter value" + (isAutoGeneratableKey(spec.key()) ? " (Enter to auto-generate): " : ": ");
+        String prompt = "  └─ Enter value"
+                + (isSensitiveKey(spec.key()) ? " (input is being read; characters are hidden)" : "")
+                + (isAutoGeneratableKey(spec.key()) ? " (Enter to auto-generate): " : ": ");
         String value = isSensitiveKey(spec.key())
                 ? readPasswordWithFallback(System.console(), prompt)
                 : readLineWithFallback(System.console(), prompt);

@@ -755,11 +755,11 @@ Telegram's MarkdownV2 format requires escaping every special character (`_`, `*`
 
 ### Q: What happens when a Telegram user I have not allowlisted sends a message?
 
-`TelegramAllowlistGuard` is evaluated in the `AllowlistHandler` at the start of the `MessagePipeline`. If the user's Telegram user ID or username is not in `AMSHA_TELEGRAM_ALLOWED_USER_IDS` / `AMSHA_TELEGRAM_ALLOWED_USERS`, the message is rejected before it reaches the intent classifier or agent loop.
+`TelegramAllowlistGuard` is evaluated in the `AllowlistHandler` at the start of the `MessagePipeline`. When `AMSHA_TELEGRAM_ALLOWED_USER_IDS` is configured, only matching numeric account IDs are allowed; the public username list is ignored. `AMSHA_TELEGRAM_ALLOWED_USERS` is a legacy fallback used only when no numeric IDs are configured. A rejected message is stopped before it reaches the intent classifier or agent loop.
 
 If `amsha.channel.telegram.silent-block=false` (default), the user receives the configured `block-response` message (default: `⛔ Access denied.`). If `silent-block=true`, the message is dropped silently with no reply - useful when you do not want to reveal that the bot is running.
 
-An empty allowlist (`AMSHA_TELEGRAM_ALLOWED_USERS=`) allows all users - this is the open-access mode used in development.
+When both allowlists are empty, all users can interact. This open-access mode is used in development.
 
 ---
 

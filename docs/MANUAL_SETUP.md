@@ -309,9 +309,12 @@ AMSHA_AUTO_SEED_SECRETS=true
 ```env
 AMSHA_TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
-AMSHA_TELEGRAM_ALLOWED_USER_IDS=123456789          # numeric IDs from @userinfobot
-AMSHA_TELEGRAM_ALLOWED_USERS=yourusername          # without @
+AMSHA_TELEGRAM_ALLOWED_USER_IDS=123456789          # stable numeric account ID from @userinfobot
+# Optional legacy fallback; use only when numeric user IDs are not configured:
+# AMSHA_TELEGRAM_ALLOWED_USERS=yourusername         # public username, without @
 ```
+
+Numeric Telegram user IDs identify accounts and differ from public, changeable `@usernames`. When the ID list is set, it is authoritative: only matching IDs can use the bot and the username list is ignored. The username list is a fallback for setups that do not configure numeric IDs.
 
 Keep `AMSHA_TELEGRAM_ENABLED=false` when Telegram is not in use. Enable it only
 after replacing the bot token and numeric user ID placeholders with valid values.
@@ -1018,8 +1021,8 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `AMSHA_CORS_ORIGINS` | Optional | `http://localhost:3000` | Comma-separated CORS origins. |
 | `AMSHA_TELEGRAM_ENABLED` | Optional | `true` | Set `false` if not using Telegram. |
 | `TELEGRAM_BOT_TOKEN` | attach only | - | From @BotFather. |
-| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | attach only | - | Comma-separated numeric IDs. |
-| `AMSHA_TELEGRAM_ALLOWED_USERS` | attach only | - | Comma-separated usernames (no @). |
+| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | attach only | - | Numeric Telegram account IDs; when set, only matching IDs are allowed. |
+| `AMSHA_TELEGRAM_ALLOWED_USERS` | attach only | - | Public usernames without `@`; fallback only when no numeric IDs are configured. |
 | `QUARKUS_PROFILE` | Optional | `prod` | `dev` \| `test` \| `prod` \| `cli` |
 | `AMSHA_RAG_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Optional | `http://localhost:4317` | OTLP trace endpoint. |
