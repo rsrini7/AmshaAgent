@@ -3,8 +3,11 @@ package com.amsha.app.cli;
 import java.io.PrintStream;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.common.util.SecretRedactor;
@@ -34,6 +37,8 @@ public final class CliStartupFailureReporter {
     private static final String LOG_FILE_TEST = "amsha-test-sqlite.log";
     private static final String DEFAULT_PROFILE = PROFILE_PROD;
     private static final String DEFAULT_LOG_FILE = LOG_FILE_PROD;
+    private static final String SECURITY_DIAGNOSTIC_PREFIX = "[SECURITY]";
+    private static final String FATAL_DIAGNOSTIC_PREFIX = "FATAL:";
 
     private static final Map<String, String> PROFILE_LOG_FILES = Map.of(
             PROFILE_CLI, LOG_FILE_CLI,
@@ -109,6 +114,23 @@ public final class CliStartupFailureReporter {
         if (failure == null) {
             return "No exception details were provided.";
         }
-        return SecretRedactor.redact(LogUtil.rootMessage(new IllegalStateException(failure)));
+        String diagnostic = startupDiagnosticMessage(failure);
+        if (diagnostic == null) {
+            diagnostic = LogUtil.rootMessage(new IllegalStateException(failure));
+        }
+        return SecretRedactor.redact(diagnostic);
+    }
+
+    private static String startupDiagnosticMessage(Throwable failure) {
+        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Throwable current = failure; current != null && visited.add(current); current = current.getCause()) {
+            String message = current.getMessage();
+            if (message != null
+                    && (message.startsWith(SECURITY_DIAGNOSTIC_PREFIX)
+                            || message.startsWith(FATAL_DIAGNOSTIC_PREFIX))) {
+                return message;
+            }
+        }
+        return null;
     }
 }

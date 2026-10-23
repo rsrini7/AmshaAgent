@@ -71,6 +71,25 @@ class AmshaCliTest {
         }
     }
 
+    @Test
+    void startupFailurePreservesActionableSecurityDiagnostic() {
+        String securityMessage = "[SECURITY] Stored audit HMAC key cannot be decrypted. "
+                + "AMSHA_VAULT_PEPPER must match the value used to create this data. "
+                + "Restore the original pepper to keep existing data.";
+        Throwable cipherFailure =
+                new SecurityException("decryption failed", new IllegalStateException("mac check failed"));
+        Throwable startupDiagnostic = new IllegalStateException(securityMessage, cipherFailure);
+        Throwable quarkusFailure = new IllegalStateException("Quarkus startup wrapper", startupDiagnostic);
+        ByteArrayOutputStream error = new ByteArrayOutputStream();
+
+        CliStartupFailureReporter.report(
+                "Quarkus runtime startup", quarkusFailure, new PrintStream(error, true, StandardCharsets.UTF_8));
+
+        String output = error.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains(securityMessage), output);
+        assertFalse(output.contains("mac check failed"), output);
+    }
+
     private static void restoreSystemProperty(String name, String value) {
         if (value == null) {
             System.clearProperty(name);
