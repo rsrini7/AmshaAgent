@@ -477,7 +477,7 @@ Core memory modifications are governed by a token-bucket rate limiter (e.g., max
 
 ### Context Compaction
 
-`CompactionHandler` (priority 60) runs before agent dispatch when token/message count exceeds threshold. Uses a separate lighter LLM (`openai/gpt-oss-20b` via Groq by default) to summarize older turns.
+`CompactionHandler` (priority 60) runs before agent dispatch when the token/message count exceeds a threshold. It uses a separately configured compaction provider and model. When the `infinite-loop` provider is selected, the compaction provider order comes from `AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS`.
 
 `CompactionService.compact()`:
 1. Preserves all raw historical turns to the **Recall Memory** store (`recall_messages`) before summarizing.
@@ -743,9 +743,9 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 
 ## LLM Providers
 
-| Provider | Default Model | Notes |
+| Provider | Provider Model Fallback | Notes |
 |---|---|---|
-| Groq | `openai/gpt-oss-120b` | Default; OpenAI-compatible API |
+| Groq | `openai/gpt-oss-120b` | OpenAI-compatible API |
 | OpenAI | `gpt-4o-mini` | Official OpenAI API |
 | Ollama | `mistral-small:latest` | Local inference |
 | OpenRouter | `minimax/minimax-m3:free` | Unified multi-model API |
@@ -764,6 +764,9 @@ See [SETUP.md](./SETUP.md) for detailed backend switching instructions.
 | LlamaCpp | `qwen3` | Local inference via OpenAI-compatible API on port 9000 |
 | Generic OpenAI | `gpt-4o-mini` | Any OpenAI-compatible endpoint |
 | Infinite Loop | Multi-slot | Quality tracking + cooldown between providers |
+
+These are provider-specific model fallbacks used when that provider is selected
+without a model override. Amsha does not choose a provider automatically.
 
 The **compaction model** is separate — always a lighter/cheaper model regardless of reasoning provider.
 

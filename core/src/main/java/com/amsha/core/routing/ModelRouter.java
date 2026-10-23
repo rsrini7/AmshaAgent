@@ -95,7 +95,7 @@ public class ModelRouter {
     @ConfigProperty(name = LlmConfigKeys.PROFILE_ROUTING_ENABLED, defaultValue = "false")
     boolean profileRoutingEnabled;
 
-    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.DEFAULT_PROVIDER)
     String globalProvider;
 
     @ConfigProperty(name = LlmConfigKeys.MODEL)

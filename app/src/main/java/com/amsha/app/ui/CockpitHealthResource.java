@@ -65,7 +65,7 @@ public class CockpitHealthResource {
     @Any
     Instance<AgentChatModelProvider> providers;
 
-    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.DEFAULT_PROVIDER)
     String defaultProviderName;
 
     @Context

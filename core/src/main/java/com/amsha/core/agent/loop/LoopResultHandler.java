@@ -94,11 +94,8 @@ public class LoopResultHandler {
         agentSseService.publish(
                 sessionId,
                 new AgentSseService.AgentStatusEvent(
-                        sessionId,
-                        canonicalRole,
-                        CheckpointStatus.AWAITING_RETRY.name(),
-                        Instant.now(),
-                        (long) awaitingRetry.retryAfterMs()));
+                        sessionId, canonicalRole, CheckpointStatus.AWAITING_RETRY.name(), Instant.now(), (long)
+                                awaitingRetry.retryAfterMs()));
     }
 
     public void updateStoreForTerminal(

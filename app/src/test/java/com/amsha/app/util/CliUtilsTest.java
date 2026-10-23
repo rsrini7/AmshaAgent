@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -274,10 +275,8 @@ class CliUtilsTest {
     }
 
     @Test
-    void llmKeySpecFor_unknownDefaultsToGroq() {
-        assertEquals(
-                "AMSHA_GROQ_API_KEY",
-                ProviderKeySpecs.llmKeySpecFor("something-else").key());
+    void llmKeySpecFor_unknownReturnsNull() {
+        assertNull(ProviderKeySpecs.llmKeySpecFor("something-else"));
     }
 
     // -----------------------------------------------------------------------
@@ -435,9 +434,11 @@ class CliUtilsTest {
         for (String k : PER_PROVIDER_KEYS) System.setProperty(k, "test-value-123");
         for (String k : TELEGRAM_KEYS) System.setProperty(k, "test-value-123");
         for (String k : OPTIONAL_TOOL_KEYS) System.setProperty(k, "test-value-123");
+        // Explicitly select a provider for the complete-config fixture.
+        System.setProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ);
         // Provider key
         System.setProperty(ConfigKeys.GROQ_API_KEY, "gsk_test123");
-        // Default slot providers (groq for compaction/classifier, ollama for embedding)
+        // Explicit compaction/classifier providers (Groq) and the local embedding provider
         // already covered by the COMPACTION_GROQ / CLASSIFIER_GROQ / embedding keys
         // in PER_PROVIDER_KEYS — nothing else to do.
     }

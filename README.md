@@ -76,15 +76,7 @@ cp .env.example .env
 java --enable-native-access=ALL-UNNAMED -jar app/target/quarkus-app/quarkus-run.jar chat
 ```
 
-For a Groq setup, set `AMSHA_LLM_PROVIDER=groq` and `AMSHA_GROQ_API_KEY` in `.env`;
-the template defaults to the keyless `infinite-loop` provider. Also replace the
-security-key placeholders for `AMSHA_VAULT_PEPPER`, `AMSHA_AUDIT_HMAC_KEY`,
-`AMSHA_API_KEYS_INTERNAL`, `AMSHA_API_KEYS_CI`, and `AMSHA_AUTH_HMAC_KEY`. Generate
-each security value with `openssl rand -base64 32` and keep it stable across
-restarts. See [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) for keyless providers
-and the full configuration reference.
-
-See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
+No LLM provider is selected automatically. The first-run CLI setup prompts you to choose one; for non-interactive setups, set `AMSHA_LLM_PROVIDER` explicitly. For example, to use Groq, set `AMSHA_LLM_PROVIDER=groq` and `AMSHA_GROQ_API_KEY` in `.env`. Local providers such as Ollama and OMLX are also available. Replace the security-key placeholders `AMSHA_VAULT_PEPPER`, `AMSHA_AUDIT_HMAC_KEY`, `AMSHA_API_KEYS_INTERNAL`, `AMSHA_API_KEYS_CI`, and `AMSHA_AUTH_HMAC_KEY`. Generate security values with `openssl rand -base64 32` and keep them stable across restarts. See [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) for provider options and the full configuration reference, and [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup.
 ---
 
 ## Key Capabilities

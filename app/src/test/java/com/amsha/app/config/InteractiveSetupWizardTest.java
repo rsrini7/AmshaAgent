@@ -113,9 +113,9 @@ class InteractiveSetupWizardTest {
         ensure.invoke(null, envFile);
 
         String content = Files.readString(envFile);
-        assertTrue(content.contains("AMSHA_INFINITE_LOOP_LLM_PROVIDERS=omlx,groq,openrouter"));
-        assertTrue(content.contains("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS=groq,ollama"));
-        assertTrue(content.contains("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS=groq,ollama"));
+        assertTrue(content.contains("AMSHA_INFINITE_LOOP_LLM_PROVIDERS=omlx,ollama"));
+        assertTrue(content.contains("AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS=omlx,ollama"));
+        assertTrue(content.contains("AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS=omlx,ollama"));
         assertFalse(content.contains("AMSHA_INFINITE_LOOP_LLM_PROVIDERS=infinite-loop"));
     }
 

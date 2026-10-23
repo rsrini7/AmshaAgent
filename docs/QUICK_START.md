@@ -17,19 +17,16 @@ cd AmshaAgent
 cp .env.example .env
 ```
 
-For Groq, set `AMSHA_LLM_PROVIDER=groq` and `AMSHA_GROQ_API_KEY` in `.env`.
-The template selects `infinite-loop` by default. Replace the security-key
-placeholders for `AMSHA_VAULT_PEPPER`, `AMSHA_AUDIT_HMAC_KEY`,
-`AMSHA_API_KEYS_INTERNAL`, `AMSHA_API_KEYS_CI`, and `AMSHA_AUTH_HMAC_KEY` with
-separate values generated using `openssl rand -base64 32`. Keep them stable across
-restarts. See the [configuration reference](./CONFIGURATION.md) for keyless
-providers and all startup requirements.
+Amsha does not select an LLM provider automatically. The first-run CLI setup asks you to choose one. For a non-interactive setup, set `AMSHA_LLM_PROVIDER` and the matching provider credentials in `.env`. For example, Groq uses `AMSHA_LLM_PROVIDER=groq` and `AMSHA_GROQ_API_KEY`; local providers such as Ollama and OMLX do not require a hosted API key. See the [configuration reference](./CONFIGURATION.md) for supported providers and their settings.
 
-The template enables `AMSHA_AUTO_SEED_SECRETS=true` for a fresh local data
-directory. On first boot this stores the stable audit key in the vault before
-startup validation. Keep the value stable; if you already provisioned the vault,
-you can turn auto-seeding off. When startup fails, the binary prints the reason
-and the diagnostic log path in the terminal.
+Replace the security-key placeholders `AMSHA_VAULT_PEPPER`,
+`AMSHA_AUDIT_HMAC_KEY`, `AMSHA_API_KEYS_INTERNAL`, `AMSHA_API_KEYS_CI`, and
+`AMSHA_AUTH_HMAC_KEY` with separate values generated using
+`openssl rand -base64 32`. Keep them stable across restarts. The template enables
+`AMSHA_AUTO_SEED_SECRETS=true` for a local data directory; on first boot, Amsha
+stores a stable audit key in the vault before startup validation. Keep the vault
+pepper stable after data has been created. If startup fails, the binary prints
+its reason and diagnostic log path in the terminal.
 
 ```bash
 # Start in chat mode with hot reload; dev mode runs without sandbox isolation.

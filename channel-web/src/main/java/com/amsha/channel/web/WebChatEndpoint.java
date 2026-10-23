@@ -138,8 +138,7 @@ public class WebChatEndpoint {
         }
     }
 
-    private void setupUnauthenticatedSession(
-            WebSocketConnection conn, String platformId, String amshaSessionId) {
+    private void setupUnauthenticatedSession(WebSocketConnection conn, String platformId, String amshaSessionId) {
         connections.put(conn.id(), new ConnectionState(platformId, amshaSessionId, false, null));
         channelServices.bindSessionOwner(amshaSessionId, platformId);
         sessionStore.register(platformId, amshaSessionId, platformId, conn);

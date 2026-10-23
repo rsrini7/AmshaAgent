@@ -61,7 +61,7 @@ public class ChatModelProducer {
             Map.entry(ModelDefaults.PROVIDER_GEMINI, ModelDefaults.DEFAULT_GEMINI_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GENERIC_OPENAI, ""));
 
-    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.DEFAULT_PROVIDER)
     String provider;
 
     @ConfigProperty(name = LlmConfigKeys.VAULT_PRIORITY, defaultValue = "false")
@@ -212,6 +212,10 @@ public class ChatModelProducer {
 
     private AgentChatModelProvider findProvider(String providerName) {
         String cleanProvider = clean(providerName != null ? providerName : ModelDefaults.DEFAULT_PROVIDER);
+        if (!hasText(cleanProvider)) {
+            throw new IllegalStateException(
+                    "No LLM provider is selected. Set AMSHA_LLM_PROVIDER to a configured provider before sending a message.");
+        }
         for (AgentChatModelProvider p : providers) {
             if (p.providerName().equalsIgnoreCase(cleanProvider)) {
                 return p;

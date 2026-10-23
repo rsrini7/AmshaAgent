@@ -158,7 +158,7 @@ public class LlmConfigurationProvenance {
     @Inject
     Config config;
 
-    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.DEFAULT_PROVIDER)
     String configuredProvider;
 
     @ConfigProperty(name = LlmConfigKeys.VAULT_PRIORITY, defaultValue = "false")

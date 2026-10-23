@@ -44,7 +44,6 @@ import {
   AgentTraceEvent,
   isAgentTraceEvent,
   ExecutionRunSummaryDto,
-  ExecutionTraceDto,
   toAgentTraceEvent,
 } from '../types/trace';
 
@@ -615,7 +614,7 @@ export class ArcShell extends LitElement {
         })
       );
     }
-    if (TERMINAL_AGENT_SESSION_STATUSES.has(status)) return;
+      return;
     }
 
     if (rawType === 'status_change') {

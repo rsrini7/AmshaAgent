@@ -11,7 +11,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_{PROVIDER}_API_KEY` | — | Provider-specific LLM API key, for example `AMSHA_GROQ_API_KEY` (`gsk_...`) |
-| `AMSHA_LLM_PROVIDER` | `groq` in `application.yaml`; the repository `.env.example` explicitly selects `infinite-loop` | Provider ID: `groq`, `openai`, `ollama`, `claude-code`, `openrouter`, `nvidia`, `cerebras`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `agy`, `kimchi`, `foundry`, `gemini`, `omlx`, `llamacpp`, `generic-openai`, or the internal `infinite-loop` provider |
+| `AMSHA_LLM_PROVIDER` | Unset; choose one during first-run setup or configure explicitly | Provider ID: `groq`, `openai`, `ollama`, `claude-code`, `openrouter`, `nvidia`, `cerebras`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `agy`, `kimchi`, `foundry`, `gemini`, `omlx`, `llamacpp`, `generic-openai`, or internal `infinite-loop`. Non-interactive deployments must set this value explicitly. |
 | `AMSHA_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `AMSHA_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
 | `AMSHA_LLM_TEMPERATURE` | `0.1` | LLM temperature |

@@ -49,6 +49,13 @@ public class CliUtils {
     private static final String PLACEHOLDER_YOUR_PREFIX = "your_";
     private static final String PLACEHOLDER_HERE_SUFFIX = "_here";
     private static final String PLACEHOLDER_REPEATED_X_REGEX = ".*x{8,}.*";
+    private static final String DEFAULT_LOCAL_PROVIDER_LIST =
+            ModelDefaults.PROVIDER_OMLX + "," + ModelDefaults.PROVIDER_OLLAMA;
+    private static final VarSpec LLM_PROVIDER_SPEC = new VarSpec(
+            ConfigKeys.LLM_PROVIDER,
+            "Select the LLM provider for assistant responses; no provider is selected automatically.",
+            "Choose one in the first-run menu, or set AMSHA_LLM_PROVIDER to a supported provider ID.",
+            "Local options include ollama, omlx, llamacpp, and foundry.");
 
     // -------------------------------------------------------------------------
     // Required vars per mode
@@ -136,27 +143,22 @@ public class CliUtils {
 
         List<VarSpec> missing = new ArrayList<>();
 
-        // 1. LLM Primary Key first
-        String llmProvider = Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER))
-                .orElseGet(() -> System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ))
-                .toLowerCase(Locale.ROOT);
-        VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(llmProvider);
+        // 1. Require an explicit provider selection, then check its key if needed.
+        String llmProvider = configuredValue(ConfigKeys.LLM_PROVIDER).toLowerCase(Locale.ROOT);
+        if (llmProvider.isBlank()) {
+            missing.add(LLM_PROVIDER_SPEC);
+        }
+        VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(mainCredentialProvider(llmProvider));
         if (providerKeySpec != null && !isSet(providerKeySpec.key())) missing.add(providerKeySpec);
 
         // 1b. Per-slot API keys for compaction / intent-classifier / embedding.
         // Each infinite-loop provider list selects the first entry for key resolution.
-        String compactionProvider = ProviderKeySpecs.firstProvider(
-                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS))
-                        .orElseGet(() -> System.getProperty(
-                                ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, "groq,ollama")));
-        String classifierProvider = ProviderKeySpecs.firstProvider(
-                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS))
-                        .orElseGet(() -> System.getProperty(
-                                ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, "groq,ollama")));
-        String embeddingProvider = ProviderKeySpecs.firstProvider(
-                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS))
-                        .orElseGet(() -> System.getProperty(
-                                ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS, ModelDefaults.PROVIDER_OLLAMA)));
+        String compactionProvider = ProviderKeySpecs.firstProvider(configuredValueOrDefault(
+                ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, DEFAULT_LOCAL_PROVIDER_LIST));
+        String classifierProvider = ProviderKeySpecs.firstProvider(configuredValueOrDefault(
+                ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, DEFAULT_LOCAL_PROVIDER_LIST));
+        String embeddingProvider = ProviderKeySpecs.firstProvider(configuredValueOrDefault(
+                ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS, ModelDefaults.PROVIDER_OLLAMA));
 
         VarSpec compactionKeySpec = ProviderKeySpecs.compactionKeySpecFor(compactionProvider);
         if (compactionKeySpec != null && !isSet(compactionKeySpec.key())) missing.add(compactionKeySpec);
@@ -266,10 +268,9 @@ public class CliUtils {
             if (!isSet(spec.key())) missing.add(spec);
         }
 
-        String llmProvider = Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER))
-                .map(String::toLowerCase)
-                .orElse(ModelDefaults.PROVIDER_GROQ);
-        VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(llmProvider);
+        String llmProvider = configuredValue(ConfigKeys.LLM_PROVIDER).toLowerCase(Locale.ROOT);
+        if (llmProvider.isBlank()) missing.add(LLM_PROVIDER_SPEC);
+        VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(mainCredentialProvider(llmProvider));
         if (providerKeySpec != null && !isSet(providerKeySpec.key())) {
             missing.add(providerKeySpec);
         }
@@ -423,5 +424,23 @@ public class CliUtils {
         if (val.equalsIgnoreCase(VALUE_NONE)) return false;
         if (val.matches(PLACEHOLDER_REPEATED_X_REGEX)) return false;
         return true;
+    }
+
+    private static String mainCredentialProvider(String provider) {
+        if (!ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(provider)) return provider;
+        String providerList =
+                configuredValueOrDefault(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, DEFAULT_LOCAL_PROVIDER_LIST);
+        return ProviderKeySpecs.firstProvider(providerList);
+    }
+
+    private static String configuredValue(String key) {
+        String value = System.getProperty(key);
+        if (value == null) value = System.getenv(key);
+        return value == null ? "" : value.trim();
+    }
+
+    private static String configuredValueOrDefault(String key, String defaultValue) {
+        String value = configuredValue(key);
+        return value.isBlank() ? defaultValue : value;
     }
 }

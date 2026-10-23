@@ -3,9 +3,11 @@
 - **Status**: Approved
 - **Date**: 2026-08-19
 - **Provider ID**: `groq`
-- **Default Model**: `openai/gpt-oss-120b`
+- **Provider Model Fallback**: `openai/gpt-oss-120b`
 - **Default Base URL**: `https://api.groq.com/openai/v1`
 - **Credential Type**: `API_KEY` (`AMSHA_GROQ_API_KEY`)
+
+This ADR records Groq as a supported provider and its provider-specific model fallback; it does not select Groq globally. `AMSHA_LLM_PROVIDER` is unset by default and must be selected explicitly.
 
 ---
 

@@ -707,7 +707,7 @@ amsha:
     # Loopback-only owner credential rotation for local development recovery.
     local-recovery-enabled: ${AMSHA_BOOTSTRAP_LOCAL_RECOVERY:false}
   llm:
-    provider: ${AMSHA_LLM_PROVIDER:groq}
+    provider: ${AMSHA_LLM_PROVIDER:}
     profile-routing:
       enabled: ${AMSHA_LLM_PROFILE_ROUTING_ENABLED:false}
     modality-route-seeder:
@@ -875,11 +875,11 @@ amsha:
     api-key: ${AMSHA_GNANI_API_KEY:}
   infinite-loop:
     llm:
-      providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,groq,openrouter}
+      providers: ${AMSHA_INFINITE_LOOP_LLM_PROVIDERS:omlx,ollama}
     compaction:
-      providers: ${AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS:groq,ollama}
+      providers: ${AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS:omlx,ollama}
     classifier:
-      providers: ${AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS:groq,ollama}
+      providers: ${AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS:omlx,ollama}
     embedding:
       providers: ${AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS:ollama}
     cooldown-base-seconds: ${AMSHA_INFINITE_LOOP_COOLDOWN_BASE_SECONDS:5}

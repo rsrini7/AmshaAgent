@@ -129,9 +129,10 @@ public final class ModelDefaults {
     public static final String DEFAULT_OLLAMA_EMBED_MODEL = "nomic-embed-text:v1.5";
     public static final String DEFAULT_JINA_EMBED_MODEL = "jina-embeddings-v5-text-nano";
 
-    // ── Fallback Provider ────────────────────────────────────────
+    // ── Provider Selection ───────────────────────────────────────
 
-    public static final String DEFAULT_PROVIDER = PROVIDER_GROQ;
+    /** Empty until a user explicitly selects a provider. */
+    public static final String DEFAULT_PROVIDER = "";
 
     // ── Unset-Model Sentinel ─────────────────────────────────────
 
@@ -166,11 +167,11 @@ public final class ModelDefaults {
             Map.entry("127.0.0.1:9000", PROVIDER_LLAMACPP));
 
     /**
-     * Returns the default model name for the given provider ID.
-     * Falls back to {@link #DEFAULT_GROQ_MODEL} for unknown providers.
+     * Returns the default model name for a known provider ID.
+     * Returns an empty string when no provider is selected or the ID is unknown.
      */
     public static String defaultModelForProvider(String provider) {
-        if (provider == null) return DEFAULT_GROQ_MODEL;
+        if (provider == null || provider.isBlank()) return "";
         return switch (provider.toLowerCase(Locale.ROOT)) {
             case PROVIDER_GROQ -> DEFAULT_GROQ_MODEL;
             case PROVIDER_OPENAI -> DEFAULT_OPENAI_MODEL;
@@ -195,7 +196,7 @@ public final class ModelDefaults {
             case PROVIDER_LLAMACPP -> DEFAULT_LLAMACPP_MODEL;
             case PROVIDER_GENERIC_OPENAI -> DEFAULT_GENERIC_OPENAI_MODEL;
             case PROVIDER_INFINITE_LOOP -> DEFAULT_INFINITE_LOOP_MODEL;
-            default -> DEFAULT_GROQ_MODEL;
+            default -> "";
         };
     }
 

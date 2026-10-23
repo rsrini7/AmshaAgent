@@ -63,6 +63,6 @@ final class CliLlmProviderMenu {
 
     static String providerForChoice(String choice) {
         String normalizedChoice = choice == null ? "" : choice.trim();
-        return PROVIDER_BY_CHOICE.getOrDefault(normalizedChoice, ModelDefaults.PROVIDER_GROQ);
+        return PROVIDER_BY_CHOICE.getOrDefault(normalizedChoice, ModelDefaults.DEFAULT_PROVIDER);
     }
 }

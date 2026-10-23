@@ -81,7 +81,7 @@ public class ModelArenaResource {
 
     private static final Logger log = Logger.getLogger(ModelArenaResource.class);
 
-    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.PROVIDER_GROQ)
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.DEFAULT_PROVIDER)
     String defaultProviderName;
 
     @Inject
@@ -419,7 +419,7 @@ public class ModelArenaResource {
             ChatModel model = chatModelProducer != null ? chatModelProducer.chatModel() : null;
             String cleanDefault = (defaultProviderName != null && !defaultProviderName.isBlank())
                     ? defaultProviderName.trim().toLowerCase(Locale.ROOT)
-                    : ModelDefaults.PROVIDER_GROQ;
+                    : ModelDefaults.DEFAULT_PROVIDER;
             return new ResolvedProvider(model, ModelArenaHelper.resolveBaseUrl(cleanDefault, providers));
         }
 

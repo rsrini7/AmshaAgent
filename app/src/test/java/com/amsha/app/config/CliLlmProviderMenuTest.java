@@ -63,7 +63,7 @@ class CliLlmProviderMenuTest {
 
     @Test
     void defaultsUnknownChoicesToGroq() {
-        assertEquals(ModelDefaults.PROVIDER_GROQ, CliLlmProviderMenu.providerForChoice(null));
-        assertEquals(ModelDefaults.PROVIDER_GROQ, CliLlmProviderMenu.providerForChoice("unknown"));
+        assertEquals(ModelDefaults.DEFAULT_PROVIDER, CliLlmProviderMenu.providerForChoice(null));
+        assertEquals(ModelDefaults.DEFAULT_PROVIDER, CliLlmProviderMenu.providerForChoice("unknown"));
     }
 }

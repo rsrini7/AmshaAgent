@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 
 import com.amsha.app.cli.CliArguments;
 import com.amsha.app.util.CliUtils;
-import com.amsha.app.util.ProviderKeySpecs;
 import com.amsha.app.util.VarSpec;
 import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
@@ -91,7 +90,7 @@ public class InteractiveSetupWizard {
             return;
         }
 
-        if (System.getProperty(ConfigKeys.LLM_PROVIDER) == null && System.getenv(ConfigKeys.LLM_PROVIDER) == null) {
+        if (configuredProvider().isBlank()) {
             promptProviderSelection();
         }
 
@@ -109,8 +108,8 @@ public class InteractiveSetupWizard {
             }
         }
 
+        ensureBaseConfigsInEnv(envFile);
         if (!missing.isEmpty()) {
-            ensureBaseConfigsInEnv(envFile);
 
             System.err.println();
             System.err.println("╔══════════════════════════════════════════════════════════╗");
@@ -157,7 +156,7 @@ public class InteractiveSetupWizard {
     private static void promptProviderSelection() {
         System.err.println();
         System.err.println("  ┌─ LLM Provider Select");
-        System.err.println("  │  1. Groq (default) - ultra fast, free tier available");
+        System.err.println("  │  1. Groq - hosted API provider");
         System.err.println("  │  2. OpenRouter - access any model (Llama 3, Claude, etc.)");
         System.err.println("  │  3. OpenAI - direct connection");
         System.err.println("  │  4. Ollama - local only (no API key required)");
@@ -175,18 +174,24 @@ public class InteractiveSetupWizard {
         System.err.println("  │  16. Codex CLI - ChatGPT Plus OAuth (zero-config)");
         CliLlmProviderMenu.printAdditionalProviders();
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-21, Default: 1]: ");
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-21, no default]: ");
         String provider = CliLlmProviderMenu.providerForChoice(choice);
+        if (provider.isBlank()) {
+            System.err.println(
+                    "[Amsha Agent] No provider selected. Choose one in the menu or set AMSHA_LLM_PROVIDER in .env.");
+            return;
+        }
         System.setProperty(ConfigKeys.LLM_PROVIDER, provider);
-        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, provider);
-        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, provider);
-        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, provider);
+        if (!ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(provider)) {
+            System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, provider);
+            System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, provider);
+            System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, provider);
+        }
     }
 
     private static void ensureBaseConfigsInEnv(Path envFile) {
-        String provider = Optional.ofNullable(System.getProperty(ConfigKeys.LLM_PROVIDER))
-                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER)))
-                .orElse(ModelDefaults.PROVIDER_GROQ);
+        String provider = configuredProvider();
+        if (provider.isBlank()) return;
         EnvConfigInitializer.patchEnvFile(
                 envFile, ConfigKeys.LLM_PROVIDER, provider, EnvConfigInitializer.PatchMode.UPDATE);
         boolean infiniteLoop = ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(provider);
@@ -194,19 +199,19 @@ public class InteractiveSetupWizard {
                 envFile,
                 ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, "omlx,groq,openrouter")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, "omlx,ollama")
                         : provider);
         patchProviderList(
                 envFile,
                 ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, "groq,ollama")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, "omlx,ollama")
                         : provider);
         patchProviderList(
                 envFile,
                 ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, "groq,ollama")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, "omlx,ollama")
                         : provider);
         if (ModelDefaults.PROVIDER_SARVAM.equalsIgnoreCase(provider)) {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_MODEL", "sarvam-105b-conversations");
@@ -283,9 +288,15 @@ public class InteractiveSetupWizard {
         return providers.isBlank() ? fallback : providers;
     }
 
+    private static String configuredProvider() {
+        String value = System.getProperty(ConfigKeys.LLM_PROVIDER);
+        if (value == null) value = System.getenv(ConfigKeys.LLM_PROVIDER);
+        return value == null ? ModelDefaults.DEFAULT_PROVIDER : value.trim();
+    }
+
     private static boolean shouldPromptUnifiedKey(List<VarSpec> missing) {
-        String provider = System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ)
-                .toLowerCase(Locale.ROOT);
+        String provider = configuredProvider().toLowerCase(Locale.ROOT);
+        if (provider.isBlank()) return false;
         String llmKeyName = llmApiKeyForProvider(provider);
         boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key().equals(llmKeyName));
         String compactionKey = compactionApiKeyForProvider(provider);
@@ -304,8 +315,7 @@ public class InteractiveSetupWizard {
         if (resp == null
                 || resp.trim().isEmpty()
                 || resp.trim().toLowerCase(Locale.ROOT).startsWith(YES_RESPONSE_PREFIX)) {
-            String provider = System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ)
-                    .toLowerCase(Locale.ROOT);
+            String provider = configuredProvider().toLowerCase(Locale.ROOT);
             String key = readPasswordWithFallback(
                     System.console(), "  └─ Enter " + provider.toUpperCase(Locale.ROOT) + " API key: ");
             if (key != null && !key.isBlank()) {
@@ -356,23 +366,7 @@ public class InteractiveSetupWizard {
     }
 
     private static String llmApiKeyForProvider(String provider) {
-        return switch (provider.toLowerCase(Locale.ROOT)) {
-            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.OPENROUTER_API_KEY;
-            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.OPENAI_API_KEY;
-            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.GEMINI_API_KEY;
-            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.CEREBRAS_API_KEY;
-            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.NVIDIA_API_KEY;
-            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.SARVAM_API_KEY;
-            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.OPENCODE_API_KEY;
-            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.HUGGINGFACE_API_KEY;
-            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.MISTRAL_API_KEY;
-            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.CLOUDFLARE_API_KEY;
-            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.COHERE_API_KEY;
-            case ModelDefaults.PROVIDER_CODEX -> ConfigKeys.CODEX_API_KEY;
-            case ModelDefaults.PROVIDER_OMLX -> ConfigKeys.OMLX_API_KEY;
-            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.GENERIC_OPENAI_API_KEY;
-            default -> ConfigKeys.GROQ_API_KEY;
-        };
+        return ProviderApiKeyLookup.llmApiKeyForProvider(provider);
     }
 
     /**
@@ -380,24 +374,7 @@ public class InteractiveSetupWizard {
      * or {@code null} if the provider does not require an API key (e.g. ollama, omlx, codex).
      */
     private static String compactionApiKeyForProvider(String provider) {
-        if (ProviderKeySpecs.isCompactionClassifierKeyless(provider)) {
-            return null;
-        }
-        return switch (provider.toLowerCase(Locale.ROOT)) {
-            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.COMPACTION_OPENROUTER_API_KEY;
-            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.COMPACTION_OPENAI_API_KEY;
-            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.COMPACTION_GEMINI_API_KEY;
-            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.COMPACTION_CEREBRAS_API_KEY;
-            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.COMPACTION_NVIDIA_API_KEY;
-            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.COMPACTION_SARVAM_API_KEY;
-            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.COMPACTION_OPENCODE_API_KEY;
-            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.COMPACTION_HUGGINGFACE_API_KEY;
-            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.COMPACTION_MISTRAL_API_KEY;
-            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.COMPACTION_CLOUDFLARE_API_KEY;
-            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.COMPACTION_COHERE_API_KEY;
-            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.COMPACTION_GENERIC_OPENAI_API_KEY;
-            default -> ConfigKeys.COMPACTION_GROQ_API_KEY;
-        };
+        return ProviderApiKeyLookup.compactionApiKeyForProvider(provider);
     }
 
     /**
@@ -405,24 +382,7 @@ public class InteractiveSetupWizard {
      * or {@code null} if the provider does not require an API key (e.g. ollama, omlx, codex).
      */
     private static String classifierApiKeyForProvider(String provider) {
-        if (ProviderKeySpecs.isCompactionClassifierKeyless(provider)) {
-            return null;
-        }
-        return switch (provider.toLowerCase(Locale.ROOT)) {
-            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.CLASSIFIER_OPENROUTER_API_KEY;
-            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.CLASSIFIER_OPENAI_API_KEY;
-            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.CLASSIFIER_GEMINI_API_KEY;
-            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.CLASSIFIER_CEREBRAS_API_KEY;
-            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.CLASSIFIER_NVIDIA_API_KEY;
-            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.CLASSIFIER_SARVAM_API_KEY;
-            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.CLASSIFIER_OPENCODE_API_KEY;
-            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.CLASSIFIER_HUGGINGFACE_API_KEY;
-            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.CLASSIFIER_MISTRAL_API_KEY;
-            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.CLASSIFIER_CLOUDFLARE_API_KEY;
-            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.CLASSIFIER_COHERE_API_KEY;
-            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.CLASSIFIER_GENERIC_OPENAI_API_KEY;
-            default -> ConfigKeys.CLASSIFIER_GROQ_API_KEY;
-        };
+        return ProviderApiKeyLookup.classifierApiKeyForProvider(provider);
     }
 
     private static boolean promptTelegramEnablement(Path envFile) {
