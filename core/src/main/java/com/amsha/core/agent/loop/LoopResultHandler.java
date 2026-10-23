@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 import com.amsha.channel.api.ChannelPlugin;
+import com.amsha.channel.api.ChannelType;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -14,6 +15,7 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.agent.sse.AgentSseService;
 import com.amsha.core.audit.ComplianceViolationException;
 import com.amsha.core.channel.ChannelPluginRegistry;
+import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentErrorMessageUtil;
@@ -50,26 +52,53 @@ public class LoopResultHandler {
     }
 
     public void updateStoreForRetry(
-            String sessionId, String canonicalRole, AgentResult.AwaitingRetry awaitingRetry, MessageContext context) {
-        log.warnf("Session %s paused due to rate limit - retry after %dms", sessionId, awaitingRetry.retryAfterMs());
-        agentStore.load(sessionId, canonicalRole).ifPresent(cp -> {
-            cp.setStatus(CheckpointStatus.AWAITING_RETRY);
-            cp.setRetryAfterMs(awaitingRetry.retryAfterMs());
-            agentStore.save(cp);
-
-            if (context != null && context.getUser() != null && "TELEGRAM".equalsIgnoreCase(cp.getChannelType())) {
-                long waitSec = awaitingRetry.retryAfterMs() / 1000;
-                String notice = "⏳ Rate limit hit - I'll automatically retry in " + waitSec + " seconds.";
-                channelPluginRegistry
-                        .find(context.getUser().channel().id())
-                        .map(ChannelPlugin::sender)
-                        .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
-            }
+            String sessionId,
+            String canonicalRole,
+            String userId,
+            AutonomyLevel autonomy,
+            AgentResult.AwaitingRetry awaitingRetry,
+            String goal,
+            MessageContext context) {
+        AgentCheckpoint checkpoint = agentStore.load(sessionId, canonicalRole).orElseGet(() -> {
+            log.infof("Creating retry checkpoint for rate-limited session %s", sessionId);
+            return agentStore.save(sessionId, canonicalRole, userId, autonomy, awaitingRetry.steps(), goal);
         });
+        if (checkpoint == null) {
+            throw new IllegalStateException("Could not persist checkpoint for rate-limited session.");
+        }
+
+        checkpoint.setStatus(CheckpointStatus.AWAITING_RETRY);
+        checkpoint.setRetryAfterMs(awaitingRetry.retryAfterMs());
+        agentStore.save(checkpoint);
+        log.warnf("Session %s paused due to rate limit - retry after %dms", sessionId, awaitingRetry.retryAfterMs());
+
+        if (context != null && context.getUser() != null) {
+            tryStampChannelInfo(sessionId, canonicalRole, context);
+        }
+
+        String checkpointChannelType = checkpoint.getChannelType();
+        if (checkpointChannelType == null && context != null && context.getUser() != null) {
+            checkpointChannelType = context.getUser().channel().name();
+        }
+        if (context != null
+                && context.getUser() != null
+                && context.getUser().channel() == ChannelType.TELEGRAM
+                && ChannelType.TELEGRAM.name().equalsIgnoreCase(checkpointChannelType)) {
+            long waitSec = awaitingRetry.retryAfterMs() / 1000;
+            String notice = "⏳ Rate limit hit - I'll automatically retry in " + waitSec + " seconds.";
+            channelPluginRegistry
+                    .find(context.getUser().channel().id())
+                    .map(ChannelPlugin::sender)
+                    .ifPresent(sender -> sender.sendRaw(context.getUser(), notice));
+        }
         agentSseService.publish(
                 sessionId,
                 new AgentSseService.AgentStatusEvent(
-                        sessionId, canonicalRole, CheckpointStatus.AWAITING_RETRY.name(), Instant.now()));
+                        sessionId,
+                        canonicalRole,
+                        CheckpointStatus.AWAITING_RETRY.name(),
+                        Instant.now(),
+                        (long) awaitingRetry.retryAfterMs()));
     }
 
     public void updateStoreForTerminal(

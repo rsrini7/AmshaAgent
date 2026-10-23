@@ -8,7 +8,16 @@ import {
   clearPersistedOwnerApiKey,
   readPersistedOwnerApiKey,
 } from '../api/client';
-import { SseManager, SsePayload, SseStatus } from '../api/sse';
+import {
+  AGENT_SESSION_STATUS,
+  AGENT_SESSION_STATUS_EVENT,
+  SseManager,
+  SsePayload,
+  SseStatus,
+  TERMINAL_AGENT_SESSION_STATUSES,
+  isAgentStatusPayload,
+  AgentSessionStatusNotice,
+} from '../api/sse';
 import { provide } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { ROUTES } from '../routes';
@@ -588,6 +597,27 @@ export class ArcShell extends LitElement {
       return;
     }
 
+    if (isAgentStatusPayload(event)) {
+      this._handleAgentEvent({ agentRole: event.agentRole, status: event.status });
+      const status = event.status.trim().toUpperCase();
+    if (
+      event.sessionId === this._sessionId &&
+      (status === AGENT_SESSION_STATUS.AWAITING_RETRY || TERMINAL_AGENT_SESSION_STATUSES.has(status))
+    ) {
+      window.dispatchEvent(
+        new CustomEvent<AgentSessionStatusNotice>(AGENT_SESSION_STATUS_EVENT, {
+          detail: {
+            sessionId: event.sessionId,
+            status,
+            timestamp: event.timestamp,
+            retryAfterMs: event.retryAfterMs,
+          },
+        })
+      );
+    }
+    if (TERMINAL_AGENT_SESSION_STATUSES.has(status)) return;
+    }
+
     if (rawType === 'status_change') {
       this._fetchAgents();
       this._fetchApprovals();
@@ -596,7 +626,7 @@ export class ArcShell extends LitElement {
     } else if (isHitlEvent) {
       this._handleHitlEvent(event);
       this._fetchApprovals();
-    } else if (rawType === 'agent_status') {
+  } else if (rawType === 'agent_status' && !isAgentStatusPayload(event)) {
       this._handleAgentEvent(event);
     }
   }
@@ -679,38 +709,9 @@ export class ArcShell extends LitElement {
     // ─── SSE Event Handlers ──────────────────────────────────────────────────
 
   private _handleHitlEvent(event: any) {
-    const isAwaiting = event.type === 'AWAITING_APPROVAL' || event.eventType === 'AWAITING_APPROVAL';
-    if (isAwaiting) {
-      // Add to pending if not already present
-      const existing = this._pendingApprovals.find(
-        (a) => (a.taskId === event.sessionId || a.sessionId === event.sessionId) && a.toolName === event.toolName
-      );
-      if (!existing) {
-        let paramsObj = {};
-        try { paramsObj = JSON.parse(event.toolParams || '{}'); } catch (_) {}
-        this._pendingApprovals = [
-          ...this._pendingApprovals,
-          {
-            taskId: event.sessionId,
-            sessionId: event.sessionId,
-            toolName: event.toolName,
-            params: paramsObj,
-            requestedAt: event.timestamp || new Date().toISOString(),
-            agentName: 'Agent',
-          } as PendingApprovalDto,
-        ];
-      }
-    } else {
-      // APPROVED, DENIED, RESUMED - remove from pending list
-      this._pendingApprovals = this._pendingApprovals.filter(
-        (a) =>
-          !(
-            (a.taskId === event.sessionId || a.sessionId === event.sessionId) &&
-            (a.toolName === event.toolName || !event.toolName)
-          )
-      );
-    }
-
+    // The SSE event only identifies the session. The actionable task ID and
+    // authoritative tool parameters come from GET /hitl, so do not fabricate a
+    // PendingApprovalDto from the session ID here.
     this._publishHitlProgress(event);
   }
 
@@ -840,6 +841,7 @@ export class ArcShell extends LitElement {
             class="content-area"
             style="display: flex; flex: 1;"
             .traceEvents=${this._activeRunEvents}
+            .pendingApprovals=${this._pendingApprovals}
           ></arc-chat-interface>
         </div>
       </div>

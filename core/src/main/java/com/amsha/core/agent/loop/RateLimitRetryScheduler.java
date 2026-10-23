@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.DatabaseSafetyGuard;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -81,7 +82,7 @@ public class RateLimitRetryScheduler {
      * <strong>§5.9 (MUST):</strong> This method is transaction-free. Atomic state
      * transition is handled by {@link StatefulAgentStore#claimForRetry(Long)}.
      */
-    @Scheduled(every = "30s", identity = "rate-limit-retry")
+    @Scheduled(every = "5s", identity = "rate-limit-retry")
     @ActivateRequestContext
     public void processPendingRetries() {
         if (shuttingDown) {
@@ -127,8 +128,9 @@ public class RateLimitRetryScheduler {
                                 continue;
                             }
 
-                            AgentResult result =
-                                    agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal());
+                            AgentResult result = WorkspaceScopeHolder.call(
+                                    cp.getSessionId(),
+                                    () -> agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()));
                             if (!CronSessionStatusSync.syncTerminal(
                                     cp.getSessionId(), result, cronStore, cronRunStore)) {
                                 agentStore.markFailed(cp.getId(), "Cron lease lost during retry resume");

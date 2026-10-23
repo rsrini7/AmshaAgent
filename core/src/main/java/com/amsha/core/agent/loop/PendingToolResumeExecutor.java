@@ -29,6 +29,7 @@ import org.jboss.logging.Logger;
 final class PendingToolResumeExecutor {
     private static final Logger log = Logger.getLogger(PendingToolResumeExecutor.class);
     private static final int MAX_RETRIES = 2;
+    private static final int MAX_INLINE_RETRY_AFTER_MS = 5_000;
 
     private final StatefulAgentStore agentStore;
     private final ToolRegistry toolRegistry;
@@ -77,7 +78,7 @@ final class PendingToolResumeExecutor {
                     "[ResumeStrategy] No pending tool found in checkpoint for session %s role %s — completing checkpoint and running finish pass",
                     sessionId, effectiveRole);
             completeInProgressCheckpoint(checkpoint);
-            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+            return runFinishPassWithRetry(stateMachineRunner, context, history, sessionId, null);
         }
 
         var owner = delegationResolver.resolveOwner(effectiveRole, toolName);
@@ -125,7 +126,7 @@ final class PendingToolResumeExecutor {
                 return executeAttempt(request);
             } catch (Exception e) {
                 long retryAfter = AgentErrorMessageUtil.parseRetryAfterMillis(e);
-                if (retryAfter > 0 && retryAfter < 5000 && retryCount < MAX_RETRIES) {
+                if (retryAfter > 0 && retryAfter < MAX_INLINE_RETRY_AFTER_MS && retryCount < MAX_RETRIES) {
                     retryCount++;
                     waitBeforeRetry(retryAfter);
                     continue;
@@ -171,7 +172,12 @@ final class PendingToolResumeExecutor {
                     request.history(),
                     request.sessionId());
             completeInProgressCheckpoint(request.checkpoint());
-            return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
+            return runFinishPassWithRetry(
+                    request.stateMachineRunner(),
+                    request.context(),
+                    request.history(),
+                    request.sessionId(),
+                    request.toolName());
         }
 
         ToolResponse response = WorkspaceContext.runWithFullAutonomy(
@@ -230,7 +236,12 @@ final class PendingToolResumeExecutor {
                 return AgentResult.finished("✅ " + safeOutput, List.copyOf(request.history()));
             }
             completeInProgressCheckpoint(request.checkpoint());
-            return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
+            return runFinishPassWithRetry(
+                    request.stateMachineRunner(),
+                    request.context(),
+                    request.history(),
+                    request.sessionId(),
+                    request.toolName());
         }
         return handleFailure(request, response);
     }
@@ -347,6 +358,28 @@ final class PendingToolResumeExecutor {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Resume interrupted during backoff", e);
+        }
+    }
+
+    private AgentResult runFinishPassWithRetry(
+            AgentStateMachineRunner stateMachineRunner,
+            AgentExecutionContext context,
+            List<ReasoningStep> history,
+            String sessionId,
+            String toolName) {
+        try {
+            return stateMachineRunner.runFinishPass(context, reasoningEngine, history);
+        } catch (RuntimeException e) {
+            long retryAfterMs = AgentErrorMessageUtil.parseRetryAfterMillis(e);
+            if (retryAfterMs <= 0) {
+                throw e;
+            }
+
+            int retryDelayMs = (int) Math.min(retryAfterMs, Integer.MAX_VALUE);
+            log.warnf(
+                    "Post-approval finish pass rate limited session=%s tool=%s retryAfterMs=%d",
+                    sessionId, toolName, retryDelayMs);
+            return AgentResult.awaitingRetry(sessionId, retryDelayMs, List.copyOf(history));
         }
     }
 

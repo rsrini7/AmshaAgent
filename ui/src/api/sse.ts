@@ -3,6 +3,51 @@ import { EventDeduplicator } from './event-dedup';
 import { AgentTraceEvent, traceEventId } from '../types/trace';
 import { readPersistedOwnerApiKey } from './client';
 
+export const AGENT_SESSION_STATUS_EVENT = 'amsha-agent-session-status';
+
+export const AGENT_SESSION_STATUS = {
+  RUNNING: 'RUNNING',
+  AWAITING_RETRY: 'AWAITING_RETRY',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+  DENIED: 'DENIED',
+  LOOP_EXCEEDED: 'LOOP_EXCEEDED',
+} as const;
+
+export const TERMINAL_AGENT_SESSION_STATUSES: ReadonlySet<string> = new Set([
+  AGENT_SESSION_STATUS.COMPLETED,
+  AGENT_SESSION_STATUS.FAILED,
+  AGENT_SESSION_STATUS.DENIED,
+  AGENT_SESSION_STATUS.LOOP_EXCEEDED,
+]);
+
+export interface AgentStatusPayload {
+  sessionId: string;
+  agentRole: string;
+  status: string;
+  timestamp?: string;
+  retryAfterMs?: number;
+}
+
+export interface AgentSessionStatusNotice {
+  sessionId: string;
+  status: string;
+  timestamp?: string;
+  retryAfterMs?: number;
+}
+
+export function isAgentStatusPayload(value: unknown): value is AgentStatusPayload {
+  if (value === null || typeof value !== 'object') return false;
+  const candidate = value as Partial<AgentStatusPayload>;
+  return (
+    typeof candidate.sessionId === 'string' &&
+    typeof candidate.agentRole === 'string' &&
+    typeof candidate.status === 'string' &&
+    (candidate.retryAfterMs === undefined ||
+      (typeof candidate.retryAfterMs === 'number' && Number.isFinite(candidate.retryAfterMs) && candidate.retryAfterMs >= 0))
+  );
+}
+
 export const SseStatus = {
   CONNECTED: 'connected',
   DISCONNECTED: 'disconnected',
@@ -16,7 +61,7 @@ export type SseStatus = (typeof SseStatus)[keyof typeof SseStatus];
  * Anything the SSE channel can deliver: the pre-existing agent events plus the versioned
  * execution trace added by the cockpit feature.
  */
-export type SsePayload = AgentEvent | AgentTraceEvent;
+export type SsePayload = AgentEvent | AgentTraceEvent | AgentStatusPayload;
 
 export class SseManager {
   private _reader: ReadableStreamDefaultReader<string> | null = null;

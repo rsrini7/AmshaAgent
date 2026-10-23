@@ -23,6 +23,7 @@ import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
@@ -41,7 +42,6 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import io.quarkus.arc.Arc;
 
 /**
  * Handles the orchestration of session resumption after human-in-the-loop approval.
@@ -175,57 +175,54 @@ public class CheckpointResumeHandler {
                 agentStore.clearBatchResuming(sessionId);
                 return false;
             }
-            executor.execute(() -> {
-                try {
-                    Arc.container().requestContext().activate();
-                    MessageContext context = null;
-                    try {
-                        String resumeGoal = strategyDispatcher.resolveResumeGoal(sessionId, agentRole);
-                        if (resumeGoal == null || resumeGoal.isBlank()) {
-                            log.warnf(
-                                    "resumeAfterBatchDecision: no resume goal found for session %s role %s",
-                                    sessionId, agentRole);
-                        } else {
-                            ChannelType cType = (channelType == null || channelType.isBlank())
-                                    ? ChannelType.WEBSOCKET
-                                    : ChannelType.of(channelType);
-                            ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
-                            context = prepareResumeMessageContext(chatId, user, cType, resumeGoal, checkpoint);
-
-                            String toolInfo = ResumeToolInfoFormatter.format(checkpoint, objectMapper);
-                            AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
-                            var handoff =
-                                    new DelegatedCompletionHandoff(agentStore, objectMapper).capture(sessionId, result);
-                            if (handoff.isPresent()) {
-                                DelegatedCompletionHandoff.ParentResume parent = handoff.get();
-                                if (parent.ready()) {
-                                    log.infof(
-                                            "[DELEGATION] Resuming parent %s after child %s completed",
-                                            parent.sessionId(), sessionId);
-                                    resumeAfterBatchDecision(
-                                            parent.sessionId(),
-                                            parent.agentRole(),
-                                            parent.userId(),
-                                            parent.chatId(),
-                                            parent.channelType());
-                                }
-                            } else if (result != null) {
-                                dispatchResumeResult(context, result, cType, user, sessionId, toolInfo);
-                            }
-                        }
-                    } catch (Exception e) {
-                        handleResumeFailure(sessionId, context, e);
-                    } finally {
+            WorkspaceScopeHolder.run(
+                    sessionId,
+                    userId,
+                    chatId,
+                    () -> executor.execute(WorkspaceScopeHolder.wrap(() -> {
                         try {
-                            Arc.container().requestContext().deactivate();
-                        } catch (Exception e) {
-                            log.debugf("Request context deactivate (non-fatal): %s", LogUtil.rootMessage(e));
+                            MessageContext context = null;
+                            try {
+                                String resumeGoal = strategyDispatcher.resolveResumeGoal(sessionId, agentRole);
+                                if (resumeGoal == null || resumeGoal.isBlank()) {
+                                    log.warnf(
+                                            "resumeAfterBatchDecision: no resume goal found for session %s role %s",
+                                            sessionId, agentRole);
+                                } else {
+                                    ChannelType cType = (channelType == null || channelType.isBlank())
+                                            ? ChannelType.WEBSOCKET
+                                            : ChannelType.of(channelType);
+                                    ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
+                                    context = prepareResumeMessageContext(chatId, user, cType, resumeGoal, checkpoint);
+
+                                    String toolInfo = ResumeToolInfoFormatter.format(checkpoint, objectMapper);
+                                    AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
+                                    var handoff = new DelegatedCompletionHandoff(agentStore, objectMapper)
+                                            .capture(sessionId, result);
+                                    if (handoff.isPresent()) {
+                                        DelegatedCompletionHandoff.ParentResume parent = handoff.get();
+                                        if (parent.ready()) {
+                                            log.infof(
+                                                    "[DELEGATION] Resuming parent %s after child %s completed",
+                                                    parent.sessionId(), sessionId);
+                                            resumeAfterBatchDecision(
+                                                    parent.sessionId(),
+                                                    parent.agentRole(),
+                                                    parent.userId(),
+                                                    parent.chatId(),
+                                                    parent.channelType());
+                                        }
+                                    } else if (result != null) {
+                                        dispatchResumeResult(context, result, cType, user, sessionId, toolInfo);
+                                    }
+                                }
+                            } catch (Exception e) {
+                                handleResumeFailure(sessionId, context, e);
+                            }
+                        } finally {
+                            releaseResumeClaimSafely(sessionId, agentRole);
                         }
-                    }
-                } finally {
-                    releaseResumeClaimSafely(sessionId, agentRole);
-                }
-            });
+                    })));
             return true;
         } catch (RejectedExecutionException e) {
             CronSessionStatusSync.syncTerminal(

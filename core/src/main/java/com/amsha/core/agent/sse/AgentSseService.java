@@ -115,9 +115,14 @@ public class AgentSseService {
     public record AgentStatusEvent(
             String sessionId,
             String agentRole,
-            String status, // RUNNING, COMPLETED, FAILED
-            Instant timestamp)
-            implements SseEvent {}
+            String status, // RUNNING, AWAITING_RETRY, COMPLETED, FAILED
+            Instant timestamp,
+            Long retryAfterMs)
+            implements SseEvent {
+        public AgentStatusEvent(String sessionId, String agentRole, String status, Instant timestamp) {
+            this(sessionId, agentRole, status, timestamp, null);
+        }
+    }
 
     public record HeartbeatEvent(Instant timestamp) implements SseEvent {}
 }

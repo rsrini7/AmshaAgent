@@ -281,7 +281,7 @@ export class ArcNav extends LitElement {
           .status="${this._appContext?.sseStatus ?? SseStatus.DISCONNECTED}"
           title="${this.collapsed ? `Live updates: ${this._appContext?.sseStatus ?? SseStatus.DISCONNECTED}` : ''}"
         ></arc-connection-badge>
-        ${!this.collapsed ? html`<div class="version">v1.0</div>` : nothing}
+        ${!this.collapsed ? html`<div class="version">v0.1.0</div>` : nothing}
       </div>
     `;
   }
