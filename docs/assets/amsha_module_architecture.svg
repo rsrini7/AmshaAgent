@@ -24,7 +24,7 @@
 
     <!-- telegram -->
     <rect x="20" y="188" width="200" height="48" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
-    <text x="120" y="207" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#f5c4b3">channel-telegram</text>
+    <text x="120" y="207" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#f5c4b3">amsha-channel-telegram</text>
     <text x="120" y="224" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#f0997b">Camel bot · HITL approval</text>
 
     <!-- self-evolve -->
@@ -112,12 +112,12 @@
 
     <!-- channel-web -->
     <rect x="680" y="256" width="260" height="42" rx="8" fill="#712b13" stroke="#f0997b" stroke-width="0.5"/>
-    <text x="810" y="272" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#f5c4b3">channel-web</text>
+    <text x="810" y="272" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#f5c4b3">amsha-channel-web</text>
     <text x="810" y="287" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#f0997b">WebSocket · HITL SSE stream</text>
 
     <!-- ui -->
     <rect x="680" y="304" width="260" height="42" rx="8" fill="#3c3489" stroke="#afa9ec" stroke-width="0.5"/>
-    <text x="810" y="320" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#cecbf6">ui</text>
+    <text x="810" y="320" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#cecbf6">amsha-ui</text>
     <text x="810" y="335" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#afa9ec">Lit 3.x · Chat · MCP · Health · DB · Arena</text>
 
     <text x="680" y="362" font-size="9" fill="#888">Extracted subsystems (impl tier — wired in amsha-app)</text>
@@ -141,19 +141,19 @@
   <!-- Persistence adapters row -->
   <g font-family="'Segoe UI', system-ui, sans-serif">
     <rect x="20" y="545" width="215" height="46" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
-    <text x="127" y="564" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">persistence-sqlite</text>
+    <text x="127" y="564" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">amsha-persistence-sqlite</text>
     <text x="127" y="582" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#ef9f27">WAL + FTS5 + vec0</text>
 
     <rect x="255" y="545" width="215" height="46" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
-    <text x="362" y="564" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">persistence-postgres</text>
+    <text x="362" y="564" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">amsha-persistence-postgres</text>
     <text x="362" y="582" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#ef9f27">JDBI repository</text>
 
     <rect x="490" y="545" width="215" height="46" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
-    <text x="597" y="564" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">persistence-fs</text>
+    <text x="597" y="564" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">amsha-persistence-fs</text>
     <text x="597" y="582" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#ef9f27">JSON store</text>
 
     <rect x="725" y="545" width="215" height="46" rx="8" fill="#633806" stroke="#ef9f27" stroke-width="0.5"/>
-    <text x="832" y="564" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">persistence-common</text>
+    <text x="832" y="564" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#fac775">amsha-persistence-common</text>
     <text x="832" y="582" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#ef9f27">Shared JDBI records/DTOs</text>
   </g>
 

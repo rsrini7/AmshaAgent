@@ -35,7 +35,7 @@
 | `amsha-onboarding` | Durable draft/saga onboarding REST API; the legacy numbered-step wizard and `/complete` route were removed in P110 |
 | `amsha-self-evolve` | Self-Evolution trace capture and learning loop |
 | `amsha-common` | Shared utilities (LogUtil, constants) |
-| `ui` | Lit 3.x + TypeScript web frontend |
+| `amsha-ui` | Lit 3.x + TypeScript web frontend |
 
 **Dependency flow:** `amsha-app` → `amsha-core`; the extracted subsystems (`amsha-tools-builtin`, `amsha-sandbox`, `amsha-security`, `amsha-skills`, `amsha-rag`, `amsha-mcp`, `amsha-self-evolve`, `amsha-llm-providers`) consume core through the zero-core API tier (`amsha-tool-api`, `amsha-security-api`, `amsha-classifier-api`, `amsha-llm-provider-api`, `amsha-channel-api`, `amsha-persistence-api`) instead of core internals. `amsha-memory` implements tiered memory over `amsha-persistence-api` with a strict zero-core rule. Channels: `amsha-channel-api` ← `amsha-channel-telegram`, `amsha-channel-web`. `amsha-deployment` is build-time only (not in runtime fat-jar). `amsha-rag`, `amsha-local-ml-onnx`, `amsha-mcp`, and `amsha-self-evolve` are optional runtime modules discovered via CDI; Playwright browser automation ships inside `amsha-tools-builtin` (disabled by default). Persistence follows hexagonal architecture: `amsha-persistence-api` defines ports, `amsha-persistence-common` holds shared entities, three adapters (sqlite, postgres, fs) implement ports.
 

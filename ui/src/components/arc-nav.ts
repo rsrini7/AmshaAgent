@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
+import { SseStatus } from '../api/sse';
 import { ROUTES } from '../routes';
 import './arc-connection-badge';
 
@@ -271,8 +272,8 @@ export class ArcNav extends LitElement {
       </div>
       <div class="footer">
         <arc-connection-badge
-          .status="${this._appContext?.sseStatus || 'disconnected'}"
-          title="${this.collapsed ? `Connection: ${this._appContext?.sseStatus || 'disconnected'}` : ''}"
+          .status="${this._appContext?.sseStatus ?? SseStatus.DISCONNECTED}"
+          title="${this.collapsed ? `Live updates: ${this._appContext?.sseStatus ?? SseStatus.DISCONNECTED}` : ''}"
         ></arc-connection-badge>
         ${!this.collapsed ? html`<div class="version">v1.0</div>` : nothing}
       </div>
