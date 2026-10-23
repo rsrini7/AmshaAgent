@@ -6,15 +6,26 @@ import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
+import com.amsha.channel.api.ApprovalPrompt;
+import com.amsha.channel.api.ChannelPlugin;
+import com.amsha.channel.api.ChannelSender;
+import com.amsha.channel.api.ChannelType;
+import com.amsha.channel.api.ChannelUser;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
+import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
+import com.amsha.persistence.api.SessionCatalogEntry;
+import com.amsha.persistence.api.SessionCatalogStore;
+import com.amsha.security.api.RiskLevel;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,10 +51,22 @@ class RateLimitRetrySchedulerTest {
     AgentLoop agentLoop;
 
     @Mock
+    ChannelPluginRegistry channelPluginRegistry;
+
+    @Mock
+    ChannelPlugin channelPlugin;
+
+    @Mock
+    ChannelSender channelSender;
+
+    @Mock
     CronStorePort cronStore;
 
     @Mock
     CronRunStorePort cronRunStore;
+
+    @Mock
+    SessionCatalogStore sessionCatalogStore;
 
     @Spy
     MeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -78,6 +101,82 @@ class RateLimitRetrySchedulerTest {
 
         assertDoesNotThrow(() -> scheduler.processPendingRetries());
         verify(agentLoop).resume("sess-retry", "coder", "do task");
+    }
+
+    @Test
+    void backgroundRetryCompletionIsDeliveredToCli() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("sess-retry");
+        stubNotificationRoute(cp.getSessionId(), ChannelType.CLI, "cli-owner", "cli-chat");
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(cp.getId())).thenReturn(true);
+        when(agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()))
+                .thenReturn(new AgentResult.Finished("The retry completed.", List.of(), 0, 0));
+
+        scheduler.processPendingRetries();
+
+        verify(channelSender)
+                .sendRaw(
+                        eq(new ChannelUser("cli-owner", "cli-chat", "User", ChannelType.CLI)),
+                        contains("The retry completed."));
+    }
+
+    @Test
+    void backgroundRetryCanRequestTelegramApproval() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("sess-telegram");
+        stubNotificationRoute(cp.getSessionId(), ChannelType.TELEGRAM, "telegram-user", "telegram-chat");
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(cp.getId())).thenReturn(true);
+        when(agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()))
+                .thenReturn(new AgentResult.AwaitingApproval(
+                        new ApprovalFrame("execute_shell", Map.of("command", "ls"), RiskLevel.HIGH),
+                        cp.getSessionId(),
+                        List.of(),
+                        0,
+                        0));
+
+        scheduler.processPendingRetries();
+
+        verify(channelSender)
+                .send(
+                        eq(new ChannelUser("telegram-user", "telegram-chat", "User", ChannelType.TELEGRAM)),
+                        argThat(nodes -> nodes.size() == 1
+                                && nodes.getFirst() instanceof ApprovalPrompt prompt
+                                && prompt.toolName().equals("execute_shell")
+                                && prompt.sessionId().equals(cp.getSessionId())));
+    }
+
+    @Test
+    void backgroundRetryThatHitsAnotherLimitNotifiesTelegramOfNewDelay() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("sess-telegram");
+        stubNotificationRoute(cp.getSessionId(), ChannelType.TELEGRAM, "telegram-user", "telegram-chat");
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(cp.getId())).thenReturn(true);
+        when(agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()))
+                .thenReturn(new AgentResult.AwaitingRetry(cp.getSessionId(), 5000, List.of(), 0, 0));
+
+        scheduler.processPendingRetries();
+
+        verify(channelSender)
+                .sendRaw(
+                        eq(new ChannelUser("telegram-user", "telegram-chat", "User", ChannelType.TELEGRAM)),
+                        contains("Automatically retrying in 5s"));
+    }
+
+    @Test
+    void backgroundRetryFailureIsDeliveredToTelegram() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("sess-telegram");
+        stubNotificationRoute(cp.getSessionId(), ChannelType.TELEGRAM, "telegram-user", "telegram-chat");
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(cp.getId())).thenReturn(true);
+        when(agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()))
+                .thenThrow(new RuntimeException("provider unavailable"));
+
+        scheduler.processPendingRetries();
+
+        verify(channelSender)
+                .sendRaw(
+                        eq(new ChannelUser("telegram-user", "telegram-chat", "User", ChannelType.TELEGRAM)),
+                        contains("Automatic retry failed"));
     }
 
     @Test
@@ -229,5 +328,36 @@ class RateLimitRetrySchedulerTest {
                 .thenThrow(new RuntimeException("database closed during sweep"));
 
         assertDoesNotThrow(() -> scheduler.sweepOrphanedRetries());
+    }
+
+    private static AgentCheckpointRecord readyRetryCheckpoint(String sessionId) {
+        AgentCheckpointRecord checkpoint = new AgentCheckpointRecord();
+        checkpoint.setId(300L);
+        checkpoint.setSessionId(sessionId);
+        checkpoint.setAgentRole("coordinator");
+        checkpoint.setOriginalGoal("complete the task");
+        checkpoint.setUpdatedAt(Instant.now().minusSeconds(10));
+        checkpoint.setRetryAfterMs(1000);
+        return checkpoint;
+    }
+
+    private void stubNotificationRoute(String sessionId, ChannelType channelType, String userId, String channelId) {
+        Instant now = Instant.now();
+        SessionCatalogEntry entry = new SessionCatalogEntry(
+                "entry-" + sessionId,
+                userId,
+                channelType.id(),
+                channelId,
+                sessionId,
+                "coordinator",
+                null,
+                now,
+                now,
+                0,
+                true,
+                "ACTIVE");
+        when(sessionCatalogStore.bySessionId(sessionId)).thenReturn(Optional.of(entry));
+        when(channelPluginRegistry.find(channelType.id())).thenReturn(Optional.of(channelPlugin));
+        when(channelPlugin.sender()).thenReturn(channelSender);
     }
 }
