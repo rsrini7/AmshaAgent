@@ -23,7 +23,7 @@
     "@lit/context": "^1.1.2",
     "dompurify": "^3.4.12",
     "lit": "^3.2.0",
-    "marked": "^15.0.0"
+    "marked": "^18.1.1"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.5",
