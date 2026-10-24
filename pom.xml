@@ -83,7 +83,7 @@
          ADR rule 5 at each checkpoint (aligned to 1.86 for the 3.40.1.1 checkpoint). -->
     <bouncycastle.version>1.86</bouncycastle.version>
     <archunit.version>1.5.0</archunit.version>
-    <errorprone.version>2.49.0</errorprone.version>
+    <errorprone.version>2.50.0</errorprone.version>
     <quarkus-jdbi.version>1.10.1</quarkus-jdbi.version>
     <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
     <lucene.version>10.4.0</lucene.version>
