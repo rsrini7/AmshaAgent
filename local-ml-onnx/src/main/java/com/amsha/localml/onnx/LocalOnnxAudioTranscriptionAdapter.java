@@ -387,9 +387,7 @@ public class LocalOnnxAudioTranscriptionAdapter implements AudioTranscriptionPor
                 encoderBundle = bundleRegistry.loadVerified(bundleId);
             } catch (IOException e) {
                 throw new IllegalStateException(
-                        "Failed to load verified bundle '" + bundleId
-                                + "'. Install it using: ./amsha-sqlite models install whisper",
-                        e);
+                        "Failed to load verified bundle '" + bundleId + "': " + e.getMessage(), e);
             }
             OnnxAudioTranscriptionBundleSpec spec = encoderBundle.manifest().audioTranscription();
             if (spec == null) {

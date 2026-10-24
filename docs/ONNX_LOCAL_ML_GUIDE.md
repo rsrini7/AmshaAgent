@@ -141,22 +141,23 @@ AMSHA_EMBED_DIMENSIONS=768
 ```
 
 Install the pinned embedding bundle before enabling the slot. The source checkout
-uses Mise; the packaged binary has the same installer built in and does not need
-Mise or an LLM provider configured. Downloading requires an internet connection and about
+Mise task downloads and verifies the bundle without requiring an LLM provider. A
+developer JAR or any of the three backend-specific native binaries can also manage
+models. Run JAR commands from the repository root and native commands from the
+directory containing the binaries. Downloading requires internet access and about
 436 MB of free disk space:
 
-```bash
-# Source checkout
-mise run models:install-mpnet
+| Runtime | Install MPNet | Verify MPNet |
+| --- | --- | --- |
+| Mise model task | `mise run models:install-mpnet` (installs and verifies) | Included in install |
+| Developer JAR | `mise run jar:run-dev-dep -- models install mpnet` | `mise run jar:run-dev-dep -- models verify mpnet` |
+| SQLite native | `./amsha-sqlite models install mpnet` | `./amsha-sqlite models verify mpnet` |
+| PostgreSQL native | `./amsha-pg models install mpnet` | `./amsha-pg models verify mpnet` |
+| Filesystem native | `./amsha-fs models install mpnet` | `./amsha-fs models verify mpnet` |
 
-# Packaged binary, run from the directory containing amsha-sqlite
-./amsha-sqlite models install mpnet
-./amsha-sqlite models verify mpnet
-```
-
-The binary also provides `models list` and accepts `whisper`, `bge-reranker`, and
-`all` as install targets. `all` downloads about 1.6 GB. Run `./amsha-sqlite`
-without arguments for the command and option guide. Model management reads `.env`
+Each native binary also provides `models list` and accepts `whisper`, `bge-reranker`, and
+`all` as install targets. `all` downloads about 1.6 GB. Use `models list` with
+the selected JAR or native binary to see the command and option guide. Model management reads `.env`
 from the binary directory and stores bundles under `AMSHA_ONNX_MODEL_ROOT` (or
 `AMSHA_DATA_DIR/models` when the model root is not set).
 
@@ -173,10 +174,14 @@ Model bundles are optional until their feature is enabled:
   such as `ollama`, `jina`, or `openai`. With another provider configured, Amsha
   skips the unavailable ONNX slot and continues with the configured provider.
 - Whisper requires `AMSHA_ONNX_ENABLED=true` and
-  `AMSHA_STT_LOCAL_ENABLED=true`. Install it with
-  `./amsha-sqlite models install whisper`, or leave local transcription disabled.
+  `AMSHA_STT_LOCAL_ENABLED=true`. Install it from a source checkout with
+  `mise run models:provision-local-whisper`, or use `models install whisper` with
+  the developer JAR or native binary for your backend. Otherwise, leave local
+  transcription disabled.
 - BGE reranking is optional. If its bundle is unavailable, retrieval continues
-  with hybrid search; install it with `./amsha-sqlite models install bge-reranker`
+  with hybrid search; install it from a source checkout with
+  `mise run models:install-bge-reranker`, or use `models install bge-reranker`
+  with the developer JAR or native binary for your backend.
   or set `AMSHA_RAG_RERANKER_ENABLED=false`.
 
 Before Quarkus starts, the binary checks enabled local features for missing or

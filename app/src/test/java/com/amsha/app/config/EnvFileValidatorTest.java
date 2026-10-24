@@ -7,12 +7,49 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import com.amsha.common.config.ConfigKeys;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class EnvFileValidatorTest {
+
+    private static final List<String> ACTIVE_PROVIDER_SETTINGS = List.of(
+            ConfigKeys.LLM_PROVIDER,
+            ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS,
+            ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS,
+            ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS,
+            ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS);
+
+    private final Map<String, String> originalProviderSettings = new HashMap<>();
+
+    @BeforeEach
+    void isolateProviderConfiguration() {
+        ACTIVE_PROVIDER_SETTINGS.forEach(key -> {
+            originalProviderSettings.put(key, System.getProperty(key));
+            // Empty system properties take precedence over shell variables, keeping each
+            // fixture independent of the developer's active Amsha configuration.
+            System.setProperty(key, "");
+        });
+    }
+
+    @AfterEach
+    void restoreProviderConfiguration() {
+        originalProviderSettings.forEach((key, value) -> {
+            if (value == null) {
+                System.clearProperty(key);
+            } else {
+                System.setProperty(key, value);
+            }
+        });
+        originalProviderSettings.clear();
+    }
 
     @Test
     void testValidate_validEnvFileHasNoIssues(@TempDir Path tempDir) throws IOException {
@@ -35,6 +72,7 @@ class EnvFileValidatorTest {
 
     @Test
     void testValidate_detectsDuplicatesAndPlaceholders(@TempDir Path tempDir) throws IOException {
+        setActiveProviders("groq", "", "", "", "");
         Path envFile = tempDir.resolve(".env");
         Files.write(
                 envFile,
@@ -65,6 +103,7 @@ class EnvFileValidatorTest {
 
     @Test
     void ignoresUnusedProviderPlaceholdersForSelectedCodexSetup(@TempDir Path tempDir) throws IOException {
+        setActiveProviders("codex", "codex", "codex", "codex", "ollama");
         Path envFile = tempDir.resolve(".env");
         Files.write(
                 envFile,
@@ -87,6 +126,7 @@ class EnvFileValidatorTest {
 
     @Test
     void reportsOnlyActiveAuxiliaryProviderPlaceholders(@TempDir Path tempDir) throws IOException {
+        setActiveProviders("codex", "codex", "groq", "groq", "ollama");
         Path envFile = tempDir.resolve(".env");
         Files.write(
                 envFile,
@@ -177,5 +217,14 @@ class EnvFileValidatorTest {
         assertTrue(result.hasIssues());
         // Verify printReport runs without throwing
         EnvFileValidator.printReport(result, envFile);
+    }
+
+    private static void setActiveProviders(
+            String llm, String loopLlm, String compaction, String classifier, String embedding) {
+        System.setProperty(ConfigKeys.LLM_PROVIDER, llm);
+        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, loopLlm);
+        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, compaction);
+        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, classifier);
+        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS, embedding);
     }
 }

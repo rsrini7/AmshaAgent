@@ -93,38 +93,45 @@ If the browser loses the owner cookie, `bootstrap/status` remains `CLAIMED` and 
 ## Optional local ONNX models
 
 Local embedding, reranking, and speech-to-text models are installed explicitly;
-Amsha does not fetch model files during inference. The packaged binary includes
-model-management commands, so Mise is not required:
+Amsha does not download them during inference. From a source checkout, install
+models with Mise. These tasks verify the downloaded files and do not require a
+configured LLM provider:
 
 ```bash
-./amsha-sqlite models list
-./amsha-sqlite models install mpnet       # ONNX embeddings
-./amsha-sqlite models install whisper     # local speech-to-text
-./amsha-sqlite models install bge-reranker
-./amsha-sqlite models install all
-./amsha-sqlite models verify all
+mise run models:install-mpnet
+mise run models:install-bge-reranker
+mise run models:provision-local-whisper
 ```
 
-Downloads need an internet connection. MPNet is about 436 MB, Whisper about
-43 MB, and BGE reranker about 1.1 GB. Files are stored under the configured
-`AMSHA_ONNX_MODEL_ROOT` or `AMSHA_DATA_DIR` (default `data/models/`). A failed
-install reports the model, cause, and retry command. Partial files are removed;
-complete files that pass SHA-256 verification are kept and reused on retry.
+For MPNet, use the developer JAR or native binary built for your persistence
+backend. Run the JAR command from the repository root; run a native command from
+the directory containing the selected binary:
 
-Downloads are optional until the matching feature is enabled. MPNet is needed
-for ONNX embeddings; Whisper is needed only when `AMSHA_STT_LOCAL_ENABLED=true`,
-and BGE reranking only when `AMSHA_RAG_RERANKER_ENABLED=true`. If MPNet cannot
-be downloaded, choose another provider in
-`AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS`, such as `ollama`, `jina`, or `openai`.
-If no embedding provider is available, vector search reports that it is
-unavailable and retrieval continues with keyword search. You can disable local
-speech-to-text or reranking if those models are unavailable; reranking then
-continues through the configured hybrid retrieval path.
+| Runtime | Install MPNet | Verify MPNet |
+| --- | --- | --- |
+| Developer JAR | `mise run jar:run-dev-dep -- models install mpnet` | `mise run jar:run-dev-dep -- models verify mpnet` |
+| SQLite native | `./amsha-sqlite models install mpnet` | `./amsha-sqlite models verify mpnet` |
+| PostgreSQL native | `./amsha-pg models install mpnet` | `./amsha-pg models verify mpnet` |
+| Filesystem native | `./amsha-fs models install mpnet` | `./amsha-fs models verify mpnet` |
 
-If a feature is explicitly enabled with a required model missing and no
-compatible fallback is configured, startup stops with the reason, install
-command, and fallback guidance. The CLI also prints the diagnostic log path so
-you can inspect the full startup details.
+The source checkout also has a model-only MPNet installer,
+`mise run models:install-mpnet`, which downloads and verifies the bundle without
+building the JAR. The same `models install` and `models verify` commands accept
+`whisper`, `bge-reranker`, and `all` selectors on the developer JAR and native
+binaries. `all` downloads about 1.6 GB.
+
+Downloads require internet access. MPNet is about 436 MB, Whisper about 43 MB,
+and the BGE reranker about 1.1 GB. Files are stored under `AMSHA_ONNX_MODEL_ROOT`
+or `AMSHA_DATA_DIR` (default `data/models/`). Failed installs report the cause and
+retry command; incomplete files are removed, while complete verified files are
+reused. MPNet is required when ONNX is the only configured embedding provider.
+Whisper is required only when `AMSHA_STT_LOCAL_ENABLED=true`, and the reranker only
+when `AMSHA_RAG_RERANKER_ENABLED=true`. If MPNet is unavailable, configure another
+provider such as `ollama`, `jina`, or `openai` in
+`AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS`. Without a usable vector provider,
+retrieval continues with keyword search. If an explicitly enabled feature has no
+model and no compatible fallback, startup prints the reason and installation
+options, then stops. It also prints the diagnostic log path for further detail.
 
 ## Docker Compose
 

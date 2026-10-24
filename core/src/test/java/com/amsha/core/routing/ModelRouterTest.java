@@ -76,7 +76,7 @@ class ModelRouterTest {
         router = new ModelRouter();
         router.modelPool = modelPool;
         router.groupRegistry = groupRegistry;
-        router.globalProvider = "groq";
+        router.globalProvider = Optional.of("groq");
         router.globalModel = Optional.of("llama-3.3-70b");
         router.profileResolver = profileResolver;
         router.credentialResolver = credentialResolver;
@@ -216,7 +216,7 @@ class ModelRouterTest {
 
     @Test
     void resolve_unknownProvider_throwsModelRoutingException() {
-        router.globalProvider = "unknown_provider";
+        router.globalProvider = Optional.of("unknown_provider");
         when(modelPool.getOrCreate(anyString(), any())).thenAnswer(inv -> {
             var supplier = inv.getArgument(1, Supplier.class);
             return supplier.get();

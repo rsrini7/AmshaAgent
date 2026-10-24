@@ -4,7 +4,11 @@ package com.amsha.app.security;
 public final class VaultUnlockFailureException extends IllegalStateException {
     public static final String DIAGNOSTIC = "[SECURITY] Stored audit HMAC key cannot be decrypted. "
             + "AMSHA_VAULT_PEPPER must match the value used to create this data. "
-            + "Restore the original pepper to keep existing data.";
+            + "Restore the original pepper to keep existing data. "
+            + "If the pepper is unrecoverable and SQLite data is disposable, the interactive native CLI offers "
+            + "BACKUP (move the directory) or DELETE (permanently erase it); stop other Amsha processes first. "
+            + "PostgreSQL and filesystem installs need backend-specific recovery. "
+            + "Do not discard the backup.";
 
     private final String persistenceBackend;
     private final String dataDirectory;

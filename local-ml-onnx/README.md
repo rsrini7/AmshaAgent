@@ -142,24 +142,24 @@ For reproducible development bundles:
 
 All bundles verify fixed SHA-256 digests and byte counts, writing deterministic local manifests under gitignored `data/models/`.
 
-### Standalone binary model management
+### Standalone model management
 
-For distribution environments where Python, `mise`, or repo scripts are not present on the end-user machine, the native binary provides built-in model management:
+The source checkout provides Mise tasks for downloads and SHA-256 verification.
+The developer JAR and native binaries also provide model-management commands,
+which do not require an LLM provider. Run JAR commands from the repository root;
+run native commands from the directory containing the selected binary.
 
-```bash
-# List local model bundles and their installation status
-./amsha-sqlite models list
+| Runtime | List models | Install MPNet | Verify MPNet |
+| --- | --- | --- | --- |
+| Developer JAR | `mise run jar:run-dev-dep -- models list` | `mise run jar:run-dev-dep -- models install mpnet` | `mise run jar:run-dev-dep -- models verify mpnet` |
+| SQLite native | `./amsha-sqlite models list` | `./amsha-sqlite models install mpnet` | `./amsha-sqlite models verify mpnet` |
+| PostgreSQL native | `./amsha-pg models list` | `./amsha-pg models install mpnet` | `./amsha-pg models verify mpnet` |
+| Filesystem native | `./amsha-fs models list` | `./amsha-fs models install mpnet` | `./amsha-fs models verify mpnet` |
 
-# Install pinned and SHA-256 verified model bundles
-./amsha-sqlite models install whisper       # Local speech-to-text (~43 MB)
-./amsha-sqlite models install mpnet         # Local dense embeddings (~436 MB)
-./amsha-sqlite models install bge-reranker  # Local cross-encoder reranking (~1.1 GB)
-./amsha-sqlite models install all           # Install all supported local models
-
-# Verify integrity of installed model files
-./amsha-sqlite models verify whisper
-./amsha-sqlite models verify mpnet
-```
+The `install` and `verify` commands also accept `whisper`, `bge-reranker`, and
+`all`. The `all` selector downloads about 1.6 GB. For a source checkout, the
+model-only tasks such as `mise run models:install-mpnet` avoid rebuilding the JAR
+and verify the downloaded files as part of installation.
 
 For MPNet's embedding-space settings and the RAG provider switch, follow the
 [ONNX Local ML guide](../docs/ONNX_LOCAL_ML_GUIDE.md#5-configuration-reference).

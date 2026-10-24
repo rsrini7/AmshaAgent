@@ -309,6 +309,8 @@ mise run help    # or: mise tasks
 | `mise run build:native-lowmem` | Native binary - local GraalVM, 6 GB heap cap |
 | `mise run build:clean` | `mvnw clean` |
 | `mise run models:install-mpnet` | Download and verify MPNet for ONNX embeddings (~436 MB) |
+| `mise run models:install-bge-reranker` | Download and verify the optional BGE reranker (~1.1 GB) |
+| `mise run models:provision-local-whisper` | Provision the optional local Whisper speech model |
 | **`mise run dev`** | Quarkus dev mode on :8080; several Amsha dependencies are non-reloadable |
 | `mise run dev:chat` | Quarkus dev mode - interactive REPL |
 | `mise run dev:attach` | Quarkus dev mode - Telegram daemon |
@@ -502,7 +504,7 @@ Available roles: `coordinator` · `researcher` · `coder` · `debugger` · `arch
 
 All JAR tasks invoke `java` directly with paths `./lib/vec0` / `./data`. For multi-module development, `jar:run-dev-dep` runs the clean module build with tests skipped before launching the packaged JAR with the `%dev` profile. Rerun it after code changes.
 
-If `.env` selects `onnx` embeddings, install the MPNet bundle once from the source checkout with `mise run models:install-mpnet`. Native-binary users can install it with `./amsha-sqlite models install mpnet`; see the [ONNX local ML guide](./ONNX_LOCAL_ML_GUIDE.md).
+If `.env` selects `onnx` embeddings, install MPNet from the source checkout with `mise run models:install-mpnet`. The developer JAR can manage the model with `mise run jar:run-dev-dep -- models install mpnet`. Native builds are backend-specific; use the matching binary from its directory: `./amsha-sqlite`, `./amsha-pg`, or `./amsha-fs`, followed by `models install mpnet`. Each runtime also supports `models verify mpnet`. See the [ONNX local ML guide](./ONNX_LOCAL_ML_GUIDE.md) for complete commands.
 
 ```bash
 mise run jar:run-dev-dep -- serve # clean build (tests skipped), then web server on :8080

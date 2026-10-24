@@ -3,6 +3,7 @@ package com.amsha.core.scope;
 import java.util.concurrent.Callable;
 
 import com.amsha.channel.api.ChannelType;
+import com.amsha.common.util.LogUtil;
 import com.amsha.core.util.MdcKeys;
 import com.amsha.security.api.AutonomyLevel;
 
@@ -105,7 +106,7 @@ public final class WorkspaceScopeHolder {
             }
             scope.run(runnable);
         } finally {
-            if (requestContext != null && !wasActive) requestContext.deactivate();
+            deactivateRequestContext(requestContext, wasActive);
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
             MDC.remove(MdcKeys.CHAT_ID);
@@ -144,7 +145,7 @@ public final class WorkspaceScopeHolder {
 
             return scope.call(() -> callable.call());
         } finally {
-            if (requestContext != null && !wasActive) requestContext.deactivate();
+            deactivateRequestContext(requestContext, wasActive);
             MDC.remove(MdcKeys.SESSION_ID);
             MDC.remove(MdcKeys.USER_ID);
             MDC.remove(MdcKeys.CHAT_ID);
@@ -240,6 +241,17 @@ public final class WorkspaceScopeHolder {
     private static void validate(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalArgumentException("sessionId must not be null or blank");
+        }
+    }
+
+    private static void deactivateRequestContext(ManagedContext requestContext, boolean wasActive) {
+        if (requestContext == null || wasActive) {
+            return;
+        }
+        try {
+            requestContext.deactivate();
+        } catch (RuntimeException e) {
+            LOG.warn("Failed to deactivate request context after workspace scope", LogUtil.relevantThrowable(e));
         }
     }
 

@@ -2,6 +2,7 @@ package com.amsha.localml.onnx;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -44,6 +45,18 @@ class OnnxModelBundleRegistryTest {
         OnnxModelBundleRegistry registry = new OnnxModelBundleRegistry(objectMapper, false, tempDir, 1024);
 
         assertThrows(IOException.class, () -> registry.loadVerified("bundle-one"));
+    }
+
+    @Test
+    void missingKnownBundleListsInstallCommandsForAllRuntimes() {
+        OnnxModelBundleRegistry registry = new OnnxModelBundleRegistry(objectMapper, true, tempDir, 1024);
+
+        IOException failure = assertThrows(IOException.class, () -> registry.loadVerified(OnnxModelBundleIds.MPNET));
+
+        assertTrue(failure.getMessage().contains("mise run jar:run-dev-dep -- models install mpnet"));
+        assertTrue(failure.getMessage().contains("amsha-sqlite models install mpnet"));
+        assertTrue(failure.getMessage().contains("amsha-pg models install mpnet"));
+        assertTrue(failure.getMessage().contains("amsha-fs models install mpnet"));
     }
 
     @Test

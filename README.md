@@ -11,7 +11,7 @@
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
-  ![Java Tests](https://img.shields.io/badge/Tests-9782_passed_%C2%B7_15_skipped_of_9797-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9790_passed_%C2%B7_24_skipped_of_9814-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-86.58%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-201_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-59.64%25-yellow.svg?style=flat)
@@ -95,7 +95,16 @@ Install and initialize mise as described in [docs/MISE_SETUP.md](./docs/MISE_SET
 mise run models:install-mpnet
 ```
 
-This downloads about 436 MB to `data/models/`. Native-binary users can install it with `./amsha-sqlite models install mpnet` from the directory containing the binary; see the [ONNX local ML guide](./docs/ONNX_LOCAL_ML_GUIDE.md) for both workflows.
+This downloads about 436 MB to `data/models/` and verifies the bundle. For a developer JAR, run `mise run jar:run-dev-dep -- models install mpnet`; the model-only task above performs the same download and verification without rebuilding the JAR. Native builds are backend-specific, so use the binary you built from the repository root:
+
+| Runtime | Install MPNet | Verify MPNet |
+| --- | --- | --- |
+| Developer JAR | `mise run jar:run-dev-dep -- models install mpnet` | `mise run jar:run-dev-dep -- models verify mpnet` |
+| SQLite native | `./dist/amsha-sqlite models install mpnet` | `./dist/amsha-sqlite models verify mpnet` |
+| PostgreSQL native | `./dist/amsha-pg models install mpnet` | `./dist/amsha-pg models verify mpnet` |
+| Filesystem native | `./dist/amsha-fs models install mpnet` | `./dist/amsha-fs models verify mpnet` |
+
+See the [ONNX local ML guide](./docs/ONNX_LOCAL_ML_GUIDE.md) for Whisper, reranker, model-root, and fallback details.
 
 For regular multi-module development, use the packaged JAR task; it clean-builds all modules (tests skipped) before starting the application with the Quarkus `dev` profile:
 

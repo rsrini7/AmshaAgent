@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.app.cli.CliArguments;
@@ -38,6 +39,11 @@ public final class LocalModelValidator {
     private static final String EMBEDDING_PROVIDER_JINA = "jina";
     private static final String OS_MACOS_FRAGMENT = "mac";
     private static final String OS_WINDOWS_FRAGMENT = "win";
+    private static final String MISE_JAR_MODEL_COMMAND = ModelInstaller.JVM_LAUNCHER_COMMAND + " models ";
+    private static final Map<String, String> MISE_MODEL_INSTALL_TASKS = Map.of(
+            ModelInstaller.SELECTOR_MPNET, "models:install-mpnet",
+            ModelInstaller.SELECTOR_RERANKER, "models:install-bge-reranker",
+            ModelInstaller.SELECTOR_WHISPER, "models:provision-local-whisper");
 
     private LocalModelValidator() {}
 
@@ -62,9 +68,10 @@ public final class LocalModelValidator {
                 if (ModelInstaller.checkStatus(whisper, modelRoot) != ModelInstaller.ModelStatus.INSTALLED) {
                     printMissingWhisperBanner(whisperDir);
                     localModelFailure = new StartupPreflightException(
-                            "Whisper model bundle is missing or incomplete at " + whisperDir + ". Install it with "
-                                    + ModelInstaller.launcherCommand() + " models install "
-                                    + ModelInstaller.SELECTOR_WHISPER + " or disable local transcription with "
+                            "Whisper model bundle is missing or incomplete at " + whisperDir
+                                    + ". Install it using one of these options:"
+                                    + formatModelInstallGuidance(ModelInstaller.SELECTOR_WHISPER)
+                                    + "\nOr disable local transcription with "
                                     + LOCAL_STT_ENABLED_ENV + "=false.");
                 }
 
@@ -140,12 +147,10 @@ public final class LocalModelValidator {
         System.err.println("[Amsha Agent] Optional reranking is unavailable; continuing with hybrid search.");
         if (onnxEnabled) {
             System.err.printf("The model bundle %s is missing or incomplete.%n", bundleId);
-            System.err.printf(
-                    "Install with: %s models install %s%n",
-                    ModelInstaller.launcherCommand(),
-                    entry.map(catalogEntry ->
-                                    catalogEntry.aliases().stream().findFirst().orElse(catalogEntry.id()))
-                            .orElse(bundleId));
+            String installName = entry.map(catalogEntry ->
+                            catalogEntry.aliases().stream().findFirst().orElse(catalogEntry.id()))
+                    .orElse(bundleId);
+            System.err.printf("Install it using one of these options:%s%n", formatModelInstallGuidance(installName));
         } else {
             System.err.printf("Enable ONNX with %s=true to use reranking.%n", ConfigKeys.ONNX_ENABLED);
         }
@@ -256,19 +261,11 @@ public final class LocalModelValidator {
             String installName = entry.get().aliases().stream()
                     .findFirst()
                     .orElse(entry.get().id());
-            String launcher = ModelInstaller.launcherCommand();
-            message.append("\nInstall with: ")
-                    .append(launcher)
-                    .append(" models install ")
-                    .append(installName);
-            message.append("\nVerify with: ")
-                    .append(launcher)
-                    .append(" models verify ")
-                    .append(installName);
+            message.append("\nInstall it using one of these options:").append(formatModelInstallGuidance(installName));
         } else {
-            message.append("\nList supported bundles with: ")
-                    .append(ModelInstaller.launcherCommand())
-                    .append(" models list");
+            message.append("\nList supported bundles with:");
+            appendNativeBinaryCommands(message, "list", null);
+            message.append("\nSource checkout: mise run models:list");
         }
         message.append("\nTo avoid ONNX, configure another embedding provider in ")
                 .append(EMBEDDING_PROVIDERS_ENV)
@@ -282,6 +279,39 @@ public final class LocalModelValidator {
         return message.toString();
     }
 
+    private static String formatModelInstallGuidance(String selector) {
+        StringBuilder guidance = new StringBuilder();
+        guidance.append("\n  Developer JAR (run from source checkout root): ")
+                .append(MISE_JAR_MODEL_COMMAND)
+                .append("install ")
+                .append(selector);
+        ModelInstaller.findModel(selector)
+                .flatMap(entry -> entry.aliases().stream()
+                        .filter(MISE_MODEL_INSTALL_TASKS::containsKey)
+                        .map(MISE_MODEL_INSTALL_TASKS::get)
+                        .findFirst())
+                .ifPresent(task -> guidance.append("\n  Mise model task (also verifies files): mise run ")
+                        .append(task));
+        guidance.append("\n  Native binaries (run from the directory containing the binary):");
+        appendNativeBinaryCommands(guidance, "install", selector);
+        guidance.append("\n  Verify from the Dev JAR with: ")
+                .append(MISE_JAR_MODEL_COMMAND)
+                .append("verify ")
+                .append(selector);
+        guidance.append(
+                "\n  Verify a native install using the same binary command with `verify` instead of `install`.");
+        return guidance.toString();
+    }
+
+    private static void appendNativeBinaryCommands(StringBuilder target, String action, String selector) {
+        for (String launcher : ModelInstaller.launcherCommands()) {
+            target.append("\n    ").append(launcher).append(" models ").append(action);
+            if (selector != null) {
+                target.append(' ').append(selector);
+            }
+        }
+    }
+
     public static final class StartupPreflightException extends RuntimeException {
 
         private static final long serialVersionUID = 1L;
@@ -293,22 +323,13 @@ public final class LocalModelValidator {
 
     private static void printMissingWhisperBanner(Path targetDir) {
         System.err.println();
-        System.err.println("  ┌──────────────────────────────────────────────────────────────────────────┐");
-        System.err.printf("  │ %-70s │%n", "🎙️  Local Whisper Model Bundle Missing or Incomplete");
-        System.err.println("  ├──────────────────────────────────────────────────────────────────────────┤");
-        System.err.printf("  │ %-70s │%n", "Local transcription requires " + LOCAL_STT_ENABLED_ENV + "=true.");
-        System.err.printf(
-                "  │ %-70s │%n", "Bundle " + ModelInstaller.WHISPER_BUNDLE_ID + " is missing or incomplete at:");
-        System.err.printf("  │   %-70s │%n", targetDir.toString());
-        System.err.println("  │                                                                          │");
-        System.err.println("  │ Install using this binary:                                               │");
-        System.err.printf(
-                "  │   %-70s │%n",
-                ModelInstaller.launcherCommand() + " models install " + ModelInstaller.SELECTOR_WHISPER);
-        System.err.println("  │                                                                          │");
-        System.err.println("  │ Or disable local transcription in .env:                                  │");
-        System.err.printf("  │   %-70s │%n", LOCAL_STT_ENABLED_ENV + "=false");
-        System.err.println("  └──────────────────────────────────────────────────────────────────────────┘");
+        System.err.println("[Amsha Agent] Local Whisper Model Bundle Missing or Incomplete.");
+        System.err.printf("Bundle location: %s%n", targetDir);
+        System.err.printf("Local transcription requires %s=true.%n", LOCAL_STT_ENABLED_ENV);
+        System.err.println("Install options:");
+        System.err.println(
+                formatModelInstallGuidance(ModelInstaller.SELECTOR_WHISPER).strip());
+        System.err.printf("Or disable local transcription with %s=false.%n", LOCAL_STT_ENABLED_ENV);
         System.err.println();
     }
 

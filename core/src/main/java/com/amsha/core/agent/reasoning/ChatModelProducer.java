@@ -61,8 +61,8 @@ public class ChatModelProducer {
             Map.entry(ModelDefaults.PROVIDER_GEMINI, ModelDefaults.DEFAULT_GEMINI_BASE_URL),
             Map.entry(ModelDefaults.PROVIDER_GENERIC_OPENAI, ""));
 
-    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.DEFAULT_PROVIDER)
-    String provider;
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER)
+    Optional<String> provider;
 
     @ConfigProperty(name = LlmConfigKeys.VAULT_PRIORITY, defaultValue = "false")
     boolean vaultPriority;
@@ -117,12 +117,12 @@ public class ChatModelProducer {
     private VaultLlmConfig resolveVaultPriorityConfig() {
         Optional<VaultKey> vaultProvider = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
         if (vaultProvider.isEmpty()) {
-            return new VaultLlmConfig(provider, null, null, null);
+            return new VaultLlmConfig(configuredProvider(), null, null, null);
         }
         try (VaultKey pKey = vaultProvider.get()) {
             String p = new String(pKey.get(), StandardCharsets.UTF_8).trim();
             if (p.isBlank()) {
-                return new VaultLlmConfig(provider, null, null, null);
+                return new VaultLlmConfig(configuredProvider(), null, null, null);
             }
             String key = readVaultKeyForProvider(p);
             String model = readVaultString(VaultConstants.LLM_MODEL_KEY);
@@ -133,7 +133,7 @@ public class ChatModelProducer {
     }
 
     private VaultLlmConfig resolveStandardVaultConfig() {
-        String effectiveProv = provider;
+        String effectiveProv = configuredProvider();
         String key = readVaultKeyForProvider(effectiveProv);
         String model = readVaultString(VaultConstants.LLM_MODEL_KEY);
         String baseUrl = readVaultString(VaultConstants.LLM_BASE_URL_KEY);
@@ -191,6 +191,13 @@ public class ChatModelProducer {
         return value != null && !value.isBlank();
     }
 
+    private String configuredProvider() {
+        if (provider == null) {
+            return ModelDefaults.DEFAULT_PROVIDER;
+        }
+        return provider.filter(ChatModelProducer::hasText).orElse(ModelDefaults.DEFAULT_PROVIDER);
+    }
+
     private String resolveProvider() {
         if (vaultPriority) {
             Optional<VaultKey> vaultKey = vault.retrieveSystemKey(VaultConstants.LLM_PROVIDER_KEY);
@@ -199,7 +206,7 @@ public class ChatModelProducer {
                 if (!p.isBlank()) return p;
             }
         }
-        return provider != null ? provider : ModelDefaults.DEFAULT_PROVIDER;
+        return configuredProvider();
     }
 
     @Produces
@@ -211,7 +218,10 @@ public class ChatModelProducer {
     }
 
     private AgentChatModelProvider findProvider(String providerName) {
-        String cleanProvider = clean(providerName != null ? providerName : ModelDefaults.DEFAULT_PROVIDER);
+        String cleanProvider = clean(providerName);
+        if (!hasText(cleanProvider)) {
+            cleanProvider = clean(resolveProvider());
+        }
         if (!hasText(cleanProvider)) {
             throw new IllegalStateException(
                     "No LLM provider is selected. Set AMSHA_LLM_PROVIDER to a configured provider before sending a message.");
@@ -221,8 +231,8 @@ public class ChatModelProducer {
                 return p;
             }
         }
-        throw new IllegalStateException(
-                "No AgentChatModelProvider found for provider='" + cleanProvider + "' (raw: '" + provider + "')");
+        throw new IllegalStateException("No AgentChatModelProvider found for provider='" + cleanProvider + "' (raw: '"
+                + configuredProvider() + "')");
     }
 
     private String clean(String value) {

@@ -117,11 +117,19 @@ $ErrorActionPreference = 'Stop'
 """
 
 [tasks."test:summary"]
-description = "Summarize surefire+failsafe XML test report counts, reactor JaCoCo coverage, and UI coverage"
+description = "Run UI coverage tests, then summarize Java tests and reactor/UI coverage"
 dir = "{{config_root}}"
 quiet = true
 shell = "bash -c"
 run = """
+ui_test_status=0
+if mise run test:ui; then
+  echo "[test:summary] UI test suite completed."
+else
+  ui_test_status=$?
+  echo "[test:summary] UI test suite exited with status $ui_test_status; collecting available reports." >&2
+fi
+
 # NOTE: this aggregation deliberately uses only POSIX `find`/`grep`/`awk`. It previously used
 # `rg`, which is not declared in [tools] and therefore absent on a clean checkout — and because
 # stderr was discarded, the task printed a confident "Total: 0" instead of failing. Keep the
@@ -145,10 +153,16 @@ else
     END { printf "Total: %d | Failures: %d | Errors: %d | Skipped: %d | Suites: %d", t, f, e, s, NR }')
     echo "Java Tests: $TEST_SUMMARY"
 fi
-python3 ./scripts/analyze_jacoco_coverage.py --summary 2>/dev/null
+summary_status=0
+python3 ./scripts/analyze_jacoco_coverage.py --summary || summary_status=$?
 if [ -f "ui/coverage/coverage-summary.json" ] || [ -f "ui/coverage/junit.xml" ]; then
     echo "---"
-    python3 ./scripts/analyze_ui_coverage.py --summary --sync-readme 2>/dev/null
+  python3 ./scripts/analyze_ui_coverage.py --summary --sync-readme || summary_status=$?
+fi
+
+if [ "$ui_test_status" -ne 0 ] || [ "$summary_status" -ne 0 ]; then
+  echo "[test:summary] Summary completed with failures (UI tests: $ui_test_status, report generation: $summary_status)." >&2
+  exit 1
 fi
 """
 

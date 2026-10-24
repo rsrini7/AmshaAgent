@@ -95,8 +95,8 @@ public class ModelRouter {
     @ConfigProperty(name = LlmConfigKeys.PROFILE_ROUTING_ENABLED, defaultValue = "false")
     boolean profileRoutingEnabled;
 
-    @ConfigProperty(name = LlmConfigKeys.PROVIDER, defaultValue = ModelDefaults.DEFAULT_PROVIDER)
-    String globalProvider;
+    @ConfigProperty(name = LlmConfigKeys.PROVIDER)
+    Optional<String> globalProvider;
 
     @ConfigProperty(name = LlmConfigKeys.MODEL)
     Optional<String> globalModel;
@@ -125,7 +125,7 @@ public class ModelRouter {
         }
         var configs = resolveConfigs(agentRole, bypassLightweightDowngrade);
         if (configs.isEmpty()) {
-            return getOrCreateModel(globalProvider, globalModel.orElse(""));
+            return getOrCreateModel(configuredGlobalProvider(), globalModel.orElse(""));
         }
         return buildModelFromConfigs(configs);
     }
@@ -233,8 +233,8 @@ public class ModelRouter {
         if (!bypassLightweightDowngrade && goal != null && isLightweightTask(goal)) {
             log.infof(
                     "[MODEL-ROUTER] Goal classified as lightweight. Routing to default low-cost provider: %s",
-                    globalProvider);
-            return List.of(new ModelConfig(globalProvider, globalModel.orElse("")));
+                    configuredGlobalProvider());
+            return List.of(new ModelConfig(configuredGlobalProvider(), globalModel.orElse("")));
         }
 
         var personaConfigs = getPersonaConfigs(agentRole);
@@ -243,10 +243,16 @@ public class ModelRouter {
         var groupConfigs = getGroupConfigs(agentRole);
         if (!groupConfigs.isEmpty()) return groupConfigs;
 
-        return List.of(new ModelConfig(globalProvider, globalModel.orElse("")));
+        return List.of(new ModelConfig(configuredGlobalProvider(), globalModel.orElse("")));
     }
 
     // ── Private ────────────────────────────────────────────────────────────
+
+    private String configuredGlobalProvider() {
+        return globalProvider == null
+                ? ModelDefaults.DEFAULT_PROVIDER
+                : globalProvider.orElse(ModelDefaults.DEFAULT_PROVIDER);
+    }
 
     /**
      * Reads persona model configs. Supports multiple entries for fallback chain.

@@ -55,8 +55,8 @@ public class OnnxModelBundleRegistry {
             String hint = bundleId.contains(OnnxModelBundleIds.WHISPER_HINT)
                     ? OnnxModelBundleIds.WHISPER_HINT
                     : bundleId.contains(OnnxModelBundleIds.MPNET_HINT) ? OnnxModelBundleIds.MPNET_HINT : bundleId;
-            throw new IOException("Model bundle '" + bundleId + "' is not installed in " + bundle
-                    + ". Install it using: ./amsha-sqlite models install " + hint);
+            throw new IOException("Model bundle '" + bundleId + "' is not installed in " + bundle + ".\n"
+                    + OnnxModelInstallGuidance.forSelector(hint));
         }
         Path canonicalBundle = bundle.toRealPath();
         if (!canonicalBundle.startsWith(canonicalRoot)) {

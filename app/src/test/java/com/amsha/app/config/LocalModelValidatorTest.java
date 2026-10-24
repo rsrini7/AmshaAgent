@@ -48,6 +48,7 @@ class LocalModelValidatorTest {
     private static final String STT_ENABLED = "amsha.stt.local.enabled";
     private static final String FFMPEG_PATH = "amsha.stt.ffmpeg-path";
     private static final String ONNX_ENABLED = "amsha.onnx.enabled";
+    private static final String RERANKER_ENABLED = "amsha.rag.reranker.enabled";
     private static final String EMBEDDING_MODEL = "amsha.embedding.onnx.model";
     private static final String EMBEDDING_PROVIDERS_PROPERTY = "amsha.infinite-loop.embedding.providers";
     private static final String EMBEDDING_PROVIDERS_ENV = "AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS";
@@ -79,6 +80,7 @@ class LocalModelValidatorTest {
             STT_ENABLED,
             FFMPEG_PATH,
             ONNX_ENABLED,
+            RERANKER_ENABLED,
             EMBEDDING_MODEL,
             EMBEDDING_PROVIDERS_PROPERTY,
             EMBEDDING_PROVIDERS_ENV
@@ -89,9 +91,11 @@ class LocalModelValidatorTest {
         System.setErr(new PrintStream(capturedErr, true, StandardCharsets.UTF_8));
         // Pin the model root at the temp dir so resolution never depends on the developer's machine.
         System.setProperty(MODEL_ROOT, modelRoot.toString());
+        System.setProperty(OS_NAME, "Linux");
         System.setProperty(STT_ENABLED, "false");
         System.setProperty(FFMPEG_PATH, "");
         System.setProperty(ONNX_ENABLED, "false");
+        System.setProperty(RERANKER_ENABLED, "false");
         System.setProperty(EMBEDDING_MODEL, "");
         System.clearProperty(EMBEDDING_PROVIDERS_PROPERTY);
         System.setProperty(EMBEDDING_PROVIDERS_ENV, "ollama");
@@ -207,7 +211,13 @@ class LocalModelValidatorTest {
         String out = stderr();
         assertTrue(missingBundle.getMessage().contains(ModelInstaller.WHISPER_BUNDLE_ID));
         assertTrue(out.contains(WHISPER_BANNER_TITLE), out);
+        assertTrue(out.contains("mise run jar:run-dev-dep -- models install whisper"), out);
+        assertTrue(out.contains("mise run models:provision-local-whisper"), out);
+        assertTrue(out.contains("run from source checkout root"), out);
+        assertTrue(out.contains("run from the directory containing the binary"), out);
         assertTrue(out.contains("./amsha-sqlite models install whisper"), out);
+        assertTrue(out.contains("./amsha-pg models install whisper"), out);
+        assertTrue(out.contains("./amsha-fs models install whisper"), out);
         assertTrue(out.contains(modelRoot.resolve(WHISPER).toString()), out);
         assertFalse(out.contains(FFMPEG_BANNER_TITLE), "ffmpeg is available, so the banner must not print");
 
@@ -313,8 +323,13 @@ class LocalModelValidatorTest {
         LocalModelValidator.StartupPreflightException exception =
                 assertThrows(LocalModelValidator.StartupPreflightException.class, () -> validate(NO_ARGS, true));
         assertTrue(exception.getMessage().contains("bundle '" + MPNET + "' is missing"));
+        assertTrue(exception.getMessage().contains("mise run jar:run-dev-dep -- models install mpnet"));
+        assertTrue(exception.getMessage().contains("mise run models:install-mpnet"));
         assertTrue(exception.getMessage().contains("./amsha-sqlite models install mpnet"));
-        assertTrue(exception.getMessage().contains("./amsha-sqlite models verify mpnet"));
+        assertTrue(exception.getMessage().contains("./amsha-pg models install mpnet"));
+        assertTrue(exception.getMessage().contains("./amsha-fs models install mpnet"));
+        assertTrue(exception.getMessage().contains("mise run jar:run-dev-dep -- models verify mpnet"));
+        assertTrue(exception.getMessage().contains("models verify mpnet"));
         assertTrue(exception.getMessage().contains(modelRoot.resolve(MPNET).toString()));
     }
 

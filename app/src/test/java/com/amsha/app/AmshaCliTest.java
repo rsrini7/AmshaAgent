@@ -102,10 +102,10 @@ class AmshaCliTest {
     void runningWithoutArgumentsPrintsAllCommandsAndOptions() {
         String output = captureUsage();
 
-        assertTrue(output.contains("amsha-sqlite serve"), output);
-        assertTrue(output.contains("amsha-sqlite chat [options]"), output);
-        assertTrue(output.contains("amsha-sqlite ask <goal> [options]"), output);
-        assertTrue(output.contains("amsha-sqlite attach <channel>"), output);
+        assertTrue(output.contains("mise run jar:run-dev-dep -- serve"), output);
+        assertTrue(output.contains("mise run jar:run-dev-dep -- chat [options]"), output);
+        assertTrue(output.contains("mise run jar:run-dev-dep -- ask <goal> [options]"), output);
+        assertTrue(output.contains("mise run jar:run-dev-dep -- attach <channel>"), output);
         assertTrue(output.contains("--last-session"), output);
         assertTrue(output.contains("--new-session"), output);
         assertTrue(output.contains("--verbose"), output);

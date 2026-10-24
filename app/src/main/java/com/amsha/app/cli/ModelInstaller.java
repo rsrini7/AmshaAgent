@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 import com.amsha.localml.onnx.OnnxModelBundleIds;
+import com.amsha.localml.onnx.OnnxModelInstallGuidance;
 import com.amsha.localml.onnx.OnnxModelRootResolver;
 
 /**
@@ -34,6 +35,7 @@ public final class ModelInstaller {
     public static final String SELECTOR_WHISPER = "whisper";
     public static final String SELECTOR_MPNET = "mpnet";
     public static final String SELECTOR_RERANKER = "bge-reranker";
+    public static final String JVM_LAUNCHER_COMMAND = OnnxModelInstallGuidance.DEVELOPER_JAR_LAUNCHER;
 
     public static final String WHISPER_BUNDLE_ID = OnnxModelBundleIds.WHISPER;
     public static final String MPNET_BUNDLE_ID = OnnxModelBundleIds.MPNET;
@@ -41,8 +43,6 @@ public final class ModelInstaller {
     public static final String MANIFEST_FILE_NAME = OnnxModelBundleIds.MANIFEST_FILE_NAME;
 
     private static final int DOWNLOAD_PROGRESS_INTERVAL_PERCENT = 25;
-    private static final String EXECUTABLE_AMSHA_PREFIX = "amsha";
-    private static final String OS_WINDOWS_FRAGMENT = "win";
 
     public record ModelFileSpec(String fileName, String remoteUrl, long expectedBytes, String expectedSha256) {}
 
@@ -264,25 +264,12 @@ public final class ModelInstaller {
         return CATALOG;
     }
 
+    public static List<String> launcherCommands() {
+        return ModelLauncherCommands.launcherCommands();
+    }
+
     public static String launcherCommand() {
-        String processCommand = ProcessHandle.current().info().command().orElse("");
-        if (!processCommand.isBlank()) {
-            Path commandPath = Path.of(processCommand);
-            Path executable = commandPath.getFileName();
-            if (executable != null && executable.toString().startsWith(EXECUTABLE_AMSHA_PREFIX)) {
-                String launchPath = commandPath.getParent() == null
-                        ? System.getProperty("os.name", "")
-                                        .toLowerCase(Locale.ROOT)
-                                        .contains(OS_WINDOWS_FRAGMENT)
-                                ? ".\\" + commandPath
-                                : "./" + commandPath
-                        : processCommand;
-                return launchPath.chars().anyMatch(Character::isWhitespace)
-                        ? "\"" + launchPath.replace("\"", "\\\"") + "\""
-                        : launchPath;
-            }
-        }
-        return "./amsha-sqlite";
+        return ModelLauncherCommands.launcherCommand();
     }
 
     public static Optional<ModelCatalogEntry> findModel(String query) {
