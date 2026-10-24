@@ -97,7 +97,7 @@ class ModelRouterBranchTest {
         router.modelPool = modelPool;
         router.groupRegistry = groupRegistry;
         router.classifierService = classifierService;
-        router.globalProvider = "groq";
+        router.globalProvider = Optional.of("groq");
         router.globalModel = Optional.of("llama-3.3-70b");
         router.profileResolver = profileResolver;
         router.credentialResolver = credentialResolver;
@@ -149,7 +149,7 @@ class ModelRouterBranchTest {
             }
         };
         noConfigRouter.modelPool = modelPool;
-        noConfigRouter.globalProvider = "groq";
+        noConfigRouter.globalProvider = Optional.of("groq");
         noConfigRouter.globalModel = Optional.of("llama-3.3-70b");
         when(modelPool.getOrCreate(anyString(), any())).thenReturn(groqModel);
 

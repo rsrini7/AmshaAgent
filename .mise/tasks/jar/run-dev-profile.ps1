@@ -1,11 +1,12 @@
 #!/usr/bin/env pwsh
-#MISE description = "Run packaged jar with dev profile. Usage: mise run jar:run-dev-profile -- serve|chat|attach|ask"
+#MISE description = "Run the packaged JAR in dev profile. Usage: mise run jar:run-dev-profile -- <Amsha CLI command> [args]"
 #MISE dir = "{{config_root}}"
 #MISE shell = "pwsh -NonInteractive -Command"
 $ErrorActionPreference = 'Stop'
 $jar = 'app/target/quarkus-app/quarkus-run.jar'
 if (-not (Test-Path $jar)) { Write-Host '❌  JAR not found. Run: mise run build-app'; exit 1 }
-$cmd = if ($args.Count -gt 0 -and $args[0]) { $args[0] } else { 'serve' }
+$appArgs = if ($args.Count -gt 0) { @($args) } else { @('serve') }
+$cmd = $appArgs[0]
 if ($cmd -eq 'attach' -and -not $env:TELEGRAM_BOT_TOKEN) {
     Write-Host '❌  TELEGRAM_BOT_TOKEN is not set in .env'; exit 1
 }
@@ -37,7 +38,7 @@ if ($env:AMSHA_DEBUG -and $env:AMSHA_DEBUG -ne 'false') {
 }
 Write-Host "▶   Starting JAR in dev profile - mode: $cmd"
 try {
-    & java @jvmArgs -jar $jar $cmd
+    & java @jvmArgs -jar $jar @appArgs
     $script:exitCode = $LASTEXITCODE
 } finally {
     $code = if ($null -eq $script:exitCode) { 130 } else { $script:exitCode }

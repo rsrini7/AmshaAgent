@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -163,7 +164,7 @@ class LoopResultHandlerTest {
         AgentCheckpoint cp = mock(AgentCheckpoint.class);
         when(agentStore.load("s1", "coordinator")).thenReturn(Optional.of(cp));
 
-        handler().updateStoreForRetry("s1", "coordinator", retry(5000), null);
+        handler().updateStoreForRetry("s1", "coordinator", "u1", AutonomyLevel.FULL, retry(5000), "goal", null);
 
         verify(cp).setStatus(CheckpointStatus.AWAITING_RETRY);
         verify(cp).setRetryAfterMs(5000);
@@ -183,7 +184,9 @@ class LoopResultHandlerTest {
         when(channelRegistry.find("telegram")).thenReturn(Optional.of(plugin));
 
         ChannelUser user = telegramUser();
-        handler().updateStoreForRetry("s1", "coordinator", retry(5000), contextWith(user));
+        handler()
+                .updateStoreForRetry(
+                        "s1", "coordinator", "u1", AutonomyLevel.FULL, retry(5000), "goal", contextWith(user));
 
         ArgumentCaptor<String> notice = ArgumentCaptor.forClass(String.class);
         verify(sender).sendRaw(eq(user), notice.capture());
@@ -198,19 +201,33 @@ class LoopResultHandlerTest {
         when(cp.getChannelType()).thenReturn("SLACK");
         when(agentStore.load("s1", "coordinator")).thenReturn(Optional.of(cp));
 
-        handler().updateStoreForRetry("s1", "coordinator", retry(5000), contextWith(telegramUser()));
+        handler()
+                .updateStoreForRetry(
+                        "s1",
+                        "coordinator",
+                        "u1",
+                        AutonomyLevel.FULL,
+                        retry(5000),
+                        "goal",
+                        contextWith(telegramUser()));
 
         verifyNoInteractions(channelRegistry);
         verify(sseService).publish(eq("s1"), any(AgentSseService.AgentStatusEvent.class));
     }
 
     @Test
-    void retryStillPublishesStatusWhenNoCheckpointExists() {
+    void retryCreatesCheckpointAndPublishesStatusWhenNoCheckpointExists() {
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
         when(agentStore.load("s1", "coordinator")).thenReturn(Optional.empty());
+        when(agentStore.save(eq("s1"), eq("coordinator"), eq("u1"), eq(AutonomyLevel.FULL), anyList(), eq("goal")))
+                .thenReturn(cp);
 
-        handler().updateStoreForRetry("s1", "coordinator", retry(1000), null);
+        handler().updateStoreForRetry("s1", "coordinator", "u1", AutonomyLevel.FULL, retry(1000), "goal", null);
 
-        verify(agentStore, never()).save(any());
+        verify(agentStore).save(eq("s1"), eq("coordinator"), eq("u1"), eq(AutonomyLevel.FULL), anyList(), eq("goal"));
+        verify(cp).setStatus(CheckpointStatus.AWAITING_RETRY);
+        verify(cp).setRetryAfterMs(1000);
+        verify(agentStore).save(cp);
         verify(sseService).publish(eq("s1"), any(AgentSseService.AgentStatusEvent.class));
     }
 

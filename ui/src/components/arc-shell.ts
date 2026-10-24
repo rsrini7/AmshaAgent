@@ -3,11 +3,21 @@ import { customElement, state } from 'lit/decorators.js';
 import { AgentStatusDto } from '../api/generated/models';
 import { PendingApprovalDto } from '../api/types';
 import {
+  ArcApiError,
   ArcClient,
   clearPersistedOwnerApiKey,
   readPersistedOwnerApiKey,
 } from '../api/client';
-import { SseManager, SsePayload } from '../api/sse';
+import {
+  AGENT_SESSION_STATUS,
+  AGENT_SESSION_STATUS_EVENT,
+  SseManager,
+  SsePayload,
+  SseStatus,
+  TERMINAL_AGENT_SESSION_STATUSES,
+  isAgentStatusPayload,
+  AgentSessionStatusNotice,
+} from '../api/sse';
 import { provide } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
 import { ROUTES } from '../routes';
@@ -34,7 +44,6 @@ import {
   AgentTraceEvent,
   isAgentTraceEvent,
   ExecutionRunSummaryDto,
-  ExecutionTraceDto,
   toAgentTraceEvent,
 } from '../types/trace';
 
@@ -48,16 +57,17 @@ export class ArcShell extends LitElement {
     sessionId: '',
     platformId: '',
     workspaceId: typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-workspace-id') || undefined : undefined,
-    sseStatus: 'disconnected'
+    sseStatus: SseStatus.DISCONNECTED
   };
 
   @state() private _apiKey = '';
+  @state() private _authFailureNotice = '';
   @state() private _sessionId = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-chat-session') || '' : '';
   @state() private _platformId = ''; // Stable ID for WebSocket
   @state() private _workspaceId = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('amsha-workspace-id') || '' : '';
   @state() private _agents: AgentStatusDto[] = [];
   @state() private _pendingApprovals: PendingApprovalDto[] = [];
-  @state() private _sseStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
+  @state() private _sseStatus: SseStatus = SseStatus.DISCONNECTED;
   @state() private _route =
     typeof window !== 'undefined' ? this._routeFromHash(window.location?.hash || '#/onboarding') : '#/chat';
   @state() private _isNavOpen = false;
@@ -84,6 +94,7 @@ export class ArcShell extends LitElement {
 
   private _client: ArcClient | null = null;
   private _sseManager: SseManager | null = null;
+  private _authRecoveryStarted = false;
   private _boundSessionReady = ((e: Event) => this._onSessionReady(e as CustomEvent)) as EventListener;
   private _boundWsStatusChange = (e: CustomEvent<{ status: string }>) => {
     this._chatWsStatus = e.detail.status;
@@ -428,7 +439,11 @@ export class ArcShell extends LitElement {
         credentials: 'include'
       });
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
+        if (res.status === 401) {
+          this._handleUnauthorized();
+          return;
+        }
+        if (res.status === 403) {
           this._clearWorkspaceId();
         }
         return;
@@ -458,7 +473,10 @@ export class ArcShell extends LitElement {
   private _onApiKeySet(e: CustomEvent<{ key: string }>) {
     const rawKey = e.detail?.key?.trim();
     this._apiKey = rawKey || readPersistedOwnerApiKey() || '';
+    this._authFailureNotice = '';
     this._client = new ArcClient('/api/v1', this._apiKey);
+    this._authRecoveryStarted = false;
+    this._sseStatus = SseStatus.DISCONNECTED;
     this._updateContext();
 
     // Close stale SSE connections bound to the previous key.
@@ -483,12 +501,22 @@ export class ArcShell extends LitElement {
   }
 
   private _handleUnauthorized() {
-    console.warn('[Amsha Agent] Stale API key detected (401). Redirecting to onboarding...');
+    if (this._authRecoveryStarted) return;
+    this._authRecoveryStarted = true;
+    console.warn('[Amsha Agent] Authentication rejected (401). Redirecting to onboarding...');
+    this._authFailureNotice = 'Authentication was rejected. Sign in or enter a current API key to continue.';
+    this._sseManager?.disconnect();
     clearPersistedOwnerApiKey();
     this._apiKey = '';
+    this._client = new ArcClient('/api/v1', undefined, false);
     this._clearWorkspaceId();
+    this._sseStatus = SseStatus.UNAUTHORIZED;
     this._updateContext();
     window.location.hash = '#/onboarding';
+  }
+
+  private _isUnauthorized(error: unknown): boolean {
+    return error instanceof ArcApiError && error.status === 401;
   }
 
   private _onSessionReady(e: CustomEvent<{ sessionId: string; platformId: string; workspaceId?: string }>) {
@@ -568,6 +596,27 @@ export class ArcShell extends LitElement {
       return;
     }
 
+    if (isAgentStatusPayload(event)) {
+      this._handleAgentEvent({ agentRole: event.agentRole, status: event.status });
+      const status = event.status.trim().toUpperCase();
+    if (
+      event.sessionId === this._sessionId &&
+      (status === AGENT_SESSION_STATUS.AWAITING_RETRY || TERMINAL_AGENT_SESSION_STATUSES.has(status))
+    ) {
+      window.dispatchEvent(
+        new CustomEvent<AgentSessionStatusNotice>(AGENT_SESSION_STATUS_EVENT, {
+          detail: {
+            sessionId: event.sessionId,
+            status,
+            timestamp: event.timestamp,
+            retryAfterMs: event.retryAfterMs,
+          },
+        })
+      );
+    }
+      return;
+    }
+
     if (rawType === 'status_change') {
       this._fetchAgents();
       this._fetchApprovals();
@@ -576,7 +625,7 @@ export class ArcShell extends LitElement {
     } else if (isHitlEvent) {
       this._handleHitlEvent(event);
       this._fetchApprovals();
-    } else if (rawType === 'agent_status') {
+  } else if (rawType === 'agent_status' && !isAgentStatusPayload(event)) {
       this._handleAgentEvent(event);
     }
   }
@@ -659,38 +708,9 @@ export class ArcShell extends LitElement {
     // ─── SSE Event Handlers ──────────────────────────────────────────────────
 
   private _handleHitlEvent(event: any) {
-    const isAwaiting = event.type === 'AWAITING_APPROVAL' || event.eventType === 'AWAITING_APPROVAL';
-    if (isAwaiting) {
-      // Add to pending if not already present
-      const existing = this._pendingApprovals.find(
-        (a) => (a.taskId === event.sessionId || a.sessionId === event.sessionId) && a.toolName === event.toolName
-      );
-      if (!existing) {
-        let paramsObj = {};
-        try { paramsObj = JSON.parse(event.toolParams || '{}'); } catch (_) {}
-        this._pendingApprovals = [
-          ...this._pendingApprovals,
-          {
-            taskId: event.sessionId,
-            sessionId: event.sessionId,
-            toolName: event.toolName,
-            params: paramsObj,
-            requestedAt: event.timestamp || new Date().toISOString(),
-            agentName: 'Agent',
-          } as PendingApprovalDto,
-        ];
-      }
-    } else {
-      // APPROVED, DENIED, RESUMED - remove from pending list
-      this._pendingApprovals = this._pendingApprovals.filter(
-        (a) =>
-          !(
-            (a.taskId === event.sessionId || a.sessionId === event.sessionId) &&
-            (a.toolName === event.toolName || !event.toolName)
-          )
-      );
-    }
-
+    // The SSE event only identifies the session. The actionable task ID and
+    // authoritative tool parameters come from GET /hitl, so do not fabricate a
+    // PendingApprovalDto from the session ID here.
     this._publishHitlProgress(event);
   }
 
@@ -737,10 +757,8 @@ export class ArcShell extends LitElement {
     if (!this._client) return;
     try {
       this._agents = await this._client.getAgents();
-    } catch (err: any) {
-      if (err.message?.includes('401')) {
-        this._handleUnauthorized();
-      }
+    } catch (error) {
+      if (this._isUnauthorized(error)) this._handleUnauthorized();
     }
   }
 
@@ -749,10 +767,8 @@ export class ArcShell extends LitElement {
     try {
       const result = await this._client.getHitl();
       this._pendingApprovals = result.items;
-    } catch (err: any) {
-      if (err.message?.includes('401')) {
-        this._handleUnauthorized();
-      }
+    } catch (error) {
+      if (this._isUnauthorized(error)) this._handleUnauthorized();
     }
   }
 
@@ -766,14 +782,18 @@ export class ArcShell extends LitElement {
       this._apiKey,
       (event: SsePayload) => this._handleSseEvent(event),
       (status) => {
-        const wasDown = this._sseStatus !== 'connected';
+        const wasDown = this._sseStatus !== SseStatus.CONNECTED;
         this._sseStatus = status;
         this._updateContext();
-          if (wasDown && status === 'connected') {
-            this._fetchAgents();
-            this._fetchApprovals();
-          }
+        if (status === SseStatus.UNAUTHORIZED) {
+          this._handleUnauthorized();
+          return;
         }
+        if (wasDown && status === SseStatus.CONNECTED) {
+          this._fetchAgents();
+          this._fetchApprovals();
+        }
+      }
     );
     this._sseManager.connect();
   }
@@ -820,6 +840,7 @@ export class ArcShell extends LitElement {
             class="content-area"
             style="display: flex; flex: 1;"
             .traceEvents=${this._activeRunEvents}
+            .pendingApprovals=${this._pendingApprovals}
           ></arc-chat-interface>
         </div>
       </div>
@@ -883,6 +904,18 @@ export class ArcShell extends LitElement {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   render() {
+    const sseStatusColor = this._sseStatus === SseStatus.CONNECTED
+      ? 'var(--accent-secondary)'
+      : this._sseStatus === SseStatus.ERROR || this._sseStatus === SseStatus.UNAUTHORIZED
+        ? '#ef4444'
+        : 'var(--text-muted)';
+    const sseStatusLabel = this._sseStatus === SseStatus.CONNECTED
+      ? 'Live updates connected'
+      : this._sseStatus === SseStatus.UNAUTHORIZED
+        ? 'Sign in to restore live updates'
+        : this._sseStatus === SseStatus.ERROR
+          ? 'Live updates unavailable'
+          : 'Live updates disconnected';
     return html`
       ${this._apiKey
         ? html`
@@ -891,6 +924,11 @@ export class ArcShell extends LitElement {
           `
         : ''}
       <main>
+        ${this._authFailureNotice
+          ? html`<div role="alert" style="margin: 12px 16px; padding: 12px 16px; border: 1px solid #ef444466; border-radius: 8px; color: #ef4444; background: #ef44441a;">
+            ${this._authFailureNotice}
+          </div>`
+          : nothing}
         ${this._apiKey
           ? html`
               <header class="topbar">
@@ -933,12 +971,10 @@ export class ArcShell extends LitElement {
                   <div class="connection-pill">
                     <div
                       class="status-dot"
-                      style="background: ${this._sseStatus === 'connected'
-                        ? 'var(--accent-secondary)'
-                        : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'};
-                        box-shadow: 0 0 0 6px color-mix(in srgb, ${this._sseStatus === 'connected' ? 'var(--accent-secondary)' : this._sseStatus === 'error' ? '#ef4444' : 'var(--text-muted)'} 18%, transparent);"
+                      style="background: ${sseStatusColor};
+                        box-shadow: 0 0 0 6px color-mix(in srgb, ${sseStatusColor} 18%, transparent);"
                     ></div>
-                    ${this._sseStatus === 'connected' ? 'Connected to Amsha Agent' : 'Amsha Agent (Offline)'}
+                    ${sseStatusLabel}
                   </div>
                   <arc-theme-toggle></arc-theme-toggle>
                 </div>

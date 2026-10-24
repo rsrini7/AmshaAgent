@@ -223,4 +223,63 @@ describe('Visual Cockpit Trace Replay and Scrubbing Controls', () => {
     expect(rendered).toContain('NOT_OBSERVED');
     expect(rendered).toContain('gaps)');
   });
+
+  it('covers paradigm view selection, replay playback, scrub controls, and run actions', () => {
+    const canvas = new ArcFlowCanvas();
+    const events = [
+      makeTrace({ sequence: 0, stage: 'turn_start' }),
+      makeTrace({ sequence: 1, stage: 'guard_check' }),
+      makeTrace({ sequence: 2, stage: 'turn_end' }),
+    ];
+    canvas.events = events;
+    canvas.paradigm = 'REACT';
+    canvas.setViewMode('react');
+    expect(canvas.viewMode).toBe('react');
+    canvas.setViewMode('multi_agent');
+    expect(canvas.viewMode).toBe('conveyor');
+    canvas.paradigm = 'GROUP_CONSULTATION';
+    canvas.setViewMode('multi_agent');
+    expect(canvas.viewMode).toBe('multi_agent');
+    canvas.setViewMode('conveyor');
+    expect(canvas.viewMode).toBe('conveyor');
+
+    (window as any).setTimeout = vi.fn(() => 44);
+    (window as any).clearTimeout = vi.fn();
+    (canvas as any)._play();
+    expect((canvas as any)._isPlaying).toBe(true);
+    expect((canvas as any)._scrubIndex).toBe(0);
+    (canvas as any)._togglePlay();
+    expect((canvas as any)._isPlaying).toBe(false);
+    (canvas as any)._togglePlay();
+    expect((canvas as any)._isPlaying).toBe(true);
+    (canvas as any)._cycleSpeed();
+    expect((canvas as any)._playbackSpeed).toBe(2);
+    (canvas as any)._cycleSpeed();
+    expect((canvas as any)._playbackSpeed).toBe(5);
+    (canvas as any)._cycleSpeed();
+    expect((canvas as any)._playbackSpeed).toBe(1);
+
+    (canvas as any)._onScrubInput({ target: { value: '99' } });
+    expect((canvas as any)._scrubIndex).toBe(2);
+    (canvas as any)._onScrubInput({ target: { value: 'invalid' } });
+    expect((canvas as any)._scrubIndex).toBe(2);
+    canvas.isReplayMode = true;
+    (canvas as any)._scrubIndex = -1;
+    canvas.updated(new Map([['isReplayMode', false]]) as any);
+    expect((canvas as any)._scrubIndex).toBe(2);
+
+    const selectedRuns: string[] = [];
+    canvas.addEventListener('start-replay', (event) => selectedRuns.push((event as CustomEvent).detail.runId));
+    const refreshEvents: string[] = [];
+    canvas.addEventListener('refresh-runs', () => refreshEvents.push('refresh'));
+    canvas.addEventListener('exit-replay', () => refreshEvents.push('exit'));
+    (canvas as any)._runsOpen = true;
+    (canvas as any)._onSelectRun('run-archive');
+    expect(selectedRuns).toEqual(['run-archive']);
+    expect((canvas as any)._runsOpen).toBe(false);
+    (canvas as any)._onExitReplay();
+    expect(refreshEvents).toEqual(['exit', 'refresh']);
+    expect((canvas as any)._scrubIndex).toBe(-1);
+    expect((canvas as any)._isPlaying).toBe(false);
+  });
 });

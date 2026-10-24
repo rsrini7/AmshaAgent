@@ -471,6 +471,12 @@ export class ArcOnboardingStepConnections extends LitElement {
             <datalist id="discovered-models-list">
               ${this._discoveredModels.map(m => html`<option value="${m.id}">${m.label && m.label !== m.id ? m.label : m.id}</option>`)}
             </datalist>
+        ${this._selectedProviderId === 'groq' ? html`
+          <p style="font-size:12px;margin-top:var(--space-1)">
+            Choose a model your Groq account can access. If discovery does not list it, enter its model ID.
+            <a href="https://console.groq.com/docs/models.md" target="_blank" rel="noopener noreferrer">Groq model docs</a>.
+          </p>
+        ` : ''}
           </div>
           <div>
             <label class="field-label" for="draft-context-window">Context Window (tokens)</label>

@@ -47,6 +47,10 @@ import io.quarkus.websockets.next.WebSocketConnection;
 public class WebChatEndpoint {
 
     private static final Logger log = Logger.getLogger(WebChatEndpoint.class);
+    private static final String AUTH_MESSAGE_TYPE = "AUTH";
+    private static final String MESSAGE_TYPE = "message";
+    private static final String CONNECTED_FRAME_TYPE = "connected";
+    private static final String ERROR_FRAME_TYPE = "error";
     private static final int MAX_AUDIO_UPLOAD_BYTES = (int) MediaBudgetLimits.DEFAULT_MAX_DOCUMENT_SIZE_BYTES;
     private static final int MAX_AUDIO_BASE64_CHARS = 4 * ((MAX_AUDIO_UPLOAD_BYTES + 2) / 3);
     private static final int MAX_FILE_NAME_CHARS = 255;
@@ -120,7 +124,7 @@ public class WebChatEndpoint {
                     conn.id(), platformId, amshaSessionId);
 
             if (!requireAuth) {
-                setupAuthenticatedSession(conn, platformId, amshaSessionId, platformId);
+                setupUnauthenticatedSession(conn, platformId, amshaSessionId);
             } else {
                 log.infof("WebSocket pending auth: connId=%s platformId=%s", conn.id(), platformId);
             }
@@ -132,6 +136,22 @@ public class WebChatEndpoint {
             cleanup(conn, "initialization error");
             conn.close().subscribe().with(id -> {}, err -> {});
         }
+    }
+
+    private void setupUnauthenticatedSession(WebSocketConnection conn, String platformId, String amshaSessionId) {
+        connections.put(conn.id(), new ConnectionState(platformId, amshaSessionId, false, null));
+        channelServices.bindSessionOwner(amshaSessionId, platformId);
+        sessionStore.register(platformId, amshaSessionId, platformId, conn);
+        channelServices.recordHeartbeat(amshaSessionId);
+        conn.sendText(buildConnectedJson(platformId, amshaSessionId, false))
+                .subscribe()
+                .with(
+                        id -> {},
+                        err -> log.warnf(
+                                "Failed to send connected event to %s: %s", conn.id(), LogUtil.rootMessage(err)));
+        log.infof(
+                "WebSocket ready: connId=%s platformId=%s amshaSession=%s owner=anonymous",
+                conn.id(), platformId, amshaSessionId);
     }
 
     private void setupAuthenticatedSession(
@@ -153,7 +173,7 @@ public class WebChatEndpoint {
         // §85-B: Proactively initialize session presence in the heartbeat tracker.
         channelServices.recordHeartbeat(effectiveSessionId);
 
-        conn.sendText(buildConnectedJson(platformId, effectiveSessionId))
+        conn.sendText(buildConnectedJson(platformId, effectiveSessionId, true))
                 .subscribe()
                 .with(
                         id -> {},
@@ -172,26 +192,35 @@ public class WebChatEndpoint {
             String type = json.getString("type", "");
 
             ConnectionState cs = connections.get(conn.id());
-            if ("AUTH".equals(type)) {
+            if (AUTH_MESSAGE_TYPE.equals(type)) {
                 String token = json.getString("token", "");
                 Optional<String> owner = wsTokenStore.validateAndConsumeToken(token);
-                if (owner.isPresent() && (cs == null || !owner.get().equals(cs.ownerKeyName()))) {
+                if (owner.isPresent()
+                        && (cs == null || !cs.authenticated() || !owner.get().equals(cs.ownerKeyName()))) {
                     String platformId = cs != null ? cs.platformId() : null;
                     String amshaSessionId = cs != null ? cs.amshaSessionId() : null;
                     setupAuthenticatedSession(conn, platformId, amshaSessionId, owner.get());
-                } else if (owner.isEmpty() && requireAuth) {
-                    conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Invalid or expired token\"}");
+                } else if (owner.isEmpty()) {
+                    conn.sendTextAndAwait(Json.createObjectBuilder()
+                            .add("type", ERROR_FRAME_TYPE)
+                            .add("text", "Invalid or expired token")
+                            .build()
+                            .toString());
                     var _ = conn.close();
                 }
                 return;
             }
             if (requireAuth && (cs == null || !cs.authenticated())) {
-                conn.sendTextAndAwait("{\"type\":\"error\",\"text\":\"Authentication required\"}");
+                conn.sendTextAndAwait(Json.createObjectBuilder()
+                        .add("type", ERROR_FRAME_TYPE)
+                        .add("text", "Authentication required")
+                        .build()
+                        .toString());
                 var _ = conn.close();
                 return;
             }
 
-            if (!"message".equals(type)) {
+            if (!MESSAGE_TYPE.equals(type)) {
                 return;
             }
             String text = json.getString("text", "");
@@ -350,11 +379,12 @@ public class WebChatEndpoint {
      * The UI MUST use amshaSessionId for all REST calls (/api/v1/hitl, /api/v1/sessions/{id}/approve).
      * The UI MUST use platformId only as the local WebSocket reference if needed.
      */
-    private String buildConnectedJson(String platformId, String amshaSessionId) {
+    private String buildConnectedJson(String platformId, String amshaSessionId, boolean authenticated) {
         return Json.createObjectBuilder()
-                .add("type", "connected")
+                .add("type", CONNECTED_FRAME_TYPE)
                 .add("sessionId", amshaSessionId) // use this for REST/HITL calls
                 .add("platformId", platformId) // WebSocket connection reference
+                .add("authenticated", authenticated)
                 .build()
                 .toString();
     }

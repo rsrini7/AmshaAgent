@@ -56,7 +56,8 @@ public class LocalOnnxScoringAdapter implements RerankerPort {
             OnnxInferenceMetrics metrics,
             @ConfigProperty(name = "amsha.rag.reranker.enabled", defaultValue = "false") boolean enabled,
             @ConfigProperty(name = "amsha.onnx.enabled", defaultValue = "false") boolean onnxEnabled,
-            @ConfigProperty(name = "amsha.rag.reranker.bundle-id", defaultValue = "bge-reranker-v1") String bundleId,
+            @ConfigProperty(name = "amsha.rag.reranker.bundle-id", defaultValue = OnnxModelBundleIds.RERANKER)
+                    String bundleId,
             @ConfigProperty(name = "amsha.rag.reranker.timeout", defaultValue = "PT5S") Duration timeout,
             @ConfigProperty(name = "amsha.rag.reranker.max-candidates", defaultValue = "50") int maxCandidates,
             @ConfigProperty(name = "amsha.rag.reranker.max-input-bytes", defaultValue = "262144") long maxInputBytes) {

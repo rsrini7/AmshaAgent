@@ -18,7 +18,7 @@ const ARENA_PROVIDERS: ArenaProvider[] = [
   { id: 'llamacpp', name: 'llama.cpp Server', category: 'Local / Self-Hosted', defaultModel: 'qwen3' },
 
   // Ultra-Fast Cloud
-  { id: 'groq', name: 'Groq (LPU)', category: 'Ultra-Fast Cloud', defaultModel: 'meta-llama/llama-4-scout-17b-16e-instruct' },
+  { id: 'groq', name: 'Groq (LPU)', category: 'Ultra-Fast Cloud', defaultModel: 'openai/gpt-oss-120b' },
   { id: 'cerebras', name: 'Cerebras (CS-3)', category: 'Ultra-Fast Cloud', defaultModel: 'qwen-3.8-27b' },
   { id: 'cloudflare', name: 'Cloudflare Workers AI', category: 'Ultra-Fast Cloud', defaultModel: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
 

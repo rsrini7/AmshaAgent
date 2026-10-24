@@ -6,13 +6,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.amsha.app.util.ProviderKeySpecs;
+import com.amsha.app.util.VarSpec;
 import com.amsha.common.config.ConfigKeys;
+import com.amsha.llm.api.ModelDefaults;
 import com.amsha.security.api.VaultConstants;
 
 import org.jboss.logging.Logger;
@@ -73,6 +78,41 @@ public class EnvFileValidator {
             ConfigKeys.DECISION_KEV_API_KEY,
             ConfigKeys.DECISION_OMLX_API_KEY);
 
+    private static final Set<String> PROVIDER_API_KEY_KEYS = Set.of(
+            ConfigKeys.GROQ_API_KEY,
+            ConfigKeys.OPENAI_API_KEY,
+            ConfigKeys.OPENROUTER_API_KEY,
+            ConfigKeys.GEMINI_API_KEY,
+            ConfigKeys.NVIDIA_API_KEY,
+            ConfigKeys.CEREBRAS_API_KEY,
+            ConfigKeys.SARVAM_API_KEY,
+            ConfigKeys.OPENCODE_API_KEY,
+            ConfigKeys.HUGGINGFACE_API_KEY,
+            ConfigKeys.MISTRAL_API_KEY,
+            ConfigKeys.CLOUDFLARE_API_KEY,
+            ConfigKeys.CLOUDFLARE_ACCOUNT_ID,
+            ConfigKeys.COHERE_API_KEY,
+            ConfigKeys.CODEX_API_KEY,
+            ConfigKeys.OMLX_API_KEY,
+            ConfigKeys.GENERIC_OPENAI_API_KEY,
+            ConfigKeys.CLAUDE_CODE_API_KEY,
+            ConfigKeys.AGY_API_KEY,
+            ConfigKeys.KIMCHI_API_KEY,
+            ConfigKeys.EMBEDDING_JINA_API_KEY,
+            ConfigKeys.EMBEDDING_OPENAI_API_KEY);
+    private static final String COMPACTION_API_KEY_PREFIX = "AMSHA_COMPACTION_";
+    private static final String CLASSIFIER_API_KEY_PREFIX = "AMSHA_CLASSIFIER_";
+    private static final String API_KEY_SUFFIX = "_API_KEY";
+
+    private record EnvEntry(String key, String value, int lineNumber) {}
+
+    private enum ProviderRole {
+        LLM,
+        COMPACTION,
+        CLASSIFIER,
+        EMBEDDING
+    }
+
     /**
      * Result of validating a .env file.
      */
@@ -112,6 +152,8 @@ public class EnvFileValidator {
         List<String> emptySecurityKeys = new ArrayList<>();
         List<String> emptyApiKeys = new ArrayList<>();
         Map<String, Integer> keyCount = new HashMap<>();
+        Map<String, String> valuesByKey = new HashMap<>();
+        List<EnvEntry> entries = new ArrayList<>();
 
         if (!Files.exists(envFile)) {
             return new ValidationResult(
@@ -130,7 +172,7 @@ public class EnvFileValidator {
 
                 Matcher m = ENV_PATTERN.matcher(trimmed);
                 if (!m.find()) {
-                    malformedLines.add("Line " + lineNum + ": " + trimmed);
+                    malformedLines.add("Line " + lineNum + ": expected KEY=value format");
                     continue;
                 }
 
@@ -156,7 +198,7 @@ public class EnvFileValidator {
                 if (value.startsWith("\"") || value.startsWith("'")) {
                     String quote = value.substring(0, 1);
                     if (value.length() < 2 || !value.endsWith(quote)) {
-                        malformedLines.add("Line " + lineNum + ": " + trimmed);
+                        malformedLines.add("Line " + lineNum + ": unmatched quote in value for " + key);
                         continue;
                     }
                     value = value.substring(1, value.length() - 1);
@@ -164,20 +206,12 @@ public class EnvFileValidator {
 
                 // Track duplicates
                 keyCount.merge(key, 1, Integer::sum);
-
-                // Check for placeholder values
-                if (isPlaceholder(value)) {
-                    placeholderValues.add(key + "=" + value + " (line " + lineNum + ")");
-                }
+                valuesByKey.put(key, value);
+                entries.add(new EnvEntry(key, value, lineNum));
 
                 // Check empty security keys
                 if (SECURITY_KEYS.contains(key) && (value.isEmpty() || isPlaceholder(value))) {
                     emptySecurityKeys.add(key + " (line " + lineNum + ")");
-                }
-
-                // Check empty API keys
-                if (API_KEY_KEYS.contains(key) && value.isEmpty()) {
-                    emptyApiKeys.add(key + " (line " + lineNum + ")");
                 }
             }
 
@@ -191,8 +225,29 @@ public class EnvFileValidator {
             log.warnf("Failed to read .env for validation: %s", e.getMessage());
         }
 
+        collectProviderCredentialIssues(entries, valuesByKey, placeholderValues, emptyApiKeys);
+
         return new ValidationResult(
                 duplicateKeys, malformedLines, placeholderValues, emptySecurityKeys, emptyApiKeys, keyCount.size());
+    }
+
+    private static void collectProviderCredentialIssues(
+            List<EnvEntry> entries,
+            Map<String, String> valuesByKey,
+            List<String> placeholderValues,
+            List<String> emptyApiKeys) {
+        Set<String> activeProviderApiKeys = activeProviderApiKeys(valuesByKey);
+        for (EnvEntry entry : entries) {
+            boolean relevantCredential = shouldValidateCredential(entry.key(), activeProviderApiKeys);
+            if (relevantCredential && isPlaceholder(entry.value())) {
+                placeholderValues.add(entry.key() + " (line " + entry.lineNumber() + ")");
+            }
+            if (relevantCredential
+                    && API_KEY_KEYS.contains(entry.key())
+                    && entry.value().isEmpty()) {
+                emptyApiKeys.add(entry.key() + " (line " + entry.lineNumber() + ")");
+            }
+        }
     }
 
     /**
@@ -231,11 +286,11 @@ public class EnvFileValidator {
         }
 
         if (!result.placeholderValues().isEmpty()) {
-            System.err.println("  ⚠  PLACEHOLDER VALUES (will not work at runtime):");
+            System.err.println("  ⚠  PLACEHOLDERS IN ACTIVE CONFIGURATION (will not work at runtime):");
             for (String msg : result.placeholderValues()) {
                 System.err.println("     - " + msg);
             }
-            System.err.println("     Fix: Replace placeholder with actual values.");
+            System.err.println("     Fix: Set each listed key to a valid value.");
             System.err.println();
         }
 
@@ -258,6 +313,78 @@ public class EnvFileValidator {
 
         System.err.println("  " + "─".repeat(58));
         System.err.println();
+    }
+
+    private static Set<String> activeProviderApiKeys(Map<String, String> valuesByKey) {
+        Set<String> activeKeys = new HashSet<>();
+        addProviderApiKeys(activeKeys, configuredSetting(valuesByKey, ConfigKeys.LLM_PROVIDER), ProviderRole.LLM);
+        addConfiguredProviders(
+                activeKeys,
+                configuredSetting(valuesByKey, ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS),
+                ProviderRole.LLM);
+        addConfiguredProviders(
+                activeKeys,
+                configuredSetting(valuesByKey, ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS),
+                ProviderRole.COMPACTION);
+        addConfiguredProviders(
+                activeKeys,
+                configuredSetting(valuesByKey, ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS),
+                ProviderRole.CLASSIFIER);
+        addConfiguredProviders(
+                activeKeys,
+                configuredSetting(valuesByKey, ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS),
+                ProviderRole.EMBEDDING);
+        return activeKeys;
+    }
+
+    private static void addConfiguredProviders(Set<String> activeKeys, String providerList, ProviderRole role) {
+        if (providerList == null || providerList.isBlank()) return;
+        for (String provider : providerList.split(",")) {
+            addProviderApiKeys(activeKeys, provider, role);
+        }
+    }
+
+    private static void addProviderApiKeys(Set<String> activeKeys, String providerName, ProviderRole role) {
+        if (providerName == null || providerName.isBlank()) return;
+        String provider = providerName.trim().toLowerCase(Locale.ROOT);
+        if (role == ProviderRole.EMBEDDING) {
+            VarSpec keySpec = ProviderKeySpecs.embeddingKeySpecFor(provider);
+            if (keySpec != null) activeKeys.add(keySpec.key());
+            return;
+        }
+        if (role == ProviderRole.LLM && ProviderKeySpecs.isLlmKeyless(provider)) return;
+        if (role != ProviderRole.LLM && ProviderKeySpecs.isCompactionClassifierKeyless(provider)) return;
+        String roleApiKey =
+                switch (role) {
+                    case LLM -> ProviderApiKeyLookup.llmApiKeyForProvider(provider);
+                    case COMPACTION -> ProviderApiKeyLookup.compactionApiKeyForProvider(provider);
+                    case CLASSIFIER -> ProviderApiKeyLookup.classifierApiKeyForProvider(provider);
+                    case EMBEDDING -> null;
+                };
+        if (roleApiKey != null) activeKeys.add(roleApiKey);
+        String fallbackApiKey = ProviderApiKeyLookup.llmApiKeyForProvider(provider);
+        if (fallbackApiKey != null) activeKeys.add(fallbackApiKey);
+        if (ModelDefaults.PROVIDER_CLOUDFLARE.equals(provider)) {
+            activeKeys.add(ConfigKeys.CLOUDFLARE_ACCOUNT_ID);
+        }
+    }
+
+    private static String configuredSetting(Map<String, String> valuesByKey, String key) {
+        String systemValue = System.getProperty(key);
+        if (systemValue != null) return systemValue;
+        String environmentValue = System.getenv(key);
+        if (environmentValue != null) return environmentValue;
+        return valuesByKey.getOrDefault(key, "");
+    }
+
+    private static boolean shouldValidateCredential(String key, Set<String> activeProviderApiKeys) {
+        return !isProviderScopedApiKey(key) || activeProviderApiKeys.contains(key);
+    }
+
+    private static boolean isProviderScopedApiKey(String key) {
+        boolean providerSlotKey = key.endsWith(API_KEY_SUFFIX)
+                && (key.startsWith(COMPACTION_API_KEY_PREFIX) || key.startsWith(CLASSIFIER_API_KEY_PREFIX));
+        return PROVIDER_API_KEY_KEYS.contains(key) || providerSlotKey;
     }
 
     private static boolean isPlaceholder(String value) {

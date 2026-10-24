@@ -61,13 +61,16 @@ For detailed verification of *each* feature (expected log patterns, audit events
 
 ## 1. Prerequisites & Starting the Bot
 
+Numeric Telegram user IDs identify accounts and differ from public, changeable usernames. Find an ID by messaging `@userinfobot`. When `AMSHA_TELEGRAM_ALLOWED_USER_IDS` is set, only matching IDs are allowed and the username list is ignored; usernames are a fallback when no numeric IDs are configured.
+
 ### Required `.env` Variables
 
 ```env
 AMSHA_TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=<token from @BotFather>
 AMSHA_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>
-AMSHA_TELEGRAM_ALLOWED_USERS=<your @username without @>
+# Optional legacy fallback; use only when numeric user IDs are not configured:
+# AMSHA_TELEGRAM_ALLOWED_USERS=<your username without @>
 AMSHA_API_KEYS_INTERNAL=key-internal-changeme   # or your custom key
 AMSHA_LLM_PROVIDER=groq
 AMSHA_GROQ_API_KEY=<your groq key>                    # must start with gsk_
@@ -200,7 +203,7 @@ Send a free-text message (not a command). In logs:
 INFO  [IntentClassificationHandler] Classified message as role 'coordinator' for chat <chatId>
 ```
 
-The classifier uses `llama-3.1-8b-instant` via Groq (OpenAI-compatible namespace - accessed via
+The classifier uses `openai/gpt-oss-20b` via Groq (OpenAI-compatible namespace - accessed via
 `quarkus.langchain4j.openai.*` config, not `quarkus.langchain4j.groq.*`). Defaults to
 `coordinator` on any error or rate limit.
 
@@ -734,7 +737,10 @@ educational question about the topic must pass through.
 ## 11. Allowlist Access Control
 
 `TelegramAllowlistGuard` checks incoming messages against `AMSHA_TELEGRAM_ALLOWED_USER_IDS`
-(numeric IDs) and `AMSHA_TELEGRAM_ALLOWED_USERS` (usernames) before any session is created.
+before any session is created when that list is configured. Numeric IDs identify Telegram
+accounts and are authoritative: only matching IDs are allowed, and the username list is
+ignored. `AMSHA_TELEGRAM_ALLOWED_USERS` (public usernames without `@`) is a legacy fallback
+used only when no numeric IDs are configured.
 
 ---
 
@@ -755,8 +761,8 @@ No audit event, no session, no LLM call.
 
 ### 11.2 Open access mode
 
-If `AMSHA_TELEGRAM_ALLOWED_USER_IDS` is empty (not set), the allowlist guard is disabled
-and all users can interact. Confirm in logs:
+If both `AMSHA_TELEGRAM_ALLOWED_USER_IDS` and `AMSHA_TELEGRAM_ALLOWED_USERS` are empty
+(or not set), the allowlist guard is disabled and all users can interact. Confirm in logs:
 
 ```
 DEBUG [TelegramAllowlistGuard] Open access mode - no allowlist configured
@@ -781,7 +787,7 @@ Logs show two separate `Resolved session` entries with the same UUID, processed 
 ## 13. Context Compaction & Long-Term Memory
 
 Compaction triggers when the chat window approaches the max (20 messages). The oldest messages
-are summarised by `ContextCompactionService` (using `llama-3.1-8b-instant`), stored in
+are summarised by `ContextCompactionService` (using `openai/gpt-oss-20b`), stored in
 `compaction_summary` (SQLite), and indexed in `compaction_summary_fts` (FTS5).
 
 ---

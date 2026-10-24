@@ -148,7 +148,9 @@ class SqliteVectorIndexCompatibilityInitializerTest {
 
         initializer.onStart(new StartupEvent());
 
-        verifyNoInteractions(jdbi, metadata);
+        verifyNoInteractions(jdbi);
+        verify(metadata).markUnavailable(VectorIndexNamespace.RAG_GLOBAL);
+        verify(metadata).markUnavailable(VectorIndexNamespace.ARCHIVAL);
     }
 
     @Test
@@ -160,21 +162,25 @@ class SqliteVectorIndexCompatibilityInitializerTest {
 
         initializer.onStart(new StartupEvent());
 
-        verifyNoInteractions(jdbi, metadata);
+        verifyNoInteractions(jdbi);
+        verify(metadata).markUnavailable(VectorIndexNamespace.RAG_GLOBAL);
+        verify(metadata).markUnavailable(VectorIndexNamespace.ARCHIVAL);
     }
 
     @Test
-    @DisplayName("no active descriptor -> warn and skip, never touch the database")
-    void absentActiveDescriptorSkips() {
+    @DisplayName("embedding provider failure disables vector search without database access")
+    void embeddingProviderFailureDisablesVectorSearch() {
         when(interceptor.isVectorSearchEnabled()).thenReturn(true);
         when(descriptorSources.isUnsatisfied()).thenReturn(false);
         when(descriptorSources.isAmbiguous()).thenReturn(false);
         when(descriptorSources.get()).thenReturn(source);
-        when(source.activeDescriptor()).thenReturn(Optional.empty());
+        when(source.activeDescriptor()).thenThrow(new IllegalStateException("embedding provider unavailable"));
 
         initializer.onStart(new StartupEvent());
 
-        verifyNoInteractions(jdbi, metadata);
+        verifyNoInteractions(jdbi);
+        verify(metadata).markUnavailable(VectorIndexNamespace.RAG_GLOBAL);
+        verify(metadata).markUnavailable(VectorIndexNamespace.ARCHIVAL);
     }
 
     // =========================================================================

@@ -52,9 +52,11 @@ public class OnnxModelBundleRegistry {
         Path bundle = canonicalRoot.resolve(bundleId).normalize();
         if (!bundle.startsWith(canonicalRoot)) throw new IOException("Model bundle path escapes configured root");
         if (!Files.exists(bundle)) {
-            String hint = bundleId.contains("whisper") ? "whisper" : (bundleId.contains("mpnet") ? "mpnet" : bundleId);
-            throw new IOException("Model bundle '" + bundleId + "' is not installed in " + bundle
-                    + ". Install it using: ./amsha models install " + hint);
+            String hint = bundleId.contains(OnnxModelBundleIds.WHISPER_HINT)
+                    ? OnnxModelBundleIds.WHISPER_HINT
+                    : bundleId.contains(OnnxModelBundleIds.MPNET_HINT) ? OnnxModelBundleIds.MPNET_HINT : bundleId;
+            throw new IOException("Model bundle '" + bundleId + "' is not installed in " + bundle + ".\n"
+                    + OnnxModelInstallGuidance.forSelector(hint));
         }
         Path canonicalBundle = bundle.toRealPath();
         if (!canonicalBundle.startsWith(canonicalRoot)) {
@@ -68,7 +70,7 @@ public class OnnxModelBundleRegistry {
     }
 
     private static void validateBundleId(String bundleId) throws IOException {
-        if (bundleId == null || !bundleId.matches("[a-zA-Z0-9][a-zA-Z0-9._-]*")) {
+        if (!OnnxModelBundleIds.isValid(bundleId)) {
             throw new IOException("Model bundle ID contains unsupported characters");
         }
     }

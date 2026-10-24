@@ -1,9 +1,10 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { SseStatus } from '../api/sse';
 
 @customElement('arc-connection-badge')
 export class ArcConnectionBadge extends LitElement {
-  @property({ type: String }) status: 'connected' | 'disconnected' | 'error' = 'disconnected';
+  @property({ type: String }) status: SseStatus = SseStatus.DISCONNECTED;
 
   static styles = css`
     :host {
@@ -33,6 +34,12 @@ export class ArcConnectionBadge extends LitElement {
       border-color: rgba(239, 68, 68, 0.3);
       color: #ef4444;
     }
+
+    :host([status="unauthorized"]) {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
     
     .dot {
       width: 6px;
@@ -55,7 +62,8 @@ export class ArcConnectionBadge extends LitElement {
     }
     
     .status-disconnected .dot { background: var(--text-muted); opacity: 0.5; }
-    .status-error .dot { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+    .status-error .dot,
+    .status-unauthorized .dot { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
 
     @keyframes pulse {
       0% { transform: scale(1); opacity: 0.8; }
@@ -68,9 +76,10 @@ export class ArcConnectionBadge extends LitElement {
   `;
 
   render() {
-    let label = 'Offline';
-    if (this.status === 'connected') label = 'Live';
-    // If status is 'error' or 'disconnected', label remains 'Offline'
+    let label = 'Disconnected';
+    if (this.status === SseStatus.CONNECTED) label = 'Live';
+    if (this.status === SseStatus.ERROR) label = 'Issue';
+    if (this.status === SseStatus.UNAUTHORIZED) label = 'Sign in';
 
 
     return html`

@@ -8,4 +8,8 @@ public class AppBootstrap {
     public static void bootstrap(String[] args) {
         BootstrapOrchestrator.bootstrap(args);
     }
+
+    public static void bootstrapModelManagement() {
+        BootstrapOrchestrator.bootstrapModelManagement();
+    }
 }

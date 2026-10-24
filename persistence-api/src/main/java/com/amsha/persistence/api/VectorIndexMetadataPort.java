@@ -9,6 +9,8 @@ public interface VectorIndexMetadataPort {
     VectorIndexCompatibility verifyOrInitialize(
             VectorIndexNamespace namespace, EmbeddingIndexDescriptor activeDescriptor, boolean indexEmpty);
 
+    VectorIndexCompatibility markUnavailable(VectorIndexNamespace namespace);
+
     VectorIndexCompatibility markUnavailable(VectorIndexNamespace namespace, EmbeddingIndexDescriptor activeDescriptor);
 
     Optional<EmbeddingIndexDescriptor> find(VectorIndexNamespace namespace);

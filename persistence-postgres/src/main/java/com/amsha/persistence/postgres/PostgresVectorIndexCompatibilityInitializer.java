@@ -44,12 +44,22 @@ public class PostgresVectorIndexCompatibilityInitializer {
 
     void onStart(@Observes @Priority(Interceptor.Priority.APPLICATION + 300) StartupEvent event) {
         if (descriptorSources.isUnsatisfied() || descriptorSources.isAmbiguous()) {
+            metadata.markUnavailable(VectorIndexNamespace.RAG_GLOBAL);
             log.warn("PostgreSQL vector descriptor source unavailable or ambiguous; vector search remains disabled");
             return;
         }
-        EmbeddingIndexDescriptor descriptor =
-                descriptorSources.get().activeDescriptor().orElse(null);
+        EmbeddingIndexDescriptor descriptor;
+        try {
+            descriptor = descriptorSources.get().activeDescriptor().orElse(null);
+        } catch (RuntimeException e) {
+            metadata.markUnavailable(VectorIndexNamespace.RAG_GLOBAL);
+            log.warnf(
+                    "PostgreSQL embedding provider could not be initialized; vector search remains disabled: %s",
+                    LogUtil.rootMessage(e));
+            return;
+        }
         if (descriptor == null) {
+            metadata.markUnavailable(VectorIndexNamespace.RAG_GLOBAL);
             log.warn("PostgreSQL active embedding descriptor unavailable; vector search remains disabled");
             return;
         }

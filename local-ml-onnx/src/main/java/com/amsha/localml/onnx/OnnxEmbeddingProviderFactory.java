@@ -33,6 +33,8 @@ import io.vertx.core.Context;
 @Unremovable
 public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
 
+    public static final String PROVIDER_ID = "onnx";
+
     private final OnnxModelBundleRegistry bundleRegistry;
     private final OnnxRuntimeManager runtimeManager;
     private final OnnxSessionLeaseManager sessionLeaseManager;
@@ -129,7 +131,7 @@ public class OnnxEmbeddingProviderFactory implements EmbeddingProviderFactory {
 
     @Override
     public String providerId() {
-        return "onnx";
+        return PROVIDER_ID;
     }
 
     @Override

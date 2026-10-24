@@ -2,7 +2,9 @@ import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
+import { SseStatus } from '../api/sse';
 import { ROUTES } from '../routes';
+import { LOGO_SVG_SRC } from '../branding';
 import './arc-connection-badge';
 
 @customElement('arc-nav')
@@ -83,6 +85,7 @@ export class ArcNav extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: var(--space-2);
       padding: var(--space-2) var(--space-2) var(--space-6);
       min-height: 36px;
     }
@@ -96,26 +99,30 @@ export class ArcNav extends LitElement {
     .logo {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: var(--space-2);
       font-weight: 700;
-      font-size: 1.25rem;
+      font-size: 1rem;
       letter-spacing: -0.02em;
+      flex: 1 1 auto;
       min-width: 0;
+      overflow: hidden;
       cursor: default;
     }
     :host([collapsed]) .logo {
+      flex: 0 0 auto;
       padding: 0;
       justify-content: center;
     }
     .logo-icon {
-      color: var(--accent);
-      font-size: 1.3rem;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 26px;
+      height: 26px;
+      display: block;
+      flex-shrink: 0;
     }
     .logo-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
       background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -227,8 +234,8 @@ export class ArcNav extends LitElement {
   render() {
     return html`
       <div class="nav-header">
-        <div class="logo" title="${this.collapsed ? 'Amsha Agent' : ''}">
-          <span class="logo-icon">⬡</span>
+        <div class="logo" title="Amsha Agent">
+          <img class="logo-icon" src="${LOGO_SVG_SRC}" alt="" width="26" height="26" />
           ${!this.collapsed ? html`<span class="logo-text">Amsha Agent</span>` : nothing}
         </div>
         <button
@@ -271,10 +278,10 @@ export class ArcNav extends LitElement {
       </div>
       <div class="footer">
         <arc-connection-badge
-          .status="${this._appContext?.sseStatus || 'disconnected'}"
-          title="${this.collapsed ? `Connection: ${this._appContext?.sseStatus || 'disconnected'}` : ''}"
+          .status="${this._appContext?.sseStatus ?? SseStatus.DISCONNECTED}"
+          title="${this.collapsed ? `Live updates: ${this._appContext?.sseStatus ?? SseStatus.DISCONNECTED}` : ''}"
         ></arc-connection-badge>
-        ${!this.collapsed ? html`<div class="version">v1.0</div>` : nothing}
+        ${!this.collapsed ? html`<div class="version">v0.1.0</div>` : nothing}
       </div>
     `;
   }

@@ -23,7 +23,7 @@ public class CompactionModelProducerTest {
             return Map.of(
                     "amsha.infinite-loop.compaction.providers", "groq",
                     "amsha.compaction.groq.api-key", "test-groq-key",
-                    "amsha.compaction.groq.model", "llama-3.1-8b-instant",
+                    "amsha.compaction.groq.model", "openai/gpt-oss-20b",
                     "amsha.compaction.groq.base-url", "https://api.groq.com/openai/v1");
         }
     }
@@ -34,7 +34,7 @@ public class CompactionModelProducerTest {
             return Map.of(
                     "amsha.infinite-loop.compaction.providers", "groq",
                     "amsha.compaction.groq.api-key", "specific-compaction-key",
-                    "amsha.compaction.groq.model", "llama-3.1-8b-instant",
+                    "amsha.compaction.groq.model", "openai/gpt-oss-20b",
                     "amsha.compaction.groq.base-url", "https://api.groq.com/openai/v1");
         }
     }

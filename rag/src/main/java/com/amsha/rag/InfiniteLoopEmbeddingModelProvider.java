@@ -51,6 +51,7 @@ public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescrip
 
     private static final Logger log = Logger.getLogger(InfiniteLoopEmbeddingModelProvider.class);
     private static final String CONFIG_PREFIX = "amsha.embedding.";
+    static final String TEST_FORCE_ERROR_PROPERTY = "amsha.test.force-error";
 
     @Inject
     @Any
@@ -74,13 +75,13 @@ public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescrip
     @ConfigProperty(name = "amsha.rag.embed-dimensions", defaultValue = "768")
     int configuredVectorDimension;
 
-    private volatile InfiniteLoopEmbeddingModel instance;
-    private volatile EmbeddingIndexDescriptor activeIndexDescriptor;
+    private EmbeddingModel instance;
+    private EmbeddingIndexDescriptor activeIndexDescriptor;
 
     @Produces
     @ApplicationScoped
     @Startup
-    public EmbeddingModel embeddingModel() {
+    public synchronized EmbeddingModel embeddingModel() {
         if (instance != null) return instance;
         synchronized (this) {
             if (instance != null) return instance;
@@ -109,15 +110,18 @@ public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescrip
                             trimmed, configured.space().spaceId());
                 } catch (Exception e) {
                     log.warnf("Embedding loop: skipping slot [%s] — %s", trimmed, LogUtil.rootMessage(e));
+                } catch (LinkageError e) {
+                    log.warnf("Embedding loop: skipping slot [%s] — %s", trimmed, LogUtil.rootMessage(e));
                 }
             }
 
             if (slots.isEmpty()) {
                 boolean isTest = LaunchMode.current() == LaunchMode.TEST;
-                if (isTest && !Boolean.getBoolean("amsha.test.force-error")) {
+                boolean forceFailure = Boolean.getBoolean(TEST_FORCE_ERROR_PROPERTY);
+                if (isTest && !forceFailure) {
                     log.warn(
                             "Embedding loop: No embedding slots could be initialized in test profile. Using dummy embedding model.");
-                    return new EmbeddingModel() {
+                    instance = new EmbeddingModel() {
                         @Override
                         public Response<Embedding> embed(String text) {
                             return Response.from(new Embedding(new float[768]));
@@ -135,9 +139,18 @@ public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescrip
                                     .toList());
                         }
                     };
+                    return instance;
                 }
-                throw new IllegalStateException("No embedding providers configured. Check mpnet model is available. "
-                        + "Check amsha.infinite-loop.embedding.providers (currently: " + loopProviders + ")");
+                if (forceFailure) {
+                    throw new IllegalStateException(
+                            "No configured embedding provider could be initialized in the forced-failure test profile.");
+                }
+                log.warnf(
+                        "No configured embedding provider could be initialized (%s). Continuing with keyword search; "
+                                + "embedding operations will fail until a provider is configured and available.",
+                        loopProviders);
+                instance = unavailableEmbeddingModel(loopProviders);
+                return instance;
             }
 
             log.infof(
@@ -154,9 +167,29 @@ public class InfiniteLoopEmbeddingModelProvider implements EmbeddingIndexDescrip
     }
 
     @Override
-    public Optional<EmbeddingIndexDescriptor> activeDescriptor() {
+    public synchronized Optional<EmbeddingIndexDescriptor> activeDescriptor() {
         if (activeIndexDescriptor == null) embeddingModel();
         return Optional.ofNullable(activeIndexDescriptor);
+    }
+
+    private static EmbeddingModel unavailableEmbeddingModel(String configuredProviders) {
+        String message = "No embedding provider is available. Configured providers: " + configuredProviders + ".";
+        return new EmbeddingModel() {
+            @Override
+            public Response<Embedding> embed(String text) {
+                throw new IllegalStateException(message);
+            }
+
+            @Override
+            public Response<Embedding> embed(TextSegment textSegment) {
+                throw new IllegalStateException(message);
+            }
+
+            @Override
+            public Response<List<Embedding>> embedAll(List<TextSegment> textSegments) {
+                throw new IllegalStateException(message);
+            }
+        };
     }
 
     private EmbeddingIndexDescriptor toIndexDescriptor(EmbeddingSpaceDescriptor space) {

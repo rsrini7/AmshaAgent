@@ -170,11 +170,16 @@ Spring AI is a strong alternative but is more opinionated toward the Spring ecos
 
 ---
 
-### Q: Why Groq as the default LLM provider instead of OpenAI or a local model?
+### Q: How do I choose an LLM provider?
 
-Groq's LPU (Language Processing Unit) inference delivers the lowest token/second latency of any hosted API, which directly reduces agent loop iteration time. For a ReAct-style agent that may call the LLM 5–7 times per task, a 3× latency advantage over OpenAI's standard API compounds significantly. Amsha Agent V0.1.0 defaults to `meta-llama/llama-4-scout-17b-16e-instruct` for reasoning and `llama-3.1-8b-instant` for intent classification and compaction - both available on Groq.
-
-Ollama is still provisioned in `docker-compose.yaml` (disabled by default) for fully air-gapped deployments. Switching is a two-line change in `application.yaml`.
+Amsha does not select an LLM provider automatically. The first-run CLI setup
+prompts you to choose one. In non-interactive deployments, set
+`AMSHA_LLM_PROVIDER` explicitly and provide any required credentials. Hosted
+providers such as Groq and OpenRouter require their own account credentials;
+local options such as Ollama and OMLX can run against a local inference server.
+The `infinite-loop` provider is an explicit multi-provider failover strategy,
+not an automatic default. See [the provider configuration reference](./CONFIGURATION.md)
+for provider IDs, model fallbacks, and credential variables.
 
 ### Q: What is OMLX and when should I use it?
 
@@ -214,7 +219,7 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 
 Direct access is intentionally narrow. If any persona requests a known tool it does not own, the loop delegates through `garuda` to the tool's owner; approval-resume and parallel-batch paths use the same rule. This preserves least privilege without granting every persona every tool.
 
-The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `llama-3.1-8b-instant` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
+The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification tokens), then falls through to `openai/gpt-oss-20b` to auto-route incoming messages to the best role. You can also specify a role explicitly via `--role` on the CLI or `agentRole` in the REST payload.
 
 ---
 
@@ -492,7 +497,7 @@ The first response is an approval task. Approve it through the MCP approval endp
 
 Amsha Agent uses a rolling window `ChatMemoryStore` capped at `amsha.chat-memory.max-messages` (default 20). When the window fills, the `CompactionHandler` in the message pipeline triggers `ContextCompactionService` if the message count exceeds `amsha.memory.compaction.threshold` (default 5 above the keep-recent count).
 
-Compaction uses `llama-3.1-8b-instant` to summarize the oldest messages into a `CompactionSummaryDto`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`amsha-fts.db`) so it can be recalled later via `MemorySearchTool`.
+Compaction uses `openai/gpt-oss-20b` to summarize the oldest messages into a `CompactionSummaryDto`, discards the originals from the rolling window, and preserves the most recent `keep-recent` (default 5) messages verbatim. The summary is also written into the FTS5 database (`amsha-fts.db`) so it can be recalled later via `MemorySearchTool`.
 
 ---
 
@@ -750,11 +755,11 @@ Telegram's MarkdownV2 format requires escaping every special character (`_`, `*`
 
 ### Q: What happens when a Telegram user I have not allowlisted sends a message?
 
-`TelegramAllowlistGuard` is evaluated in the `AllowlistHandler` at the start of the `MessagePipeline`. If the user's Telegram user ID or username is not in `AMSHA_TELEGRAM_ALLOWED_USER_IDS` / `AMSHA_TELEGRAM_ALLOWED_USERS`, the message is rejected before it reaches the intent classifier or agent loop.
+`TelegramAllowlistGuard` is evaluated in the `AllowlistHandler` at the start of the `MessagePipeline`. When `AMSHA_TELEGRAM_ALLOWED_USER_IDS` is configured, only matching numeric account IDs are allowed; the public username list is ignored. `AMSHA_TELEGRAM_ALLOWED_USERS` is a legacy fallback used only when no numeric IDs are configured. A rejected message is stopped before it reaches the intent classifier or agent loop.
 
 If `amsha.channel.telegram.silent-block=false` (default), the user receives the configured `block-response` message (default: `⛔ Access denied.`). If `silent-block=true`, the message is dropped silently with no reply - useful when you do not want to reveal that the bot is running.
 
-An empty allowlist (`AMSHA_TELEGRAM_ALLOWED_USERS=`) allows all users - this is the open-access mode used in development.
+When both allowlists are empty, all users can interact. This open-access mode is used in development.
 
 ---
 

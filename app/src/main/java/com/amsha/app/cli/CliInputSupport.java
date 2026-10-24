@@ -14,7 +14,20 @@ import com.amsha.core.state.ActivityPhase;
 /** Small, stateless helpers for the interactive CLI input and presentation paths. */
 final class CliInputSupport {
 
+    static final String APPROVE_COMMAND = "/approve";
+    static final String DENY_COMMAND = "/deny";
+    static final String EXIT_COMMAND = "/exit";
+    static final String QUIT_COMMAND = "/quit";
+
     private CliInputSupport() {}
+
+    static boolean isExitCommand(String input) {
+        return EXIT_COMMAND.equalsIgnoreCase(input) || QUIT_COMMAND.equalsIgnoreCase(input);
+    }
+
+    static boolean isApprovalCommand(String input) {
+        return input != null && (input.startsWith(APPROVE_COMMAND) || input.startsWith(DENY_COMMAND));
+    }
 
     static void runFallback(BooleanSupplier hitlPending, Consumer<String> dispatch) {
         Console console = System.console();
@@ -35,14 +48,14 @@ final class CliInputSupport {
             } catch (Exception _) {
                 break;
             }
-            if ("/exit".equalsIgnoreCase(input) || "/quit".equalsIgnoreCase(input)) {
+            if (isExitCommand(input)) {
                 System.out.println("Goodbye.");
                 break;
             }
             if (input.isBlank()) continue;
-            if (!input.startsWith("/approve") && !input.startsWith("/deny") && hitlPending.getAsBoolean()) {
-                System.out.println(
-                        "\n▶ Amsha Agent> ⏸ Approval pending - type /approve or /deny before sending new messages.");
+            if (!isApprovalCommand(input) && hitlPending.getAsBoolean()) {
+                System.out.println("\n▶ Amsha Agent> ⏸ Approval pending - type " + APPROVE_COMMAND + " or "
+                        + DENY_COMMAND + " before sending new messages.");
                 continue;
             }
             dispatch.accept(input);
@@ -51,18 +64,18 @@ final class CliInputSupport {
 
     static List<String> slashCommands() {
         return List.of(
-                "/approve",
+                APPROVE_COMMAND,
                 "/approvals",
                 "/commands",
                 "/crons",
                 "/deletecron",
-                "/deny",
-                "/exit",
+                DENY_COMMAND,
+                EXIT_COMMAND,
                 "/halt",
                 "/help",
                 "/history",
                 "/newsession",
-                "/quit",
+                QUIT_COMMAND,
                 "/reset",
                 "/resume",
                 "/retry",
@@ -77,7 +90,8 @@ final class CliInputSupport {
         if (params != null && params.length() > 200) params = params.substring(0, 200) + "... [truncated]";
         return "\n▶ Amsha Agent> ⏸ Approval needed for tool: " + awaiting.toolName()
                 + "\n   Params: " + (params == null || params.isBlank() ? "(none)" : params)
-                + "\n   Type /approve or /deny (or approve via REST/UI - result will appear automatically)";
+                + "\n   Type " + APPROVE_COMMAND + " or " + DENY_COMMAND
+                + " (or approve via REST/UI - result will appear automatically)";
     }
 
     static String describePhase(String phase) {

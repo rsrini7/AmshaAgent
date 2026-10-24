@@ -49,6 +49,8 @@ public class LocalOnnxAudioTranscriptionAdapter implements AudioTranscriptionPor
     private static final int MAX_DURATION_SECONDS = 30;
     private static final int SAMPLE_RATE = 16000;
     private static final int DEFAULT_MAX_TRANSCRIPT_CHARS = 12000;
+    private static final String ORT_TERMINATION_MESSAGE = "terminate";
+    private static final String ORT_FAILURE_TOKEN = "ORT_FAIL";
 
     private final OnnxModelBundleRegistry bundleRegistry;
     private final OnnxRuntimeManager runtimeManager;
@@ -77,7 +79,8 @@ public class LocalOnnxAudioTranscriptionAdapter implements AudioTranscriptionPor
             ObjectMapper objectMapper,
             @ConfigProperty(name = "amsha.stt.local.enabled", defaultValue = "false") boolean enabled,
             @ConfigProperty(name = "amsha.onnx.enabled", defaultValue = "false") boolean onnxEnabled,
-            @ConfigProperty(name = "amsha.stt.local.bundle-id", defaultValue = "whisper-tiny-en-v1") String bundleId,
+            @ConfigProperty(name = "amsha.stt.local.bundle-id", defaultValue = OnnxModelBundleIds.WHISPER)
+                    String bundleId,
             @ConfigProperty(name = "amsha.stt.local.timeout", defaultValue = "PT30S") Duration defaultTimeout,
             @ConfigProperty(name = "amsha.stt.local.max-audio-bytes", defaultValue = "26214400") long maxAudioBytes,
             @ConfigProperty(name = "amsha.stt.local.max-transcript-chars", defaultValue = "12000")
@@ -172,7 +175,7 @@ public class LocalOnnxAudioTranscriptionAdapter implements AudioTranscriptionPor
         this.runner.set(Objects.requireNonNull(runner, "runner"));
         this.enabled = true;
         this.onnxEnabled = true;
-        this.bundleId = "whisper-tiny-en-v1";
+        this.bundleId = OnnxModelBundleIds.WHISPER;
         this.defaultTimeout = defaultTimeout != null ? defaultTimeout : Duration.ofSeconds(30);
         this.maxAudioBytes = maxAudioBytes > 0 ? maxAudioBytes : DEFAULT_MAX_AUDIO_BYTES;
         this.maxTranscriptChars = maxTranscriptChars > 0 ? maxTranscriptChars : DEFAULT_MAX_TRANSCRIPT_CHARS;
@@ -384,9 +387,7 @@ public class LocalOnnxAudioTranscriptionAdapter implements AudioTranscriptionPor
                 encoderBundle = bundleRegistry.loadVerified(bundleId);
             } catch (IOException e) {
                 throw new IllegalStateException(
-                        "Failed to load verified bundle '" + bundleId
-                                + "'. Install it using: ./amsha models install whisper",
-                        e);
+                        "Failed to load verified bundle '" + bundleId + "': " + e.getMessage(), e);
             }
             OnnxAudioTranscriptionBundleSpec spec = encoderBundle.manifest().audioTranscription();
             if (spec == null) {
@@ -441,8 +442,8 @@ public class LocalOnnxAudioTranscriptionAdapter implements AudioTranscriptionPor
         if (cause instanceof TimeoutException) return true;
         if (cause instanceof OrtException
                 && cause.getMessage() != null
-                && (cause.getMessage().contains("terminate")
-                        || cause.getMessage().contains("ORT_FAIL"))) {
+                && (cause.getMessage().contains(ORT_TERMINATION_MESSAGE)
+                        || cause.getMessage().contains(ORT_FAILURE_TOKEN))) {
             return true;
         }
         return isTerminationOrTimeout(cause.getCause());

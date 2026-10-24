@@ -1287,15 +1287,11 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       expect(backCalled).toBe(true);
     });
 
-    it('ArcOnboardingStepIntegrations handles playwright toggles, next, and back', () => {
+    it('ArcOnboardingStepIntegrations renders setup guidance and supports navigation', () => {
       const step = new ArcOnboardingStepIntegrations();
-      let updatedIntegrations: any = null;
       let nextCalled = false;
       let backCalled = false;
 
-      step.addEventListener('update-integrations', ((e: CustomEvent) => {
-        updatedIntegrations = e.detail.integrations;
-      }) as EventListener);
       step.addEventListener('next', () => {
         nextCalled = true;
       });
@@ -1304,11 +1300,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       });
 
       const rendered = flattenLit(step.render());
-      expect(rendered).toContain('Outbound Integrations (Optional)');
-      expect(rendered).toContain('Enable Playwright Browser Tool');
-
-      (step as any)._onChange('playwrightEnabled', true);
-      expect(updatedIntegrations.playwrightEnabled).toBe(true);
+      expect(rendered).toContain('Integrations (Optional)');
+      expect(rendered).toContain('Search, GitHub, and browser automation');
+      expect(rendered).toContain('AMSHA_TOOLS_PLAYWRIGHT_ENABLED');
 
       (step as any)._next();
       expect(nextCalled).toBe(true);
@@ -1379,15 +1373,11 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       expect(backCalled).toBe(true);
     });
 
-    it('ArcOnboardingStepChannels handles channel toggles, next, and back', () => {
+    it('ArcOnboardingStepChannels renders channel setup guidance and supports navigation', () => {
       const step = new ArcOnboardingStepChannels();
-      let updatedChannels: any = null;
       let nextCalled = false;
       let backCalled = false;
 
-      step.addEventListener('update-channels', ((e: CustomEvent) => {
-        updatedChannels = e.detail.channels;
-      }) as EventListener);
       step.addEventListener('next', () => {
         nextCalled = true;
       });
@@ -1396,12 +1386,10 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       });
 
       const rendered = flattenLit(step.render());
-      expect(rendered).toContain('Channels & Scheduling (Optional)');
-      expect(rendered).toContain('Enable Telegram Integration');
-      expect(rendered).toContain('Enable Web Chat Channel');
-
-      (step as any)._onChange('telegramEnabled', true);
-      expect(updatedChannels.telegramEnabled).toBe(true);
+      expect(rendered).toContain('Channels (Optional)');
+      expect(rendered).toContain('AMSHA_TELEGRAM_ALLOWED_USER_IDS');
+      expect(rendered).toContain('AMSHA_TELEGRAM_ALLOWED_USERS');
+      expect(rendered).toContain('Web chat and schedules');
 
       (step as any)._next();
       expect(nextCalled).toBe(true);
@@ -1410,15 +1398,11 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       expect(backCalled).toBe(true);
     });
 
-    it('ArcOnboardingStepIdentity handles identity client id updates, next, and back', () => {
+    it('ArcOnboardingStepIdentity renders identity setup guidance and supports navigation', () => {
       const step = new ArcOnboardingStepIdentity();
-      let updatedIdentity: any = null;
       let nextCalled = false;
       let backCalled = false;
 
-      step.addEventListener('update-identity', ((e: CustomEvent) => {
-        updatedIdentity = e.detail.identity;
-      }) as EventListener);
       step.addEventListener('next', () => {
         nextCalled = true;
       });
@@ -1427,11 +1411,9 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       });
 
       const rendered = flattenLit(step.render());
-      expect(rendered).toContain('External Identity & OIDC (Optional)');
-      expect(rendered).toContain('OIDC Client ID');
-
-      (step as any)._onChange('oidcClientId', 'my-client-id');
-      expect(updatedIdentity.oidcClientId).toBe('my-client-id');
+      expect(rendered).toContain('External Identity (Optional)');
+      expect(rendered).toContain('Generic OIDC');
+      expect(rendered).toContain('AMSHA_AUTH_IDP_OIDC_CLIENT_ID');
 
       (step as any)._next();
       expect(nextCalled).toBe(true);

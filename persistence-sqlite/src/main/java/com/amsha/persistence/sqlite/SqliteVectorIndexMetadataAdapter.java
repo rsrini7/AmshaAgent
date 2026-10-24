@@ -59,6 +59,13 @@ public class SqliteVectorIndexMetadataAdapter implements VectorIndexMetadataPort
     }
 
     @Override
+    public VectorIndexCompatibility markUnavailable(VectorIndexNamespace namespace) {
+        VectorIndexCompatibility result = VectorIndexCompatibility.unavailable(namespace);
+        compatibility.put(namespace, result);
+        return result;
+    }
+
+    @Override
     public VectorIndexCompatibility markUnavailable(
             VectorIndexNamespace namespace, EmbeddingIndexDescriptor activeDescriptor) {
         VectorIndexCompatibility result = unavailable(namespace, activeDescriptor);

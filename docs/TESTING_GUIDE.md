@@ -781,7 +781,7 @@ curl -s -X DELETE http://localhost:8080/api/v1/skills/test-skill-001 \
 
 **Expect:** `{"message":"Deleted and reloaded: test-skill-001"}`
 
-**Confirm:** Sending "test skill routing" now routes through Groq intent classifier (IntentClassificationHandler appears in logs).
+**Confirm:** `IntentClassificationHandler` appears in the logs for the routing flow. The request uses the configured LLM provider, so a successful run only verifies Groq when `AMSHA_LLM_PROVIDER=groq` and a valid `AMSHA_GROQ_API_KEY` are set. If `AMSHA_LLM_PROVIDER=omlx`, the same check runs through OMLX and does not verify Groq.
 
 ---
 

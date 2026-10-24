@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.amsha.channel.api.ChannelAllowlist;
+import com.amsha.common.config.ConfigKeys;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -18,10 +19,10 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
 
     private static final Logger log = Logger.getLogger(TelegramAllowlistGuard.class);
 
-    @ConfigProperty(name = "amsha.channel.telegram.allowed-user-ids")
-    Optional<List<Long>> allowedUserIds;
+    @ConfigProperty(name = ConfigKeys.TELEGRAM_ALLOWED_USER_IDS_PROPERTY)
+    Optional<List<String>> allowedUserIds;
 
-    @ConfigProperty(name = "amsha.channel.telegram.allowed-users", defaultValue = "")
+    @ConfigProperty(name = ConfigKeys.TELEGRAM_ALLOWED_USERS_PROPERTY, defaultValue = "")
     Optional<List<String>> allowedUsers;
 
     @ConfigProperty(name = "amsha.channel.telegram.block-response", defaultValue = "⛔ Access denied.")
@@ -40,7 +41,8 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
             if (userIdStr != null) {
                 try {
                     long userId = Long.parseLong(userIdStr);
-                    if (allowedUserIds.get().contains(userId)) {
+                    if (allowedUserIds.get().stream()
+                            .anyMatch(configuredId -> isConfiguredUserId(configuredId, userId))) {
                         return true;
                     }
                 } catch (NumberFormatException _) {
@@ -86,7 +88,17 @@ public class TelegramAllowlistGuard implements ChannelAllowlist {
         return false;
     }
 
-    @Override
+    static boolean isConfiguredUserId(String configuredId, long userId) {
+        if (configuredId == null) {
+            return false;
+        }
+        try {
+            return Long.parseLong(configuredId.trim()) == userId;
+        } catch (NumberFormatException _) {
+            return false;
+        }
+    }
+
     public String getBlockResponse() {
         return blockResponse;
     }

@@ -24,7 +24,7 @@ class ProviderKeySpecsTest {
         assertNotNull(ProviderKeySpecs.llmKeySpecFor("generic-openai"));
         assertNull(ProviderKeySpecs.llmKeySpecFor("ollama"));
         assertNull(ProviderKeySpecs.llmKeySpecFor("codex"));
-        assertNotNull(ProviderKeySpecs.llmKeySpecFor(null));
+        assertNull(ProviderKeySpecs.llmKeySpecFor(null));
     }
 
     @Test
@@ -77,8 +77,8 @@ class ProviderKeySpecsTest {
 
     @Test
     void testFirstProvider() {
-        assertEquals("groq", ProviderKeySpecs.firstProvider(null));
-        assertEquals("groq", ProviderKeySpecs.firstProvider(""));
+        assertEquals("", ProviderKeySpecs.firstProvider(null));
+        assertEquals("", ProviderKeySpecs.firstProvider(""));
         assertEquals("openai", ProviderKeySpecs.firstProvider("openai,ollama"));
         assertEquals("gemini", ProviderKeySpecs.firstProvider("gemini"));
     }

@@ -88,9 +88,9 @@ GraalVM `native-image` captures compile-time environment variables and bakes the
 `AMSHA_VAULT_PEPPER` represents the external cryptographic anchor. Because reading or decrypting the vault requires the pepper, the pepper cannot reside inside the vault itself. It must be provided via the host environment, `.env`, or an external secrets manager (KMS/HSM).
 
 ### 4. Dev Secret Seeding (`DevSecretSeeder`) & Production Boundaries
-- `AMSHA_AUTO_SEED_SECRETS` defaults to `false` in production (`.env.example`, `application.yaml`, and `DevSecretSeeder.java`).
+- `AMSHA_AUTO_SEED_SECRETS` defaults to `false` in the runtime configuration. The repository's `.env.example` opts into `true` so a fresh local data directory can seed its stable audit HMAC key before the production startup check; operators with a pre-provisioned vault can disable it.
 - In multi-tenant environments, Tier 2 secrets are submitted through authenticated onboarding/settings flows or the guarded `/vault KEY=VALUE` command and encrypted under user-specific session scopes (`USER:<userId>`). There is no public `/api/v1/vault/keys` endpoint.
-- When explicitly enabled (`AMSHA_AUTO_SEED_SECRETS=true`) in single-user development or local workflows, `DevSecretSeeder` executes upon the `StartupEvent`, copying tool keys from the environment into the encrypted vault for developer convenience.
+- When enabled, `DevSecretSeeder` runs at `StartupEvent`, idempotently copying the stable `AMSHA_AUDIT_HMAC_KEY` and any configured GitHub, Serper, and Brave tool keys from the trusted environment into the encrypted vault. Keep the audit key unchanged across restarts. Multi-tenant deployments should use their controlled secret-provisioning path and keep auto-seeding disabled.
 
 ### 5. HMAC Audit Key Seeding Lifecycle
 - **Dev/Test (`seedAuditHmacKey`)**: Uses an ephemeral 32-byte key generated via `SecureRandom` on each boot. This ensures frequent test database wipes do not preserve dangling HMAC chains from prior sessions.

@@ -59,6 +59,8 @@ public class ChatCommand implements Runnable {
 
     private static final String CLI_USER_ID = "cli-user";
     private static final String CLI_CHAT_ID = "cli-chat";
+    private static final String APPROVAL_RESPONSE_MARKER = "⏸ Approval";
+    private static final String PARALLEL_BATCH_RESPONSE_MARKER = "⏸ Parallel batch";
     private static final long PROGRESS_TICK_SECONDS = 20;
 
     @CommandLine.Option(
@@ -276,18 +278,19 @@ public class ChatCommand implements Runnable {
                 continue;
             }
 
-            if ("/exit".equalsIgnoreCase(input) || "/quit".equalsIgnoreCase(input)) {
+            if (CliInputSupport.isExitCommand(input)) {
                 log.infof("CLI chat session %s exiting on user command", currentCliSessionId);
                 terminal.writer().println("Goodbye.");
                 break;
             }
             if (input.isBlank()) continue;
 
-            if (!input.startsWith("/approve") && !input.startsWith("/deny")) {
+            if (!CliInputSupport.isApprovalCommand(input)) {
                 if (hitlPending) {
                     terminal.writer()
-                            .println(
-                                    "\n▶ Amsha Agent> ⏸ Approval pending - type /approve or /deny before sending new messages.");
+                            .println("\n▶ Amsha Agent> ⏸ Approval pending - type "
+                                    + CliInputSupport.APPROVE_COMMAND + " or " + CliInputSupport.DENY_COMMAND
+                                    + " before sending new messages.");
                     continue;
                 }
             }
@@ -331,7 +334,8 @@ public class ChatCommand implements Runnable {
                             Optional.ofNullable(role),
                             Optional.of(maxIterations))));
             boolean isApprovalPrompt = result.commandResponse()
-                    .map(resp -> resp.contains("⏸ Approval") || resp.contains("⏸ Parallel batch"))
+                    .map(resp ->
+                            resp.contains(APPROVAL_RESPONSE_MARKER) || resp.contains(PARALLEL_BATCH_RESPONSE_MARKER))
                     .orElse(false);
             boolean newHitlPending = result.agentResult()
                     .map(AgentResult.AwaitingApproval.class::isInstance)

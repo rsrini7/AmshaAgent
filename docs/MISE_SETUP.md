@@ -17,7 +17,7 @@
 6. [JDK Management - Temurin vs GraalVM](#6-jdk-management---temurin-vs-graalvm)
 7. [All Tasks at a Glance](#7-all-tasks-at-a-glance)
 8. [Build Tasks](#8-build-tasks)
-9. [Dev Mode Tasks (hot reload)](#9-dev-mode-tasks-hot-reload)
+9. [Quarkus Dev Mode Tasks (limited multi-module reload)](#9-quarkus-dev-mode-tasks-limited-multi-module-reload)
 10. [JAR Run Tasks](#10-jar-run-tasks)
 11. [Native Binary Tasks](#11-native-binary-tasks)
 12. [Creating Release Archives (`dist:pack`)](#12-creating-release-archives-distpack)
@@ -31,17 +31,13 @@
 
 ## 1. Why mise?
 
-Instead of remembering:
+For regular multi-module development, use the packaged JAR task. It clean-builds all modules (tests skipped) before starting the app with the Quarkus `dev` profile:
 
 ```bash
-./mvnw quarkus:dev -pl app -am -Dquarkus.args=serve -Damsha.rag.vec-extension-path=../lib/vec0 ...
+mise run jar:run-dev-dep -- serve
 ```
 
-You just type:
-
-```bash
-mise run dev
-```
+Quarkus dev mode remains available for reloadable application code, but several Amsha module dependencies are not reloaded; changes there need a rebuild or restart.
 
 `mise` also:
 
@@ -148,7 +144,7 @@ mise run podman:init
 mise run sandbox:check
 
 # 11. Run
-mise run dev              # hot reload on :8080
+mise run jar:run-dev-dep -- serve  # packaged app; rebuilds dependencies first
 ```
 
 ### What `mise install` installs
@@ -312,12 +308,16 @@ mise run help    # or: mise tasks
 | `mise run build:native-local` | Native binary - always local GraalVM, no container |
 | `mise run build:native-lowmem` | Native binary - local GraalVM, 6 GB heap cap |
 | `mise run build:clean` | `mvnw clean` |
-| **`mise run dev`** | Hot-reload serve on :8080 (strategy: NONE) |
-| `mise run dev:chat` | Hot-reload - interactive REPL |
-| `mise run dev:attach` | Hot-reload - Telegram daemon |
-| `mise run dev:ask` | Hot-reload - one-shot task (`$env:GOAL="..."`) |
-| `mise run dev:no-ui` | Hot-reload - Dev UI + console disabled |
+| `mise run models:install-mpnet` | Download and verify MPNet for ONNX embeddings (~436 MB) |
+| `mise run models:install-bge-reranker` | Download and verify the optional BGE reranker (~1.1 GB) |
+| `mise run models:provision-local-whisper` | Provision the optional local Whisper speech model |
+| **`mise run dev`** | Quarkus dev mode on :8080; several Amsha dependencies are non-reloadable |
+| `mise run dev:chat` | Quarkus dev mode - interactive REPL |
+| `mise run dev:attach` | Quarkus dev mode - Telegram daemon |
+| `mise run dev:ask` | Quarkus dev mode - one-shot task (`$env:GOAL="..."`) |
+| `mise run dev:no-ui` | Quarkus dev mode - Dev UI + console disabled |
 | `mise run dev:kill` | Kill any lingering Quarkus background processes |
+| **`mise run jar:run-dev-dep -- serve`** | Clean module build (tests skipped), then packaged JAR with `%dev` profile (recommended for multi-module changes) |
 | **`mise run jar:serve`** | Packaged jar - REST daemon on :8080 |
 | `mise run jar:chat` | Packaged jar - interactive REPL |
 | `mise run jar:attach` | Packaged jar - Telegram daemon |
@@ -478,16 +478,18 @@ mise run build:native
 
 ***
 
-## 9. Dev Mode Tasks (hot reload)
+## 9. Quarkus Dev Mode Tasks (limited multi-module reload)
 
-All `dev*` tasks use Temurin 25 and pass paths `../lib/vec0` / `../data` (because `quarkus:dev` forks Maven inside `app/`). No Podman needed - sandbox strategy is `NONE`.
+Use these tasks when you need Quarkus dev-mode features such as the Dev UI or continuous-testing controls. They use Temurin 25, pass paths `../lib/vec0` / `../data` because `quarkus:dev` forks Maven inside `app/`, and do not need Podman; the sandbox strategy is `NONE`.
+
+Quarkus reports several Amsha dependencies as non-reloadable in this multi-module build. Edits in those modules will not be picked up by hot reload. For those changes, use `mise run jar:run-dev-dep -- serve` to rebuild the project and restart the packaged app.
 
 ```bash
-mise run dev           # serve on :8080 · hot reload · Dev UI at /q/dev-ui
-mise run dev:chat      # interactive REPL
-mise run dev:no-ui     # serve - Dev UI + console disabled
-mise run dev:attach    # Telegram daemon (TELEGRAM_BOT_TOKEN required in .env)
-mise run dev:kill      # kill any lingering Quarkus processes
+mise run dev          # Quarkus dev mode on :8080 · Dev UI at /q/dev-ui
+mise run dev:chat     # interactive REPL
+mise run dev:no-ui    # serve - Dev UI + console disabled
+mise run dev:attach   # Telegram daemon (TELEGRAM_BOT_TOKEN required in .env)
+mise run dev:kill     # kill lingering Quarkus processes
 
 # One-shot ask
 $env:GOAL = "Analyze the Amsha Agent architecture"; mise run dev:ask
@@ -500,13 +502,17 @@ Available roles: `coordinator` · `researcher` · `coder` · `debugger` · `arch
 
 ## 10. JAR Run Tasks
 
-All jar tasks invoke `java` directly with paths `./lib/vec0` / `./data`.
+All JAR tasks invoke `java` directly with paths `./lib/vec0` / `./data`. For multi-module development, `jar:run-dev-dep` runs the clean module build with tests skipped before launching the packaged JAR with the `%dev` profile. Rerun it after code changes.
+
+If `.env` selects `onnx` embeddings, install MPNet from the source checkout with `mise run models:install-mpnet`. The developer JAR can manage the model with `mise run jar:run-dev-dep -- models install mpnet`. Native builds are backend-specific; use the matching binary from its directory: `./amsha-sqlite`, `./amsha-pg`, or `./amsha-fs`, followed by `models install mpnet`. Each runtime also supports `models verify mpnet`. See the [ONNX local ML guide](./ONNX_LOCAL_ML_GUIDE.md) for complete commands.
 
 ```bash
-mise run jar:serve                # REST daemon on :8080 (CLI profile)
-mise run jar:chat                 # interactive REPL
-mise run jar:attach               # Telegram daemon
-mise run jar:run-dev-profile      # %dev profile - usage: mise run jar:run-dev-profile -- serve|chat|attach|ask
+mise run jar:run-dev-dep -- serve # clean build (tests skipped), then web server on :8080
+mise run jar:run-dev-dep -- chat  # clean build (tests skipped), then interactive CLI
+mise run jar:serve                # packaged JAR - REST daemon on :8080 (CLI profile)
+mise run jar:chat                 # packaged JAR - interactive REPL
+mise run jar:attach               # packaged JAR - Telegram daemon
+mise run jar:run-dev-profile      # run the existing JAR with %dev profile; does not build
 
 # One-shot ask
 $env:GOAL = "List all active cron jobs"; mise run jar:ask
@@ -517,7 +523,7 @@ $env:ROLE = "researcher"; $env:GOAL = "Research Quarkus ScopedValues"; mise run 
 
 ## 11. Native Binary Tasks
 
-**Prerequisite:** `mise run build:native`
+Build for the current machine with `mise run build:native-local`. This uses local GraalVM and substantial memory; see the native platform status near the top of the README.
 
 ```bash
 mise run native:serve    # REST daemon on :8080

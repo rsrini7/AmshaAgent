@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import com.amsha.app.cli.CliArguments;
 import com.amsha.common.config.ConfigKeys;
 import com.amsha.llm.api.ModelDefaults;
 import com.amsha.security.api.VaultConstants;
@@ -35,6 +36,26 @@ import com.amsha.security.api.VaultConstants;
  * </ul>
  */
 public class CliUtils {
+
+    private static final String TELEGRAM_ENABLED_ENV = ConfigKeys.TELEGRAM_ENABLED;
+    private static final String TELEGRAM_ALLOWED_USER_IDS_ENV = ConfigKeys.TELEGRAM_ALLOWED_USER_IDS_ENV;
+    private static final String TELEGRAM_ALLOWED_USERS_ENV = ConfigKeys.TELEGRAM_ALLOWED_USERS_ENV;
+    private static final String VALUE_TRUE = Boolean.TRUE.toString();
+    private static final String VALUE_NONE = "none";
+    private static final String VALUE_FALSE = Boolean.FALSE.toString();
+    private static final String VALUE_SKIP = "skip";
+    private static final String PLACEHOLDER_CHANGEME = "changeme";
+    private static final String PLACEHOLDER_START = "<";
+    private static final String PLACEHOLDER_YOUR_PREFIX = "your_";
+    private static final String PLACEHOLDER_HERE_SUFFIX = "_here";
+    private static final String PLACEHOLDER_REPEATED_X_REGEX = ".*x{8,}.*";
+    private static final String DEFAULT_LOCAL_PROVIDER_LIST =
+            ModelDefaults.PROVIDER_OMLX + "," + ModelDefaults.PROVIDER_OLLAMA;
+    private static final VarSpec LLM_PROVIDER_SPEC = new VarSpec(
+            ConfigKeys.LLM_PROVIDER,
+            "Select the LLM provider for assistant responses; no provider is selected automatically.",
+            "Choose one in the first-run menu, or set AMSHA_LLM_PROVIDER to a supported provider ID.",
+            "Local options include ollama, omlx, llamacpp, and foundry.");
 
     // -------------------------------------------------------------------------
     // Required vars per mode
@@ -97,14 +118,17 @@ public class CliUtils {
                 "2. Send /newbot and follow the prompts",
                 "3. Copy the token and add:  TELEGRAM_BOT_TOKEN=123456:ABCdef..."),
         new VarSpec(
-                "AMSHA_TELEGRAM_ALLOWED_USER_IDS",
-                "Comma-separated numeric Telegram user IDs allowed to use the bot.",
-                "Find your user ID by messaging @userinfobot on Telegram.",
-                "Add:  AMSHA_TELEGRAM_ALLOWED_USER_IDS=123456789"),
+                TELEGRAM_ALLOWED_USER_IDS_ENV,
+                "Numeric Telegram account IDs, not visible @usernames. IDs provide stronger account-level protection; "
+                        + "when any IDs are set, only matching IDs are allowed and the username list is ignored. "
+                        + "Find your ID by messaging @userinfobot.",
+                "Find your numeric Telegram account ID by messaging @userinfobot; do not enter your visible @username here.",
+                "Add:  " + TELEGRAM_ALLOWED_USER_IDS_ENV + "=123456789"),
         new VarSpec(
-                "AMSHA_TELEGRAM_ALLOWED_USERS",
-                "Comma-separated Telegram usernames (without @) allowed to use the bot.",
-                "Add:  AMSHA_TELEGRAM_ALLOWED_USERS=yourusername"),
+                TELEGRAM_ALLOWED_USERS_ENV,
+                "Comma-separated public Telegram usernames (without @). Used only when no numeric user IDs are set; "
+                        + "usernames can change.",
+                "Add:  " + TELEGRAM_ALLOWED_USERS_ENV + "=yourusername"),
     };
 
     // -------------------------------------------------------------------------
@@ -116,33 +140,28 @@ public class CliUtils {
      * Called by BinaryBootstrap for interactive first-run setup.
      */
     public static List<VarSpec> getMissingVarSpecs(String[] args) {
-        if (args != null && args.length > 0 && "models".equalsIgnoreCase(args[0])) {
+        if (args != null && args.length > 0 && CliArguments.COMMAND_MODELS.equalsIgnoreCase(args[0])) {
             return List.of();
         }
 
         List<VarSpec> missing = new ArrayList<>();
 
-        // 1. LLM Primary Key first
-        String llmProvider = Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER))
-                .orElseGet(() -> System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ))
-                .toLowerCase(Locale.ROOT);
-        VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(llmProvider);
+        // 1. Require an explicit provider selection, then check its key if needed.
+        String llmProvider = configuredValue(ConfigKeys.LLM_PROVIDER).toLowerCase(Locale.ROOT);
+        if (llmProvider.isBlank()) {
+            missing.add(LLM_PROVIDER_SPEC);
+        }
+        VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(mainCredentialProvider(llmProvider));
         if (providerKeySpec != null && !isSet(providerKeySpec.key())) missing.add(providerKeySpec);
 
         // 1b. Per-slot API keys for compaction / intent-classifier / embedding.
         // Each infinite-loop provider list selects the first entry for key resolution.
-        String compactionProvider = ProviderKeySpecs.firstProvider(
-                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS))
-                        .orElseGet(() -> System.getProperty(
-                                ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, "groq,ollama")));
-        String classifierProvider = ProviderKeySpecs.firstProvider(
-                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS))
-                        .orElseGet(() -> System.getProperty(
-                                ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, "groq,ollama")));
-        String embeddingProvider = ProviderKeySpecs.firstProvider(
-                Optional.ofNullable(System.getenv(ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS))
-                        .orElseGet(() -> System.getProperty(
-                                ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS, ModelDefaults.PROVIDER_OLLAMA)));
+        String compactionProvider = ProviderKeySpecs.firstProvider(configuredValueOrDefault(
+                ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, DEFAULT_LOCAL_PROVIDER_LIST));
+        String classifierProvider = ProviderKeySpecs.firstProvider(configuredValueOrDefault(
+                ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, DEFAULT_LOCAL_PROVIDER_LIST));
+        String embeddingProvider = ProviderKeySpecs.firstProvider(configuredValueOrDefault(
+                ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS, ModelDefaults.PROVIDER_OLLAMA));
 
         VarSpec compactionKeySpec = ProviderKeySpecs.compactionKeySpecFor(compactionProvider);
         if (compactionKeySpec != null && !isSet(compactionKeySpec.key())) missing.add(compactionKeySpec);
@@ -160,8 +179,8 @@ public class CliUtils {
             if (!isSet(spec.key())) missing.add(spec);
         }
 
-        boolean attachMode = args != null && args.length > 0 && "attach".equalsIgnoreCase(args[0]);
-        if (attachMode || !isExplicitOptOut("AMSHA_TELEGRAM_ENABLED")) {
+        boolean attachMode = args != null && args.length > 0 && CliArguments.COMMAND_ATTACH.equalsIgnoreCase(args[0]);
+        if (attachMode || !isExplicitOptOut(TELEGRAM_ENABLED_ENV)) {
             for (VarSpec spec : TELEGRAM_VARS) {
                 if (!isSet(spec.key())) missing.add(spec);
             }
@@ -206,7 +225,7 @@ public class CliUtils {
     }
 
     private static boolean isTrue(String propertyKey, String environmentKey) {
-        return "true".equalsIgnoreCase(configuredValue(propertyKey, environmentKey));
+        return VALUE_TRUE.equalsIgnoreCase(configuredValue(propertyKey, environmentKey));
     }
 
     private static String configuredValue(String propertyKey, String environmentKey) {
@@ -220,7 +239,9 @@ public class CliUtils {
     private static boolean isExplicitOptOut(String key) {
         String val = System.getProperty(key, System.getenv(key));
         return val != null
-                && (val.equalsIgnoreCase("none") || val.equalsIgnoreCase("false") || val.equalsIgnoreCase("skip"));
+                && (val.equalsIgnoreCase(VALUE_NONE)
+                        || val.equalsIgnoreCase(VALUE_FALSE)
+                        || val.equalsIgnoreCase(VALUE_SKIP));
     }
 
     /**
@@ -234,14 +255,12 @@ public class CliUtils {
      * @param args the raw CLI args passed to {@code main()}
      */
     public static void validateRequiredEnvVars(String[] args) {
-        String mode = args.length > 0 ? args[0].toLowerCase(Locale.ROOT) : "";
+        String mode = args != null && args.length > 0 ? args[0].toLowerCase(Locale.ROOT) : "";
 
         // No validation needed for help/version flags or models management command
-        if (mode.equals("--help")
-                || mode.equals("-h")
-                || mode.equals("--version")
-                || mode.equals("-v")
-                || mode.equals("models")) {
+        if (CliArguments.isHelpOption(mode)
+                || CliArguments.isVersionOption(mode)
+                || CliArguments.COMMAND_MODELS.equalsIgnoreCase(mode)) {
             return;
         }
 
@@ -252,19 +271,18 @@ public class CliUtils {
             if (!isSet(spec.key())) missing.add(spec);
         }
 
-        String llmProvider = Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER))
-                .map(String::toLowerCase)
-                .orElse(ModelDefaults.PROVIDER_GROQ);
-        VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(llmProvider);
+        String llmProvider = configuredValue(ConfigKeys.LLM_PROVIDER).toLowerCase(Locale.ROOT);
+        if (llmProvider.isBlank()) missing.add(LLM_PROVIDER_SPEC);
+        VarSpec providerKeySpec = ProviderKeySpecs.llmKeySpecFor(mainCredentialProvider(llmProvider));
         if (providerKeySpec != null && !isSet(providerKeySpec.key())) {
             missing.add(providerKeySpec);
         }
 
-        if (mode.equals("attach")) {
+        if (CliArguments.COMMAND_ATTACH.equalsIgnoreCase(mode)) {
             for (VarSpec spec : TELEGRAM_VARS) {
                 if (!isSet(spec.key())) missing.add(spec);
             }
-        } else if (mode.equals("serve")) {
+        } else if (CliArguments.COMMAND_SERVE.equalsIgnoreCase(mode)) {
             warnTelegramIfPartial();
         }
 
@@ -328,11 +346,11 @@ public class CliUtils {
      * </ol>
      */
     private static void warnTelegramIfPartial() {
-        String val = System.getProperty("AMSHA_TELEGRAM_ENABLED", System.getenv("AMSHA_TELEGRAM_ENABLED"));
-        boolean enabled = "true".equalsIgnoreCase(val);
+        String val = System.getProperty(TELEGRAM_ENABLED_ENV, System.getenv(TELEGRAM_ENABLED_ENV));
+        boolean enabled = VALUE_TRUE.equalsIgnoreCase(val);
         boolean hasToken = isSet(ConfigKeys.TELEGRAM_BOT_TOKEN);
-        boolean hasUserIds = isSet("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
-        boolean hasUsers = isSet("AMSHA_TELEGRAM_ALLOWED_USERS");
+        boolean hasUserIds = isSet(TELEGRAM_ALLOWED_USER_IDS_ENV);
+        boolean hasUsers = isSet(TELEGRAM_ALLOWED_USERS_ENV);
 
         // Case 0: nothing Telegram-related set at all - gentle info nudge
         if (!enabled && !hasToken && !hasUserIds && !hasUsers) {
@@ -342,8 +360,8 @@ public class CliUtils {
                     "        To enable: set these in your .env and run ./amsha attach (or amsha.exe attach):");
             System.err.println("          AMSHA_TELEGRAM_ENABLED=true");
             System.err.println("          TELEGRAM_BOT_TOKEN=<token from @BotFather>");
-            System.err.println("          AMSHA_TELEGRAM_ALLOWED_USER_IDS=<your numeric Telegram user ID>");
-            System.err.println("          AMSHA_TELEGRAM_ALLOWED_USERS=<your @username without @>");
+            System.err.println("          " + TELEGRAM_ALLOWED_USER_IDS_ENV + "=<your numeric Telegram user ID>");
+            System.err.println("          " + TELEGRAM_ALLOWED_USERS_ENV + "=<your @username without @>");
             System.err.println("        Continuing in HTTP/MCP-only mode.");
             System.err.println();
             return;
@@ -353,8 +371,8 @@ public class CliUtils {
         if (enabled) {
             List<String> missingKeys = new ArrayList<>();
             if (!hasToken) missingKeys.add(ConfigKeys.TELEGRAM_BOT_TOKEN);
-            if (!hasUserIds) missingKeys.add("AMSHA_TELEGRAM_ALLOWED_USER_IDS");
-            if (!hasUsers) missingKeys.add("AMSHA_TELEGRAM_ALLOWED_USERS");
+            if (!hasUserIds) missingKeys.add(TELEGRAM_ALLOWED_USER_IDS_ENV);
+            if (!hasUsers) missingKeys.add(TELEGRAM_ALLOWED_USERS_ENV);
             if (!missingKeys.isEmpty()) {
                 System.err.println();
                 System.err.println("  WARN: AMSHA_TELEGRAM_ENABLED=true but Telegram vars are missing:");
@@ -368,8 +386,8 @@ public class CliUtils {
             if (hasToken && (!hasUserIds || !hasUsers)) {
                 System.err.println();
                 System.err.println("  WARN: TELEGRAM_BOT_TOKEN is set but access-control vars are missing.");
-                if (!hasUserIds) System.err.println("        - AMSHA_TELEGRAM_ALLOWED_USER_IDS is not set");
-                if (!hasUsers) System.err.println("        - AMSHA_TELEGRAM_ALLOWED_USERS is not set");
+                if (!hasUserIds) System.err.println("        - " + TELEGRAM_ALLOWED_USER_IDS_ENV + " is not set");
+                if (!hasUsers) System.err.println("        - " + TELEGRAM_ALLOWED_USERS_ENV + " is not set");
                 System.err.println("        Without these, the bot may respond to messages from anyone.");
                 System.err.println("        Find your user ID by messaging @userinfobot on Telegram.");
                 System.err.println();
@@ -402,12 +420,30 @@ public class CliUtils {
     private static boolean isSet(String key) {
         String val = System.getProperty(key, System.getenv(key));
         if (val == null || val.isBlank()) return false;
-        if (val.contains("changeme")) return false;
-        if (val.contains("<")) return false;
-        if (val.contains("your_") && val.contains("_here")) return false;
+        if (val.contains(PLACEHOLDER_CHANGEME)) return false;
+        if (val.contains(PLACEHOLDER_START)) return false;
+        if (val.contains(PLACEHOLDER_YOUR_PREFIX) && val.contains(PLACEHOLDER_HERE_SUFFIX)) return false;
         // Catch repeated-x placeholders like jina_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-        if (val.equalsIgnoreCase("none")) return false;
-        if (val.matches(".*x{8,}.*")) return false;
+        if (val.equalsIgnoreCase(VALUE_NONE)) return false;
+        if (val.matches(PLACEHOLDER_REPEATED_X_REGEX)) return false;
         return true;
+    }
+
+    private static String mainCredentialProvider(String provider) {
+        if (!ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(provider)) return provider;
+        String providerList =
+                configuredValueOrDefault(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, DEFAULT_LOCAL_PROVIDER_LIST);
+        return ProviderKeySpecs.firstProvider(providerList);
+    }
+
+    private static String configuredValue(String key) {
+        String value = System.getProperty(key);
+        if (value == null) value = System.getenv(key);
+        return value == null ? "" : value.trim();
+    }
+
+    private static String configuredValueOrDefault(String key, String defaultValue) {
+        String value = configuredValue(key);
+        return value.isBlank() ? defaultValue : value;
     }
 }

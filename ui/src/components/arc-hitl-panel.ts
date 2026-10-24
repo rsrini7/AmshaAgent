@@ -13,6 +13,7 @@ export class ArcHitlPanel extends LitElement {
   private _appContext!: ArcAppContext;
 
   @property({ type: Array }) approvals: PendingApprovalDto[] = [];
+  @property({ type: Boolean, reflect: true }) compact = false;
   @property({ type: Boolean }) channelCommandMode = false;
   @property({ type: Boolean }) channelCommandPending = false;
   @property({ type: String }) channelCommandError = '';
@@ -51,6 +52,10 @@ export class ArcHitlPanel extends LitElement {
 
   static styles = css`
     :host { display: block; padding: var(--space-8); box-sizing: border-box; background: var(--bg-base); }
+    :host([compact]) { padding: 0; background: transparent; }
+    :host([compact]) > div { max-width: 100% !important; margin: 0 !important; }
+    :host([compact]) .header-row { display: none; }
+    :host([compact]) .card { margin-bottom: 0; padding: var(--space-4); }
     h2 { color: var(--text-primary); margin-top: 0; margin-bottom: var(--space-6); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
     .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-6); }
     .header-row h2 { margin: 0; }

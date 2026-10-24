@@ -18,7 +18,7 @@
 ###
 ### Compaction trigger:
 ###   When chat window exceeds: threshold (10 messages) OR max-chars (96000) OR max-tokens (32000)
-###   → ContextCompactionService summarises the oldest messages via llama-3.1-8b-instant
+###   → ContextCompactionService summarises the oldest messages via openai/gpt-oss-20b
 ###   → Summary stored in both meta.db (compaction_summary) and fts.db (FTS5 index)
 ###   → Most recent 5 messages kept verbatim in the rolling window
 ###   → Audit event: CONTEXT_COMPACTED

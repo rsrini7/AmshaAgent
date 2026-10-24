@@ -1,5 +1,7 @@
 <div align="center">
-  <h1>🛡️ Amsha Agent V0.1.0</h1>
+  <img src="docs/assets/amsha_bee_shield.svg" width="96" height="96" alt="Amsha Agent logo: a crowned queen bee with attendant bees and honeycomb inside a dark shield">
+  <h1>Amsha Agent</h1>
+  <p><em>The crowned queen bee honours Bhramari Devi, the Hindu bee goddess.</em></p>
   <p><strong>Self-hosted multi-agent AI platform built with Java 25 and Quarkus, featuring governed tool execution, session-isolated CDI state, optional rootless Podman sandboxing, and SQLite, PostgreSQL, and filesystem persistence.</strong></p>
 
   ![JDK 25](https://img.shields.io/badge/JDK-25-red.svg?style=flat&logo=java)
@@ -9,10 +11,10 @@
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
-  ![Java Tests](https://img.shields.io/badge/Tests-9774_passed_%C2%B7_15_skipped_of_9789-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9790_passed_%C2%B7_24_skipped_of_9814-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-86.58%25-brightgreen.svg?style=flat)
-  ![UI Tests](https://img.shields.io/badge/UI_Tests-201_passing-brightgreen.svg?style=flat)
-  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-59.64%25-yellow.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-333_passing-brightgreen.svg?style=flat)
+  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-83.61%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -58,28 +60,63 @@ responses.
 
 ## Quick Start
 
+Requirements: JDK 25, Git, and internet access for the first build. The Maven wrapper is included; Podman is optional for sandboxed code execution.
+
 ```bash
-# Prerequisites: JDK 25, Docker/Podman (optional for sandbox)
 git clone https://github.com/rsrini7/AmshaAgent.git
 cd AmshaAgent
 
-# Copy and edit .env (see docs/CONFIGURATION.md for all variables)
-cp .env.example .env
-# At minimum for a Groq development setup: AMSHA_GROQ_API_KEY=gsk_...,
-# AMSHA_VAULT_PEPPER, AMSHA_AUDIT_HMAC_KEY, AMSHA_API_KEYS_INTERNAL, and
-# AMSHA_AUTH_HMAC_KEY must be set to strong stable values. See the configuration
-# reference for keyless providers and the complete startup requirements.
-
-# Dev mode (hot reload, no sandbox isolation)
-./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
-
-# Or build and run a packaged JAR
-./mvnw clean package -DskipTests
-java --enable-native-access=ALL-UNNAMED -jar app/target/quarkus-app/quarkus-run.jar chat
 ```
 
-See [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup options.
+Start on macOS or Linux:
 
+```bash
+./scripts/run-jar.sh
+
+```
+
+Start on Windows PowerShell:
+
+```powershell
+.\scripts\run-jar.ps1
+```
+
+The launcher builds the packaged application with the included Maven wrapper and starts it in a regular terminal. On a fresh run, Amsha creates `.env` in the repository folder and opens setup. Choose one provider and configure the credentials it needs. For a fresh data directory, press Enter at security-key prompts that offer to generate values. When reusing existing data, keep its original `.env` and especially `AMSHA_VAULT_PEPPER`; changing it can make stored encrypted secrets unreadable. Optional integrations can be skipped. Keep `.env` private. If you already ran Quarkus dev mode and only `app/.env` exists, the launcher reuses that config and runtime folder.
+
+When startup completes, open [http://localhost:8080](http://localhost:8080) for the web interface. To run the server command instead, pass it to the launcher: `./scripts/run-jar.sh serve` or `./scripts/run-jar.ps1 serve`.
+
+See [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) for provider options and the full configuration reference, and [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup.
+
+### Contributor workflows
+
+Install and initialize mise as described in [docs/MISE_SETUP.md](./docs/MISE_SETUP.md). If `.env` selects `onnx` for embeddings, install the verified MPNet bundle once from the source checkout:
+
+```bash
+mise run models:install-mpnet
+```
+
+This downloads about 436 MB to `data/models/` and verifies the bundle. For a developer JAR, run `mise run jar:run-dev-dep -- models install mpnet`; the model-only task above performs the same download and verification without rebuilding the JAR. Native builds are backend-specific, so use the binary you built from the repository root:
+
+| Runtime | Install MPNet | Verify MPNet |
+| --- | --- | --- |
+| Developer JAR | `mise run jar:run-dev-dep -- models install mpnet` | `mise run jar:run-dev-dep -- models verify mpnet` |
+| SQLite native | `./dist/amsha-sqlite models install mpnet` | `./dist/amsha-sqlite models verify mpnet` |
+| PostgreSQL native | `./dist/amsha-pg models install mpnet` | `./dist/amsha-pg models verify mpnet` |
+| Filesystem native | `./dist/amsha-fs models install mpnet` | `./dist/amsha-fs models verify mpnet` |
+
+See the [ONNX local ML guide](./docs/ONNX_LOCAL_ML_GUIDE.md) for Whisper, reranker, model-root, and fallback details.
+
+For regular multi-module development, use the packaged JAR task; it clean-builds all modules (tests skipped) before starting the application with the Quarkus `dev` profile:
+
+```bash
+mise run jar:run-dev-dep -- serve
+```
+
+This starts the web interface at [http://localhost:8080](http://localhost:8080). To work in the interactive CLI, use `mise run jar:run-dev-dep -- chat`. Rerun the task after code changes. It skips tests; run `mise run build:test` when you need the full test suite. This is more reliable for this multi-module project because Quarkus dev mode cannot reload several Amsha module dependencies.
+
+To validate the local GraalVM native-image path, run `mise run build:native-local`, then `mise run native:serve`. Native-image builds take longer and use substantial memory; current native runtime verification is on macOS arm64, while Linux and Windows runtime checks remain pending.
+
+Quarkus hot reload remains available through `mise run dev` for code that is reloadable in the application module. Changes in non-reloadable Amsha dependencies still require a rebuild or restart. The dev-mode terminal also uses `:` for Quarkus console commands; when Amsha prompts for a value or offers to auto-generate a key, press Enter directly rather than typing `:`.
 ---
 
 ## Key Capabilities

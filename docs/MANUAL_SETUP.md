@@ -264,6 +264,12 @@ AMSHA_AUTH_HMAC_KEY=<generated>       # immutable - do not change after first bo
 AMSHA_API_KEYS_CI=<generated>          # optional, for CI smoke tests
 ```
 
+For a fresh data directory, keep `AMSHA_AUTO_SEED_SECRETS=true` from the
+template. It seeds the stable `AMSHA_AUDIT_HMAC_KEY` into the vault before
+startup validation. If the vault already contains that key, auto-seeding can
+be disabled. On startup failure, the binary prints the reason and diagnostic
+log path.
+
 ### 5.4 Set Required API Keys
 
 Edit `.env`:
@@ -303,11 +309,15 @@ AMSHA_AUTO_SEED_SECRETS=true
 ```env
 AMSHA_TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOPQrsTUVwxyz
-AMSHA_TELEGRAM_ALLOWED_USER_IDS=123456789          # numeric IDs from @userinfobot
-AMSHA_TELEGRAM_ALLOWED_USERS=yourusername          # without @
+AMSHA_TELEGRAM_ALLOWED_USER_IDS=123456789          # stable numeric account ID from @userinfobot
+# Optional legacy fallback; use only when numeric user IDs are not configured:
+# AMSHA_TELEGRAM_ALLOWED_USERS=yourusername         # public username, without @
 ```
 
-If not using Telegram, comment these out or set `AMSHA_TELEGRAM_ENABLED=false` - leaving placeholder values causes Quarkus to fail on startup (it tries to parse `<telegram-user-id>` as a long).
+Numeric Telegram user IDs identify accounts and differ from public, changeable `@usernames`. When the ID list is set, it is authoritative: only matching IDs can use the bot and the username list is ignored. The username list is a fallback for setups that do not configure numeric IDs.
+
+Keep `AMSHA_TELEGRAM_ENABLED=false` when Telegram is not in use. Enable it only
+after replacing the bot token and numeric user ID placeholders with valid values.
 
 ### 5.6 Validate .env
 
@@ -1005,14 +1015,14 @@ if (Test-Path lib/vec0.dll) { Write-Host "OK: lib/vec0.dll" } else { Write-Host 
 | `AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | Optional | `groq,ollama` | Comma-separated classifier providers. |
 | `AMSHA_CLASSIFIER_<PROVIDER>_API_KEY` | Required for non-local providers | - | Per-provider classifier key (e.g. `AMSHA_CLASSIFIER_GROQ_API_KEY`). |
 | `AMSHA_EMBED_DIMENSIONS` | Optional | `768` | Must match model. Jina nano = 768, OpenAI 3-small = 1536. |
-| `AMSHA_AUTO_SEED_SECRETS` | Optional | `false` | Set `true` to seed vault from env on boot. |
+| `AMSHA_AUTO_SEED_SECRETS` | Optional | `false` | Set `true` for the first boot with a new vault to seed the stable audit HMAC key and configured optional tool secrets; disable after seeding or pre-provision the vault. |
 | `GITHUB_TOKEN` | Optional | - | Required for GitHub tool (researcher role). |
 | `AMSHA_DATA_DIR` | Optional | `./data` | Path to SQLite databases and workspaces. |
 | `AMSHA_CORS_ORIGINS` | Optional | `http://localhost:3000` | Comma-separated CORS origins. |
 | `AMSHA_TELEGRAM_ENABLED` | Optional | `true` | Set `false` if not using Telegram. |
 | `TELEGRAM_BOT_TOKEN` | attach only | - | From @BotFather. |
-| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | attach only | - | Comma-separated numeric IDs. |
-| `AMSHA_TELEGRAM_ALLOWED_USERS` | attach only | - | Comma-separated usernames (no @). |
+| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | attach only | - | Numeric Telegram account IDs; when set, only matching IDs are allowed. |
+| `AMSHA_TELEGRAM_ALLOWED_USERS` | attach only | - | Public usernames without `@`; fallback only when no numeric IDs are configured. |
 | `QUARKUS_PROFILE` | Optional | `prod` | `dev` \| `test` \| `prod` \| `cli` |
 | `AMSHA_RAG_VEC_PATH` | Optional | `./lib/vec0` | Path to vec0 extension (no suffix). |
 | `QUARKUS_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Optional | `http://localhost:4317` | OTLP trace endpoint. |
@@ -1036,13 +1046,17 @@ sudo apt install dos2unix -y && dos2unix mvnw && chmod +x mvnw
 
 ### `FATAL: amsha-audit-hmac-key is not present in SecretVault`
 
-`AMSHA_AUTO_SEED_SECRETS=true` must be set in `.env` so `DevSecretSeeder` reads `AMSHA_AUDIT_HMAC_KEY` from config and seeds the vault before `StartupSecurityValidator` checks it. Verify:
+On a fresh data directory, `AMSHA_AUTO_SEED_SECRETS=true` lets `DevSecretSeeder`
+copy the stable `AMSHA_AUDIT_HMAC_KEY` from `.env` before
+`StartupSecurityValidator` checks it. If auto-seeding is disabled, provision
+the key in the vault before starting. The CLI prints this startup reason and
+the active diagnostic log path. Verify the setting without displaying keys:
 
 ```bash
-grep -E 'AUDIT_HMAC|AUTO_SEED' .env
+grep -q '^AMSHA_AUDIT_HMAC_KEY=.' .env && grep -q '^AMSHA_AUTO_SEED_SECRETS=true$' .env
 ```
 
-Both must be present and non-empty.
+Both settings must be present; the audit key must be the stable generated value.
 
 ### `Expected a long value, got "<telegram-user-id>"` (Quarkus startup)
 

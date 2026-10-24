@@ -85,6 +85,7 @@ class InfiniteLoopCompactionProviderBranchTest {
                 Map.of(
                         "amsha.compaction.synthetic-ladder.base-url", CLOUDFLARE_TEMPLATE,
                         "amsha.compaction.synthetic-ladder.model", "llama-3.3-70b",
+                        "amsha.compaction.synthetic-ladder.structured-output-mode", "PROMPT_DIRECTIVE",
                         "amsha.compaction.synthetic-ladder.max-retries", "5",
                         "AMSHA_SYNTHETIC_LADDER_API_KEY", "sk-groq",
                         "AMSHA_SYNTHETIC_LADDER_ACCOUNT_ID", "acc-9"),
@@ -230,6 +231,7 @@ class InfiniteLoopCompactionProviderBranchTest {
                 Map.of(
                         "amsha.compaction.fixture-provider.base-url", "https://api.groq.com/openai/v1",
                         "amsha.compaction.fixture-provider.model", "llama-3.3-70b",
+                        "amsha.compaction.fixture-provider.structured-output-mode", "PROMPT_DIRECTIVE",
                         "amsha.compaction.fixture-provider.api-key", "sk-explicit",
                         "amsha.compaction.fixture-provider.account-id", "acc-explicit"),
                 () -> provider("fixture-provider", factory).compactionModel());

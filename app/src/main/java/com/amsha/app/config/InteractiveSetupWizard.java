@@ -16,8 +16,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.amsha.app.cli.CliArguments;
 import com.amsha.app.util.CliUtils;
-import com.amsha.app.util.ProviderKeySpecs;
 import com.amsha.app.util.VarSpec;
 import com.amsha.common.config.ConfigKeys;
 import com.amsha.common.util.LogUtil;
@@ -33,6 +33,9 @@ import org.jboss.logging.Logger;
 public class InteractiveSetupWizard {
 
     private static final Logger log = Logger.getLogger(InteractiveSetupWizard.class);
+    private static final String YES_RESPONSE_PREFIX = "y";
+    private static final String TELEGRAM_ENV_PREFIX = "TELEGRAM_";
+    private static final String AMSHA_TELEGRAM_ENV_PREFIX = "AMSHA_TELEGRAM_";
 
     private static final Set<String> SENSITIVE_KEYS = Set.of(
             ConfigKeys.GROQ_API_KEY,
@@ -47,6 +50,7 @@ public class InteractiveSetupWizard {
             ConfigKeys.EMBEDDING_OPENAI_API_KEY,
             VaultConstants.VAULT_PEPPER,
             VaultConstants.AUDIT_HMAC_KEY,
+            VaultConstants.AUTH_HMAC_KEY,
             VaultConstants.API_KEYS_INTERNAL,
             VaultConstants.API_KEYS_CI,
             ConfigKeys.TELEGRAM_BOT_TOKEN,
@@ -76,16 +80,17 @@ public class InteractiveSetupWizard {
     private static final Set<String> AUTO_GENERATABLE_KEYS = Set.of(
             VaultConstants.VAULT_PEPPER,
             VaultConstants.AUDIT_HMAC_KEY,
+            VaultConstants.AUTH_HMAC_KEY,
             VaultConstants.API_KEYS_INTERNAL,
             VaultConstants.API_KEYS_CI,
             VaultConstants.API_KEYS_ADMIN);
 
     public static void run(Path binaryDir, String[] args) {
-        if (args != null && args.length > 0 && "models".equalsIgnoreCase(args[0])) {
+        if (args != null && args.length > 0 && CliArguments.COMMAND_MODELS.equalsIgnoreCase(args[0])) {
             return;
         }
 
-        if (System.getProperty(ConfigKeys.LLM_PROVIDER) == null && System.getenv(ConfigKeys.LLM_PROVIDER) == null) {
+        if (configuredProvider().isBlank()) {
             promptProviderSelection();
         }
 
@@ -103,8 +108,8 @@ public class InteractiveSetupWizard {
             }
         }
 
+        ensureBaseConfigsInEnv(envFile);
         if (!missing.isEmpty()) {
-            ensureBaseConfigsInEnv(envFile);
 
             System.err.println();
             System.err.println("╔══════════════════════════════════════════════════════════╗");
@@ -139,6 +144,10 @@ public class InteractiveSetupWizard {
                 if (spec.key().equals(VaultConstants.TOOLS_BRAVE_API_KEY)
                         && !promptOptionalModule(envFile, spec.key(), "Brave Search Integration")) continue;
 
+                if (spec.key().equals(VaultConstants.VAULT_PEPPER)) {
+                    System.err.println(
+                            "  Note: the vault pepper decrypts stored secrets. Keep the original when reusing a data directory.");
+                }
                 promptVariable(envFile, spec);
             }
         }
@@ -147,7 +156,7 @@ public class InteractiveSetupWizard {
     private static void promptProviderSelection() {
         System.err.println();
         System.err.println("  ┌─ LLM Provider Select");
-        System.err.println("  │  1. Groq (default) - ultra fast, free tier available");
+        System.err.println("  │  1. Groq - hosted API provider");
         System.err.println("  │  2. OpenRouter - access any model (Llama 3, Claude, etc.)");
         System.err.println("  │  3. OpenAI - direct connection");
         System.err.println("  │  4. Ollama - local only (no API key required)");
@@ -165,56 +174,44 @@ public class InteractiveSetupWizard {
         System.err.println("  │  16. Codex CLI - ChatGPT Plus OAuth (zero-config)");
         CliLlmProviderMenu.printAdditionalProviders();
         System.err.println("  │");
-        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-21, Default: 1]: ");
-        String provider =
-                switch (choice != null ? choice.trim() : "") {
-                    case "2" -> ModelDefaults.PROVIDER_OPENROUTER;
-                    case "3" -> ModelDefaults.PROVIDER_OPENAI;
-                    case "4" -> ModelDefaults.PROVIDER_OLLAMA;
-                    case "5" -> ModelDefaults.PROVIDER_NVIDIA;
-                    case "6" -> ModelDefaults.PROVIDER_GEMINI;
-                    case "7" -> ModelDefaults.PROVIDER_CEREBRAS;
-                    case "8" -> ModelDefaults.PROVIDER_OMLX;
-                    case "9" -> ModelDefaults.PROVIDER_GENERIC_OPENAI;
-                    case "10" -> ModelDefaults.PROVIDER_SARVAM;
-                    case "11" -> ModelDefaults.PROVIDER_OPENCODE;
-                    case "12" -> ModelDefaults.PROVIDER_HUGGINGFACE;
-                    case "13" -> ModelDefaults.PROVIDER_MISTRAL;
-                    case "14" -> ModelDefaults.PROVIDER_CLOUDFLARE;
-                    case "15" -> ModelDefaults.PROVIDER_COHERE;
-                    case "16" -> ModelDefaults.PROVIDER_CODEX;
-                    default -> CliLlmProviderMenu.providerForAdditionalChoice(choice);
-                };
+        String choice = readLineWithFallback(System.console(), "  └─ Select provider [1-21, no default]: ");
+        String provider = CliLlmProviderMenu.providerForChoice(choice);
+        if (provider.isBlank()) {
+            System.err.println(
+                    "[Amsha Agent] No provider selected. Choose one in the menu or set AMSHA_LLM_PROVIDER in .env.");
+            return;
+        }
         System.setProperty(ConfigKeys.LLM_PROVIDER, provider);
-        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, provider);
-        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, provider);
-        System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, provider);
+        if (!ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(provider)) {
+            System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, provider);
+            System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, provider);
+            System.setProperty(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, provider);
+        }
     }
 
     private static void ensureBaseConfigsInEnv(Path envFile) {
-        String provider = Optional.ofNullable(System.getProperty(ConfigKeys.LLM_PROVIDER))
-                .or(() -> Optional.ofNullable(System.getenv(ConfigKeys.LLM_PROVIDER)))
-                .orElse(ModelDefaults.PROVIDER_GROQ);
+        String provider = configuredProvider();
+        if (provider.isBlank()) return;
         EnvConfigInitializer.patchEnvFile(
                 envFile, ConfigKeys.LLM_PROVIDER, provider, EnvConfigInitializer.PatchMode.UPDATE);
-        boolean infiniteLoop = provider.equalsIgnoreCase("infinite-loop");
+        boolean infiniteLoop = ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(provider);
         patchProviderList(
                 envFile,
                 ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, "omlx,groq,openrouter")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_LLM_PROVIDERS, "omlx,ollama")
                         : provider);
         patchProviderList(
                 envFile,
                 ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, "groq,ollama")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS, "omlx,ollama")
                         : provider);
         patchProviderList(
                 envFile,
                 ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS,
                 infiniteLoop
-                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, "groq,ollama")
+                        ? configuredProviderList(ConfigKeys.AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS, "omlx,ollama")
                         : provider);
         if (ModelDefaults.PROVIDER_SARVAM.equalsIgnoreCase(provider)) {
             patchBaseConfig(envFile, "AMSHA_COMPACTION_SARVAM_MODEL", "sarvam-105b-conversations");
@@ -286,14 +283,20 @@ public class InteractiveSetupWizard {
         String providers = Arrays.stream(configured.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
-                .filter(value -> !value.equalsIgnoreCase("infinite-loop"))
+                .filter(value -> !ModelDefaults.PROVIDER_INFINITE_LOOP.equalsIgnoreCase(value))
                 .collect(Collectors.joining(","));
         return providers.isBlank() ? fallback : providers;
     }
 
+    private static String configuredProvider() {
+        String value = System.getProperty(ConfigKeys.LLM_PROVIDER);
+        if (value == null) value = System.getenv(ConfigKeys.LLM_PROVIDER);
+        return value == null ? ModelDefaults.DEFAULT_PROVIDER : value.trim();
+    }
+
     private static boolean shouldPromptUnifiedKey(List<VarSpec> missing) {
-        String provider = System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ)
-                .toLowerCase(Locale.ROOT);
+        String provider = configuredProvider().toLowerCase(Locale.ROOT);
+        if (provider.isBlank()) return false;
         String llmKeyName = llmApiKeyForProvider(provider);
         boolean llmKeyMissing = missing.stream().anyMatch(s -> s.key().equals(llmKeyName));
         String compactionKey = compactionApiKeyForProvider(provider);
@@ -311,9 +314,8 @@ public class InteractiveSetupWizard {
         String resp = readLineWithFallback(System.console(), "  └─ Use a single key for all? [Y/n]: ");
         if (resp == null
                 || resp.trim().isEmpty()
-                || resp.trim().toLowerCase(Locale.ROOT).startsWith("y")) {
-            String provider = System.getProperty(ConfigKeys.LLM_PROVIDER, ModelDefaults.PROVIDER_GROQ)
-                    .toLowerCase(Locale.ROOT);
+                || resp.trim().toLowerCase(Locale.ROOT).startsWith(YES_RESPONSE_PREFIX)) {
+            String provider = configuredProvider().toLowerCase(Locale.ROOT);
             String key = readPasswordWithFallback(
                     System.console(), "  └─ Enter " + provider.toUpperCase(Locale.ROOT) + " API key: ");
             if (key != null && !key.isBlank()) {
@@ -364,23 +366,7 @@ public class InteractiveSetupWizard {
     }
 
     private static String llmApiKeyForProvider(String provider) {
-        return switch (provider.toLowerCase(Locale.ROOT)) {
-            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.OPENROUTER_API_KEY;
-            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.OPENAI_API_KEY;
-            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.GEMINI_API_KEY;
-            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.CEREBRAS_API_KEY;
-            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.NVIDIA_API_KEY;
-            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.SARVAM_API_KEY;
-            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.OPENCODE_API_KEY;
-            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.HUGGINGFACE_API_KEY;
-            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.MISTRAL_API_KEY;
-            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.CLOUDFLARE_API_KEY;
-            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.COHERE_API_KEY;
-            case ModelDefaults.PROVIDER_CODEX -> ConfigKeys.CODEX_API_KEY;
-            case ModelDefaults.PROVIDER_OMLX -> ConfigKeys.OMLX_API_KEY;
-            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.GENERIC_OPENAI_API_KEY;
-            default -> ConfigKeys.GROQ_API_KEY;
-        };
+        return ProviderApiKeyLookup.llmApiKeyForProvider(provider);
     }
 
     /**
@@ -388,24 +374,7 @@ public class InteractiveSetupWizard {
      * or {@code null} if the provider does not require an API key (e.g. ollama, omlx, codex).
      */
     private static String compactionApiKeyForProvider(String provider) {
-        if (ProviderKeySpecs.isCompactionClassifierKeyless(provider)) {
-            return null;
-        }
-        return switch (provider.toLowerCase(Locale.ROOT)) {
-            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.COMPACTION_OPENROUTER_API_KEY;
-            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.COMPACTION_OPENAI_API_KEY;
-            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.COMPACTION_GEMINI_API_KEY;
-            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.COMPACTION_CEREBRAS_API_KEY;
-            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.COMPACTION_NVIDIA_API_KEY;
-            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.COMPACTION_SARVAM_API_KEY;
-            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.COMPACTION_OPENCODE_API_KEY;
-            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.COMPACTION_HUGGINGFACE_API_KEY;
-            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.COMPACTION_MISTRAL_API_KEY;
-            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.COMPACTION_CLOUDFLARE_API_KEY;
-            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.COMPACTION_COHERE_API_KEY;
-            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.COMPACTION_GENERIC_OPENAI_API_KEY;
-            default -> ConfigKeys.COMPACTION_GROQ_API_KEY;
-        };
+        return ProviderApiKeyLookup.compactionApiKeyForProvider(provider);
     }
 
     /**
@@ -413,34 +382,17 @@ public class InteractiveSetupWizard {
      * or {@code null} if the provider does not require an API key (e.g. ollama, omlx, codex).
      */
     private static String classifierApiKeyForProvider(String provider) {
-        if (ProviderKeySpecs.isCompactionClassifierKeyless(provider)) {
-            return null;
-        }
-        return switch (provider.toLowerCase(Locale.ROOT)) {
-            case ModelDefaults.PROVIDER_OPENROUTER -> ConfigKeys.CLASSIFIER_OPENROUTER_API_KEY;
-            case ModelDefaults.PROVIDER_OPENAI -> ConfigKeys.CLASSIFIER_OPENAI_API_KEY;
-            case ModelDefaults.PROVIDER_GEMINI -> ConfigKeys.CLASSIFIER_GEMINI_API_KEY;
-            case ModelDefaults.PROVIDER_CEREBRAS -> ConfigKeys.CLASSIFIER_CEREBRAS_API_KEY;
-            case ModelDefaults.PROVIDER_NVIDIA -> ConfigKeys.CLASSIFIER_NVIDIA_API_KEY;
-            case ModelDefaults.PROVIDER_SARVAM -> ConfigKeys.CLASSIFIER_SARVAM_API_KEY;
-            case ModelDefaults.PROVIDER_OPENCODE -> ConfigKeys.CLASSIFIER_OPENCODE_API_KEY;
-            case ModelDefaults.PROVIDER_HUGGINGFACE -> ConfigKeys.CLASSIFIER_HUGGINGFACE_API_KEY;
-            case ModelDefaults.PROVIDER_MISTRAL -> ConfigKeys.CLASSIFIER_MISTRAL_API_KEY;
-            case ModelDefaults.PROVIDER_CLOUDFLARE -> ConfigKeys.CLASSIFIER_CLOUDFLARE_API_KEY;
-            case ModelDefaults.PROVIDER_COHERE -> ConfigKeys.CLASSIFIER_COHERE_API_KEY;
-            case ModelDefaults.PROVIDER_GENERIC_OPENAI -> ConfigKeys.CLASSIFIER_GENERIC_OPENAI_API_KEY;
-            default -> ConfigKeys.CLASSIFIER_GROQ_API_KEY;
-        };
+        return ProviderApiKeyLookup.classifierApiKeyForProvider(provider);
     }
 
     private static boolean promptTelegramEnablement(Path envFile) {
         System.err.println("  ┌─ Telegram Integration");
         String response = readLineWithFallback(System.console(), "  └─ Enable Telegram? [y/N]: ");
         boolean enabled =
-                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
+                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith(YES_RESPONSE_PREFIX);
         EnvConfigInitializer.patchEnvFile(
-                envFile, "AMSHA_TELEGRAM_ENABLED", String.valueOf(enabled), EnvConfigInitializer.PatchMode.UPDATE);
-        System.setProperty("AMSHA_TELEGRAM_ENABLED", String.valueOf(enabled));
+                envFile, ConfigKeys.TELEGRAM_ENABLED, String.valueOf(enabled), EnvConfigInitializer.PatchMode.UPDATE);
+        System.setProperty(ConfigKeys.TELEGRAM_ENABLED, String.valueOf(enabled));
         return enabled;
     }
 
@@ -448,7 +400,7 @@ public class InteractiveSetupWizard {
         System.err.println("  ┌─ " + label);
         String response = readLineWithFallback(System.console(), "  └─ Configure " + key + "? [y/N]: ");
         boolean enabled =
-                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith("y");
+                response != null && response.trim().toLowerCase(Locale.ROOT).startsWith(YES_RESPONSE_PREFIX);
         if (!enabled) {
             EnvConfigInitializer.patchEnvFile(envFile, key, "none", EnvConfigInitializer.PatchMode.UPDATE);
             System.setProperty(key, "none");
@@ -461,13 +413,14 @@ public class InteractiveSetupWizard {
         System.err.println("  ┌─ " + spec.key());
         System.err.println("  │  " + spec.description());
         String prompt = "  └─ Enter value"
-                + (AUTO_GENERATABLE_KEYS.contains(spec.key()) ? " (Enter to auto-generate): " : ": ");
-        String value = SENSITIVE_KEYS.contains(spec.key())
+                + (isSensitiveKey(spec.key()) ? " (input is being read; characters are hidden)" : "")
+                + (isAutoGeneratableKey(spec.key()) ? " (Enter to auto-generate): " : ": ");
+        String value = isSensitiveKey(spec.key())
                 ? readPasswordWithFallback(System.console(), prompt)
                 : readLineWithFallback(System.console(), prompt);
 
         if (value == null || value.isBlank()) {
-            if (AUTO_GENERATABLE_KEYS.contains(spec.key())) {
+            if (isAutoGeneratableKey(spec.key())) {
                 value = generateRandomValue();
                 System.err.println("     ✓ Auto-generated");
             } else {
@@ -481,10 +434,18 @@ public class InteractiveSetupWizard {
     }
 
     private static boolean isTelegramKey(String key) {
-        return key.startsWith("TELEGRAM_") || key.startsWith("AMSHA_TELEGRAM_");
+        return key.startsWith(TELEGRAM_ENV_PREFIX) || key.startsWith(AMSHA_TELEGRAM_ENV_PREFIX);
     }
 
     @SuppressWarnings("java:S2119")
+    static boolean isAutoGeneratableKey(String key) {
+        return AUTO_GENERATABLE_KEYS.contains(key);
+    }
+
+    static boolean isSensitiveKey(String key) {
+        return SENSITIVE_KEYS.contains(key);
+    }
+
     private static String generateRandomValue() {
         byte[] bytes = new byte[32];
         // Instantiate SecureRandom locally — NOT as a static field.

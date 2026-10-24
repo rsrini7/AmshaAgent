@@ -274,7 +274,7 @@ class ChatModelProducerTest {
     }
 
     @Test
-    void resolveProvider_nullProvider_returnsGroq() throws Exception {
+    void resolveProvider_nullProvider_returnsNoDefault() throws Exception {
         ChatModelProducer producer = new ChatModelProducer();
         setField(producer, "provider", null);
         setField(producer, "vaultPriority", false);
@@ -282,7 +282,7 @@ class ChatModelProducerTest {
         Method m = ChatModelProducer.class.getDeclaredMethod("resolveProvider");
         m.setAccessible(true);
         String result = (String) m.invoke(producer);
-        assertEquals("groq", result);
+        assertEquals(ModelDefaults.DEFAULT_PROVIDER, result);
     }
 
     // -----------------------------------------------------------------------
@@ -315,7 +315,7 @@ class ChatModelProducerTest {
     }
 
     @Test
-    void findProvider_nullName_defaultsToGroq() throws Exception {
+    void findProvider_nullName_usesConfiguredProvider() throws Exception {
         ChatModelProducer producer = new ChatModelProducer();
         setField(producer, "provider", "groq");
 
@@ -340,6 +340,21 @@ class ChatModelProducerTest {
         AgentChatModelProvider result = (AgentChatModelProvider) m.invoke(producer, (String) null);
         assertNotNull(result);
         assertEquals("groq", result.providerName());
+    }
+
+    @Test
+    void findProvider_nullNameWithoutConfiguredProvider_failsClosed() throws Exception {
+        ChatModelProducer producer = new ChatModelProducer();
+        setField(producer, "provider", null);
+        setField(producer, "providers", createEmptyInstance());
+
+        Method method = ChatModelProducer.class.getDeclaredMethod("findProvider", String.class);
+        method.setAccessible(true);
+        InvocationTargetException thrown =
+                assertThrows(InvocationTargetException.class, () -> method.invoke(producer, (Object) null));
+
+        assertTrue(thrown.getCause() instanceof IllegalStateException);
+        assertTrue(thrown.getCause().getMessage().contains("AMSHA_LLM_PROVIDER"));
     }
 
     @Test
@@ -1153,7 +1168,9 @@ class ChatModelProducerTest {
     private void setField(Object target, String fieldName, Object value) throws Exception {
         Field f = target.getClass().getDeclaredField(fieldName);
         f.setAccessible(true);
-        f.set(target, value);
+        Object assignedValue =
+                Optional.class.equals(f.getType()) && value instanceof String text ? Optional.of(text) : value;
+        f.set(target, assignedValue);
     }
 
     /**

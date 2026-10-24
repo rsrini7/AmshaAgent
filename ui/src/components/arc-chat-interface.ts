@@ -9,8 +9,24 @@ import DOMPurify from 'dompurify';
 import { AgentTraceEvent } from '../types/trace';
 import { PendingApprovalDto } from '../api/types';
 import { ArcClient, readPersistedOwnerApiKey, readCsrfTokenFromCookie } from '../api/client';
+import {
+  AGENT_SESSION_STATUS,
+  AGENT_SESSION_STATUS_EVENT,
+  AgentSessionStatusNotice,
+  TERMINAL_AGENT_SESSION_STATUSES,
+} from '../api/sse';
+import { LOGO_SVG_SRC } from '../branding';
 import './arc-run-flow-card';
 import './arc-hitl-panel';
+
+const WS_FRAME_TYPE = {
+  AUTH: 'AUTH',
+  CONNECTED: 'connected',
+  SESSION_ROTATED: 'session-rotated',
+  SESSION_TERMINATED: 'session_terminated',
+  APPROVAL_REQUIRED: 'approval_required',
+  ERROR: 'error',
+} as const;
 
 interface ChatMessage {
   id: string;
@@ -65,6 +81,7 @@ export class ArcChatInterface extends LitElement {
 
   @property({ type: String }) platformId = '';
   @property({ type: Array }) traceEvents: AgentTraceEvent[] = [];
+  @property({ type: Array }) pendingApprovals: PendingApprovalDto[] = [];
 
   @state() private _messages: ChatMessage[] = [];
   @state() private _input = '';
@@ -97,19 +114,24 @@ export class ArcChatInterface extends LitElement {
   private _intentionalClose = false;
   private _reconnectAttempts = 0;
   private _reconnectTimeoutId: any = null;
-  private _wsToken = '';
-  private _wsTokenFetchedAt = 0;
+  private _connectionReadyTimeoutId: number | null = null;
+  private _retryCountdownId: number | null = null;
+  private _retryDeadlineMs: number | null = null;
+  private _authExpectedOnCurrentConnection = false;
   private _lastConnectAt = 0;
   private _isReconnecting = false;
   private _turnWatchdogId: number | null = null;
   private _turnGeneration = 0;
   private _activeBackgroundCronSessionId: string | null = null;
   private _boundProgress = ((e: Event) => this._onProgress(e as CustomEvent<ProgressUpdate>)) as EventListener;
+  private _boundAgentSessionStatus =
+    ((e: Event) => this._onAgentSessionStatus(e as CustomEvent<AgentSessionStatusNotice>)) as EventListener;
   private _boundDocumentClick = ((e: MouseEvent) => this._handleDocumentClick(e)) as EventListener;
   private _boundKeyDown = ((e: KeyboardEvent) => this._handleGlobalKeyDown(e)) as EventListener;
-  private static readonly WS_TOKEN_TTL = 30_000;
   private static readonly CHAT_REQUEST_TIMEOUT_MS = 10_000;
+  private static readonly CONNECTION_READY_TIMEOUT_MS = 15_000;
   private static readonly TURN_WATCHDOG_TIMEOUT_MS = 180_000;
+  private static readonly RETRY_COUNTDOWN_TICK_MS = 1000;
   private static readonly MIN_CONNECT_INTERVAL = 5000;
   private static readonly MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
   private static readonly SUPPORTED_AUDIO_TYPES = new Set([
@@ -212,8 +234,10 @@ export class ArcChatInterface extends LitElement {
       width: 28px; height: 28px; border-radius: 50%;
       background: var(--bg-elevated); border: 1px solid var(--border);
       display: flex; align-items: center; justify-content: center;
-      color: var(--accent); font-size: 14px; flex-shrink: 0;
+      flex-shrink: 0;
     }
+
+    .avatar-img { width: 20px; height: 20px; display: block; }
 
     .bubble { 
       padding: 6px 12px; border-radius: 12px;
@@ -677,6 +701,32 @@ export class ArcChatInterface extends LitElement {
        border-radius: 12px; overflow: hidden;
        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
+    .pending-chat-approvals {
+      width: min(100%, 720px);
+      margin: 16px 0;
+      padding: 14px;
+      box-sizing: border-box;
+      border: 1px solid rgba(245, 158, 11, 0.55);
+      border-radius: 12px;
+      background: rgba(245, 158, 11, 0.07);
+    }
+    .pending-chat-approvals-heading {
+      margin: 0 0 4px;
+      color: #f59e0b;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .pending-chat-approvals-copy {
+      margin: 0 0 12px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .approval-page-link {
+      color: var(--accent-secondary);
+      font-size: 13px;
+      font-weight: 600;
+    }
     .approval-body { padding: 16px; border-bottom: 1px solid rgba(245, 158, 11, 0.2); }
     .approval-title { font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .approval-tool { font-size: 13px; margin-bottom: 8px; }
@@ -709,6 +759,9 @@ export class ArcChatInterface extends LitElement {
     if (changedProperties.has('traceEvents') && this.traceEvents && this.traceEvents.length > 0) {
       this._syncLatestAssistantRunEvents();
     }
+    if (changedProperties.has('pendingApprovals') && this._currentSessionApprovals.length > 0) {
+      this._scrollToBottom();
+    }
   }
 
   private _syncLatestAssistantRunEvents() {
@@ -740,6 +793,25 @@ export class ArcChatInterface extends LitElement {
 
   private currentSessionId(): string {
     return this._authoritativeSessionId || this._appContext?.sessionId || '';
+  }
+
+  private get _currentSessionApprovals(): PendingApprovalDto[] {
+    const sessionId = this.currentSessionId();
+    if (!sessionId) return [];
+    return this.pendingApprovals.filter((approval) => {
+      const approvalSessionId = approval.sessionId;
+      const hasChannelApprovalCard = this._messages.some(
+        (message) =>
+          message.isApprovalPrompt &&
+          message.targetSessionId === approvalSessionId &&
+          message.approvalData?.tool === approval.toolName
+      );
+      return (
+        typeof approvalSessionId === 'string' &&
+        !hasChannelApprovalCard &&
+        (approvalSessionId === sessionId || approvalSessionId.startsWith(`${sessionId}:delegate:`))
+      );
+    });
   }
 
   private acceptServerSession(sessionId: unknown, platformId?: unknown): string {
@@ -830,6 +902,7 @@ export class ArcChatInterface extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener('amsha-agent-progress', this._boundProgress);
+    window.addEventListener(AGENT_SESSION_STATUS_EVENT, this._boundAgentSessionStatus);
     window.addEventListener('click', this._boundDocumentClick);
     window.addEventListener('keydown', this._boundKeyDown);
   }
@@ -837,6 +910,7 @@ export class ArcChatInterface extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener('amsha-agent-progress', this._boundProgress);
+    window.removeEventListener(AGENT_SESSION_STATUS_EVENT, this._boundAgentSessionStatus);
     window.removeEventListener('click', this._boundDocumentClick);
     window.removeEventListener('keydown', this._boundKeyDown);
     if (this._reconnectTimeoutId) {
@@ -851,6 +925,85 @@ export class ArcChatInterface extends LitElement {
     this._clearTurnWatchdog();
     this._resetProgress();
     this._ws?.disconnect();
+  }
+
+  private _onAgentSessionStatus(event: CustomEvent<AgentSessionStatusNotice>): void {
+    const { sessionId, status, timestamp, retryAfterMs } = event.detail;
+    if (!sessionId || sessionId !== this.currentSessionId()) return;
+
+    const normalizedStatus = status.trim().toUpperCase();
+    if (normalizedStatus === AGENT_SESSION_STATUS.AWAITING_RETRY) {
+      this._showRetryCountdown(retryAfterMs, timestamp);
+      return;
+    }
+    if (!TERMINAL_AGENT_SESSION_STATUSES.has(normalizedStatus)) return;
+
+    this._clearRetryCountdown();
+    this._clearTurnWatchdog();
+    this._isTyping = false;
+    this._awaitingApproval = false;
+    this._turnStalled = false;
+    void this._loadHistory(sessionId, true).then((history) => {
+      if (sessionId !== this.currentSessionId()) return;
+      const lastMessage = history[history.length - 1];
+      if (
+        normalizedStatus === AGENT_SESSION_STATUS.COMPLETED &&
+        lastMessage?.role === 'assistant' &&
+        !lastMessage.isApprovalPrompt
+      ) {
+        this._resetProgress();
+        return;
+      }
+      this._progressPhase = normalizedStatus === AGENT_SESSION_STATUS.COMPLETED
+        ? 'Run completed'
+        : 'Run ended';
+      this._progressDetail = `The agent run ended with status ${normalizedStatus}.`;
+      this._scrollToBottom();
+    });
+  }
+
+  private _showRetryCountdown(retryAfterMs?: number, timestamp?: string): void {
+    this._clearRetryCountdown();
+    const eventTime = timestamp ? Date.parse(timestamp) : Number.NaN;
+    const retryDelay = typeof retryAfterMs === 'number' && Number.isFinite(retryAfterMs)
+      ? Math.max(0, retryAfterMs)
+      : 0;
+    this._retryDeadlineMs = (Number.isFinite(eventTime) ? eventTime : Date.now()) + retryDelay;
+    this._awaitingApproval = false;
+    this._isTyping = true;
+    this._turnStalled = false;
+    this._clearTurnWatchdog();
+
+    const refreshCountdown = () => {
+      if (this._retryDeadlineMs === null) return;
+      const remainingMs = this._retryDeadlineMs - Date.now();
+      if (remainingMs <= 0) {
+        this._clearRetryCountdown();
+        this._progressPhase = 'Retrying now';
+        this._progressDetail = 'The provider retry is starting.';
+        this._armTurnWatchdog();
+      } else {
+        this._progressPhase = 'Rate limit hit';
+        this._progressDetail = `Automatically retrying in ${Math.ceil(remainingMs / 1000)} seconds.`;
+      }
+      this._scrollToBottom();
+    };
+
+    refreshCountdown();
+    if (this._retryDeadlineMs !== null && this._retryDeadlineMs > Date.now()) {
+      this._retryCountdownId = window.setInterval(
+        refreshCountdown,
+        ArcChatInterface.RETRY_COUNTDOWN_TICK_MS,
+      );
+    }
+  }
+
+  private _clearRetryCountdown(): void {
+    if (this._retryCountdownId !== null) {
+      window.clearInterval(this._retryCountdownId);
+      this._retryCountdownId = null;
+    }
+    this._retryDeadlineMs = null;
   }
 
   private _onProgress(event: CustomEvent<ProgressUpdate>) {
@@ -871,9 +1024,15 @@ export class ArcChatInterface extends LitElement {
     const phase = event.detail?.phase?.trim();
     const detail = event.detail?.detail?.trim() || '';
     if (!phase && !detail) return;
+    this._clearRetryCountdown();
 
     if (phase === 'Approval granted' || phase === 'Resuming work') {
       this._awaitingApproval = false;
+    }
+    if (phase === 'Waiting for approval') {
+      this._clearTurnWatchdog();
+      this._awaitingApproval = true;
+      this._isTyping = false;
     }
     if (phase === 'Approval denied') {
       this._clearTurnWatchdog();
@@ -895,13 +1054,14 @@ export class ArcChatInterface extends LitElement {
       this._progressTrail = [...this._progressTrail, next].slice(-4);
     }
 
-    this._isTyping = true;
+    this._isTyping = !this._awaitingApproval;
     this._turnStalled = false;
     this._armTurnWatchdog();
     this._scrollToBottom();
   }
 
   private _resetProgress() {
+    this._clearRetryCountdown();
     this._progressPhase = '';
     this._progressDetail = '';
     this._progressTrail = [];
@@ -935,6 +1095,13 @@ export class ArcChatInterface extends LitElement {
     this._turnGeneration++;
   }
 
+  private _clearConnectionReadyTimeout(): void {
+    if (this._connectionReadyTimeoutId !== null) {
+      window.clearTimeout(this._connectionReadyTimeoutId);
+      this._connectionReadyTimeoutId = null;
+    }
+  }
+
   private _markTurnStalled(phase: string, detail: string): void {
     this._turnStalled = true;
     this._progressPhase = phase;
@@ -965,7 +1132,7 @@ export class ArcChatInterface extends LitElement {
       const client = new ArcClient('/api/v1', this._appContext?.apiKey || '');
       const status = await client.getSessionStatus(sessionId, 'coordinator');
       const backendStatus = status?.status?.trim().toUpperCase() || 'UNKNOWN';
-      const terminal = ['COMPLETED', 'FAILED', 'DENIED', 'LOOP_EXCEEDED'].includes(backendStatus);
+      const terminal = TERMINAL_AGENT_SESSION_STATUSES.has(backendStatus);
       const history = terminal ? await this._loadHistory(sessionId, true) : [];
       const lastMessage = history[history.length - 1];
 
@@ -1045,18 +1212,20 @@ export class ArcChatInterface extends LitElement {
       return;
     }
     this._connecting = true;
+    this._wsStatus = 'connecting';
+    window.dispatchEvent(new CustomEvent('ws-status-change', { detail: { status: 'connecting' } }));
 
-    let token = this._wsToken && Date.now() - this._wsTokenFetchedAt < ArcChatInterface.WS_TOKEN_TTL
-      ? this._wsToken : '';
-    if (!token && this._appContext?.apiKey) {
+    const configuredApiKey = this._appContext?.apiKey?.trim() || '';
+    const persistedApiKey = readPersistedOwnerApiKey();
+    const shouldAuthenticate = Boolean(configuredApiKey || persistedApiKey);
+    let token = '';
+    if (shouldAuthenticate) {
       try {
         const wsHeaders: Record<string, string> = {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         };
         const effectiveApiKey =
-          this._appContext?.apiKey && this._appContext.apiKey !== 'authenticated'
-            ? this._appContext.apiKey
-            : readPersistedOwnerApiKey();
+          configuredApiKey && configuredApiKey !== 'authenticated' ? configuredApiKey : persistedApiKey;
         if (effectiveApiKey && effectiveApiKey !== 'authenticated') {
           wsHeaders['X-Amsha-API-Key'] = effectiveApiKey;
         }
@@ -1070,16 +1239,33 @@ export class ArcChatInterface extends LitElement {
           headers: wsHeaders,
           signal: AbortSignal.timeout(ArcChatInterface.CHAT_REQUEST_TIMEOUT_MS),
         });
-        if (res.ok) {
-          const data = await res.json();
-          this._wsToken = data.token;
-          this._wsTokenFetchedAt = Date.now();
-          token = this._wsToken;
+        if (!res.ok) {
+          throw new Error(`WebSocket token request returned HTTP ${res.status}`);
         }
+        const data: unknown = await res.json();
+        const responseToken =
+          data !== null && typeof data === 'object' && 'token' in data ? (data as { token?: unknown }).token : null;
+        if (typeof responseToken !== 'string' || !responseToken.trim()) {
+          throw new Error('WebSocket token response did not include a token');
+        }
+        token = responseToken;
       } catch (e) {
         console.warn('Failed to obtain WS token', e);
+        if (generation !== this._connectionGeneration || this._intentionalClose) {
+          this._connecting = false;
+          return;
+        }
+        this._connecting = false;
+      this._authExpectedOnCurrentConnection = false;
+        this._wsStatus = 'error';
+        window.dispatchEvent(new CustomEvent('ws-status-change', { detail: { status: 'error' } }));
+        this._reconnectAttempts++;
+        window.setTimeout(() => this._scheduleReconnect(), 0);
+        return;
       }
     }
+
+    this._authExpectedOnCurrentConnection = Boolean(token);
 
     if (generation !== this._connectionGeneration || this._intentionalClose) {
       this._connecting = false;
@@ -1094,22 +1280,31 @@ export class ArcChatInterface extends LitElement {
       (frame) => this._handleFrame(frame),
       (status) => {
         if (this._ws !== manager) return; // stale connection
-        this._wsStatus = status;
-        window.dispatchEvent(new CustomEvent('ws-status-change', {
-          detail: { status }
-        }));
-        if (status === 'open') {
-          this._connecting = false;
-          if (token) this._ws?.send({ type: 'AUTH', token });
-          // Defer resetting backoff — WS must stay open for 5s first
-          // to prevent rapid open/close loops from resetting the counter
-          setTimeout(() => {
-            if (this._wsStatus === 'open') {
-              this._reconnectAttempts = 0;
+        if (status === 'connecting') {
+          this._connecting = true;
+          this._wsStatus = 'connecting';
+          window.dispatchEvent(new CustomEvent('ws-status-change', { detail: { status: 'connecting' } }));
+          return;
+        }
+        if (status === 'transport-open') {
+          this._connecting = true;
+          this._wsStatus = 'connecting';
+          window.dispatchEvent(new CustomEvent('ws-status-change', { detail: { status: 'connecting' } }));
+          this._clearConnectionReadyTimeout();
+          this._connectionReadyTimeoutId = window.setTimeout(() => {
+            if (this._ws === manager && this._wsStatus !== 'open') {
+              console.warn('WebSocket session handshake timed out');
+              manager.disconnect();
             }
-          }, 5000);
+          }, ArcChatInterface.CONNECTION_READY_TIMEOUT_MS);
+          if (token) this._ws?.send({ type: WS_FRAME_TYPE.AUTH, token });
+          return;
         }
         if (status === 'closed' || status === 'error') {
+          this._wsStatus = status;
+          window.dispatchEvent(new CustomEvent('ws-status-change', { detail: { status } }));
+          this._clearConnectionReadyTimeout();
+          this._authExpectedOnCurrentConnection = false;
           const hadActiveTurn = this._isTyping && !this._awaitingApproval;
           this._connecting = false;
           this._ws = null;
@@ -1230,12 +1425,23 @@ export class ArcChatInterface extends LitElement {
   }
 
   private _handleFrame(frame: any) {
-    if (frame.type === 'connected') {
+    if (frame.type === WS_FRAME_TYPE.CONNECTED) {
+      if (this._authExpectedOnCurrentConnection && frame.authenticated !== true) {
+        return;
+      }
+      this._authExpectedOnCurrentConnection = false;
+      this._clearConnectionReadyTimeout();
       const hadActiveTurn = this._isTyping && !this._awaitingApproval;
       const hadPendingApproval = this._awaitingApproval;
       const hadStalledTurn = this._turnStalled;
       this._wsStatus = 'open';
       this._connecting = false;
+      window.dispatchEvent(new CustomEvent('ws-status-change', { detail: { status: 'open' } }));
+      window.setTimeout(() => {
+        if (this._wsStatus === 'open') {
+          this._reconnectAttempts = 0;
+        }
+      }, 5000);
       if (hadStalledTurn) {
         this._clearTurnWatchdog();
         this._isTyping = false;
@@ -1258,12 +1464,12 @@ export class ArcChatInterface extends LitElement {
         // Always reload history on connect/reconnect (handles page refresh)
         void this._loadHistory(sessionId);
       }
-    } else if (frame.type === 'session-rotated') {
+    } else if (frame.type === WS_FRAME_TYPE.SESSION_ROTATED) {
       const sessionId = this.acceptServerSession(frame.sessionId, frame.platformId);
       if (sessionId) {
         void this._loadHistory(sessionId, false);
       }
-    } else if (frame.type === 'session_terminated') {
+    } else if (frame.type === WS_FRAME_TYPE.SESSION_TERMINATED) {
       if (this._intentionalClose) return;
       this._intentionalClose = true;
       if (this._ws) {
@@ -1271,14 +1477,17 @@ export class ArcChatInterface extends LitElement {
         this._ws = null;
       }
       this._wsStatus = 'closed';
+      this._clearConnectionReadyTimeout();
+      window.dispatchEvent(new CustomEvent('ws-status-change', { detail: { status: 'closed' } }));
       this._sessionHalted = true;
       this._clearTurnWatchdog();
       this._isTyping = false;
       this._turnStalled = false;
       this._resetProgress();
-    } else if (frame.type === 'approval_required') {
+    } else if (frame.type === WS_FRAME_TYPE.APPROVAL_REQUIRED) {
       this._handleApprovalRequiredFrame(frame);
-    } else if (frame.type === 'error') {
+    } else if (frame.type === WS_FRAME_TYPE.ERROR) {
+      this._authExpectedOnCurrentConnection = false;
       this._clearTurnWatchdog();
       this._isTyping = false;
       this._awaitingApproval = false;
@@ -1755,6 +1964,23 @@ export class ArcChatInterface extends LitElement {
     }
   }
 
+  private _onPendingApprovalAction(event: CustomEvent<{ taskId: string; action: string }>): void {
+    if (event.detail.action === 'approved' || event.detail.action === 'resolved') {
+      this._markToolExecutionStarted();
+      this._scrollToBottom();
+      return;
+    }
+    if (event.detail.action === 'rejected') {
+      this._clearTurnWatchdog();
+      this._awaitingApproval = false;
+      this._isTyping = false;
+      this._turnStalled = false;
+      this._progressPhase = 'Approval denied';
+      this._progressDetail = 'Tool request denied.';
+      this._scrollToBottom();
+    }
+  }
+
   private _markApprovalResolved(m: ChatMessage): void {
     this._clearTurnWatchdog();
     this._awaitingApproval = false;
@@ -2063,7 +2289,7 @@ export class ArcChatInterface extends LitElement {
           ` : html`
             <div class="msg-group msg-group-${m.role === 'user' ? 'user' : 'assistant'}">
                <div class="msg-header msg-header-${m.role === 'user' ? 'user' : 'assistant'}">
-                 ${m.role === 'assistant' ? html`<div class="avatar">⬡</div> Amsha Agent` : 'You'}
+                 ${m.role === 'assistant' ? html`<div class="avatar"><img class="avatar-img" src="${LOGO_SVG_SRC}" alt="" width="20" height="20" /></div> Amsha Agent` : 'You'}
                </div>
                 <div class="bubble bubble-${m.role === 'user' ? 'user' : 'assistant'}">
                   ${m.role === 'user'
@@ -2108,6 +2334,32 @@ export class ArcChatInterface extends LitElement {
                <div class="timestamp timestamp-${m.role}">${this._formatTime(m.timestamp)}</div>
             </div>
           `)}
+          ${this._currentSessionApprovals.length > 0
+            ? html`
+                <section class="pending-chat-approvals" role="region" aria-label="Pending action approvals">
+                  <h3 class="pending-chat-approvals-heading">Approval needed to continue</h3>
+                  <p class="pending-chat-approvals-copy">
+                    The agent is paused. Review the requested tool and approve or deny it here to continue.
+                  </p>
+                  <arc-hitl-panel
+                    .approvals=${this._currentSessionApprovals}
+                    .compact=${true}
+                    @approval-action=${(event: CustomEvent<{ taskId: string; action: string }>) =>
+                      this._onPendingApprovalAction(event)}
+                  ></arc-hitl-panel>
+                </section>
+              `
+            : this._awaitingApproval
+              ? html`
+                  <div class="pending-chat-approvals" role="status">
+                    <h3 class="pending-chat-approvals-heading">Approval needed to continue</h3>
+                    <p class="pending-chat-approvals-copy">
+                      Loading the approval details. If they do not appear here, review them on the
+                      <a class="approval-page-link" href="#/hitl">Approvals page</a>.
+                    </p>
+                  </div>
+                `
+              : nothing}
         </div>
         
         <div class="input-wrapper">

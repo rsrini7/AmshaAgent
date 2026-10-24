@@ -50,6 +50,11 @@ class VectorIndexCompatibilityHealthCheckTest {
             }
 
             @Override
+            public VectorIndexCompatibility markUnavailable(VectorIndexNamespace namespace) {
+                return VectorIndexCompatibility.unavailable(namespace);
+            }
+
+            @Override
             public VectorIndexCompatibility markUnavailable(
                     VectorIndexNamespace namespace, EmbeddingIndexDescriptor activeDescriptor) {
                 throw new UnsupportedOperationException();

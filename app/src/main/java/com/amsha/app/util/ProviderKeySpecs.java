@@ -169,8 +169,8 @@ public final class ProviderKeySpecs {
      * Returns {@code null} for keyless providers (e.g. ollama, codex).
      */
     public static VarSpec llmKeySpecFor(String provider) {
-        if (provider == null) {
-            return GROQ_KEY_SPEC;
+        if (provider == null || provider.isBlank()) {
+            return null;
         }
         if (isLlmKeyless(provider)) {
             return null;
@@ -189,7 +189,8 @@ public final class ProviderKeySpecs {
             case ModelDefaults.PROVIDER_COHERE -> COHERE_KEY_SPEC;
             case ModelDefaults.PROVIDER_OMLX -> OMLX_KEY_SPEC;
             case ModelDefaults.PROVIDER_GENERIC_OPENAI -> GENERIC_OPENAI_KEY_SPEC;
-            default -> GROQ_KEY_SPEC;
+            case ModelDefaults.PROVIDER_GROQ -> GROQ_KEY_SPEC;
+            default -> null;
         };
     }
 
@@ -278,12 +279,13 @@ public final class ProviderKeySpecs {
                         ConfigKeys.COMPACTION_GENERIC_OPENAI_API_KEY,
                         "",
                         "your provider dashboard");
-            default ->
+            case ModelDefaults.PROVIDER_GROQ ->
                 providerKeySpec(
                         ModelDefaults.PROVIDER_GROQ,
                         ConfigKeys.COMPACTION_GROQ_API_KEY,
                         "gsk_",
                         "https://console.groq.com");
+            default -> null;
         };
     }
 
@@ -372,12 +374,13 @@ public final class ProviderKeySpecs {
                         ConfigKeys.CLASSIFIER_GENERIC_OPENAI_API_KEY,
                         "",
                         "your provider dashboard");
-            default ->
+            case ModelDefaults.PROVIDER_GROQ ->
                 providerKeySpec(
                         ModelDefaults.PROVIDER_GROQ,
                         ConfigKeys.CLASSIFIER_GROQ_API_KEY,
                         "gsk_",
                         "https://console.groq.com");
+            default -> null;
         };
     }
 
@@ -429,7 +432,7 @@ public final class ProviderKeySpecs {
      * Resolves the first provider in a comma-separated provider list (e.g. "groq,ollama").
      */
     public static String firstProvider(String csv) {
-        if (csv == null || csv.isBlank()) return ModelDefaults.PROVIDER_GROQ;
+        if (csv == null || csv.isBlank()) return "";
         int comma = csv.indexOf(',');
         return (comma < 0 ? csv : csv.substring(0, comma)).trim().toLowerCase(Locale.ROOT);
     }

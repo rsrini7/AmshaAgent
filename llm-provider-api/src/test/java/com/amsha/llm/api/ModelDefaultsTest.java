@@ -42,8 +42,8 @@ class ModelDefaultsTest {
         assertEquals(
                 ModelDefaults.DEFAULT_GENERIC_OPENAI_MODEL, ModelDefaults.defaultModelForProvider("generic-openai"));
         assertEquals(ModelDefaults.DEFAULT_INFINITE_LOOP_MODEL, ModelDefaults.defaultModelForProvider("infinite-loop"));
-        assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider(null));
-        assertEquals(ModelDefaults.DEFAULT_GROQ_MODEL, ModelDefaults.defaultModelForProvider("unknown"));
+        assertEquals("", ModelDefaults.defaultModelForProvider(null));
+        assertEquals("", ModelDefaults.defaultModelForProvider("unknown"));
     }
 
     @Test

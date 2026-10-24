@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ArcRunFlowCard,
   computeFlowStages,
   computeTurnStats,
   CANONICAL_FLOW_STAGES,
@@ -118,5 +119,13 @@ describe('ArcRunFlowCard logic & invariants', () => {
     expect(stats.latencyMs).toBe(2500);
     expect(stats.guardDecision).toBe('NOT_OBSERVED');
     expect(stats.totalTokens).toBe(0);
+  });
+
+  it('renders an empty flow card and one populated with observed events', () => {
+    const card = new ArcRunFlowCard();
+    expect(card.render()).toBeDefined();
+    card.events = [mockTrace({ stage: 'turn_start', status: 'START' })];
+    card.runId = 'run-test-1';
+    expect(card.render()).toBeDefined();
   });
 });

@@ -4,13 +4,16 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
+import com.amsha.app.config.LocalModelValidator;
 import com.amsha.common.config.ConfigKeys;
+import com.amsha.common.util.LogUtil;
 import com.amsha.localml.onnx.LocalAudioTranscoder;
 
 /**
@@ -18,7 +21,7 @@ import com.amsha.localml.onnx.LocalAudioTranscoder;
  * Provides an offline, zero-dependency model setup mechanism directly in the Amsha binary.
  */
 @Command(
-        name = "models",
+        name = CliArguments.COMMAND_MODELS,
         description = "Manage and install local ONNX model bundles",
         mixinStandardHelpOptions = true,
         subcommands = {
@@ -46,12 +49,7 @@ public class ModelsCommand implements Runnable {
 
         for (ModelInstaller.ModelCatalogEntry entry : models) {
             ModelInstaller.ModelStatus status = ModelInstaller.checkStatus(entry, modelRoot);
-            String statusText =
-                    switch (status) {
-                        case INSTALLED -> "INSTALLED";
-                        case INCOMPLETE -> "INCOMPLETE";
-                        case MISSING -> "MISSING";
-                    };
+            String statusText = status.name();
             System.out.printf(
                     "  %-28s %-12s %-10s %s%n", entry.id(), statusText, entry.totalSize(), entry.description());
         }
@@ -59,14 +57,46 @@ public class ModelsCommand implements Runnable {
         System.out.println("  " + "-".repeat(88));
         System.out.printf("  Storage directory: %s%n%n", modelRoot);
         System.out.println("  USAGE");
-        System.out.println(
-                "    ./amsha models install <model>    Install a model (e.g., whisper, mpnet, bge-reranker, all)");
-        System.out.println("    ./amsha models verify <model>     Verify SHA-256 integrity of installed files");
-        System.out.println("    ./amsha models list               Show this catalog");
+        String launcher = ModelInstaller.launcherCommand();
+        System.out.printf(
+                "    %s models install <model>    Install a model (whisper, mpnet, bge-reranker, all)%n", launcher);
+        System.out.printf("    %s models verify <model>     Verify SHA-256 integrity of installed files%n", launcher);
+        System.out.printf("    %s models list               Show this catalog%n", launcher);
         System.out.println();
     }
 
-    @Command(name = "list", description = "List available model bundles and installation status")
+    static void printInstallFailure(
+            ModelInstaller.ModelCatalogEntry entry, Path modelRoot, Exception failure, PrintStream errorOutput) {
+        String retryAlias = entry.aliases().stream().findFirst().orElse(entry.id());
+        String launcher = ModelInstaller.launcherCommand();
+        errorOutput.printf("[Amsha Agent] Model bundle '%s' could not be installed.%n", entry.id());
+        errorOutput.printf("Reason: %s%n", LogUtil.rootMessage(failure));
+        errorOutput.printf("Model directory: %s%n", modelRoot.toAbsolutePath().normalize());
+        errorOutput.println("Check internet access, available disk space, and write permission for this directory.");
+        errorOutput.println("Verified files are retained; retry reuses them and downloads incomplete files again.");
+        errorOutput.printf("Retry with: %s models install %s%n", launcher, retryAlias);
+
+        switch (entry.id()) {
+            case ModelInstaller.MPNET_BUNDLE_ID -> {
+                errorOutput.println("This model is needed only when ONNX is selected for embeddings.");
+                errorOutput.printf(
+                        "If it cannot be downloaded, configure another embedding provider in %s "
+                                + "(for example ollama, jina, or openai).%n",
+                        ConfigKeys.AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS);
+            }
+            case ModelInstaller.WHISPER_BUNDLE_ID ->
+                errorOutput.printf(
+                        "Local voice transcription is optional; set %s=false to disable it.%n",
+                        LocalModelValidator.LOCAL_STT_ENABLED_ENV);
+            case ModelInstaller.RERANKER_BUNDLE_ID ->
+                errorOutput.printf(
+                        "Reranking is optional; set %s=false to disable it and continue with hybrid search.%n",
+                        LocalModelValidator.RERANKER_ENABLED_ENV);
+            default -> errorOutput.println("This local model is optional unless its feature is enabled.");
+        }
+    }
+
+    @Command(name = CliArguments.COMMAND_LIST, description = "List available model bundles and installation status")
     public static class ListCommand implements Runnable {
         @Override
         public void run() {
@@ -74,8 +104,8 @@ public class ModelsCommand implements Runnable {
         }
     }
 
-    @Command(name = "install", description = "Download, verify, and install a model bundle")
-    public static class InstallCommand implements Runnable {
+    @Command(name = CliArguments.COMMAND_INSTALL, description = "Download, verify, and install a model bundle")
+    public static class InstallCommand implements Callable<Integer> {
 
         @Parameters(
                 index = "0",
@@ -85,24 +115,26 @@ public class ModelsCommand implements Runnable {
         String modelName;
 
         @Override
-        public void run() {
+        public Integer call() {
             if (modelName == null || modelName.isBlank()) {
                 System.out.println("❌ Please specify a model to install: whisper, mpnet, bge-reranker, or all");
                 printList();
-                return;
+                return 2;
             }
 
             Path modelRoot = ModelInstaller.resolveModelRoot();
-            if ("all".equalsIgnoreCase(modelName.trim())) {
+            if (ModelInstaller.SELECTOR_ALL.equalsIgnoreCase(modelName.trim())) {
+                int exitCode = 0;
                 for (ModelInstaller.ModelCatalogEntry entry : ModelInstaller.allModels()) {
                     try {
                         ModelInstaller.installBundle(entry, modelRoot, System.out);
-                    } catch (IOException e) {
-                        System.err.printf("❌ Installation failed for %s: %s%n", entry.id(), e.getMessage());
+                    } catch (IOException | RuntimeException e) {
+                        printInstallFailure(entry, modelRoot, e, System.err);
+                        exitCode = 1;
                     }
                 }
                 checkFfmpegNotice();
-                return;
+                return exitCode;
             }
 
             Optional<ModelInstaller.ModelCatalogEntry> match = ModelInstaller.findModel(modelName);
@@ -111,16 +143,18 @@ public class ModelsCommand implements Runnable {
                         .map(ModelInstaller.ModelCatalogEntry::id)
                         .collect(Collectors.joining(", "));
                 System.err.printf("❌ Unknown model '%s'. Known models: %s, all%n", modelName, known);
-                return;
+                return 2;
             }
 
             try {
                 ModelInstaller.installBundle(match.get(), modelRoot, System.out);
-                if (match.get().id().contains("whisper")) {
+                if (ModelInstaller.WHISPER_BUNDLE_ID.equals(match.get().id())) {
                     checkFfmpegNotice();
                 }
-            } catch (IOException e) {
-                System.err.printf("❌ Installation failed: %s%n", e.getMessage());
+                return 0;
+            } catch (IOException | RuntimeException e) {
+                printInstallFailure(match.get(), modelRoot, e, System.err);
+                return 1;
             }
         }
 
@@ -139,7 +173,7 @@ public class ModelsCommand implements Runnable {
         }
     }
 
-    @Command(name = "verify", description = "Verify checksums of installed model bundles")
+    @Command(name = CliArguments.COMMAND_VERIFY, description = "Verify checksums of installed model bundles")
     public static class VerifyCommand implements Callable<Integer> {
 
         @Parameters(
@@ -152,7 +186,9 @@ public class ModelsCommand implements Runnable {
         @Override
         public Integer call() {
             Path modelRoot = ModelInstaller.resolveModelRoot();
-            if (modelName == null || modelName.isBlank() || "all".equalsIgnoreCase(modelName.trim())) {
+            if (modelName == null
+                    || modelName.isBlank()
+                    || ModelInstaller.SELECTOR_ALL.equalsIgnoreCase(modelName.trim())) {
                 boolean allOk = true;
                 for (ModelInstaller.ModelCatalogEntry entry : ModelInstaller.allModels()) {
                     System.out.printf("Verifying '%s'...%n", entry.id());

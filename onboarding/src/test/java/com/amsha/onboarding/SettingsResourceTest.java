@@ -118,8 +118,7 @@ public class SettingsResourceTest {
         when(llmValidationGateway.validate(anyString(), anyString(), anyString()))
                 .thenReturn(true);
 
-        ProviderUpdateRequest req =
-                new ProviderUpdateRequest("groq", "meta-llama/llama-4-scout-17b-16e-instruct", "test-key-123");
+        ProviderUpdateRequest req = new ProviderUpdateRequest("groq", "openai/gpt-oss-120b", "test-key-123");
         givenAuth()
                 .contentType(ContentType.JSON)
                 .body(req)

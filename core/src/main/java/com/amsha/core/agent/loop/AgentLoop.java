@@ -280,7 +280,15 @@ public class AgentLoop {
                 if (result instanceof AgentResult.AwaitingApproval) {
                     getLoopResultHandler().tryStampChannelInfo(sessionId, canonicalRole, context);
                 } else if (result instanceof AgentResult.AwaitingRetry awaitingRetry) {
-                    getLoopResultHandler().updateStoreForRetry(sessionId, canonicalRole, awaitingRetry, context);
+                    getLoopResultHandler()
+                            .updateStoreForRetry(
+                                    sessionId,
+                                    canonicalRole,
+                                    capturedUserId,
+                                    agentExecutionContext.autonomyLevel(),
+                                    awaitingRetry,
+                                    effectiveGoal,
+                                    context);
                 } else if (result != null) {
                     getLoopResultHandler()
                             .updateStoreForTerminal(

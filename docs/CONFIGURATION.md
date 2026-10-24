@@ -11,7 +11,7 @@ Generate secrets: `openssl rand -base64 32` (Linux/macOS) or `[Convert]::ToBase6
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_{PROVIDER}_API_KEY` | — | Provider-specific LLM API key, for example `AMSHA_GROQ_API_KEY` (`gsk_...`) |
-| `AMSHA_LLM_PROVIDER` | `groq` in `application.yaml`; the repository `.env.example` explicitly selects `infinite-loop` | Provider ID: `groq`, `openai`, `ollama`, `claude-code`, `openrouter`, `nvidia`, `cerebras`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `agy`, `kimchi`, `foundry`, `gemini`, `omlx`, `llamacpp`, `generic-openai`, or the internal `infinite-loop` provider |
+| `AMSHA_LLM_PROVIDER` | Unset; choose one during first-run setup or configure explicitly | Provider ID: `groq`, `openai`, `ollama`, `claude-code`, `openrouter`, `nvidia`, `cerebras`, `sarvam`, `opencode`, `huggingface`, `mistral`, `cloudflare`, `cohere`, `codex`, `agy`, `kimchi`, `foundry`, `gemini`, `omlx`, `llamacpp`, `generic-openai`, or internal `infinite-loop`. Non-interactive deployments must set this value explicitly. |
 | `AMSHA_LLM_MAX_OUTPUT_TOKENS` | `8192` | Max output tokens per LLM call |
 | `AMSHA_LLM_MAX_RETRIES` | `3` | Max LLM retry attempts |
 | `AMSHA_LLM_TEMPERATURE` | `0.1` | LLM temperature |
@@ -82,7 +82,7 @@ amsha.llm.persona.models.brahma.model=deepseek-coder-33b
 **Example:** Kailasa (debugging group) uses fast Llama:
 ```bash
 amsha.llm.group.models.kailasa.provider=groq
-amsha.llm.group.models.kailasa.model=meta-llama/llama-4-scout-17b-16e-instruct
+amsha.llm.group.models.kailasa.model=openai/gpt-oss-120b
 ```
 
 ### Multi-Model Failover
@@ -177,7 +177,7 @@ provider in the list has its own slot with independent health tracking.
 |---|---|---|
 | `AMSHA_INFINITE_LOOP_COMPACTION_PROVIDERS` | `groq,ollama` | Comma-separated compaction providers (slot order) |
 | `AMSHA_COMPACTION_GROQ_API_KEY` | — | Groq API key for the compaction slot |
-| `AMSHA_COMPACTION_GROQ_MODEL` | `llama-3.1-8b-instant` | Compaction model on Groq |
+| `AMSHA_COMPACTION_GROQ_MODEL` | `openai/gpt-oss-20b` | Compaction model on Groq |
 | `AMSHA_COMPACTION_GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq base URL for compaction |
 | `AMSHA_COMPACTION_GROQ_MAX_RETRIES` | `3` | Max retries for the Groq compaction slot |
 | `AMSHA_COMPACTION_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the compaction slot |
@@ -203,7 +203,7 @@ when all slots are exhausted.
 |---|---|---|
 | `AMSHA_INFINITE_LOOP_CLASSIFIER_PROVIDERS` | `groq,ollama` | Comma-separated classifier providers (slot order) |
 | `AMSHA_CLASSIFIER_GROQ_API_KEY` | — | Groq API key for the classifier slot |
-| `AMSHA_CLASSIFIER_GROQ_MODEL` | `llama-3.1-8b-instant` | Classifier model on Groq |
+| `AMSHA_CLASSIFIER_GROQ_MODEL` | `openai/gpt-oss-20b` | Classifier model on Groq |
 | `AMSHA_CLASSIFIER_GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Groq base URL for classifier |
 | `AMSHA_CLASSIFIER_GROQ_MAX_RETRIES` | `3` | Max retries for the Groq classifier slot |
 | `AMSHA_CLASSIFIER_OLLAMA_MODEL` | `mistral-small:latest` | Ollama model for the classifier slot |
@@ -323,7 +323,7 @@ variables are required (replace `{PROVIDER}` with the provider name, e.g., `GROQ
 | Variable | Default | Description |
 |---|---|---|
 | `AMSHA_GROQ_API_KEY` | — | Groq API key for the main LLM slot |
-| `AMSHA_GROQ_MODEL` | — | Groq model for the main LLM slot |
+| `AMSHA_GROQ_MODEL` | — | Groq model for the main LLM slot; choose one available to your account from the [Groq model list](https://console.groq.com/docs/models.md) |
 | `AMSHA_GEMINI_MODEL` | — | Gemini model for the main LLM slot |
 | `AMSHA_OPENROUTER_API_KEY` | — | OpenRouter API key for the main LLM slot |
 | `AMSHA_OPENROUTER_MODEL` | — | OpenRouter model for the main LLM slot |
@@ -377,7 +377,11 @@ See `.mise/tasks/headroom/README.md` for setup and usage.
 | `AMSHA_AUTH_IDP_GITHUB_CLIENT_SECRET` | — | GitHub OAuth client secret. |
 | `AMSHA_AUTH_IDP_GITHUB_REDIRECT_URI` | *(derived)* | Fixed, pre-registered redirect URI sent to GitHub. Defaults to the server-derived callback. |
 | `AMSHA_PII_MODE` | `REDACT_AND_FORWARD` | PII mode: REDACT_AND_FORWARD, BLOCK_AND_NOTIFY, OFF |
-| `AMSHA_AUTO_SEED_SECRETS` | `false` | Auto-seed development secrets on startup |
+| `AMSHA_AUTO_SEED_SECRETS` | `false` | Set `true` on first boot with a new vault to seed the stable `AMSHA_AUDIT_HMAC_KEY` from the environment before startup validation; keep the key unchanged or pre-provision the vault, then disable if desired. Also seeds configured optional tool secrets. |
+
+### Lost vault pepper recovery
+
+If the configured `AMSHA_VAULT_PEPPER` cannot decrypt the stored audit key, restore the original pepper to keep existing data. For a local SQLite install, an interactive terminal offers `BACKUP` to move the configured `AMSHA_DATA_DIR` to a timestamped sibling directory, or `DELETE` to permanently erase that directory. Type the selected word to confirm; pressing Enter cancels. Stop other Amsha processes using the directory first. The native CLI restarts after a successful reset. Automatic first-boot seeding also requires `AMSHA_AUTO_SEED_SECRETS=true` and a stable Base64-encoded `AMSHA_AUDIT_HMAC_KEY` in `.env`. The selected action recursively affects `AMSHA_DATA_DIR`, including workspace or model paths located inside it. PostgreSQL and filesystem installs require separate recovery steps.
 
 ## Embedding
 
@@ -518,8 +522,8 @@ schema) and must match the model used by every active provider.
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | `mock-telegram-token` | Telegram bot token from @BotFather |
 | `AMSHA_TELEGRAM_ENABLED` | `false` | Enable Telegram bot |
-| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | — | Comma-separated numeric Telegram user IDs |
-| `AMSHA_TELEGRAM_ALLOWED_USERS` | `mock-telegram-user` | Comma-separated @usernames |
+| `AMSHA_TELEGRAM_ALLOWED_USER_IDS` | — | Numeric Telegram account IDs. When set, only matching IDs are allowed and usernames are ignored. Find an ID via @userinfobot. |
+| `AMSHA_TELEGRAM_ALLOWED_USERS` | `mock-telegram-user` | Public usernames without `@`; used only when no numeric IDs are configured. Usernames can change. |
 | `AMSHA_TELEGRAM_BASE_URI` | `https://api.telegram.org` | Telegram Bot API base URI for getFile and file downloads |
 | `AMSHA_CHANNEL_TELEGRAM_MAX_LENGTH` | `4096` | Max Telegram message length |
 

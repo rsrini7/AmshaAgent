@@ -23,6 +23,8 @@ import './onboarding/arc-onboarding-step-channels';
 import './onboarding/arc-onboarding-step-identity';
 import './onboarding/arc-onboarding-step-review';
 
+const HTTP_SERVER_ERROR_MIN_STATUS = 500;
+
 @customElement('arc-onboarding')
 export class ArcOnboarding extends LitElement {
   @state() private _client = new ArcClient('/api/v1');
@@ -326,8 +328,10 @@ export class ArcOnboarding extends LitElement {
     } catch (e: any) {
       if (this._bootstrapState === 'CLAIMED' && e instanceof ArcApiError && e.status === 401) {
         this._error = 'Bootstrap is already claimed. Sign in with the owner API key to continue.';
+      } else if (e instanceof ArcApiError && e.status >= HTTP_SERVER_ERROR_MIN_STATUS) {
+        this._error = `Onboarding setup failed (HTTP ${e.status}). Check the application log for details.`;
       } else {
-        this._error = `Failed to load draft: ${e.message}`;
+        this._error = `Onboarding setup failed: ${e.message}`;
       }
     } finally {
       this._loading = false;

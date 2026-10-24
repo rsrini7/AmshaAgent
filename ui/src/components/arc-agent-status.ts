@@ -1,6 +1,7 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { AgentStatusDto } from '../api/generated/models/AgentStatusDto';
+import { LOGO_SVG_SRC } from '../branding';
 
 const AUTONOMY_LABELS: Record<string, string> = {
   readonly:   '👁 Read Only',
@@ -73,8 +74,8 @@ export class ArcAgentStatus extends LitElement {
       width: 32px; height: 32px; border-radius: 50%;
       background: var(--bg-elevated); border: 1px solid var(--border);
       display: flex; align-items: center; justify-content: center;
-      color: var(--accent); font-size: 16px;
     }
+    .agent-avatar-img { width: 24px; height: 24px; display: block; }
   `;
 
   private displayName(name: string): string {
@@ -94,7 +95,7 @@ export class ArcAgentStatus extends LitElement {
     return html`
       <div class="card" style="--autonomy-color: ${color}">
         <div class="header">
-          <div class="agent-avatar">⬡</div>
+          <div class="agent-avatar"><img class="agent-avatar-img" src="${LOGO_SVG_SRC}" alt="" width="24" height="24" /></div>
           <div class="name-col">
             <span class="name">${dName}</span>
           </div>

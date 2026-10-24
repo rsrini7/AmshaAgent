@@ -6,7 +6,7 @@ export class WsManager {
   constructor(
     private readonly url: string,
     private readonly onFrame: (frame: WsInboundFrame) => void,
-    private readonly onStatusChange: (status: 'connecting' | 'open' | 'closed' | 'error') => void
+    private readonly onStatusChange: (status: 'connecting' | 'transport-open' | 'closed' | 'error') => void
   ) {}
 
   connect(): void {
@@ -14,9 +14,7 @@ export class WsManager {
     this._ws = new WebSocket(this.url);
     this.onStatusChange('connecting');
 
-    this._ws.onopen = () => {
-      this.onStatusChange('open');
-    };
+    this._ws.onopen = () => this.onStatusChange('transport-open');
     
     this._ws.onclose = () => {
       this.onStatusChange('closed');

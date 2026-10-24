@@ -1,5 +1,6 @@
 package com.amsha.app.security;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.security.api.SecretVault;
+import com.amsha.security.api.VaultConstants;
+import com.amsha.security.api.VaultKey;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +51,8 @@ class StartupSecurityValidatorStringOnlyAllowlistTest {
 
     @BeforeEach
     void setup() {
-        when(vault.systemKeyExists("amsha-audit-hmac-key")).thenReturn(true);
+        when(vault.retrieveSystemKey(VaultConstants.AUDIT_HMAC_KEY_NAME))
+                .thenReturn(Optional.of(new VaultKey(new byte[32])));
     }
 
     @Test
@@ -56,6 +60,7 @@ class StartupSecurityValidatorStringOnlyAllowlistTest {
         StartupSecurityValidator real = ClientProxy.unwrap(validator);
         real.profile = "staging";
         real.pepper = "staging-secure-pepper-00000000000000";
+        real.telegramEnabled = true;
         real.allowedUserIds = Optional.empty();
         real.allowedUsers = Optional.of(List.of("alice"));
 
@@ -67,10 +72,23 @@ class StartupSecurityValidatorStringOnlyAllowlistTest {
         StartupSecurityValidator real = ClientProxy.unwrap(validator);
         real.profile = "staging";
         real.pepper = "staging-secure-pepper-00000000000000";
+        real.telegramEnabled = true;
         real.allowedUserIds = Optional.empty();
         real.allowedUsers = Optional.of(List.of("alice"));
 
         var ex = assertThrows(DeploymentException.class, () -> real.onStart(new StartupEvent()));
         assertTrue(ex.getMessage().contains("numeric"), "Exception message must reference 'numeric' Telegram user IDs");
+    }
+
+    @Test
+    void disabledTelegramDoesNotBlockStartupOnPlaceholderUsername() {
+        StartupSecurityValidator real = ClientProxy.unwrap(validator);
+        real.profile = "staging";
+        real.pepper = "staging-secure-pepper-00000000000000";
+        real.telegramEnabled = false;
+        real.allowedUserIds = Optional.empty();
+        real.allowedUsers = Optional.of(List.of("mock-telegram-user"));
+
+        assertDoesNotThrow(() -> real.onStart(new StartupEvent()));
     }
 }
