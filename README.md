@@ -60,23 +60,54 @@ responses.
 
 ## Quick Start
 
+Requirements: JDK 25, Git, and internet access for the first build. The Maven wrapper is included; Podman is optional for sandboxed code execution.
+
 ```bash
-# Prerequisites: JDK 25 and Git. Rootless Podman is optional for sandboxed code execution.
 git clone https://github.com/rsrini7/AmshaAgent.git
 cd AmshaAgent
 
-# Copy the configuration template, then edit .env before starting.
-cp .env.example .env
-
-# Dev mode (hot reload, no sandbox isolation)
-./mvnw quarkus:dev -pl app -am "-Dquarkus.args=chat"
-
-# Or build and run a packaged JAR
-./mvnw clean package -DskipTests
-java --enable-native-access=ALL-UNNAMED -jar app/target/quarkus-app/quarkus-run.jar chat
 ```
 
-No LLM provider is selected automatically. The first-run CLI setup prompts you to choose one; for non-interactive setups, set `AMSHA_LLM_PROVIDER` explicitly. For example, to use Groq, set `AMSHA_LLM_PROVIDER=groq` and `AMSHA_GROQ_API_KEY` in `.env`. Local providers such as Ollama and OMLX are also available. Replace the security-key placeholders `AMSHA_VAULT_PEPPER`, `AMSHA_AUDIT_HMAC_KEY`, `AMSHA_API_KEYS_INTERNAL`, `AMSHA_API_KEYS_CI`, and `AMSHA_AUTH_HMAC_KEY`. Generate security values with `openssl rand -base64 32` and keep them stable across restarts. See [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) for provider options and the full configuration reference, and [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup.
+Start on macOS or Linux:
+
+```bash
+./scripts/run-jar.sh
+
+```
+
+Start on Windows PowerShell:
+
+```powershell
+.\scripts\run-jar.ps1
+```
+
+The launcher builds the packaged application with the included Maven wrapper and starts it in a regular terminal. On a fresh run, Amsha creates `.env` in the repository folder and opens setup. Choose one provider and configure the credentials it needs. For a fresh data directory, press Enter at security-key prompts that offer to generate values. When reusing existing data, keep its original `.env` and especially `AMSHA_VAULT_PEPPER`; changing it can make stored encrypted secrets unreadable. Optional integrations can be skipped. Keep `.env` private. If you already ran Quarkus dev mode and only `app/.env` exists, the launcher reuses that config and runtime folder.
+
+When startup completes, open [http://localhost:8080](http://localhost:8080) for the web interface. To run the server command instead, pass it to the launcher: `./scripts/run-jar.sh serve` or `./scripts/run-jar.ps1 serve`.
+
+See [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) for provider options and the full configuration reference, and [docs/QUICK_START.md](./docs/QUICK_START.md) for detailed setup.
+
+### Contributor workflows
+
+Install and initialize mise as described in [docs/MISE_SETUP.md](./docs/MISE_SETUP.md). If `.env` selects `onnx` for embeddings, install the verified MPNet bundle once from the source checkout:
+
+```bash
+mise run models:install-mpnet
+```
+
+This downloads about 436 MB to `data/models/`. Native-binary users can install it with `./amsha-sqlite models install mpnet` from the directory containing the binary; see the [ONNX local ML guide](./docs/ONNX_LOCAL_ML_GUIDE.md) for both workflows.
+
+For regular multi-module development, use the packaged JAR task; it clean-builds all modules (tests skipped) before starting the application with the Quarkus `dev` profile:
+
+```bash
+mise run jar:run-dev-dep -- serve
+```
+
+This starts the web interface at [http://localhost:8080](http://localhost:8080). To work in the interactive CLI, use `mise run jar:run-dev-dep -- chat`. Rerun the task after code changes. It skips tests; run `mise run build:test` when you need the full test suite. This is more reliable for this multi-module project because Quarkus dev mode cannot reload several Amsha module dependencies.
+
+To validate the local GraalVM native-image path, run `mise run build:native-local`, then `mise run native:serve`. Native-image builds take longer and use substantial memory; current native runtime verification is on macOS arm64, while Linux and Windows runtime checks remain pending.
+
+Quarkus hot reload remains available through `mise run dev` for code that is reloadable in the application module. Changes in non-reloadable Amsha dependencies still require a rebuild or restart. The dev-mode terminal also uses `:` for Quarkus console commands; when Amsha prompts for a value or offers to auto-generate a key, press Enter directly rather than typing `:`.
 ---
 
 ## Key Capabilities

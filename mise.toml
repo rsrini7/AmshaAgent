@@ -12,7 +12,7 @@
 #   3. mise run setup:profile    ← writes shell profile (activate + completion)
 #   4. reload your shell
 #   5. mise run setup            ← .env, chmod mvnw, JDKs, gh CLI
-#   6. mise run dev
+#   6. mise run jar:run-dev-dep -- serve
 #
 # NOTE: `start` uses run = [...] array (no shell dependency) so it works
 # even before `mise install` completes - cmd.exe, sh, pwsh all handle it.
@@ -66,7 +66,7 @@ run = [
   "echo   2. mise run setup:profile      writes shell profile activate + completion",
   "echo   3. reload your shell",
   "echo   4. mise run setup              .env + chmod mvnw + JDKs + gh CLI + Playwright Chromium",
-  "echo   5. mise run dev                hot-reload on :8080",
+  "echo   5. mise run jar:run-dev-dep -- serve  clean build (tests skipped) + app on :8080",
   "echo \"\"",
   "echo   See MISE_SETUP.md for full documentation.",
   "echo \"\"",
