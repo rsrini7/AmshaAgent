@@ -205,7 +205,7 @@ jobs:
 
   #     - name: Archive redacted server log on failure
   #       if: always()
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v7
   #       with:
   #         name: jvm-validation-server-log
   #         path: server.redacted.log
@@ -264,7 +264,7 @@ jobs:
 
       - name: Upload test reports on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-test-reports
           path: |
@@ -275,7 +275,7 @@ jobs:
 
       - name: Upload coverage report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-jacoco-report
           path: "**/target/site/jacoco/**"
