@@ -27,7 +27,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 # Pre-flight: remove stale containers that would block compose up
 # Fixed container_name entries (e.g. prometheus) collide across projects.
-foreach ($name in @('prometheus', 'amshaagentinternal-otel-collector-1', 'amshaagentinternal-jaeger-1', 'amshaagentinternal-phoenix-1')) {
+foreach ($name in @('prometheus', 'amshaagent-otel-collector-1', 'amshaagent-jaeger-1', 'amshaagent-phoenix-1')) {
     $exists = podman ps -a --filter "name=^/$($name)$" --format '{{.ID}}' 2>$null
     if ($exists) {
         Write-Host "🧹  Removing stale container: $name"
@@ -44,7 +44,7 @@ if ($LASTEXITCODE -ne 0) {
         podman machine start 2>&1 | Out-Null
         Start-Sleep -Seconds 3
         # Re-run cleanup after restart (stale containers may persist)
-        foreach ($name in @('prometheus', 'amshaagentinternal-otel-collector-1', 'amshaagentinternal-jaeger-1', 'amshaagentinternal-phoenix-1')) {
+        foreach ($name in @('prometheus', 'amshaagent-otel-collector-1', 'amshaagent-jaeger-1', 'amshaagent-phoenix-1')) {
             $exists = podman ps -a --filter "name=^/$($name)$" --format '{{.ID}}' 2>$null
             if ($exists) { podman rm -f $name 2>$null | Out-Null }
         }

@@ -351,6 +351,7 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 | [FAQ.md](./docs/FAQ.md) | Architecture Q&A, rationale, operational guidance |
 | [AGENTS.md](./AGENTS.md) | Developer guide for AI coding agents — invariants, patterns, rules |
 | [LICENSE.md](./LICENSE.md) | MIT License |
+| [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) | Vendored and runtime third-party notices |
 
 ---
 

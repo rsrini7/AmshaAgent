@@ -173,7 +173,7 @@ public class GnaniSpeechSynthesisProvider implements SpeechSynthesisPort {
                     .timeout(effectiveTimeout(request.timeout()))
                     .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
                     .header(HttpProtocol.HEADER_ACCEPT, WAV_MIME)
-                    .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/amsha)")
+                    .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/AmshaAgent)")
                     .header(GnaniApiContract.API_KEY_HEADER, apiKey)
                     .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                     .build();

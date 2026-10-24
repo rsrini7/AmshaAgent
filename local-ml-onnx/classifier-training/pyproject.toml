@@ -2,6 +2,8 @@
 name = "amsha-classifier-training"
 version = "0.1.0"
 description = "Reproducible offline training and evaluation for Amsha Phase 2 shadow classifiers"
+authors = [{ name = "Amsha Agent contributors" }]
+license = { text = "MIT" }
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "accelerate>=1.8,<2",

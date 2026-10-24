@@ -18,9 +18,7 @@ class ToolStepResolutionUtilsTest {
         List<ReasoningStep> history = List.of(ReasoningStep.pending(
                         "read template",
                         ToolCapability.HOST_EXEC.toolName(),
-                        Map.of(
-                                "code",
-                                "cat /Users/srinivasanragothaman/.amsha/skills/skillsjars/algorithmic-art/templates/viewer.html"),
+                        Map.of("code", "cat /tmp/amsha/skills/skillsjars/algorithmic-art/templates/viewer.html"),
                         0,
                         0)
                 .withObservation("<html>template content</html>", true));

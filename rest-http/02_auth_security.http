@@ -25,8 +25,8 @@
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl    = http://localhost:8080
-# @validKey   = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
-# @ciKey      = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+# @validKey   = key-internal-changeme
+# @ciKey      = key-ci-changeme
 # @invalidKey = totally-wrong-key
 
 # ─────────────────────────────────────────────────────────────────

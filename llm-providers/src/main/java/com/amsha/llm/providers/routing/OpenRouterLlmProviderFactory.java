@@ -18,7 +18,7 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 public class OpenRouterLlmProviderFactory implements RoutingChatModelProvider {
 
-    @ConfigProperty(name = LlmConfigKeys.OPENROUTER_SITE_URL, defaultValue = "https://github.com/rsrini7/amsha")
+    @ConfigProperty(name = LlmConfigKeys.OPENROUTER_SITE_URL, defaultValue = "https://github.com/rsrini7/AmshaAgent")
     String siteUrl;
 
     @ConfigProperty(name = LlmConfigKeys.OPENROUTER_APP_NAME, defaultValue = "Amsha Agent")

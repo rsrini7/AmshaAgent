@@ -31,7 +31,7 @@ class GithubToolTest {
         Map<String, Object> params = Map.of(
                 "action", "repo",
                 "command", "delete",
-                "target", "rsrini7/amsha");
+                "target", "rsrini7/AmshaAgent");
         IllegalArgumentException exception =
                 assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
         assertTrue(exception.getMessage().contains("not permitted"));
@@ -42,7 +42,7 @@ class GithubToolTest {
         Map<String, Object> params = Map.of(
                 "action", "repo",
                 "command", "archive",
-                "target", "rsrini7/amsha");
+                "target", "rsrini7/AmshaAgent");
         assertThrows(IllegalArgumentException.class, () -> tool.sandboxCommand(ctx(), params));
     }
 
@@ -51,7 +51,7 @@ class GithubToolTest {
         Map<String, Object> params = Map.of(
                 "action", "repo",
                 "command", "view",
-                "target", "rsrini7/amsha");
+                "target", "rsrini7/AmshaAgent");
         assertDoesNotThrow(() -> tool.sandboxCommand(ctx(), params));
     }
 

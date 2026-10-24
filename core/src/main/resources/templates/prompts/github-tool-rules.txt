@@ -17,7 +17,7 @@ GITHUB TOOL USAGE (NON-NEGOTIABLE):
   Strip any surrounding natural language words like 'repo', 'repository',
   'details', 'info' from the target value.
   ✅ user says 'fetch rsrini7/Private repo details' → target: 'rsrini7/Private'
-  ✅ user says 'check the amsha repository' → target: 'rsrini7/amsha'
+  ✅ user says 'check the amsha repository' → target: 'rsrini7/AmshaAgent'
   ❌ target: 'rsrini7/Private repo'
   ❌ target: 'the amsha repository'
   

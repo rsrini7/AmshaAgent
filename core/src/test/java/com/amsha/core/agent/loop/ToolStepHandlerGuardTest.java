@@ -125,7 +125,7 @@ class ToolStepHandlerGuardTest {
 
     @Test
     void validateTool_coordinatorGithub_resourceInGoal_allows() {
-        AgentExecutionContext ctx = createCtx("coordinator", "summarize rsrini7/amsha");
+        AgentExecutionContext ctx = createCtx("coordinator", "summarize rsrini7/AmshaAgent");
         ReasoningStep step =
                 ReasoningStep.pending("thought", ToolCapability.GITHUB.toolName(), Map.of("query", "main"));
 

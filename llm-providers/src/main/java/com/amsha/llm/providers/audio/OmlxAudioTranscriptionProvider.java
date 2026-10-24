@@ -187,7 +187,7 @@ public class OmlxAudioTranscriptionProvider implements AudioTranscriptionPort {
                 .timeout(timeout)
                 .header(HttpProtocol.HEADER_CONTENT_TYPE, "multipart/form-data; boundary=" + boundary)
                 .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
-                .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/amsha)")
+                .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/AmshaAgent)")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body));
         if (apiKey != null && !apiKey.isBlank() && !"not-needed".equalsIgnoreCase(apiKey.trim())) {
             builder.header(HttpProtocol.HEADER_AUTHORIZATION, HttpProtocol.AUTH_SCHEME_BEARER + apiKey.trim());

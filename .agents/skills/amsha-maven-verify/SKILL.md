@@ -31,7 +31,7 @@ Use it whenever verifying, building, checking merge-readiness, or adding test co
 Always export the JDK 25 toolchain before executing `./mvnw`:
 
 ```bash
-export JAVA_HOME=/Users/srinivasanragothaman/.sdkman/candidates/java/25.0.3-tem
+export JAVA_HOME="${JAVA_HOME:-$HOME/.sdkman/candidates/java/25.0.3-tem}"
 export PATH="$JAVA_HOME/bin:$PATH"
 ```
 

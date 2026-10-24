@@ -28,7 +28,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
-# @validKey = key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
+# @validKey = key-internal-changeme
 
 # ─────────────────────────────────────────────────────────────────
 # FLOW A: REST APPROVE
@@ -225,7 +225,7 @@ Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "View the rsrini7/amsha repository using the github tool.",
+    "goal": "View the rsrini7/AmshaAgent repository using the github tool.",
     "agentRole": "coordinator",
     "maxIterations": 3
 }
