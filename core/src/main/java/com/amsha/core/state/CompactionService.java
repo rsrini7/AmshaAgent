@@ -271,7 +271,7 @@ public class CompactionService {
         String prompt = buildCompactionPrompt(sessionId, toCompact, firstUserMessage);
         String newSummary = executeCompactionTurn(sessionId, prompt);
 
-        if (newSummary.isBlank()) {
+        if (newSummary == null || newSummary.isBlank()) {
             log.warnf("Compaction returned blank summary for session %s. Aborting compaction.", sessionId);
             return false;
         }
@@ -367,18 +367,20 @@ public class CompactionService {
             response = compactionModel.chat(promptOnly);
         }
 
-        String responseText = (response != null && response.aiMessage() != null)
-                ? response.aiMessage().text()
-                : null;
+        String responseText = responseTextOrNull(response);
         if (responseText == null) {
             ChatResponse legacy = compactionModel.chat(UserMessage.userMessage(prompt));
-            responseText = (legacy != null && legacy.aiMessage() != null)
-                    ? legacy.aiMessage().text()
-                    : "";
+            responseText = responseTextOrNull(legacy);
         }
-        if (responseText.isBlank()) return "";
+        if (responseText == null || responseText.isBlank()) return "";
         if (mode != StructuredOutputMode.NATIVE || degradedToDirective) return responseText.trim();
         return extractNativeSummary(sessionId, prompt, responseText, attempt);
+    }
+
+    private static String responseTextOrNull(ChatResponse response) {
+        if (response == null) return null;
+        AiMessage aiMessage = response.aiMessage();
+        return aiMessage == null ? null : aiMessage.text();
     }
 
     private String extractNativeSummary(String sessionId, String prompt, String responseText, int attempt) {
@@ -446,10 +448,8 @@ public class CompactionService {
 
     private String executeCompactionTurn(String _sessionId, String prompt, int attempt, int maxRetries) {
         try {
-            return compactionModel
-                    .chat(UserMessage.userMessage(prompt))
-                    .aiMessage()
-                    .text();
+            String responseText = responseTextOrNull(compactionModel.chat(UserMessage.userMessage(prompt)));
+            return responseText == null ? "" : responseText;
         } catch (Exception e) {
             log.warnf("Compaction fallback attempt %d/%d failed: %s", attempt, maxRetries, LogUtil.rootMessage(e));
             throw new CompactionAbortedException("Compaction fallback failed", e);

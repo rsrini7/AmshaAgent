@@ -422,6 +422,34 @@ class CompactionServiceTest {
     }
 
     @Test
+    void malformedJsonFallbackWithNullTextAbortsWithoutThrowing() {
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(capableModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("{\"summary\":\"truncated"))
+                        .build());
+        AiMessage nullTextMessage = mock(AiMessage.class);
+        when(nullTextMessage.text()).thenReturn(null);
+        when(capableModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder().aiMessage(nullTextMessage).build());
+
+        Instance<StructuredOutputMode> modeInst = mock(Instance.class);
+        when(modeInst.isUnsatisfied()).thenReturn(false);
+        when(modeInst.get()).thenReturn(StructuredOutputMode.NATIVE);
+        service.compactionModel = capableModel;
+        service.compactionModeInstance = modeInst;
+
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+
+        assertFalse(service.compact("session1", "test-user"));
+        verify(capableModel).chat(any(UserMessage.class));
+        verify(mockPort, never()).upsert(any(CompactionSummaryDto.class));
+        verify(mockChatStore, never()).updateMessages(anyString(), anyList());
+    }
+
+    @Test
     void nativeSchema_extractsSummaryFromJsonContentAndResultFields() {
         when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
         when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
