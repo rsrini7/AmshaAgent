@@ -277,7 +277,7 @@ describe('Chat Dock & HITL Panel integration', () => {
   });
 
   it('coalesces repeated reconnect clicks into one connection attempt', async () => {
-    const mockWindow = { dispatchEvent: vi.fn() };
+    const mockWindow = { dispatchEvent: vi.fn(), setTimeout: vi.fn() };
     vi.stubGlobal('window', mockWindow);
 
     const chat = new ArcChatInterface();
@@ -294,7 +294,7 @@ describe('Chat Dock & HITL Panel integration', () => {
   });
 
   it('does not replace a socket that is already connecting', async () => {
-    const mockWindow = { dispatchEvent: vi.fn() };
+    const mockWindow = { dispatchEvent: vi.fn(), setTimeout: vi.fn() };
     vi.stubGlobal('window', mockWindow);
 
     const chat = new ArcChatInterface();
@@ -312,7 +312,7 @@ describe('Chat Dock & HITL Panel integration', () => {
   });
 
   it('keeps a stalled turn visible when the websocket reconnects', async () => {
-    const mockWindow = { dispatchEvent: vi.fn() };
+    const mockWindow = { dispatchEvent: vi.fn(), setTimeout: vi.fn() };
     vi.stubGlobal('window', mockWindow);
 
     const chat = new ArcChatInterface();
@@ -332,7 +332,7 @@ describe('Chat Dock & HITL Panel integration', () => {
 
   it('persists the latest authenticated session when the server sends provisional and authenticated frames', () => {
     const storage = new Map<string, string>();
-    const mockWindow = { dispatchEvent: vi.fn() };
+    const mockWindow = { dispatchEvent: vi.fn(), setTimeout: vi.fn() };
     vi.stubGlobal('sessionStorage', {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value),
