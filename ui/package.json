@@ -2,6 +2,13 @@
   "name": "amsha-ui",
   "private": true,
   "version": "0.1.0",
+  "description": "Amsha Agent web UI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rsrini7/AmshaAgent.git",
+    "directory": "ui"
+  },
   "type": "module",
   "scripts": {
     "generate-dto": "mvn -f ../app/pom.xml package -Pts-dto -DskipTests -q",

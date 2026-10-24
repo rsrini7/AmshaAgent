@@ -14,7 +14,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
-# @validKey = JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+# @validKey = key-ci-changeme
 
 # ─────────────────────────────────────────────────────────────────
 # FLOW A: WEB SEARCH VIA AGENT RUN

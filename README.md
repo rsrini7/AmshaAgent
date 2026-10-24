@@ -33,31 +33,6 @@
 
 **Stack**: JDK 25 · Quarkus 3.40.1.1 · LangChain4J 1.19.3 · SQLite (WAL + FTS5 + sqlite-vec) · Podman · Apache Camel · BouncyCastle
 
-### Native binary size
-
-The native binary includes the optional ONNX Runtime and DJL tokenizer libraries so a
-verified local model can run without Python or a sidecar. A current macOS arm64 build
-of `dist/amsha-sqlite` is **381.3 MiB**; size varies by target OS/architecture and
-GraalVM reachability analysis.
-
-| Contribution | Measured size | Notes |
-| --- | ---: | --- |
-| ONNX Runtime 1.27.0 JAR | 41.4 MiB compressed / 147.6 MiB contents | Contains native libraries for Linux arm64/x64, macOS arm64, and Windows x64. |
-| DJL Tokenizers 0.33.0 JAR | 17.8 MiB compressed / 51.9 MiB contents | Contains Rust tokenizer bindings for the same supported families. |
-| Native-image executable | 381.3 MiB on this build | Includes only resources/code retained by GraalVM; it cannot be accurately split into a fixed “base”, JNI metadata, and dependency total from file size alone. |
-| MPNet model bundle | 415.6 MiB external | Installed under gitignored `data/models/`; never embedded in the binary. |
-
-The JAR-content values are supply-chain inventory figures, not additive executable
-size. For the exact binary on a target, build locally and use `ls -lh dist/amsha-sqlite`.
-See [Local ONNX ML](./docs/ONNX_LOCAL_ML_GUIDE.md) for installation and verification.
-After configuring the required `AMSHA_OMLX_*` values in the ignored `.env`, run
-`mise run smoke:local-runtime -- native --binary dist/amsha-sqlite` for the reusable
-authenticated OMLX plus isolated native ONNX smoke lifecycle. The workflow forces
-Amsha to use `generic-openai`, never Ollama, and does not print credentials or model
-responses.
-
----
-
 ## Quick Start
 
 Requirements: JDK 25, Git, and internet access for the first build. The Maven wrapper is included; Podman is optional for sandboxed code execution.
@@ -286,6 +261,31 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 ---
 
+## Native binary size
+
+The native binary includes the optional ONNX Runtime and DJL tokenizer libraries so a
+verified local model can run without Python or a sidecar. A current macOS arm64 build
+of `dist/amsha-sqlite` is **381.3 MiB**; size varies by target OS/architecture and
+GraalVM reachability analysis.
+
+| Contribution | Measured size | Notes |
+| --- | ---: | --- |
+| ONNX Runtime 1.27.0 JAR | 41.4 MiB compressed / 147.6 MiB contents | Contains native libraries for Linux arm64/x64, macOS arm64, and Windows x64. |
+| DJL Tokenizers 0.33.0 JAR | 17.8 MiB compressed / 51.9 MiB contents | Contains Rust tokenizer bindings for the same supported families. |
+| Native-image executable | 381.3 MiB on this build | Includes only resources/code retained by GraalVM; it cannot be accurately split into a fixed “base”, JNI metadata, and dependency total from file size alone. |
+| MPNet model bundle | 415.6 MiB external | Installed under gitignored `data/models/`; never embedded in the binary. |
+
+The JAR-content values are supply-chain inventory figures, not additive executable
+size. For the exact binary on a target, build locally and use `ls -lh dist/amsha-sqlite`.
+See [Local ONNX ML](./docs/ONNX_LOCAL_ML_GUIDE.md) for installation and verification.
+After configuring the required `AMSHA_OMLX_*` values in the ignored `.env`, run
+`mise run smoke:local-runtime -- native --binary dist/amsha-sqlite` for the reusable
+authenticated OMLX plus isolated native ONNX smoke lifecycle. The workflow forces
+Amsha to use `generic-openai`, never Ollama, and does not print credentials or model
+responses.
+
+---
+
 ## Documentation Index
 
 ### 🚀 Getting Started
@@ -350,7 +350,8 @@ and coverage across both Java and UI suites. For detailed breakdowns:
 |-----|---------------|
 | [FAQ.md](./docs/FAQ.md) | Architecture Q&A, rationale, operational guidance |
 | [AGENTS.md](./AGENTS.md) | Developer guide for AI coding agents — invariants, patterns, rules |
-| [LICENCE.md](./LICENCE.md) | MIT License |
+| [LICENSE.md](./LICENSE.md) | MIT License |
+| [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) | Vendored and runtime third-party notices |
 
 ---
 

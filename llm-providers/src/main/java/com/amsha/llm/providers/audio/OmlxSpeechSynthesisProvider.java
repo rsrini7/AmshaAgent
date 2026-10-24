@@ -212,7 +212,7 @@ public class OmlxSpeechSynthesisProvider implements SpeechSynthesisPort {
                 .timeout(effectiveTimeout(request.timeout()))
                 .header(HttpProtocol.HEADER_CONTENT_TYPE, HttpProtocol.MEDIA_TYPE_JSON)
                 .header(HttpProtocol.HEADER_ACCEPT, "audio/*")
-                .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/amsha)")
+                .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/AmshaAgent)")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body));
         String key = apiKey == null ? null : apiKey.trim();
         if (key != null && !key.isBlank() && !"not-needed".equalsIgnoreCase(key)) {

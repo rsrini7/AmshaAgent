@@ -140,8 +140,8 @@ process environment variables take precedence.
 
 | Variable | Value | Used in |
 |---|---|---|
-| `@validKey` | `key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=` | All files |
-| `@ciKey` | `key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=` | 02, 06, 07, 08 |
+| `@validKey` | `key-internal-changeme` | All files |
+| `@ciKey` | `key-ci-changeme` | 02, 06, 07, 08 |
 
 ---
 

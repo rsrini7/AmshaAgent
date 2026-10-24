@@ -14,7 +14,7 @@ services:
       context: .
       dockerfile: Dockerfile.native
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - QUARKUS_PROFILE=prod
       - AMSHA_DATA_DIR=/app/data
@@ -51,7 +51,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     networks:
@@ -145,9 +145,9 @@ services:
     environment:
       - POSTGRES_DB=amsha
       - POSTGRES_USER=amsha
-      - POSTGRES_PASSWORD=amshapassword
+      - POSTGRES_PASSWORD=${AMSHA_PG_PASSWORD:-changeme}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -159,7 +159,7 @@ services:
     environment:
       - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
     ports:
-      - "9000:9000"
+      - "127.0.0.1:9000:9000"
     volumes:
       - sonarqube_data:/opt/sonarqube/data
       - sonarqube_extensions:/opt/sonarqube/extensions

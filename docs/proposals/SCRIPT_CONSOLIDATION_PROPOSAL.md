@@ -1,5 +1,7 @@
 # Amsha Script & Tooling Consolidation — Analysis & Refactoring Proposal
 
+> Status note (2026-10-24): the retired root-level `rebrand.sh` tombstone was removed after this proposal's inventory was recorded. Historical references below describe the earlier repository state.
+
 - **Status**: Proposed (Phases 1–3 In Progress)
 
 > **Scope**: `scripts/`, `scripts/autotest/`, `rest-http/scripts/`, `.mise/tasks/**`, and the

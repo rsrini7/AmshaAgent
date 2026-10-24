@@ -47,13 +47,23 @@ data*/
 lib/
 !scripts/lib/
 
-# Environment Variables
+# Environment Variables and Credentials
 .env
+.env.*
+!.env.example
 .env.changes.log
 .env.local
 .env.build*
 .env.backup*
 .env.recovery*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+credentials/
 
 # Node.js
 node_modules/
@@ -76,11 +86,21 @@ app/src/main/resources/env-example
 amsha-source.zip
 amsha-source.7z
 
-# Test artifacts
+# Test artifacts and local evidence
 tool-contracts.json
 results*.json
 autotest/logs/
 scripts/autotest/logs/
+docs-test/
+secret-keys.md
+P*-LLM-Completion-Response.md
+Ideas-Pending/
+*.candidate.jsonl
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Babysitter — keep project-profile, quality-gates, package.json; ignore transient
 .a5c/runs/
@@ -100,8 +120,13 @@ data/headroom/
 !.headroom/config/*.json
 .headroom/*.db
 
-.omm/*
-!.omm/config.yaml
+.omm/
+.openclaude/
+.commandcode/
+.trae/
+.cursor/
+.gemini/
+.devbox/
 
 headroom_memory.db
 .tokensave/

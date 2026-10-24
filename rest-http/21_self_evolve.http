@@ -20,8 +20,8 @@
 ### ═════════════════════════════════════════════════════════════
 
 @baseUrl    = http://localhost:8080
-@validKey   = cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=
-@ciKey      = JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+@validKey   = key-internal-changeme
+@ciKey      = key-ci-changeme
 
 ### Capture a directive ID after synthesize/list (populate manually)
 @directiveId = REPLACE_WITH_REAL_DIRECTIVE_ID

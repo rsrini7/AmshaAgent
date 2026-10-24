@@ -48,7 +48,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
-# @validKey = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+# @validKey = key-ci-changeme
 
 # ─────────────────────────────────────────────────────────────────
 # SETUP: Run several tasks to generate diverse audit events
@@ -122,7 +122,7 @@ Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "List the topics of the rsrini7/amsha GitHub repository.",
+    "goal": "List the topics of the rsrini7/AmshaAgent GitHub repository.",
     "agentRole": "coordinator",
     "maxIterations": 3
 }
@@ -276,7 +276,7 @@ Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "List rsrini7/amsha repository topics using the github tool.",
+    "goal": "List rsrini7/AmshaAgent repository topics using the github tool.",
     "agentRole": "coordinator",
     "maxIterations": 2
 }

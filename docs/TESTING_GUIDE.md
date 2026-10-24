@@ -310,8 +310,8 @@ Requests without a valid key return `HTTP 401`.
 
 | Key Name | Value |
 |---|---|
-| Internal | `key-internal-cWevfEoRvstUv0PqGpf02LzDY5kPNaz1y9GSl0LZOwU=` |
-| CI | `key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=` |
+| Internal | `key-internal-changeme` |
+| CI | `key-ci-changeme` |
 
 > **Phase 64-B2**: In production and staging, `DevSecretSeederStartup` is excluded at compile time (`@IfBuildProfile("dev")`). These default keys do not exist in non-dev deployments.
 
@@ -1246,7 +1246,7 @@ sqlite3 ./data/amsha-meta.db \
 curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run-async" \
   -H "X-Amsha-API-Key: key-internal-changeme" \
   -H "Content-Type: application/json" \
-  -d '{"goal":"View rsrini7/amsha repository using the github tool","agentRole":"researcher","maxIterations":2}'
+  -d '{"goal":"View rsrini7/AmshaAgent repository using the github tool","agentRole":"researcher","maxIterations":2}'
 
 # After approving:
 curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/approve?agentRole=researcher" \
@@ -1988,7 +1988,7 @@ SESSION=$(curl -s -X POST http://localhost:8080/api/v1/sessions \
 curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION/run-async" \
   -H "X-Amsha-API-Key: key-internal-changeme" \
   -H "Content-Type: application/json" \
-  -d '{"goal":"View repository rsrini7/amsha using the github tool","agentRole":"coordinator","maxIterations":3}'
+  -d '{"goal":"View repository rsrini7/AmshaAgent using the github tool","agentRole":"coordinator","maxIterations":3}'
 
 # Step 2: Poll status
 curl -s "http://localhost:8080/api/v1/sessions/$SESSION/status/coordinator" \
@@ -2037,7 +2037,7 @@ SESSION_FULL=$(curl -s -X POST http://localhost:8080/api/v1/sessions \
 curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION_FULL/run" \
   -H "X-Amsha-API-Key: key-internal-changeme" \
   -H "Content-Type: application/json" \
-  -d '{"goal":"View repository rsrini7/amsha using the github tool","agentRole":"coordinator","maxIterations":3}' | jq '{answer: .answer[:80]}'
+  -d '{"goal":"View repository rsrini7/AmshaAgent using the github tool","agentRole":"coordinator","maxIterations":3}' | jq '{answer: .answer[:80]}'
 ```
 
 **Expect:** GitHub data returned directly - no approval pause, no AWAITING_APPROVAL state.
@@ -2057,7 +2057,7 @@ SESSION_READONLY=$(curl -s -X POST http://localhost:8080/api/v1/sessions \
 curl -s -X POST "http://localhost:8080/api/v1/sessions/$SESSION_READONLY/run" \
   -H "X-Amsha-API-Key: key-internal-changeme" \
   -H "Content-Type: application/json" \
-  -d '{"goal":"View repository rsrini7/amsha using the github tool","agentRole":"coordinator","maxIterations":2}' | jq .
+  -d '{"goal":"View repository rsrini7/AmshaAgent using the github tool","agentRole":"coordinator","maxIterations":2}' | jq .
 ```
 
 **Expect:** Agent explains it cannot use tools (all tool calls blocked by `ToolInvocationGuard`). No approval prompt - just an error in the answer. Audit: `TOOL_BLOCKED` event, no `TOOL_INVOKED`.

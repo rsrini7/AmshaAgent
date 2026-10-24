@@ -11,6 +11,34 @@
 
   <name>amsha-parent</name>
   <description>Amsha Agent Multi-Agent Framework - Root Parent</description>
+  <url>https://github.com/rsrini7/AmshaAgent</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>amsha</id>
+      <name>Amsha Agent contributors</name>
+      <url>https://github.com/rsrini7/AmshaAgent</url>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/rsrini7/AmshaAgent.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/rsrini7/AmshaAgent.git</developerConnection>
+    <url>https://github.com/rsrini7/AmshaAgent</url>
+  </scm>
+
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/rsrini7/AmshaAgent/issues</url>
+  </issueManagement>
 
   <modules>
     <module>channel-api</module>

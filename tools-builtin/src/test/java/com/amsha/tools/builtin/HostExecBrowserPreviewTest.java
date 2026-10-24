@@ -52,7 +52,7 @@ class HostExecBrowserPreviewTest {
                 null,
                 null);
 
-        String code = "cat /Users/srinivasanragothaman/.amsha/skills/skillsjars/algorithmic-art/templates/viewer.html";
+        String code = "cat /tmp/amsha/skills/skillsjars/algorithmic-art/templates/viewer.html";
         var rewrite = tool.rewriteBrowserPreviewIfNeeded(ctx, code);
 
         assertEquals(null, rewrite.targetPath());

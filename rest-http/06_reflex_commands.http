@@ -37,7 +37,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
-# @validKey = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+# @validKey = key-ci-changeme
 
 # ─────────────────────────────────────────────────────────────────
 # SETUP: Create a shared session for reflex tests
@@ -586,7 +586,7 @@ Content-Type: application/json
 X-Amsha-API-Key: {{validKey}}
 
 {
-    "goal": "/github view rsrini7/AmshaAgentInternal readme",
+    "goal": "/github view rsrini7/AmshaAgent readme",
     "agentRole": "coordinator",
     "maxIterations": 1
 }

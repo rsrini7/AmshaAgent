@@ -115,7 +115,7 @@ if [ -z "$VIEW_S" ]; then
   fail "$VIEW_MK"
 else
   info "/github view"
-  CODE=$(run_agent "/github view rsrini7/AmshaAgentInternal readme" "$VIEW_S")
+  CODE=$(run_agent "/github view rsrini7/AmshaAgent readme" "$VIEW_S")
   case $CODE in
     200|202) ok "$CODE";;
     429) warn "$CODE (rate limited)";;

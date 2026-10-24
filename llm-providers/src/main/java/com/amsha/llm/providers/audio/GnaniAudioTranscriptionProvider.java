@@ -258,7 +258,7 @@ public class GnaniAudioTranscriptionProvider implements AudioTranscriptionPort {
                 .timeout(effectiveTimeout(requestedTimeout))
                 .header(HttpProtocol.HEADER_CONTENT_TYPE, "multipart/form-data; boundary=" + boundary)
                 .header(HttpProtocol.HEADER_ACCEPT, HttpProtocol.MEDIA_TYPE_JSON)
-                .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/amsha)")
+                .header("User-Agent", "Amsha Agent/1.0 (+https://github.com/rsrini7/AmshaAgent)")
                 .header(GnaniApiContract.API_KEY_HEADER, apiKey)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                 .build();

@@ -47,7 +47,7 @@
 ### ═══════════════════════════════════════════════════════════════
 
 # @baseUrl  = http://localhost:8080
-# @validKey = key-ci-JV/qXAikcUoSCCUsqYxLvNjxW/N3KROQtawg3VRFrJs=
+# @validKey = key-ci-changeme
 
 # ─────────────────────────────────────────────────────────────────
 # SETUP: Two dedicated sessions - one per reflex type

@@ -31,12 +31,8 @@ class LoopStuckDetectorTest {
     @Test
     void twoIdenticalReadCommands_returnsHintMentioningPath() {
         List<ReasoningStep> history = List.of(
-                toolCall(
-                        "host_exec",
-                        Map.of("code", "cat /Users/srini/.amsha/skills/algorithmic-art/templates/viewer.html")),
-                toolCall(
-                        "host_exec",
-                        Map.of("code", "cat /Users/srini/.amsha/skills/algorithmic-art/templates/viewer.html")));
+                toolCall("host_exec", Map.of("code", "cat /tmp/amsha/skills/algorithmic-art/templates/viewer.html")),
+                toolCall("host_exec", Map.of("code", "cat /tmp/amsha/skills/algorithmic-art/templates/viewer.html")));
 
         Optional<String> hint = detector.detectStuckHint(history, "skill:algorithmic-art");
 

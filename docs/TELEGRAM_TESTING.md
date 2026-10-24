@@ -514,7 +514,7 @@ store GITHUB_TOKEN=ghp_your_actual_token_here
 After storing, send a task requiring GitHub access:
 
 ```
-List the topics of the rsrini7/amsha repository.
+List the topics of the rsrini7/AmshaAgent repository.
 ```
 
 **Expect:** Bot shows `⏳ Approval Required` (SUPERVISED mode), then after `/approve`,
@@ -569,14 +569,14 @@ Both paths share the same `StatefulAgentStore` checkpoint.
 
 **Send:**
 ```
-Fetch the rsrini7/amsha repository info using the github tool.
+Fetch the rsrini7/AmshaAgent repository info using the github tool.
 ```
 
 **Expect:**
 ```
 ⏳ Approval Required - The agent wants to execute:
 Tool: github
-Parameters: {"command": "view", "repo": "rsrini7/amsha"}
+Parameters: {"command": "view", "repo": "rsrini7/AmshaAgent"}
 
 Reply /approve to proceed or /deny to cancel.
 ```
@@ -1395,7 +1395,7 @@ Run this after any significant change. Work top-to-bottom.
 2. Send `Hello` → bot responds ✅
 3. Send `Write a Java method to reverse a list` → coder role, code returned ✅
 4. Send `store GITHUB_TOKEN=<real token>` → vault stored ✅
-5. Send `Fetch rsrini7/amsha repo info` → approval prompt appears ✅
+5. Send `Fetch rsrini7/AmshaAgent repo info` → approval prompt appears ✅
 6. Send `/approve` → GitHub data returned ✅
 7. Send `/status` → shows COMPLETED with cost > $0 ✅
 8. Send `/reset` → soft reset ✅
