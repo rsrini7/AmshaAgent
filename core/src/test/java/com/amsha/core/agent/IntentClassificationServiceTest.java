@@ -65,6 +65,34 @@ class IntentClassificationServiceTest {
     }
 
     @Test
+    void testExecutionFollowUpDetection() {
+        assertTrue(intentDetector.isExecutionFollowUp("run panni result kodunga"));
+        assertTrue(intentDetector.isExecutionFollowUp("execute and share result"));
+        assertTrue(intentDetector.isExecutionFollowUp("run it"));
+        assertTrue(intentDetector.isExecutionFollowUp("run the tests"));
+
+        assertFalse(intentDetector.isExecutionFollowUp("run the report"));
+        assertFalse(intentDetector.isExecutionFollowUp("retry the task"));
+    }
+
+    @Test
+    void relativeTimeExecutionFollowUpsAreScheduleIntents() {
+        assertTrue(intentDetector.isScheduleIntent("run it tomorrow"));
+        assertTrue(intentDetector.isScheduleIntent("run it in 30 minutes"));
+        assertTrue(intentDetector.isScheduleIntent("run it next week"));
+        assertFalse(intentDetector.isScheduleIntent("run it again"));
+    }
+
+    @Test
+    void testFirstConversationIsHistoryQuery() {
+        assertTrue(intentDetector.isHistoryQuery("what was our first conversation?"));
+        assertTrue(intentDetector.isHistoryQuery("what was the first message in this chat?"));
+        assertTrue(intentDetector.isHistoryQuery("how did this conversation start?"));
+
+        assertFalse(intentDetector.isHistoryQuery("write a java program"));
+    }
+
+    @Test
     void testRetryCommand() {
         assertTrue(intentDetector.isRetryCommand("retry"));
         assertTrue(intentDetector.isRetryCommand("try again"));

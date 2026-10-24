@@ -11,7 +11,7 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
+import com.amsha.core.agent.reasoning.SkillPromptInstructions;
 import com.amsha.core.skill.SkillDefinition;
 import com.amsha.core.skill.SkillFrontmatter;
 import com.amsha.core.tools.LanguageIds;
@@ -100,7 +100,7 @@ public class SkillDefinitionParser {
                 fm.triggerPatterns() != null ? fm.triggerPatterns() : List.of(),
                 capabilities.stream().distinct().toList(),
                 fm.maxIterations() > 0 ? fm.maxIterations() : defaultMaxIterations,
-                PromptInstructionLibrary.skillExecutionPrecedencePreamble() + systemPromptBody,
+                SkillPromptInstructions.skillExecutionPrecedencePreamble() + systemPromptBody,
                 skillHome,
                 fm.browserPreview(),
                 fm.templateDir());

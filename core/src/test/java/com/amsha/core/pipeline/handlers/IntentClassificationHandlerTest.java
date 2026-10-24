@@ -149,4 +149,56 @@ class IntentClassificationHandlerTest {
                 AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
         verify(classifier, Mockito.never()).classify(anyString());
     }
+
+    @Test
+    void testHandle_routesExecutionFollowUpFromCoordinatorToCoder() {
+        ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "run panni result kodunga", "c1", Instant.now());
+        MessageContext context = new MessageContext("c1", user, msg);
+
+        when(roleCache.findLatestRole(anyString())).thenReturn(Optional.of(AgentRoleEnum.COORDINATOR.toScopedName()));
+        when(intentDetector.isFollowUpHeuristic("run panni result kodunga")).thenReturn(true);
+        when(intentDetector.isExecutionFollowUp("run panni result kodunga")).thenReturn(true);
+
+        handler.handle(context);
+
+        assertEquals(AgentRoleEnum.CODER.toScopedName(), context.getAgentRole().get());
+        verify(classifier, Mockito.never()).classify(anyString());
+    }
+
+    @Test
+    void testHandle_keepsRelativeTimeExecutionFollowUpWithCoordinator() {
+        ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "run it tomorrow", "c1", Instant.now());
+        MessageContext context = new MessageContext("c1", user, msg);
+
+        when(roleCache.findLatestRole(anyString())).thenReturn(Optional.of(AgentRoleEnum.COORDINATOR.toScopedName()));
+        when(intentDetector.isFollowUpHeuristic("run it tomorrow")).thenReturn(true);
+        when(intentDetector.isScheduleIntent("run it tomorrow")).thenReturn(true);
+        when(intentDetector.isExecutionFollowUp("run it tomorrow")).thenReturn(true);
+
+        handler.handle(context);
+
+        assertEquals(
+                AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
+        verify(classifier, Mockito.never()).classify(anyString());
+    }
+
+    @Test
+    void testHandle_doesNotRouteReportFollowUpToCoder() {
+        ChannelUser user = new ChannelUser("u1", "u1", "user", ChannelType.TELEGRAM);
+        ChannelMessage msg = new ChannelMessage.TelegramMessage(user, "run the report", "c1", Instant.now());
+        MessageContext context = new MessageContext("c1", user, msg);
+
+        when(roleCache.findLatestRole(anyString())).thenReturn(Optional.of(AgentRoleEnum.COORDINATOR.toScopedName()));
+        when(intentDetector.isFollowUpHeuristic("run the report")).thenReturn(true);
+        when(intentDetector.isExecutionFollowUp("run the report")).thenReturn(false);
+        when(classifier.classify("run the report")).thenReturn(AgentRoleEnum.COORDINATOR.toScopedName());
+
+        handler.handle(context);
+
+        assertEquals(
+                AgentRoleEnum.COORDINATOR.toScopedName(), context.getAgentRole().get());
+        verify(classifier).classify("run the report");
+    }
 }

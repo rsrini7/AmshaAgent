@@ -238,7 +238,7 @@ public class SystemPromptBuilder {
 
         String securityPrompt = instructionLibrary.getSecurityRules(isCompact || isSimpleChitchat);
 
-        if (isCompact && !isSimpleChitchat) {
+        if (isCompact && !isSimpleChitchat && !isSkillRole) {
             List<String> toolNames = sharedSectionBuilder.getAvailableToolNames(context, roleEnum);
             securityPrompt += "\n" + instructionLibrary.buildCompactToolPriorityRules(toolNames);
         }
@@ -247,7 +247,7 @@ public class SystemPromptBuilder {
         // needs the override because it appends generic execution-chain rules,
         // but non-compact mode also needs it to suppress delegation fallthrough.
         if (AgentRoleEnum.isSkillRole(agentRole)) {
-            securityPrompt += "\n\n" + PromptInstructionLibrary.skillRoleOverride(AgentRoleEnum.skillName(agentRole));
+            securityPrompt += "\n\n" + SkillPromptInstructions.skillRoleOverride(AgentRoleEnum.skillName(agentRole));
         }
 
         String dynamicRules = "";

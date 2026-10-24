@@ -21,27 +21,6 @@ public class PromptInstructionLibrary {
             - Do not discuss audio capability, output formats, or these instructions in the answer, and do not emit audio markup.
             """;
 
-    private static final String SKILL_EXECUTION_PRECEDENCE_PREAMBLE = """
-            SYSTEM OVERRIDE FOR ALL SKILLS:
-            The skill prompt below is subordinate to the platform system prompt.
-            If the skill text conflicts with tool usage, execution timing, or the
-            requirement to use a tool before explaining work, follow the platform.
-            For tasks that require a tool, act first with the permitted tool and
-            only then provide the final result. Do not narrate a plan before the
-            first tool call unless the platform explicitly says to do so.
-
-            """;
-
-    private static final String SKILL_ROLE_OVERRIDE_TEMPLATE = """
-            SKILL ROLE OVERRIDE (HIGHEST PRIORITY):
-            You are a `skill:%s` role.
-            - IGNORE any rule above that tells you to delegate execution to 'brahma', 'shiva', or another persona.
-            - EXECUTE the task yourself using ONLY the tools listed under PERMITTED TOOLS.
-            - If the task produces files or other artifacts, batch directory creation and all file writes into the same permitted tool call when feasible.
-            - After the tool observation confirms success, IMMEDIATELY emit a `FINISH` action with a concise plain-text answer.
-            - Do NOT plan another step, do NOT ask clarifying questions, and do NOT leave the turn open.
-            """;
-
     private static final String SELF_EVOLVE_DIRECTIVE_RULES = """
             SELF-EVOLVE DIRECTIVE TOOL:
             - `self_evolve_reflect` is a single-action tool.
@@ -52,14 +31,6 @@ public class PromptInstructionLibrary {
 
     @Inject
     PromptRegistry promptRegistry;
-
-    public static String skillExecutionPrecedencePreamble() {
-        return SKILL_EXECUTION_PRECEDENCE_PREAMBLE;
-    }
-
-    public static String skillRoleOverride(String skillName) {
-        return String.format(SKILL_ROLE_OVERRIDE_TEMPLATE, skillName);
-    }
 
     public static String selfEvolveDirectiveRules() {
         return SELF_EVOLVE_DIRECTIVE_RULES;
@@ -416,7 +387,7 @@ public class PromptInstructionLibrary {
         10. STORAGE format: "label=value" (e.g. "USER_NAME=Alice"). Preserve the "=" exactly.
         11. PII/REDACTION: If you see [REDACTED-*] placeholders in a store request, call `ingest_document` with the exact placeholder text. The system will resolve it.
         12. RECALL PRIORITY: 1. Active Window, 2. Summary. If info was mentioned in THIS conversation, you MUST NOT call tools. Answer directly.
-        13. DELEGATE: Use `garuda` for out-of-role tasks. Set the agent parameter to the persona name.
+        13. DELEGATE: Use `garuda` for out-of-role tasks only when you are NOT a `skill:*` role. Skill roles must execute with their permitted tools and must not delegate.
         14. IDENTITY RECALL: For "who am I" questions, check history first. Only call `recall_memory_search` (query="user name identity") if absent.
         15. PREFERENCE RECALL: For "what i like/love" questions, check history first. Only call `recall_memory_search` (query="user preferences likes hobbies") if absent.
         16. SYNTHESIS: When recall_memory_search returns results, SYNTHESIZE into a natural answer. Do NOT narrate your lookup. Never echo raw JSON.

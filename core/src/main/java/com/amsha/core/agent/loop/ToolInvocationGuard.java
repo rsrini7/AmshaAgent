@@ -19,6 +19,7 @@ import com.amsha.classifier.api.ToolRiskDecisionPolicy;
 import com.amsha.classifier.api.ToolRiskShadowContext;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.reasoning.ReasoningStepSupport;
+import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.agent.role.RoleRegistry;
 import com.amsha.core.agent.trace.StationCode;
@@ -192,10 +193,11 @@ public class ToolInvocationGuard {
             log.warnf(
                     "GUARD Role '%s' (session=%s) blocked from '%s' — no capability grant",
                     agentRole, sessionId, toolName);
-            GuardDecision.Blocked blocked =
-                    new GuardDecision.Blocked("Tool '" + toolName + "' is not permitted for role '"
-                            + agentRole
-                            + "'. Use one of your available tools, or delegate this task to a suitable agent.");
+            String recoveryHint = AgentRoleEnum.isSkillRole(agentRole)
+                    ? " Use one of the tools permitted for this skill."
+                    : " Use one of your available tools, or delegate this task to a suitable agent.";
+            GuardDecision.Blocked blocked = new GuardDecision.Blocked(
+                    "Tool '" + toolName + "' is not permitted for role '" + agentRole + "'." + recoveryHint);
             publishGuardCheck(sessionId, toolName, blocked, null);
             return blocked;
         }

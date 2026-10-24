@@ -119,6 +119,62 @@ class SkillAwareIntentDetectorTest {
     }
 
     @Test
+    void testNameMatchToleratesSingleCharacterTypoWhenSkillIsNamed() {
+        SkillDefinition def =
+                new SkillDefinition("id5", "capture-knowledge-note", "desc", List.of(), List.of(), 5, "p", null);
+        RoleDefinition rd = new RoleDefinition(
+                "skill:capture-knowledge-note", "Capture Knowledge Note", "desc", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry entry = new CompiledSkillEntry(def, List.of(), rd, "classpath");
+
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
+
+        String role = classifier.classify("use capture-knowledge-not skill and provide details");
+
+        assertEquals("skill:capture-knowledge-note", role);
+        verify(fallbackService, never()).classify(anyString());
+    }
+
+    @Test
+    void testFuzzyNameMatchRequiresSkillMention() {
+        SkillDefinition def =
+                new SkillDefinition("id6", "capture-knowledge-note", "desc", List.of(), List.of(), 5, "p", null);
+        RoleDefinition rd = new RoleDefinition(
+                "skill:capture-knowledge-note", "Capture Knowledge Note", "desc", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry entry = new CompiledSkillEntry(def, List.of(), rd, "classpath");
+
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of(entry));
+        when(fallbackService.classify(anyString())).thenReturn("coordinator");
+
+        String role = classifier.classify("capture-knowledge-not was saved");
+
+        assertEquals("coordinator", role);
+        verify(fallbackService, times(1)).classify("capture-knowledge-not was saved");
+    }
+
+    @Test
+    void testAmbiguousFuzzyNameMatchFallsBackToLLM() {
+        SkillDefinition note =
+                new SkillDefinition("id7", "capture-knowledge-note", "desc", List.of(), List.of(), 5, "p", null);
+        RoleDefinition noteRole = new RoleDefinition(
+                "skill:capture-knowledge-note", "Capture Knowledge Note", "desc", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry noteEntry = new CompiledSkillEntry(note, List.of(), noteRole, "classpath");
+
+        SkillDefinition nots =
+                new SkillDefinition("id8", "capture-knowledge-nots", "desc", List.of(), List.of(), 5, "p", null);
+        RoleDefinition notsRole = new RoleDefinition(
+                "skill:capture-knowledge-nots", "Capture Knowledge Nots", "desc", 5, false, false, Set.of(), Set.of());
+        CompiledSkillEntry notsEntry = new CompiledSkillEntry(nots, List.of(), notsRole, "classpath");
+
+        when(skillRegistry.currentSnapshot()).thenReturn(List.of(noteEntry, notsEntry));
+        when(fallbackService.classify(anyString())).thenReturn("coordinator");
+
+        String role = classifier.classify("use capture-knowledge-not skill and provide details");
+
+        assertEquals("coordinator", role);
+        verify(fallbackService, times(1)).classify("use capture-knowledge-not skill and provide details");
+    }
+
+    @Test
     void testNullOrBlankInputFallsBackToLLM() {
         when(fallbackService.classify(null)).thenReturn("coordinator");
         when(fallbackService.classify("   ")).thenReturn("coordinator");

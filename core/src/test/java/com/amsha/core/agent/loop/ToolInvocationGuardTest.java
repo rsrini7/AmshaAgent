@@ -1,6 +1,7 @@
 package com.amsha.core.agent.loop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -420,6 +421,31 @@ class ToolInvocationGuardTest {
         assertTrue(((ToolInvocationGuard.GuardDecision.Blocked) decision)
                 .observation()
                 .contains("not permitted for role 'researcher'"));
+    }
+
+    @Test
+    void skillRoleBlockedFromGarudaDoesNotSuggestDelegation() {
+        when(capabilityRegistry.hasCapability("skill:capture-knowledge-note", "garuda"))
+                .thenReturn(false);
+        var garudaTool = mock(AgentTool.class);
+        when(garudaTool.idempotencyMode()).thenReturn(IdempotencyMode.IDEMPOTENT);
+        when(garudaTool.requiredOperation()).thenReturn(ToolOperation.WRITE_MEMORY);
+        when(mockToolRegistry.findTool("garuda")).thenReturn(Optional.of(garudaTool));
+
+        ToolInvocationGuard.GuardDecision decision = guard.evaluate(
+                "s1",
+                "skill:capture-knowledge-note",
+                AutonomyLevel.FULL,
+                "garuda",
+                Map.of("agent", "saraswati"),
+                List.of(),
+                "goal",
+                List.of());
+
+        var blocked = assertInstanceOf(ToolInvocationGuard.GuardDecision.Blocked.class, decision);
+        assertTrue(blocked.observation().contains("not permitted for role 'skill:capture-knowledge-note'"));
+        assertTrue(blocked.observation().contains("Use one of the tools permitted for this skill."));
+        assertFalse(blocked.observation().contains("delegate this task"));
     }
 
     @Test

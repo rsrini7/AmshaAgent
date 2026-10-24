@@ -2,7 +2,7 @@ package com.amsha.skills;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.amsha.core.agent.reasoning.PromptInstructionLibrary;
+import com.amsha.core.agent.reasoning.SkillPromptInstructions;
 import com.amsha.core.skill.SkillDefinition;
 
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,8 @@ class SkillDefinitionParserTest {
         assertEquals(1, def.toolCapabilities().size());
         assertEquals("GITHUB", def.toolCapabilities().get(0));
         assertEquals(8, def.maxIterations());
-        assertTrue(def.systemPrompt().startsWith(PromptInstructionLibrary.skillExecutionPrecedencePreamble()));
+        assertTrue(def.systemPrompt().startsWith(SkillPromptInstructions.skillExecutionPrecedencePreamble()));
+        assertTrue(def.systemPrompt().contains("cannot delegate"));
         assertTrue(def.systemPrompt().contains("SYSTEM PROMPT INSTRUCTIONS"));
     }
 
@@ -75,7 +76,7 @@ class SkillDefinitionParserTest {
         SkillDefinition def = parser.parse(doc);
         assertEquals("minimal", def.name());
         assertEquals("", def.description());
-        assertTrue(def.systemPrompt().startsWith(PromptInstructionLibrary.skillExecutionPrecedencePreamble()));
+        assertTrue(def.systemPrompt().startsWith(SkillPromptInstructions.skillExecutionPrecedencePreamble()));
         assertTrue(def.systemPrompt().contains("prompt"));
     }
 

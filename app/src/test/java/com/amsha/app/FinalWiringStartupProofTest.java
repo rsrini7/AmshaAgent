@@ -212,6 +212,12 @@ class FinalWiringStartupProofTest {
         assertEquals(
                 Optional.of("skill:capture-knowledge-note"),
                 skillAwareIntentDetector.findSkillMatch("Summarize and ingest this document"));
+        assertEquals(
+                Optional.of("skill:capture-knowledge-note"),
+                skillAwareIntentDetector.findSkillMatch("use capture-knowledge-note skill and provide details"));
+        assertEquals(
+                Optional.of("skill:capture-knowledge-note"),
+                skillAwareIntentDetector.findSkillMatch("use capture-knowledge-not skill and provide details"));
         assertTrue(
                 skillAwareIntentDetector.findSkillMatch("Research this article").isEmpty());
         assertTrue(skillAwareIntentDetector

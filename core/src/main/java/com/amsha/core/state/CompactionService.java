@@ -27,6 +27,7 @@ import com.amsha.core.events.CompactionEvent;
 import com.amsha.core.governance.RateLimitTracker;
 import com.amsha.core.governance.SessionBudgetTracker;
 import com.amsha.core.structured.StructuredOutputMetrics;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.llm.api.StrictJsonSchemaCapable;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.llm.api.StructuredSchemaRequests;
@@ -132,9 +133,12 @@ public class CompactionService {
         preferred name, username/handle, GitHub username or repo owner, repository
         paths, branch names, URLs, model names, and other stable non-secret identifiers.
         Keep those identifiers verbatim rather than paraphrasing them away.
+        Preserve the first user message and how the conversation started, even if it
+        is a greeting or pleasantry. The summary must always make the first message
+        recoverable.
         Do NOT preserve or restate secrets such as passwords, API keys, access tokens,
         session cookies, private keys, or other credentials.
-        Discard: pleasantries, repetition, step-by-step narration of obvious actions.
+        Discard: later pleasantries, repetition, step-by-step narration of obvious actions.
         Output ONLY the final merged summary. No preamble. No labels. Max 200 words.
         If structuredOutputMode is NATIVE, you MUST respond with valid JSON.
 
@@ -158,8 +162,11 @@ public class CompactionService {
         been dispatched — they are NOT durable facts. Including them causes the LLM to
         confuse old dispatched tasks with current user requests. Omit them entirely.
 
-        --- CONVERSATION TO SUMMARIZE ---
+        --- PRIOR CONTEXT SUMMARY ---
         %s
+        --- FIRST USER MESSAGE (always preserve how the conversation started) ---
+        %s
+        --- CONVERSATION TO SUMMARIZE ---
         %s
         --- END ---
         """;
@@ -251,7 +258,17 @@ public class CompactionService {
             }
         }
 
-        String prompt = buildCompactionPrompt(sessionId, toCompact);
+        String firstUserMessage = chatMemoryStore
+                .getFirstUserMessage(sessionId)
+                .orElseGet(() -> nonSystemMessages.stream()
+                        .filter(UserMessage.class::isInstance)
+                        .map(UserMessage.class::cast)
+                        .map(message -> MultimodalRequests.textOf(message, "compaction"))
+                        .filter(text -> text != null && !text.isBlank())
+                        .findFirst()
+                        .orElse("(none)"));
+        chatMemoryStore.rememberFirstUserMessageIfMissing(sessionId, firstUserMessage);
+        String prompt = buildCompactionPrompt(sessionId, toCompact, firstUserMessage);
         String newSummary = executeCompactionTurn(sessionId, prompt);
 
         if (newSummary.isBlank()) {
@@ -269,7 +286,7 @@ public class CompactionService {
                 : StructuredOutputMode.NATIVE;
     }
 
-    private String buildCompactionPrompt(String sessionId, List<ChatMessage> toCompact) {
+    private String buildCompactionPrompt(String sessionId, List<ChatMessage> toCompact, String firstUserMessage) {
         Optional<CompactionSummaryDto> existingSummaryOpt = summaryRepository.findLatestBySessionId(sessionId);
         String existingSummaryText =
                 existingSummaryOpt.map(CompactionSummaryDto::summary).orElse("");
@@ -280,7 +297,11 @@ public class CompactionService {
                 .filter(text -> !text.contains("[CONTEXT FROM PRIOR SESSION"))
                 .collect(Collectors.joining("\n"));
 
-        String prompt = String.format(PROMPT_TEMPLATE, existingSummaryText, messagesToCompactStr);
+        String prompt = String.format(
+                PROMPT_TEMPLATE,
+                existingSummaryText,
+                firstUserMessage == null || firstUserMessage.isBlank() ? "(none)" : firstUserMessage,
+                messagesToCompactStr);
 
         StructuredOutputMode mode = resolveCompactionMode();
         if (mode == StructuredOutputMode.NATIVE) {

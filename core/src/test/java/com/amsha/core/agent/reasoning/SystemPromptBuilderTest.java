@@ -327,8 +327,10 @@ class SystemPromptBuilderTest {
 
         String result = builder.build(createCtx("s1"), "skill:test-skill", "s1", "some goal", false);
 
-        assertTrue(result.contains(PromptInstructionLibrary.skillRoleOverride("test-skill")));
-        assertTrue(result.contains("If you are a `skill:*` role, execute the task yourself"));
+        assertTrue(result.contains(SkillPromptInstructions.skillRoleOverride("test-skill")));
+        assertTrue(result.contains("Do NOT call `garuda`"));
+        assertTrue(result.contains("If the skill prompt says required input is missing"));
+        assertFalse(result.contains("TOOL PRIORITY RULES:"));
         assertFalse(result.contains("otherwise delegate to 'brahma'"));
     }
 
@@ -349,7 +351,7 @@ class SystemPromptBuilderTest {
                 createCtx("s1"), "skill:test-skill", "s1", "use algorithmic art to generate simple flow fields", false);
 
         assertFalse(result.contains("STRICT MODE - SIMPLE CONVERSATION"));
-        assertTrue(result.contains(PromptInstructionLibrary.skillRoleOverride("test-skill")));
+        assertTrue(result.contains(SkillPromptInstructions.skillRoleOverride("test-skill")));
         assertTrue(result.contains("## Execution Protocol"));
         assertTrue(result.contains("HARD TOOL OVERRIDE - CROSS-TURN CONTAMINATION PREVENTION"));
     }
@@ -371,6 +373,8 @@ class SystemPromptBuilderTest {
 
         assertTrue(result.contains("## Execution Protocol"));
         assertTrue(result.contains("Call the permitted tool once"));
+        assertTrue(result.contains("Do NOT call `garuda`"));
+        assertTrue(result.contains("If the skill prompt says required input is missing"));
         assertFalse(result.contains("SINGLE sandbox_exec call"));
         assertFalse(result.contains("SINGLE host_exec call"));
         assertFalse(result.contains("hand off to the appropriate specialist execution role"));

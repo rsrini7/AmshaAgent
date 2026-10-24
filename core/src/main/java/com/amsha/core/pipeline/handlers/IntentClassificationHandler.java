@@ -146,22 +146,25 @@ public class IntentClassificationHandler implements MessageHandler {
         String previousRole = roleCache.findLatestRole(sid).orElse(null);
         boolean isFollowUpHeuristic = intentDetector.isFollowUpHeuristic(classificationInput);
 
-        String role = null;
-        if (isFollowUpHeuristic
-                && previousRole != null
-                && (AgentRoleEnum.CODER.toScopedName().equals(previousRole)
-                        || AgentRoleEnum.DEBUGGER.toScopedName().equals(previousRole))) {
-
+        String role;
+        if (isFollowUpHeuristic && previousRole != null) {
             if (intentDetector.isScheduleIntent(classificationInput)) {
                 log.infof(
                         "Goal requires scheduling, overriding sticky role %s to coordinator for chat %s",
                         previousRole, context.getChatId());
                 role = AgentRoleEnum.COORDINATOR.toScopedName();
-            } else {
+            } else if (AgentRoleEnum.CODER.toScopedName().equals(previousRole)
+                    || AgentRoleEnum.DEBUGGER.toScopedName().equals(previousRole)) {
                 log.infof(
                         "Short follow-up detected for chat %s - preserving sticky role: %s",
                         context.getChatId(), previousRole);
                 role = previousRole;
+            } else if (AgentRoleEnum.COORDINATOR.toScopedName().equals(previousRole)
+                    && intentDetector.isExecutionFollowUp(classificationInput)) {
+                log.infof("Execution follow-up from coordinator for chat %s - routing to coder", context.getChatId());
+                role = AgentRoleEnum.CODER.toScopedName();
+            } else {
+                role = classifier.classify(classificationInput);
             }
         } else {
             role = classifier.classify(classificationInput);
