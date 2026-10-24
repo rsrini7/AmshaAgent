@@ -11,7 +11,7 @@
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
-  ![Java Tests](https://img.shields.io/badge/Tests-9790_passed_%C2%B7_24_skipped_of_9814-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9799_passed_%C2%B7_24_skipped_of_9823-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-86.58%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-333_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-83.61%25-brightgreen.svg?style=flat)
@@ -92,6 +92,7 @@ This starts the web interface at [http://localhost:8080](http://localhost:8080).
 To validate the local GraalVM native-image path, run `mise run build:native-local`, then `mise run native:serve`. Native-image builds take longer and use substantial memory; current native runtime verification is on macOS arm64, while Linux and Windows runtime checks remain pending.
 
 Quarkus hot reload remains available through `mise run dev` for code that is reloadable in the application module. Changes in non-reloadable Amsha dependencies still require a rebuild or restart. The dev-mode terminal also uses `:` for Quarkus console commands; when Amsha prompts for a value or offers to auto-generate a key, press Enter directly rather than typing `:`.
+
 ---
 
 ## Key Capabilities

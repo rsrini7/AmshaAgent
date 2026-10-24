@@ -142,16 +142,39 @@ class ResumeStrategyDispatcherUnitTest {
     }
 
     @Test
-    void testDelegatedIngestResumeAddsOriginalToolFollowUp() {
+    void testDelegatedBrowserResumeKeepsOriginalToolObservation() {
+        AgentExecutionContext ctx = mock(AgentExecutionContext.class);
+        mockContext(ctx, "browse the page", "sess-browser");
+        when(ctx.agentRole()).thenReturn("coder");
+
+        AgentCheckpoint cp = mock(AgentCheckpoint.class);
+        when(cp.getPendingToolName()).thenReturn(ToolCapability.BROWSER_NAVIGATE.toolName());
+        when(cp.getPendingToolParametersJson()).thenReturn("{\"url\":\"https://example.com\"}");
+        when(toolRegistry.invokeTool(eq(ToolCapability.DELEGATE_TO_AGENT.toolName()), anyString(), eq("sess-browser")))
+                .thenReturn(ToolResponse.success("Researcher navigated the page"));
+
+        List<ReasoningStep> history = new ArrayList<>();
+        AgentResult result = dispatcher.handle(ctx, history, mock(MessageContext.class), stateMachineRunner, cp);
+
+        assertTrue(result instanceof AgentResult.Finished);
+        assertTrue(history.stream()
+                .anyMatch(step ->
+                        step.observation() != null && step.observation().contains("Researcher navigated the page")));
+    }
+
+    @Test
+    void testResumedIngestAddsSummaryFollowUp() {
         AgentExecutionContext ctx = mock(AgentExecutionContext.class);
         mockContext(ctx, "ingest document", "sess-ingest");
         when(ctx.agentRole()).thenReturn("coder");
 
         AgentCheckpoint cp = mock(AgentCheckpoint.class);
         when(cp.getPendingToolName()).thenReturn(ToolCapability.INGEST_DOCUMENT.toolName());
-        when(cp.getPendingToolParametersJson()).thenReturn("{\"path\":\"document.pdf\"}");
-        when(toolRegistry.invokeTool(eq(ToolCapability.DELEGATE_TO_AGENT.toolName()), anyString(), eq("sess-ingest")))
-                .thenReturn(ToolResponse.success("Coordinator ingested the document"));
+        when(cp.getPendingToolParametersJson()).thenReturn("{\"text\":\"remember this\"}");
+        when(toolRegistry.invokeTool(eq(ToolCapability.INGEST_DOCUMENT.toolName()), anyString(), eq("sess-ingest")))
+                .thenReturn(ToolResponse.success("Stored"));
+        when(stateMachineRunner.runFinishPass(any(), eq(reasoningEngine), anyList()))
+                .thenReturn(AgentResult.finished("Final output", List.of()));
 
         List<ReasoningStep> history = new ArrayList<>();
         AgentResult result = dispatcher.handle(ctx, history, mock(MessageContext.class), stateMachineRunner, cp);

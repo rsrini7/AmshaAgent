@@ -205,17 +205,17 @@ Apache Camel's `camel-telegram` component handles the long-polling lifecycle, gr
 | Role | Deity | Key Constraint | Use For |
 |---|---|---|---|
 | `coordinator` | Vishnu | Orchestration tools, memory, ingest_document, web_fetch, scheduling, garuda | General tasks, scheduling, delegation |
-| `researcher` | Saraswati | GitHub, web/search/fetch, memory, agent_task, garuda | External data retrieval and source-backed analysis |
-| `coder` | Brahma | sandbox_exec, manage_checklist, register_mcp_server, memory, garuda | Code execution and engineering tasks |
-| `debugger` | Shiva | GitHub, sandbox_exec, manage_checklist, register_mcp_server, recall_memory_search, garuda | Bug analysis, stack traces, security audits |
-| `architect` | Brihaspati | GitHub, memory, garuda; never executes code | ADRs, design reviews, trade-off analysis |
+| `researcher` | Saraswati | GitHub, web/search/fetch, memory, ingest_document, agent_task, garuda | External data retrieval and source-backed analysis |
+| `coder` | Brahma | sandbox_exec, manage_checklist, register_mcp_server, memory, ingest_document, garuda | Code execution and engineering tasks |
+| `debugger` | Shiva | GitHub, sandbox_exec, manage_checklist, register_mcp_server, memory, ingest_document, garuda | Bug analysis, stack traces, security audits |
+| `architect` | Brihaspati | GitHub, memory, ingest_document, garuda; never executes code | ADRs, design reviews, trade-off analysis |
 | `synthesizer` | Dattatreya | GitHub, web/search/fetch, scheduling, memory, ingest_document, agent_task, garuda | Cross-domain output integration |
-| `optimizer` | Ganesha | garuda; unsupported tools redelegate to their owner | Complex logic and obstacle removal |
-| `sentinel` | Kartikeya | garuda; unsupported tools redelegate to their owner | Security scanning and input validation |
-| `healer` | Lakshmi | garuda; unsupported tools redelegate to their owner | Error recovery and token optimization |
-| `protector` | Durga | garuda; unsupported tools redelegate to their owner | Policy enforcement and guardrails |
-| `purifier` | Kali | garuda; unsupported tools redelegate to their owner | Cleanup and lifecycle management |
-| `nurturer` | Parvati | ingest_document, garuda | Empathy, tone analysis, sentiment |
+| `optimizer` | Ganesha | memory, ingest_document, garuda; other tools redelegate to their owner | Complex logic and obstacle removal |
+| `sentinel` | Kartikeya | memory, ingest_document, garuda; other tools redelegate to their owner | Security scanning and input validation |
+| `healer` | Lakshmi | memory, ingest_document, garuda; other tools redelegate to their owner | Error recovery and token optimization |
+| `protector` | Durga | memory, ingest_document, garuda; other tools redelegate to their owner | Policy enforcement and guardrails |
+| `purifier` | Kali | memory, ingest_document, garuda; other tools redelegate to their owner | Cleanup and lifecycle management |
+| `nurturer` | Parvati | memory, ingest_document, garuda | Empathy, tone analysis, sentiment |
 
 Direct access is intentionally narrow. If any persona requests a known tool it does not own, the loop delegates through `garuda` to the tool's owner; approval-resume and parallel-batch paths use the same rule. This preserves least privilege without granting every persona every tool.
 
@@ -225,7 +225,7 @@ The `SkillAwareIntentDetector` checks `SkillRegistry` first (zero classification
 
 ### Q: Why do `coder` and `debugger` have empty (or near-empty) tool schemas?
 
-This is a deliberate architectural constraint called **schema filtering**. When the LLM receives a tool schema, it is tempted to use those tools even when the task doesn't require them (tool bias). By passing an empty tool schema to `coder` and a read-only schema to `debugger`, it is *structurally impossible* for those personas to trigger a network call or file mutation - regardless of what the user prompt says. The constraint is enforced in `AgentRoleEnum.definition().toolNames()` and applied in `LangChainReasoningEngine` before the prompt is sent.
+This is a deliberate architectural constraint called **schema filtering**. When the LLM receives a tool schema, it is tempted to use those tools even when the task doesn't require them (tool bias). By passing a restricted tool schema to `coder` and `debugger`, those personas cannot trigger a network call or filesystem mutation - regardless of what the user prompt says. The constraint is enforced in `AgentRoleEnum.definition().toolNames()` and applied in `LangChainReasoningEngine` before the prompt is sent.
 
 ---
 

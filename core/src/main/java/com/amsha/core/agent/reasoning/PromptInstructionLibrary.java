@@ -102,6 +102,7 @@ public class PromptInstructionLibrary {
             MEMORY TOOL SELECTION:
             - `recall_memory_search`: Exact text search in conversation history. Use for specific code, error messages, prior decisions, or user statements.
             - `archival_memory_search`: Semantic search across long-term knowledge. Use for patterns, facts, preferences, project context, or general knowledge.
+            - `core_memory_read`: Read a relevant named stable profile, preference, or project-context block.
             - When the user asks "what do you know about X" or "what patterns have we seen", prefer archival_memory_search.
             - When the user asks "what did I say about X" or "find the error from earlier", prefer recall_memory_search.
 
@@ -419,7 +420,7 @@ public class PromptInstructionLibrary {
         14. IDENTITY RECALL: For "who am I" questions, check history first. Only call `recall_memory_search` (query="user name identity") if absent.
         15. PREFERENCE RECALL: For "what i like/love" questions, check history first. Only call `recall_memory_search` (query="user preferences likes hobbies") if absent.
         16. SYNTHESIS: When recall_memory_search returns results, SYNTHESIZE into a natural answer. Do NOT narrate your lookup. Never echo raw JSON.
-        16b. KNOWLEDGE SEARCH: Use `archival_memory_search` for patterns, facts, preferences, or project context. Use `recall_memory_search` for exact prior conversation text.
+        16b. KNOWLEDGE SEARCH: Use `archival_memory_search` for patterns, facts, preferences, or project context. Use `core_memory_read` for a relevant named stable block. Use `recall_memory_search` for exact prior conversation text.
         17. NEVER output raw JSON blocks to the user. Always use natural language or markdown lists.
             WRONG: {"status": "done"}
             RIGHT: "The task is complete."

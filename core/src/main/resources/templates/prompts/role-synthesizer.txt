@@ -31,4 +31,6 @@ MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 
 {#include prompts/safety-rules /}
 
+{#include prompts/research-evidence-rules /}
+
 {#include prompts/compaction-summary /}

@@ -23,6 +23,12 @@ import com.amsha.tool.api.ToolCapability;
  */
 @ApplicationScoped
 public class PromptSectionBuilder {
+    private static final String COMPACT_RESEARCH_EVIDENCE_RULE =
+            "EVIDENCE: Cite external factual claims; distinguish facts from inference; "
+                    + "state uncertainty or source conflicts; never invent citations.\n";
+    private static final String COMPACT_DELIVERY_CHECK =
+            "DELIVERY CHECK: Preserve the requested outcome and constraints; check specialist results against them; "
+                    + "follow up on gaps or conflicts using escalation rules; report unresolved limits accurately.\n";
 
     private final ToolRegistry toolRegistry;
     private final CapabilityRegistry capabilityRegistry;
@@ -84,6 +90,9 @@ public class PromptSectionBuilder {
             return EXECUTION_BOUNDARY_HOST;
         }
         boolean hasSandbox = capabilityRegistry.hasCapability(roleEnum.id(), ToolCapability.SANDBOX_EXEC.toolName());
+        if (AgentRoleEnum.isSkillRole(roleEnum.id()) && !hasSandbox) {
+            return "";
+        }
         if (isCompact) {
             return hasSandbox ? COMPACT_EXECUTION_BOUNDARY_SANDBOX : COMPACT_EXECUTION_BOUNDARY_NO_SANDBOX;
         }
@@ -102,6 +111,22 @@ public class PromptSectionBuilder {
                 - If browser navigation fails, use `web_fetch` on the same URL.
                 - Use one alternative natural-language search only after both retrieval paths fail.
                 """;
+    }
+
+    public String buildCompactResearchEvidenceRule(AgentRoleEnum roleEnum, boolean isCompact) {
+        if (!isCompact
+                || (!AgentRoleEnum.RESEARCHER_ID.equals(roleEnum.id())
+                        && !AgentRoleEnum.SYNTHESIZER_ID.equals(roleEnum.id()))) {
+            return "";
+        }
+        return COMPACT_RESEARCH_EVIDENCE_RULE;
+    }
+
+    public String buildCompactDeliveryCheckRule(AgentRoleEnum roleEnum, boolean isCompact) {
+        if (!isCompact || !AgentRoleEnum.COORDINATOR_ID.equals(roleEnum.id())) {
+            return "";
+        }
+        return COMPACT_DELIVERY_CHECK;
     }
 
     public String buildToolContaminationGuard(

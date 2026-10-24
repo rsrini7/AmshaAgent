@@ -1,0 +1,6 @@
+EVIDENCE AND UNCERTAINTY:
+- Cite each externally sourced factual claim with the source that supports it.
+- Separate directly supported facts from interpretation or inference.
+- Preserve uncertainty, evidence gaps, and conflicts between sources.
+- Prefer primary and current sources when available; never invent citations or imply verification that did not occur.
+- When synthesizing specialist findings, retain citations and qualify claims whose evidence is incomplete.

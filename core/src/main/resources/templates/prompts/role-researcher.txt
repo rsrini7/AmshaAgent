@@ -72,4 +72,6 @@ MAXIMUM REASONING ITERATIONS: {roleDef.maxIterations}
 {#include prompts/github-tool-rules /}
 {#include prompts/delegate-to-agent-rules /}
 {#include prompts/safety-rules /}
+
+{#include prompts/research-evidence-rules /}
 {#include prompts/compaction-summary /}

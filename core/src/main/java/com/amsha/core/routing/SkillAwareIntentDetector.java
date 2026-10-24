@@ -70,7 +70,7 @@ public class SkillAwareIntentDetector implements IntentDetector {
 
         for (CompiledSkillEntry entry : snapshot) {
             if (entry.matches(userMessage)) {
-                return Optional.of(skillRole(entry, "trigger pattern", userMessage));
+                return Optional.of(skillRole(entry, "trigger pattern"));
             }
         }
 
@@ -79,7 +79,7 @@ public class SkillAwareIntentDetector implements IntentDetector {
                         e2.definition().name().length(), e1.definition().name().length()))
                 .toList()) {
             if (matchesSkillName(userMessage, entry.definition().name())) {
-                return Optional.of(skillRole(entry, "skill name", userMessage));
+                return Optional.of(skillRole(entry, "skill name"));
             }
         }
 
@@ -98,9 +98,9 @@ public class SkillAwareIntentDetector implements IntentDetector {
         return boundaryPattern.matcher(userMessage).find();
     }
 
-    private static String skillRole(CompiledSkillEntry entry, String matchType, String userMessage) {
+    private static String skillRole(CompiledSkillEntry entry, String matchType) {
         String role = AgentRoleEnum.SKILL_PREFIX + entry.definition().name();
-        LOG.infof("Skill intent matched via %s: role=%s message='%s'", matchType, role, userMessage);
+        LOG.infof("Skill intent matched via %s: role=%s", matchType, role);
         return role;
     }
 }

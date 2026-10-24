@@ -9,9 +9,16 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
+import com.amsha.core.agent.reasoning.PromptTemplateEngine;
+import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.config.CoreSpiResolutionValidator;
+import com.amsha.core.routing.SkillAwareIntentDetector;
 import com.amsha.core.security.ExternalIdentityProvider;
+import com.amsha.core.skill.SkillRegistry;
 import com.amsha.memory.tiered.ArchivalMemoryService;
 import com.amsha.memory.tiered.CoreMemoryService;
 import com.amsha.memory.tiered.DirectiveFeedbackPort;
@@ -25,6 +32,7 @@ import com.amsha.security.api.SecretVault;
 import com.amsha.security.http.GovernedTransportService;
 import com.amsha.skills.SkillLoader;
 import com.amsha.skills.SkillProvider;
+import com.amsha.tool.api.ToolCapability;
 
 import org.junit.jupiter.api.Test;
 
@@ -92,6 +100,18 @@ class FinalWiringStartupProofTest {
     @Inject
     CoreSpiResolutionValidator validator;
 
+    @Inject
+    CapabilityRegistry capabilityRegistry;
+
+    @Inject
+    PromptTemplateEngine promptTemplateEngine;
+
+    @Inject
+    SkillAwareIntentDetector skillAwareIntentDetector;
+
+    @Inject
+    SkillRegistry skillRegistry;
+
     @Test
     void memoryServicesAndPortsBoundAtBoot() {
         assertNotNull(coreMemoryService, "CoreMemoryService must be bound at startup");
@@ -149,5 +169,67 @@ class FinalWiringStartupProofTest {
                 3,
                 providers.size(),
                 "all three SkillProvider impls (classpath, database, skills-jar) must be discovered: " + providers);
+    }
+
+    @Test
+    void memoryCapabilitiesAreAvailableAcrossBuiltInRoles() {
+        List<ToolCapability> memoryCapabilities = List.of(
+                ToolCapability.RECALL_MEMORY_SEARCH,
+                ToolCapability.ARCHIVAL_MEMORY_SEARCH,
+                ToolCapability.CORE_MEMORY_READ,
+                ToolCapability.CORE_MEMORY_APPEND,
+                ToolCapability.CORE_MEMORY_REPLACE,
+                ToolCapability.ARCHIVAL_MEMORY_INSERT,
+                ToolCapability.INGEST_DOCUMENT);
+
+        for (AgentRoleEnum role : AgentRoleEnum.values()) {
+            for (ToolCapability capability : memoryCapabilities) {
+                assertTrue(
+                        capabilityRegistry.hasCapability(role.id(), capability.toolName()),
+                        () -> role.id() + " lacks memory capability " + capability.toolName());
+            }
+        }
+    }
+
+    @Test
+    void researchAndSynthesisTemplatesIncludeEvidenceStandards() {
+        String researcherPrompt = promptTemplateEngine.buildSystemPrompt(AgentRoleEnum.RESEARCHER, null, null);
+        String synthesizerPrompt = promptTemplateEngine.buildSystemPrompt(AgentRoleEnum.SYNTHESIZER, null, null);
+
+        assertTrue(researcherPrompt.contains("EVIDENCE AND UNCERTAINTY"));
+        assertTrue(synthesizerPrompt.contains("EVIDENCE AND UNCERTAINTY"));
+        assertTrue(synthesizerPrompt.contains("never invent citations"));
+    }
+
+    @Test
+    void classpathKnowledgeCaptureSkillHasNarrowRoutingAndOneTool() {
+        var skill = skillRegistry.findByName("capture-knowledge-note").orElseThrow();
+
+        assertEquals("classpath", skill.source());
+        assertEquals(
+                Set.of(ToolCapability.INGEST_DOCUMENT.toolName()),
+                capabilityRegistry.getSupplementalTools("skill:capture-knowledge-note"));
+        assertEquals(
+                Optional.of("skill:capture-knowledge-note"),
+                skillAwareIntentDetector.findSkillMatch("Summarize and ingest this document"));
+        assertTrue(
+                skillAwareIntentDetector.findSkillMatch("Research this article").isEmpty());
+        assertTrue(skillAwareIntentDetector
+                .findSkillMatch("Summarize this document")
+                .isEmpty());
+        assertTrue(
+                skillAwareIntentDetector.findSkillMatch("Ingest this document").isEmpty());
+        assertTrue(skillAwareIntentDetector
+                .findSkillMatch("How do I summarize and ingest this document?")
+                .isEmpty());
+        assertTrue(skillAwareIntentDetector
+                .findSkillMatch("What is a knowledge note?")
+                .isEmpty());
+        assertTrue(skillAwareIntentDetector
+                .findSkillMatch("Summarize and save this article to a file")
+                .isEmpty());
+        assertTrue(skillAwareIntentDetector
+                .findSkillMatch("Save this report to memory and summarize it")
+                .isPresent());
     }
 }

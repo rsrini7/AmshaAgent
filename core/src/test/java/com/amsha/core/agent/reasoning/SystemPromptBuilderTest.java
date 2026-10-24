@@ -176,6 +176,31 @@ class SystemPromptBuilderTest {
     }
 
     @Test
+    void compactResearchPromptIncludesEvidenceRule() throws Exception {
+        setField(builder, "compactPromptEnabled", true);
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("RESEARCHER_PERSONA");
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+
+        String result = builder.build(
+                createCtx("research-session"), "researcher", "research-session", "compare sources", false);
+
+        assertTrue(result.contains("EVIDENCE: Cite external factual claims"));
+        assertTrue(result.contains("state uncertainty or source conflicts"));
+    }
+
+    @Test
+    void compactCoordinatorPromptIncludesDeliveryCheck() throws Exception {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("COORDINATOR_PERSONA");
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        setField(builder, "compactPromptEnabled", true);
+
+        String result = builder.build(createCtx("s1"), "coordinator", "s1", "deliver the report", false);
+
+        assertTrue(result.contains("DELIVERY CHECK"));
+        assertTrue(result.contains("report unresolved limits accurately"));
+    }
+
+    @Test
     void testBuildSystemPrompt_containsPromptLeakPrevention() {
         // Arrange
         when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("MOCK_PERSONA");
@@ -327,6 +352,28 @@ class SystemPromptBuilderTest {
         assertTrue(result.contains(PromptInstructionLibrary.skillRoleOverride("test-skill")));
         assertTrue(result.contains("## Execution Protocol"));
         assertTrue(result.contains("HARD TOOL OVERRIDE - CROSS-TURN CONTAMINATION PREVENTION"));
+    }
+
+    @Test
+    void testBuildSystemPrompt_skillRoleWithoutExecCapabilityUsesSingleToolProtocol() throws Exception {
+        when(agentPersonaRegistry.getPersonaPrompt(any(), any())).thenReturn("PERSONA_MARKER");
+        when(promptTemplateEngine.buildSystemPrompt(any(), any(), any(), any())).thenReturn("TOOL_BINDING_MARKER");
+        when(toolRegistry.findTool(any())).thenReturn(Optional.empty());
+        when(roleRegistry.resolvePermittedTools("skill:capture-knowledge-note"))
+                .thenReturn(Set.of(ToolCapability.INGEST_DOCUMENT.toolName()));
+        when(skillRegistry.findByName("capture-knowledge-note")).thenReturn(Optional.empty());
+        when(skillRegistry.currentSnapshot()).thenReturn(Collections.emptyList());
+        setField(builder, "contextWindow", 128000);
+        setField(builder, "compactPromptEnabled", false);
+
+        String result = builder.build(
+                createCtx("s1"), "skill:capture-knowledge-note", "s1", "summarize and ingest this document", false);
+
+        assertTrue(result.contains("## Execution Protocol"));
+        assertTrue(result.contains("Call the permitted tool once"));
+        assertFalse(result.contains("SINGLE sandbox_exec call"));
+        assertFalse(result.contains("SINGLE host_exec call"));
+        assertFalse(result.contains("hand off to the appropriate specialist execution role"));
     }
 
     @Test

@@ -33,7 +33,20 @@ import io.quarkus.arc.Unremovable;
 @ToolMetadata(
         capabilityId = ToolNames.INGEST_DOCUMENT,
         description = "Ingest a document into the RAG knowledge base",
-        defaultRoles = {AgentRoleEnum.COORDINATOR_ID, AgentRoleEnum.SYNTHESIZER_ID, AgentRoleEnum.NURTURER_ID})
+        defaultRoles = {
+            AgentRoleEnum.ARCHITECT_ID,
+            AgentRoleEnum.COORDINATOR_ID,
+            AgentRoleEnum.RESEARCHER_ID,
+            AgentRoleEnum.SYNTHESIZER_ID,
+            AgentRoleEnum.CODER_ID,
+            AgentRoleEnum.DEBUGGER_ID,
+            AgentRoleEnum.OPTIMIZER_ID,
+            AgentRoleEnum.SENTINEL_ID,
+            AgentRoleEnum.HEALER_ID,
+            AgentRoleEnum.PROTECTOR_ID,
+            AgentRoleEnum.PURIFIER_ID,
+            AgentRoleEnum.NURTURER_ID
+        })
 public class IngestDocumentTool implements AgentTool {
 
     @Inject
@@ -138,9 +151,7 @@ public class IngestDocumentTool implements AgentTool {
                 userId,
                 ctx.agentRole(),
                 SecurityEventType.MEMORY_INGESTED,
-                String.format(
-                        "label=%s length=%d snippet=%s",
-                        label, text.length(), (text.length() > 50 ? text.substring(0, 50) + "..." : text)));
+                String.format("label=%s length=%d", label, text.length()));
 
         if (result.isGlobalFallback()) {
             return ToolResponse.success(

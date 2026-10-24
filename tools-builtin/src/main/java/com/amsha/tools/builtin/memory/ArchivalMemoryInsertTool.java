@@ -52,7 +52,14 @@ import io.quarkus.arc.Unremovable;
             AgentRoleEnum.COORDINATOR_ID,
             AgentRoleEnum.RESEARCHER_ID,
             AgentRoleEnum.SYNTHESIZER_ID,
-            AgentRoleEnum.CODER_ID
+            AgentRoleEnum.CODER_ID,
+            AgentRoleEnum.DEBUGGER_ID,
+            AgentRoleEnum.OPTIMIZER_ID,
+            AgentRoleEnum.SENTINEL_ID,
+            AgentRoleEnum.HEALER_ID,
+            AgentRoleEnum.PROTECTOR_ID,
+            AgentRoleEnum.PURIFIER_ID,
+            AgentRoleEnum.NURTURER_ID
         })
 public class ArchivalMemoryInsertTool implements AgentTool {
 
