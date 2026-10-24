@@ -82,8 +82,18 @@ describe('ArcMcpPanel', () => {
       .mockResolvedValueOnce([connection]);
     vi.spyOn(ArcClient.prototype, 'getMcpApprovals').mockResolvedValue([]);
     const redeem = vi.spyOn(ArcClient.prototype, 'redeemMcpSetup')
-      .mockResolvedValueOnce({ serverName: 'new-server', mode: 'CREATE' })
-      .mockResolvedValueOnce({ serverName: 'docs-server', mode: 'EDIT' })
+      .mockResolvedValueOnce({
+        serverName: 'new-server',
+        channelType: 'web',
+        mode: 'CREATE',
+        expiresAt: '2026-10-24T13:00:00Z',
+      })
+      .mockResolvedValueOnce({
+        serverName: 'docs-server',
+        channelType: 'web',
+        mode: 'EDIT',
+        expiresAt: '2026-10-24T13:00:00Z',
+      })
       .mockRejectedValueOnce(new Error('expired'));
     const component = panel();
 

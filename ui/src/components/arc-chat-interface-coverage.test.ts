@@ -17,7 +17,7 @@ function createChat() {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
-    setInterval: vi.fn(() => 7),
+    setInterval: vi.fn((_callback: TimerHandler, _timeout?: number) => 7),
     clearInterval: vi.fn(),
     setTimeout: vi.fn(() => 9),
     clearTimeout: vi.fn(),
