@@ -72,7 +72,6 @@
     <text x="535" y="397" class="body" fill="#F4E9CC">Checks before any tool executes</text>
     <g class="small" fill="#DED0AE">
       <circle cx="545" cy="432" r="4" fill="#F2BB4B"/><text x="560" y="438">Role and capability</text>
-      <circle cx="735" cy="432" r="4" fill="#F2BB4B"/><text x="750" y="438">Workspace scope</text>
       <circle cx="545" cy="465" r="4" fill="#F2BB4B"/><text x="560" y="471">Deterministic policy and risk</text>
     </g>
     <rect x="535" y="488" width="380" height="1" fill="#715A32"/>
@@ -85,10 +84,11 @@
     <text x="1209" y="334" class="label" fill="#A9D6F7">EXECUTE</text>
     <text x="1165" y="389" class="card-title" fill="#EAF5FF">Tool execution</text>
     <text x="1165" y="422" class="body" fill="#C7DDF0">Runs after authorization</text>
-    <rect x="1162" y="449" width="144" height="34" rx="17" fill="#102033" stroke="#386B96"/>
-    <text x="1234" y="471" text-anchor="middle" class="small" fill="#B8D7F1">Direct tools</text>
-    <rect x="1318" y="449" width="166" height="34" rx="17" fill="#102033" stroke="#386B96"/>
-    <text x="1401" y="471" text-anchor="middle" class="small" fill="#B8D7F1">Podman sandbox</text>
+    <text x="1165" y="447" class="small" fill="#C7DDF0">Workspace-aware tools enforce scope</text>
+    <rect x="1162" y="461" width="144" height="34" rx="17" fill="#102033" stroke="#386B96"/>
+    <text x="1234" y="483" text-anchor="middle" class="small" fill="#B8D7F1">Direct tools</text>
+    <rect x="1318" y="461" width="166" height="34" rx="17" fill="#102033" stroke="#386B96"/>
+    <text x="1401" y="483" text-anchor="middle" class="small" fill="#B8D7F1">Podman sandbox</text>
   </g>
 
   <!-- Main flow arrows -->
