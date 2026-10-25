@@ -55,7 +55,7 @@ before changing:
 | Component | Candidate | Required evidence |
 | --- | ---: | --- |
 | Apache Lucene | `10.5.1` | Native image initialization, reflection, FS search, and full FS validation |
-| DJL Hugging Face tokenizers | `0.36.0` | MPNet tokenization, truncation/max-sequence, and embedding regression tests |
+| DJL Hugging Face tokenizers | `0.39.0` | MPNet tokenization, truncation/max-sequence, embedding regression, native-image initialization, and local runtime smoke tests |
 | ONNX Runtime | `1.29.0` | Native library loading, model inference, provenance, and ONNX release gates |
 | Bouncy Castle | `1.86` | Platform-managed by `quarkus-bom:3.40.1.1`. Root `pom.xml` `<bouncycastle.version>` aligned to `1.86` on 2026-10-22 (Issue 10 §2.3 / §4.3). Silent-downgrade risk is **resolved and closed**; version alignment plus local macOS arm64 native builds/smoke verification passed. Explicit provider-initialization coverage and the multi-platform native matrix remain deferred to CI before production promotion. |
 | Bucket4j | `8.19.0` | Rate-limit, authentication, and REST behavior tests |

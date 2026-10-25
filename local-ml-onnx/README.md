@@ -176,7 +176,7 @@ native workflow forces `generic-openai` plus ONNX without selecting Ollama.
 
 ## Tokenizer spike
 
-The Phase 0 JVM candidate is `ai.djl.huggingface:tokenizers` 0.33.0 (Apache-2.0).
+The Phase 0 JVM candidate is `ai.djl.huggingface:tokenizers` 0.39.0 (Apache-2.0).
 It bundles CPU JNI libraries for Linux x86-64, Linux arm64, and macOS arm64 and reads
 standard Hugging Face WordPiece, BPE, and Unigram tokenizer JSON files. `OnnxTokenizerFactory`
 forces DJL offline mode and tracking opt-out before loading a local tokenizer, and

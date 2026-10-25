@@ -26,7 +26,7 @@ class OnnxTokenizerFactoryTest {
         try (HuggingFaceTokenizer tokenizer = new OnnxTokenizerFactory().load(tokenizerFile)) {
             assertEquals("true", System.getProperty("ai.djl.offline"));
             assertEquals("true", System.getProperty("OPT_OUT_TRACKING"));
-            assertTrue(tokenizer.getVersion().endsWith("-0.33.0"));
+            assertTrue(tokenizer.getVersion().endsWith("-0.39.0"));
             assertArrayEquals(
                     new long[] {1, 2},
                     tokenizer.encode("Hello world", false, false).getIds());
