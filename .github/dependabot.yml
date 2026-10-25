@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      quarkus-platform:
+        patterns:
+          - "io.quarkus*"
+          - "*:quarkus-*"
 
   - package-ecosystem: npm
     directory: /ui

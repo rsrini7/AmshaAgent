@@ -3,7 +3,7 @@ name = "amsha-classifier-training"
 version = "0.1.0"
 description = "Reproducible offline training and evaluation for Amsha Phase 2 shadow classifiers"
 authors = [{ name = "Amsha Agent contributors" }]
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "accelerate>=1.8,<2",
@@ -11,7 +11,7 @@ dependencies = [
   "onnxruntime>=1.22,<2",
   "scikit-learn>=1.7,<2",
   "torch>=2.7,<3",
-  "transformers>=4.53,<5",
+  "transformers>=4.53,<6",
 ]
 
 [tool.uv]

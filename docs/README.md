@@ -83,7 +83,7 @@ Research evaluations (`docs/research/`) and active proposals (`docs/proposals/`)
 | [MCP Management Guide](MCP_MANAGEMENT.md) | Model Context Protocol client/server integration, governance, and tools. |
 | [SkillsJar Admission Guide](SKILLSJAR_ADMISSION.md) | Dynamic SkillsJar loading, admission gates, and security validation. |
 | [ONNX Local ML Guide](ONNX_LOCAL_ML_GUIDE.md) | In-process ONNX embeddings, model bundles, tokenizer truncation, and fallback. |
-| [Dependency Upgrade Policy](DEPENDENCY_UPGRADE_POLICY.md) | Upstream dependency review gates, platform alignment, and CVE response. |
+| [Dependency Upgrade Policy](DEPENDENCY_UPGRADE_POLICY.md) | Dependabot intake, upstream dependency review, platform alignment, and verification gates. |
 | [Frequently Asked Questions (FAQ)](FAQ.md) | Common developer and operational questions with answers. |
 
 ---

@@ -24,10 +24,10 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Check out repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
 
   #     - name: Set up Python
-  #       uses: actions/setup-python@v5
+  #       uses: actions/setup-python@v7
   #       with:
   #         python-version: "3.12"
 
@@ -55,17 +55,17 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Check out repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
 
   #     - name: Set up Temurin JDK 25
-  #       uses: actions/setup-java@v4
+  #       uses: actions/setup-java@v6
   #       with:
   #         distribution: "temurin"
   #         java-version: "25"
   #         cache: "maven"
 
   #     - name: Set up Python
-  #       uses: actions/setup-python@v5
+  #       uses: actions/setup-python@v7
   #       with:
   #         python-version: "3.12"
 
@@ -205,7 +205,7 @@ jobs:
 
   #     - name: Archive redacted server log on failure
   #       if: always()
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v7
   #       with:
   #         name: jvm-validation-server-log
   #         path: server.redacted.log
@@ -220,17 +220,17 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Temurin JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: "temurin"
           java-version: "25"
           cache: "maven"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -264,7 +264,7 @@ jobs:
 
       - name: Upload test reports on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-test-reports
           path: |
@@ -275,7 +275,7 @@ jobs:
 
       - name: Upload coverage report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-jacoco-report
           path: "**/target/site/jacoco/**"
@@ -295,10 +295,10 @@ jobs:
   #   runs-on: ${{ matrix.os }}
   #   steps:
   #     - name: Check out repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
 
   #     - name: Set up Python
-  #       uses: actions/setup-python@v5
+  #       uses: actions/setup-python@v7
   #       with:
   #         python-version: "3.12"
 

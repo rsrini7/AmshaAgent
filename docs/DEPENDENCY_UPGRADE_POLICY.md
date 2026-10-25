@@ -1,6 +1,6 @@
 # Dependency Upgrade Policy
 
-Reviewed 2026-10-22. This policy records the dependency boundary used for
+Reviewed 2026-10-25. This policy records the dependency boundary used for
 routine maintenance after the Quarkus 3.40.1.1 LTS migration checkpoint.
 
 ## Platform policy
@@ -78,6 +78,54 @@ The following are intentionally not upgraded independently:
 These versions must move as part of a tested Quarkus LTS platform change. A
 direct override would split the tested dependency graph and can invalidate
 native-image, serialization, provider, or delegation behavior.
+
+## GitHub Dependabot intake and tracking
+
+`.github/dependabot.yml` is the source of truth for weekly update checks. It
+covers the root Maven build, `ui` npm dependencies, GitHub Actions, and the
+classifier-training Python project. The Maven `quarkus-platform` group collects
+Quarkus platform and extension updates into a reviewable update.
+
+Dependabot PRs are candidates for review; they do not approve or merge
+themselves. For each review batch, create a numbered local issue under
+`.scratch/dependabot-upgrade/issues/` following
+[`docs/agents/issue-tracker.md`](agents/issue-tracker.md). Record the PR
+references, ecosystem, package names and before/after versions, manifest and
+lockfile changes, risk classification, verification commands and results, and
+the decision for each PR (integrate locally, defer, or close as obsolete).
+Store only redacted summaries under
+`.scratch/dependabot-upgrade/evidence/<batch>/`; do not copy credentials,
+authorization headers, provider payloads, or secret-bearing test output.
+
+Review each batch in this order:
+
+1. Read the upstream release notes and identify major-version, API, runtime,
+   security, and deprecation changes. Keep updates attached to an active feature
+   or billing issue out of unrelated batches until that work is in scope.
+2. Confirm the manifest constraint and lockfile agree, and check that the lock
+   diff contains only expected dependency changes.
+3. Route native-sensitive and platform-managed dependencies through the
+   evidence requirements in this policy. Use the ecosystem checks below in
+   addition to the general verification gates.
+4. Record local verification and proposed disposition in the issue file.
+   Local integration does not change the GitHub PR; a human owns remote merge
+   and close decisions.
+
+For a Quarkus update, the Dependabot group is only the notification and intake
+path. If an update changes `quarkus.platform.version`, a selected Quarkus member
+BOM, the Quarkus Maven plugin, or a BOM-managed extension, continue through
+[ADR-Quarkus-Upgrade-Strategy](adr/architecture/ADR-Quarkus-Upgrade-Strategy.md)
+and the active `.scratch/quarkus-upgrade/issues/` checkpoint. Run the
+`quarkus-update` pre-flight and retain its migration evidence there. Keep the
+platform, LangChain4j, Camel, and MCP member BOMs on one selected platform line;
+do not treat a grouped Dependabot PR as approval to bypass the checkpoint.
+
+| Ecosystem | Review and verification entry points |
+| --- | --- |
+| Maven | Root `pom.xml` and module POMs; inspect effective versions and apply the Maven, PMD, and focused-test gates below. |
+| npm | `ui/package.json` and `ui/package-lock.json`; run `npm ci`, UI tests, and the UI build. |
+| GitHub Actions | `.github/workflows/`; review action release notes, runner compatibility, permissions, and changed inputs before accepting the version. |
+| pip | `local-ml-onnx/classifier-training/pyproject.toml` and `uv.lock`; check lock consistency and run Python plus classifier-training tests. |
 
 ## Verification
 

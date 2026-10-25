@@ -94,7 +94,7 @@ class ClassifierPipelineTest(unittest.TestCase):
     def test_release_candidate_uses_training_run_prefix(self):
         project_root = Path(__file__).parents[2]
         training_source = (Path(__file__).parent / "train_classifier.py").read_text(encoding="utf-8")
-        pipeline_source = (project_root / "scripts" / "classifier_training.sh").read_text(encoding="utf-8")
+        pipeline_source = (project_root / "scripts" / "classifier" / "classifier_training.sh").read_text(encoding="utf-8")
 
         self.assertIn("summary['sha256'][:12]", training_source)
         self.assertIn('run_dir="$RUN_ROOT/$task-${digest:0:12}"', pipeline_source)
