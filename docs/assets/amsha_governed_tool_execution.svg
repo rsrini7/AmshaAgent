@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+  <title id="title">A governed path from agent to tool</title>
+  <desc id="description">An agent proposes a tool action. A runtime guard checks role, capability, workspace, and policy before execution. Sensitive actions such as shell execution and outbound network access require human approval. Tool results are sanitized, returned to the agent, and recorded in an audit trail.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101A27"/>
+      <stop offset="1" stop-color="#0B111A"/>
+    </linearGradient>
+    <linearGradient id="agentFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#312C66"/>
+      <stop offset="1" stop-color="#211F43"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#02060B" flood-opacity="0.36"/>
+    </filter>
+    <marker id="arrowNeutral" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2 2L10 6L2 10" fill="none" stroke="#A9B8C8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrowGold" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2 2L10 6L2 10" fill="none" stroke="#F2BB4B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrowTeal" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2 2L10 6L2 10" fill="none" stroke="#54D5B0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <pattern id="hexes" width="72" height="62" patternUnits="userSpaceOnUse">
+      <path d="M18 1L35 10V29L18 38L1 29V10Z M54 32L71 41V60L54 69L37 60V41Z" fill="none" stroke="#90A0B1" stroke-opacity="0.055" stroke-width="1.5"/>
+    </pattern>
+    <style>
+      text { font-family: Inter, "Segoe UI", Arial, sans-serif; }
+      .eyebrow { font-size: 17px; font-weight: 700; letter-spacing: 2.4px; }
+      .title { font-size: 43px; font-weight: 700; letter-spacing: -0.8px; }
+      .subtitle { font-size: 20px; font-weight: 400; }
+      .card-title { font-size: 25px; font-weight: 700; }
+      .body { font-size: 18px; font-weight: 500; }
+      .small { font-size: 15px; font-weight: 500; }
+      .label { font-size: 13px; font-weight: 700; letter-spacing: 1.4px; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#background)"/>
+  <rect width="1600" height="900" fill="url(#hexes)"/>
+
+  <!-- Header -->
+  <g>
+    <image href="amsha_bee_shield.svg" x="58" y="58" width="52" height="52" aria-label="Amsha Agent bee-and-shield logo"/>
+    <text x="116" y="91" class="eyebrow" fill="#E8B64F">AMSHA AGENT</text>
+    <text x="80" y="169" class="title" fill="#F3F6FA">A governed path from agent to tool</text>
+    <text x="82" y="208" class="subtitle" fill="#AAB7C6">The model proposes an action. Runtime policy evaluates it before execution.</text>
+    <rect x="1240" y="66" width="278" height="42" rx="21" fill="#182434" stroke="#344456"/>
+    <circle cx="1264" cy="87" r="5" fill="#54D5B0"/>
+    <text x="1280" y="93" class="label" fill="#C8D4E0">SELF-HOSTED · MULTI-AGENT</text>
+  </g>
+
+  <!-- Main flow cards -->
+  <g filter="url(#shadow)">
+    <!-- Agent -->
+    <rect x="80" y="284" width="330" height="220" rx="24" fill="url(#agentFill)" stroke="#9488F5" stroke-width="2"/>
+    <circle cx="119" cy="326" r="18" fill="#8B7CF0"/>
+    <text x="119" y="332" text-anchor="middle" class="small" font-weight="700" fill="#10131F">01</text>
+    <text x="151" y="334" class="label" fill="#B9B2FF">REASON</text>
+    <text x="110" y="389" class="card-title" fill="#F3F2FF">Agent core</text>
+    <text x="110" y="422" class="body" fill="#D5D1FA">Specialist role + model</text>
+    <rect x="108" y="449" width="273" height="34" rx="17" fill="#17182D" stroke="#6159A5"/>
+    <text x="244" y="471" text-anchor="middle" class="small" fill="#C6C0F9">Proposes a tool action</text>
+
+    <!-- Runtime policy gate -->
+    <rect x="505" y="260" width="440" height="268" rx="24" fill="#302515" stroke="#F2BB4B" stroke-width="2.5"/>
+    <circle cx="546" cy="303" r="18" fill="#F2BB4B"/>
+    <text x="546" y="309" text-anchor="middle" class="small" font-weight="700" fill="#201708">02</text>
+    <text x="578" y="311" class="label" fill="#F5D48B">EVERY TOOL CALL</text>
+    <text x="535" y="361" class="card-title" fill="#FFF4D5">Runtime guard</text>
+    <text x="535" y="397" class="body" fill="#F4E9CC">Checks before any tool executes</text>
+    <g class="small" fill="#DED0AE">
+      <circle cx="545" cy="432" r="4" fill="#F2BB4B"/><text x="560" y="438">Role and capability</text>
+      <circle cx="735" cy="432" r="4" fill="#F2BB4B"/><text x="750" y="438">Workspace scope</text>
+      <circle cx="545" cy="465" r="4" fill="#F2BB4B"/><text x="560" y="471">Deterministic policy and risk</text>
+    </g>
+    <rect x="535" y="488" width="380" height="1" fill="#715A32"/>
+    <text x="535" y="512" class="small" fill="#F3CB73">ALLOW · REQUIRE APPROVAL · STOP</text>
+
+    <!-- Tool execution -->
+    <rect x="1135" y="284" width="380" height="220" rx="24" fill="#172A3E" stroke="#58A3E2" stroke-width="2"/>
+    <circle cx="1177" cy="326" r="18" fill="#58A3E2"/>
+    <text x="1177" y="332" text-anchor="middle" class="small" font-weight="700" fill="#0D1A26">03</text>
+    <text x="1209" y="334" class="label" fill="#A9D6F7">EXECUTE</text>
+    <text x="1165" y="389" class="card-title" fill="#EAF5FF">Tool execution</text>
+    <text x="1165" y="422" class="body" fill="#C7DDF0">Runs after authorization</text>
+    <rect x="1162" y="449" width="144" height="34" rx="17" fill="#102033" stroke="#386B96"/>
+    <text x="1234" y="471" text-anchor="middle" class="small" fill="#B8D7F1">Direct tools</text>
+    <rect x="1318" y="449" width="166" height="34" rx="17" fill="#102033" stroke="#386B96"/>
+    <text x="1401" y="471" text-anchor="middle" class="small" fill="#B8D7F1">Podman sandbox</text>
+  </g>
+
+  <!-- Main flow arrows -->
+  <path d="M410 394H496" fill="none" stroke="#A9B8C8" stroke-width="3" marker-end="url(#arrowNeutral)"/>
+  <text x="453" y="373" text-anchor="middle" class="small" fill="#A9B8C8">tool request</text>
+  <path d="M945 344H1124" fill="none" stroke="#54D5B0" stroke-width="3" marker-end="url(#arrowTeal)"/>
+  <text x="1035" y="323" text-anchor="middle" class="small" fill="#7FE0C2">policy allows</text>
+
+  <!-- Human approval branch -->
+  <path d="M725 528V575" fill="none" stroke="#F2BB4B" stroke-width="3" marker-end="url(#arrowGold)"/>
+  <text x="748" y="557" class="small" fill="#F2BB4B">approval required</text>
+  <g filter="url(#shadow)">
+    <rect x="505" y="588" width="440" height="158" rx="22" fill="#2B2316" stroke="#DDAA42" stroke-width="2"/>
+    <circle cx="546" cy="629" r="18" fill="#F2BB4B"/>
+    <path d="M538 629L544 635L555 622" fill="none" stroke="#2B210F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="578" y="636" class="card-title" fill="#FFF1CE">Human approval</text>
+    <text x="535" y="674" class="body" fill="#E7D9B7">Required for shell + outbound network</text>
+    <rect x="535" y="696" width="170" height="31" rx="15.5" fill="#3B301C"/>
+    <text x="620" y="717" text-anchor="middle" class="small" fill="#F5D48B">Approve → execute</text>
+    <rect x="718" y="696" width="197" height="31" rx="15.5" fill="#352326"/>
+    <text x="816" y="717" text-anchor="middle" class="small" fill="#F0A6A6">Reject → stop</text>
+  </g>
+  <path d="M945 663H1040Q1080 663 1080 623V516Q1080 485 1119 485" fill="none" stroke="#F2BB4B" stroke-width="3" marker-end="url(#arrowGold)"/>
+  <text x="994" y="649" text-anchor="middle" class="small" fill="#F2BB4B">approved</text>
+
+  <!-- Sanitized observation and return path -->
+  <path d="M1325 504V570" fill="none" stroke="#A9B8C8" stroke-width="3" marker-end="url(#arrowNeutral)"/>
+  <g filter="url(#shadow)">
+    <rect x="1135" y="584" width="380" height="162" rx="22" fill="#142B28" stroke="#54D5B0" stroke-width="2"/>
+    <circle cx="1177" cy="625" r="18" fill="#54D5B0"/>
+    <text x="1177" y="631" text-anchor="middle" class="small" font-weight="700" fill="#10211D">04</text>
+    <text x="1209" y="633" class="label" fill="#9AEBD4">OBSERVE</text>
+    <text x="1165" y="680" class="card-title" fill="#E6FFF6">Sanitized result</text>
+    <text x="1165" y="713" class="body" fill="#BEE8DA">Redact · bound · return to agent</text>
+  </g>
+  <path d="M1135 707H1045Q1010 707 1010 780H245Q210 780 210 516" fill="none" stroke="#54D5B0" stroke-width="2.5" stroke-dasharray="8 8" marker-end="url(#arrowTeal)"/>
+  <rect x="514" y="761" width="284" height="37" rx="18.5" fill="#10201F" stroke="#276C5B"/>
+  <text x="656" y="785" text-anchor="middle" class="small" fill="#8BE4C9">Observation returns for the next step</text>
+
+  <!-- Audit footer -->
+  <rect x="80" y="820" width="1435" height="57" rx="18" fill="#151F2B" stroke="#344456"/>
+  <circle cx="111" cy="848" r="7" fill="#E8B64F"/>
+  <text x="134" y="855" class="label" fill="#E8B64F">AUDIT TRAIL</text>
+  <text x="280" y="855" class="body" fill="#C4D0DC">Policy decision</text>
+  <circle cx="451" cy="848" r="3" fill="#718194"/>
+  <text x="474" y="855" class="body" fill="#C4D0DC">Human approval</text>
+  <circle cx="648" cy="848" r="3" fill="#718194"/>
+  <text x="671" y="855" class="body" fill="#C4D0DC">Execution outcome</text>
+  <text x="1480" y="855" text-anchor="end" class="small" fill="#8292A3">Amsha Agent · governed tool execution</text>
+</svg>

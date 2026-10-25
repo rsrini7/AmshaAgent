@@ -252,8 +252,10 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 ### Tiered Memory & RAG
 <img src="./docs/assets/amsha_tiered_memory.svg" alt="Tiered Memory & RAG" width="100%">
 
-### Tool Governance & Sandbox
-<img src="./docs/assets/amsha_tool_governance.svg" alt="Tool Governance & Sandbox" width="100%">
+### Governed Tool Execution
+<img src="./docs/assets/amsha_governed_tool_execution.svg" alt="Governed tool execution overview: agent proposal, runtime guard, human approval, tool execution, sanitized result, and audit trail" width="100%">
+
+See the [detailed tool-governance flow](./docs/assets/amsha_tool_governance.svg) for the internal interceptor sequence.
 
 ### Governed Outbound Transport for LLMs & Arena
 <img src="./docs/assets/amsha_governed_transport.svg" alt="Governed LLM Transport" width="100%">

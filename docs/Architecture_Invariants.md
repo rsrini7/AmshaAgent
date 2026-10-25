@@ -157,7 +157,7 @@ three-tuple `(channelType, channelId, userId)`.
 - Do not move transport-specific logic into the core state machine.
 
 ### 3.2 Tool invocation path
-- All tool execution MUST flow through `ToolRegistry` and `ToolInvoker` (see the [Tool Governance & Sandbox Execution Flow Diagram](assets/amsha_tool_governance.svg) for visual context).
+- All tool execution MUST flow through `ToolRegistry` and `ToolInvoker` (see the [governed tool execution overview](assets/amsha_governed_tool_execution.svg) and [detailed tool-governance flow](assets/amsha_tool_governance.svg)).
 - Do not bypass guard, audit, sanitization, or approval logic by calling tool implementation classes directly.
 
 ### 3.2.1 Tool execution-category routing
