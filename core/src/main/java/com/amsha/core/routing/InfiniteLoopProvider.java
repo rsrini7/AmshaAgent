@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.error.LlmErrorClassificationService;
 import com.amsha.core.lifecycle.WorkspaceManager;
+import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmContentFilterException;
@@ -36,6 +37,7 @@ public class InfiniteLoopProvider<T, R> {
     private static final Logger log = Logger.getLogger(InfiniteLoopProvider.class);
     private static final long MAX_COOLDOWN_WAIT_MS = 300_000L;
     private static final int QUALITY_FAILURE_THRESHOLD = 3;
+    private static final int MAX_UNAVAILABLE_FAILURES_PER_REQUEST = 4;
 
     /** Functional interface for invoking a model with a request. */
     @FunctionalInterface
@@ -196,6 +198,8 @@ public class InfiniteLoopProvider<T, R> {
      */
     public R invoke(Object request) {
         int n = slots.size();
+        int unavailableFailures = 0;
+        Throwable lastUnavailableFailure = null;
 
         while (true) {
             LlmMalformedResponseException malformedResponse = null;
@@ -236,9 +240,13 @@ public class InfiniteLoopProvider<T, R> {
                             slot.name(), elapsedMs, slot.baseUrl());
                     return response;
                 } catch (Throwable t) {
-                    LlmMalformedResponseException candidateMalformedResponse = classifyAndHandle(slot.name(), h, t);
-                    if (candidateMalformedResponse != null) {
-                        malformedResponse = candidateMalformedResponse;
+                    FailureHandling failureHandling = classifyAndHandle(slot.name(), h, t);
+                    if (failureHandling.malformedResponse() != null) {
+                        malformedResponse = failureHandling.malformedResponse();
+                    }
+                    if (failureHandling.retryableUnavailable()) {
+                        unavailableFailures++;
+                        lastUnavailableFailure = t;
                     }
                 }
             }
@@ -256,6 +264,13 @@ public class InfiniteLoopProvider<T, R> {
                         + "Check server status and API keys. Slots will reset on app restart.");
             }
 
+            if (unavailableFailures >= MAX_UNAVAILABLE_FAILURES_PER_REQUEST) {
+                log.warnf(
+                        "InfiniteLoop: provider request exhausted after %d availability failures; returning a safe error.",
+                        unavailableFailures);
+                throw new LlmServiceUnavailableException(UserMessages.AI_PROVIDER_UNAVAILABLE, lastUnavailableFailure);
+            }
+
             long shortestMs = Long.MAX_VALUE;
             for (SlotHealth h : health.values()) {
                 if (!h.isPermanentlyDisabled()) {
@@ -267,8 +282,7 @@ public class InfiniteLoopProvider<T, R> {
             }
 
             if (shortestMs == Long.MAX_VALUE || shortestMs > MAX_COOLDOWN_WAIT_MS) {
-                throw new RuntimeException("InfiniteLoop: All providers in cooldown, shortest wait " + shortestMs
-                        + "ms exceeds maximum. Giving up.");
+                throw new LlmServiceUnavailableException(UserMessages.AI_PROVIDER_UNAVAILABLE, lastUnavailableFailure);
             }
 
             interruptibleSleep(shortestMs, "InfiniteLoop");
@@ -295,15 +309,20 @@ public class InfiniteLoopProvider<T, R> {
         }
     }
 
-    private LlmMalformedResponseException classifyAndHandle(String slotName, SlotHealth h, Throwable t) {
+    private FailureHandling classifyAndHandle(String slotName, SlotHealth h, Throwable t) {
         LlmProviderException classified = LlmErrorClassificationService.classify(t);
-        switch (classified) {
-            case LlmRateLimitException r -> handleRateLimit(slotName, h, r);
+        return switch (classified) {
+            case LlmRateLimitException r -> {
+                handleRateLimit(slotName, h, r);
+                yield new FailureHandling(null, false);
+            }
             case LlmAuthenticationException a -> {
                 h.disablePermanently();
                 log.errorf("InfiniteLoop: Slot [%s] permanently disabled (auth error): %s", slotName, a.getMessage());
+                yield new FailureHandling(null, false);
             }
-            case LlmServiceUnavailableException u -> handleServiceUnavailable(slotName, h, u);
+            case LlmServiceUnavailableException u ->
+                new FailureHandling(null, handleServiceUnavailable(slotName, h, u));
             case LlmContentFilterException c -> throw c;
             case LlmToolCallException tc -> throw tc;
             case LlmMalformedResponseException mr -> {
@@ -311,12 +330,13 @@ public class InfiniteLoopProvider<T, R> {
                 log.warnf(
                         "InfiniteLoop: Slot [%s] malformed response or schema rejected (%s), trying next slot.",
                         slotName, LogUtil.rootMessage(mr));
-                return mr;
+                yield new FailureHandling(mr, false);
             }
-            default -> handleUnknownError(slotName, h, classified);
-        }
-        return null;
+            default -> new FailureHandling(null, handleUnknownError(slotName, h, classified));
+        };
     }
+
+    private record FailureHandling(LlmMalformedResponseException malformedResponse, boolean retryableUnavailable) {}
 
     private void handleRateLimit(String slotName, SlotHealth h, LlmRateLimitException e) {
         String msg = e.getMessage();
@@ -329,20 +349,22 @@ public class InfiniteLoopProvider<T, R> {
         }
     }
 
-    private void handleServiceUnavailable(String slotName, SlotHealth h, LlmServiceUnavailableException e) {
+    private boolean handleServiceUnavailable(String slotName, SlotHealth h, LlmServiceUnavailableException e) {
         String msg = e.getMessage();
         if (msg != null && (msg.contains("tool_use_failed") || msg.contains("failed_generation"))) {
             h.disablePermanently();
             log.errorf("InfiniteLoop: Slot [%s] permanently disabled (tool_use_failed): %s", slotName, msg);
+            return false;
         } else {
             h.recordTransientFailure(cooldownTransientSeconds, cooldownBaseSeconds, cooldownMaxSeconds);
             log.warnf(
                     "InfiniteLoop: Slot [%s] transient error, cooling down %ds. %s",
                     slotName, h.cooldownRemainingMs() / 1000, msg);
+            return true;
         }
     }
 
-    private void handleUnknownError(String slotName, SlotHealth h, LlmProviderException e) {
+    private boolean handleUnknownError(String slotName, SlotHealth h, LlmProviderException e) {
         String msg = e.getMessage();
         if (msg != null
                 && (msg.contains("Connection refused")
@@ -353,11 +375,13 @@ public class InfiniteLoopProvider<T, R> {
             log.warnf(
                     "InfiniteLoop: Slot [%s] connection error, cooling down %ds. %s",
                     slotName, h.cooldownRemainingMs() / 1000, msg);
+            return true;
         } else {
             h.recordUnknownFailure(cooldownBaseSeconds, cooldownMaxSeconds);
             log.warnf(
                     "InfiniteLoop: Slot [%s] unclassified error, cooling down %ds. %s",
                     slotName, h.cooldownRemainingMs() / 1000, msg);
+            return false;
         }
     }
 

@@ -166,6 +166,8 @@ public final class UserMessages {
     public static final String BUDGET_EXCEEDED = "❌ Your session budget limit has been reached.";
     public static final String API_ERROR_FORMAT = "⚠️ API Error: %s";
     public static final String AI_SERVICE_ERROR = "⚠️ The AI service returned an error. Please try again shortly.";
+    public static final String AI_PROVIDER_UNAVAILABLE =
+            "I couldn't reach the AI service after several attempts. Please try again shortly.";
     public static final String INTERNAL_LLM_ERROR =
             "⚠️ I encountered an internal error and could not complete your request. Please try again.";
     public static final String TOKEN_LIMIT_REACHED_FORMAT = """

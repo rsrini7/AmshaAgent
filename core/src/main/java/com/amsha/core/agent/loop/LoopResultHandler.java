@@ -215,15 +215,17 @@ public class LoopResultHandler {
         log.errorf(
                 "Agent execution failed %s: %s\n%s",
                 LogUtil.ctx(sessionId, canonicalRole), errMsg, LogUtil.trimmedStack(e));
-        AgentResult result =
-                AgentResult.failed("SYSTEM_ERROR: " + errMsg, AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+        AgentResult result = AgentResult.failed(
+                AgentErrorMessageUtil.SYSTEM_ERROR_PREFIX + errMsg,
+                AgentResult.FailureCategory.SYSTEM_ERROR,
+                List.of());
         String traceId = Span.current().getSpanContext().getTraceId();
         try {
             agentStore
                     .load(sessionId, canonicalRole)
                     .ifPresent(cp -> agentStore.markFailed(
                             cp.getId(),
-                            "SYSTEM_ERROR: " + errMsg,
+                            AgentErrorMessageUtil.SYSTEM_ERROR_PREFIX + errMsg,
                             "SYSTEM_ERROR",
                             traceId,
                             ClassUtils.getCleanName(e)));
