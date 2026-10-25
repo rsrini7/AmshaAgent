@@ -13,8 +13,8 @@
   [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
   ![Java Tests](https://img.shields.io/badge/Tests-9823_passed_%C2%B7_24_skipped_of_9847-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-85.87%25-brightgreen.svg?style=flat)
-  ![UI Tests](https://img.shields.io/badge/UI_Tests-333_passing-brightgreen.svg?style=flat)
-  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-83.61%25-brightgreen.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-334_passing-brightgreen.svg?style=flat)
+  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-76.98%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
