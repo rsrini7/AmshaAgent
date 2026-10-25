@@ -21,12 +21,12 @@
   },
   "dependencies": {
     "@lit/context": "^1.1.2",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.17",
     "lit": "^3.2.0",
     "marked": "^15.0.0"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.0.5",
+    "@types/dompurify": "^3.2.0",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.2.7",
     "typescript": "^5.6.0",
