@@ -188,22 +188,7 @@ public class SystemPromptBuilder {
 
             // Inject execution protocol for skill roles
             Set<String> permittedTools = roleRegistry.resolvePermittedTools(agentRole);
-            String execTool = permittedTools.contains(ToolCapability.HOST_EXEC.toolName())
-                    ? ToolCapability.HOST_EXEC.toolName()
-                    : ToolCapability.SANDBOX_EXEC.toolName();
-
-            basePrompt += "\n\n## Execution Protocol\n"
-                    + "1. Plan ALL steps needed to accomplish the goal BEFORE calling any tools.\n"
-                    + "2. Combine ALL necessary commands into a SINGLE " + execTool + " call. Every " + execTool
-                    + " requires human approval — do NOT make multiple calls.\n"
-                    + "   - If the task creates files or artifacts, include directory creation and all file writes in that same call.\n"
-                    + "   - Linux/macOS: chain with `&&` or `;` — e.g. `cmd1 && cmd2 && cmd3`\n"
-                    + "   - Windows CMD: chain with `&&` — e.g. `cmd1 && cmd2 && cmd3`\n"
-                    + "   - Windows PowerShell: chain with `;` — e.g. `cmd1; cmd2; cmd3`\n"
-                    + "   - Cross-platform scripts: use `bash script.sh` on Linux/macOS, `wsl bash script.sh` on Windows\n"
-                    + "3. If a skill provides scripts, call the script directly — do NOT run prerequisite commands separately. The scripts handle those steps internally.\n"
-                    + "4. After the single tool call returns, emit a FINISH action with a summary of the results.\n"
-                    + "5. If the tool call fails, retry once. If it fails again, emit FINISH with the error details.\n";
+            basePrompt += buildSkillExecutionProtocol(permittedTools);
             personaPrompt = basePrompt;
         } else {
             roleEnum = AgentRoleEnum.fromString(agentRole);
@@ -253,7 +238,7 @@ public class SystemPromptBuilder {
 
         String securityPrompt = instructionLibrary.getSecurityRules(isCompact || isSimpleChitchat);
 
-        if (isCompact && !isSimpleChitchat) {
+        if (isCompact && !isSimpleChitchat && !isSkillRole) {
             List<String> toolNames = sharedSectionBuilder.getAvailableToolNames(context, roleEnum);
             securityPrompt += "\n" + instructionLibrary.buildCompactToolPriorityRules(toolNames);
         }
@@ -262,13 +247,15 @@ public class SystemPromptBuilder {
         // needs the override because it appends generic execution-chain rules,
         // but non-compact mode also needs it to suppress delegation fallthrough.
         if (AgentRoleEnum.isSkillRole(agentRole)) {
-            securityPrompt += "\n\n" + PromptInstructionLibrary.skillRoleOverride(AgentRoleEnum.skillName(agentRole));
+            securityPrompt += "\n\n" + SkillPromptInstructions.skillRoleOverride(AgentRoleEnum.skillName(agentRole));
         }
 
         String dynamicRules = "";
         if (!isSimpleChitchat) {
             dynamicRules += sharedSectionBuilder.buildExecutionBoundaryRule(roleEnum, isCompact);
             dynamicRules += "\n" + sharedSectionBuilder.buildBrowserRetryRule(context, roleEnum, isCompact);
+            dynamicRules += sharedSectionBuilder.buildCompactResearchEvidenceRule(roleEnum, isCompact);
+            dynamicRules += sharedSectionBuilder.buildCompactDeliveryCheckRule(roleEnum, isCompact);
 
             if (AgentRoleEnum.isSkillRole(agentRole)) {
                 Set<String> skillTools = roleRegistry.resolvePermittedTools(agentRole);
@@ -331,6 +318,33 @@ public class SystemPromptBuilder {
         log.debugf("[SystemPrompt] Completed build for session %s. Length: %d chars", sessionId, finalPrompt.length());
 
         return finalPrompt;
+    }
+
+    private static String buildSkillExecutionProtocol(Set<String> permittedTools) {
+        boolean hasHostExec = permittedTools.contains(ToolCapability.HOST_EXEC.toolName());
+        boolean hasSandboxExec = permittedTools.contains(ToolCapability.SANDBOX_EXEC.toolName());
+
+        if (!hasHostExec && !hasSandboxExec) {
+            return "\n\n## Execution Protocol\n"
+                    + "1. Plan the single step needed to accomplish the goal before calling the permitted tool.\n"
+                    + "2. Call the permitted tool once with a complete input; do not call any other tool.\n"
+                    + "3. After the tool responds, emit a FINISH action using only what the tool confirmed.\n"
+                    + "4. If the tool fails, emit FINISH with the error details; do not retry with a different tool.\n";
+        }
+
+        String execTool = hasHostExec ? ToolCapability.HOST_EXEC.toolName() : ToolCapability.SANDBOX_EXEC.toolName();
+        return "\n\n## Execution Protocol\n"
+                + "1. Plan ALL steps needed to accomplish the goal BEFORE calling any tools.\n"
+                + "2. Combine ALL necessary commands into a SINGLE " + execTool + " call. Every " + execTool
+                + " requires human approval — do NOT make multiple calls.\n"
+                + "   - If the task creates files or artifacts, include directory creation and all file writes in that same call.\n"
+                + "   - Linux/macOS: chain with `&&` or `;` — e.g. `cmd1 && cmd2 && cmd3`\n"
+                + "   - Windows CMD: chain with `&&` — e.g. `cmd1 && cmd2 && cmd3`\n"
+                + "   - Windows PowerShell: chain with `;` — e.g. `cmd1; cmd2; cmd3`\n"
+                + "   - Cross-platform scripts: use `bash script.sh` on Linux/macOS, `wsl bash script.sh` on Windows\n"
+                + "3. If a skill provides scripts, call the script directly — do NOT run prerequisite commands separately. The scripts handle those steps internally.\n"
+                + "4. After the single tool call returns, emit a FINISH action with a summary of the results.\n"
+                + "5. If the tool call fails, retry once. If it fails again, emit FINISH with the error details.\n";
     }
 
     private String buildCompactChitchatBase(String agentRole) {

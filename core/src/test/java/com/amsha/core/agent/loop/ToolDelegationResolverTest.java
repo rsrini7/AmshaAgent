@@ -120,33 +120,16 @@ class ToolDelegationResolverTest {
             case SCHEDULE_TASK, MANAGE_SCHEDULE ->
                 SetOf.roles(AgentRoleEnum.COORDINATOR_ID, AgentRoleEnum.SYNTHESIZER_ID)
                         .contains(role);
-            case RECALL_MEMORY_SEARCH ->
-                SetOf.roles(
-                                AgentRoleEnum.ARCHITECT_ID,
-                                AgentRoleEnum.COORDINATOR_ID,
-                                AgentRoleEnum.RESEARCHER_ID,
-                                AgentRoleEnum.SYNTHESIZER_ID,
-                                AgentRoleEnum.CODER_ID,
-                                AgentRoleEnum.DEBUGGER_ID)
-                        .contains(role);
-            case ARCHIVAL_MEMORY_SEARCH,
+            case RECALL_MEMORY_SEARCH,
+                    ARCHIVAL_MEMORY_SEARCH,
                     CORE_MEMORY_READ,
                     CORE_MEMORY_APPEND,
                     CORE_MEMORY_REPLACE,
-                    ARCHIVAL_MEMORY_INSERT ->
-                SetOf.roles(
-                                AgentRoleEnum.ARCHITECT_ID,
-                                AgentRoleEnum.COORDINATOR_ID,
-                                AgentRoleEnum.RESEARCHER_ID,
-                                AgentRoleEnum.SYNTHESIZER_ID,
-                                AgentRoleEnum.CODER_ID)
-                        .contains(role);
+                    ARCHIVAL_MEMORY_INSERT,
+                    INGEST_DOCUMENT -> true;
             case BROWSER_NAVIGATE -> role.equals(AgentRoleEnum.RESEARCHER_ID);
             case SANDBOX_EXEC, MANAGE_CHECKLIST, REGISTER_MCP_SERVER ->
                 SetOf.roles(AgentRoleEnum.CODER_ID, AgentRoleEnum.DEBUGGER_ID).contains(role);
-            case INGEST_DOCUMENT ->
-                SetOf.roles(AgentRoleEnum.COORDINATOR_ID, AgentRoleEnum.SYNTHESIZER_ID, AgentRoleEnum.NURTURER_ID)
-                        .contains(role);
             case WEB_SEARCH_BRAVE, WEB_SEARCH_SERPER ->
                 SetOf.roles(AgentRoleEnum.RESEARCHER_ID, AgentRoleEnum.SYNTHESIZER_ID)
                         .contains(role);

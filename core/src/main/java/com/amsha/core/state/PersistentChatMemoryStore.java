@@ -5,6 +5,7 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageDeserializer;
 import dev.langchain4j.data.message.ChatMessageSerializer;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 
 import jakarta.annotation.Priority;
@@ -18,11 +19,13 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.MessageTag;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.llm.api.MultimodalRequests;
 import com.amsha.memory.config.TieredMemoryConfig;
 import com.amsha.memory.tiered.RecallMemoryService;
 import com.amsha.memory.tiered.RecallMessageMapper;
@@ -116,6 +119,10 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         ReadMetadata metadata = readMetadata(id);
         int lastCumulativeCount = metadata.cumulativeNonSystemCount;
         List<Long> currentTimestamps = metadata.timestamps;
+        String firstUserMessage = metadata.firstUserMessage;
+        if (firstUserMessage == null || firstUserMessage.isBlank()) {
+            firstUserMessage = firstUserMessageText(nonSystemMessages);
+        }
         List<Long> updatedTimestamps = new ArrayList<>();
         long now = System.currentTimeMillis();
 
@@ -138,6 +145,9 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             meta.put("timestamps", updatedTimestamps);
             meta.put("cumulativeNonSystemCount", cumulativeCount);
             meta.put("windowSize", currentWindowSize);
+            if (firstUserMessage != null && !firstUserMessage.isBlank()) {
+                meta.put("firstUserMessage", firstUserMessage);
+            }
             metadataJson = objectMapper.writeValueAsString(meta);
         } catch (JsonProcessingException e) {
             log.warnf("Failed to serialize metadata for session %s", id);
@@ -162,25 +172,36 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         return readMetadata(sessionId).timestamps;
     }
 
-    private record ReadMetadata(List<Long> timestamps, int cumulativeNonSystemCount, int windowSize) {}
+    private static String firstUserMessageText(List<ChatMessage> messages) {
+        return messages.stream()
+                .filter(UserMessage.class::isInstance)
+                .map(UserMessage.class::cast)
+                .map(message -> MultimodalRequests.textOf(message, "chat-memory"))
+                .filter(text -> text != null && !text.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private record ReadMetadata(
+            List<Long> timestamps, int cumulativeNonSystemCount, int windowSize, String firstUserMessage) {}
 
     private ReadMetadata readMetadata(String sessionId) {
         return memoryStore
                 .findById(sessionId)
                 .map(ChatMemoryDto::metadataJson)
                 .map(json -> parseMetadata(json))
-                .orElse(new ReadMetadata(Collections.emptyList(), 0, 0));
+                .orElse(new ReadMetadata(Collections.emptyList(), 0, 0, null));
     }
 
     private ReadMetadata parseMetadata(String json) {
         if (json == null || json.isBlank()) {
-            return new ReadMetadata(Collections.emptyList(), 0, 0);
+            return new ReadMetadata(Collections.emptyList(), 0, 0, null);
         }
         try {
             Object parsed = objectMapper.readValue(json, Object.class);
             if (parsed instanceof List) {
                 List<Long> timestamps = objectMapper.convertValue(parsed, new TypeReference<List<Long>>() {});
-                return new ReadMetadata(timestamps, timestamps.size(), timestamps.size());
+                return new ReadMetadata(timestamps, timestamps.size(), timestamps.size(), null);
             }
             if (parsed instanceof Map map) {
                 List<Long> timestamps = map.containsKey("timestamps")
@@ -193,12 +214,13 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                                 : timestamps.size();
                 int windowSize =
                         map.containsKey("windowSize") ? ((Number) map.get("windowSize")).intValue() : cumulativeCount;
-                return new ReadMetadata(timestamps, cumulativeCount, windowSize);
+                String firstUserMessage = map.get("firstUserMessage") instanceof String value ? value : null;
+                return new ReadMetadata(timestamps, cumulativeCount, windowSize, firstUserMessage);
             }
         } catch (Exception e) {
             log.warnf("Failed to parse metadata for session: %s", LogUtil.rootMessage(e));
         }
-        return new ReadMetadata(Collections.emptyList(), 0, 0);
+        return new ReadMetadata(Collections.emptyList(), 0, 0, null);
     }
 
     @Override
@@ -217,6 +239,40 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     public SessionMetadata getSessionMetadata(String sessionId) {
         ReadMetadata metadata = readMetadata(sessionId);
         return new SessionMetadata(metadata.cumulativeNonSystemCount, metadata.windowSize);
+    }
+
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    public Optional<String> getFirstUserMessage(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(readMetadata(sessionId).firstUserMessage).filter(message -> !message.isBlank());
+    }
+
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    public void rememberFirstUserMessageIfMissing(String sessionId, String firstUserMessage) {
+        if (sessionId == null || sessionId.isBlank() || firstUserMessage == null || firstUserMessage.isBlank()) {
+            return;
+        }
+        ChatMemoryDto stored = memoryStore.findById(sessionId).orElse(null);
+        if (stored == null) {
+            return;
+        }
+        ReadMetadata metadata = parseMetadata(stored.metadataJson());
+        if (metadata.firstUserMessage != null && !metadata.firstUserMessage.isBlank()) {
+            return;
+        }
+        Map<String, Object> updated = new LinkedHashMap<>();
+        updated.put("timestamps", metadata.timestamps);
+        updated.put("cumulativeNonSystemCount", metadata.cumulativeNonSystemCount);
+        updated.put("windowSize", metadata.windowSize);
+        updated.put("firstUserMessage", firstUserMessage);
+        try {
+            String metadataJson = objectMapper.writeValueAsString(updated);
+            memoryStore.save(new ChatMemoryDto(sessionId, stored.messagesJson(), metadataJson));
+        } catch (JsonProcessingException e) {
+            log.warnf("Failed to preserve first-user-message metadata for session %s", sessionId);
+        }
     }
 
     public record SessionMetadata(int cumulativeNonSystemCount, int windowSize) {}

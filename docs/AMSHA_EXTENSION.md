@@ -398,9 +398,11 @@ curl -X POST http://localhost:8080/api/v1/skills \
 
 ### Built-in classpath skill (compiled into binary)
 
-1. Place the `.md` file in `skills/src/main/resources/skills/`
-2. Add its filename (without path) to `skills/src/main/resources/skills/index.txt`
+1. Place the skill at `core/src/main/resources/skills/<skill-name>/SKILL.md`.
+2. Add `<skill-name>/SKILL.md` to `core/src/main/resources/skills/index.txt`.
 3. Rebuild
+
+Classpath skills bypass third-party SkillsJar admission checks. Keep each trigger narrow and add per-skill tests for positive and negative activation plus its exact granted tool set.
 
 ### Skill frontmatter constraints
 
@@ -409,7 +411,7 @@ curl -X POST http://localhost:8080/api/v1/skills \
 | `name` | Required. Must be unique - database skills override classpath skills on name conflict. |
 | `trigger-patterns` | Java regexes, matched case-insensitively. Empty list = skill never auto-routes (must be invoked explicitly). |
 | `tool-capabilities` | Must be valid `ToolCapability` enum names. Invalid entries are silently ignored. |
-| `max-iterations` | Positive integer. Default 5. |
+| `max-iterations` | Positive integer. Default 15 (`amsha.skills.default-max-iterations`). |
 | `maxBudgetUsd` | **Forbidden** - budget governance is a runtime session concern, not a per-skill config. See Architecture Invariant §4.7. |
 
 > [!IMPORTANT]
@@ -850,7 +852,7 @@ public class S3SkillProvider implements SkillProvider {
 |---|---|---|
 | `DatabaseSkillProvider` | 10 | SQLite `agent_skill` table (user-created, wins on collision) |
 | `SkillsJarSkillProvider` | 50 | `META-INF/skills/` in JAR dependencies (bundled SkillsJars) |
-| `ClasspathSkillProvider` | 100 | Optional `skills/src/main/resources/skills/` index and resources |
+| `ClasspathSkillProvider` | 100 | `core/src/main/resources/skills/` resources listed in `index.txt` |
 
 Lower priority = processed first, wins on name collision. Use values between 10 and 100 for custom providers.
 

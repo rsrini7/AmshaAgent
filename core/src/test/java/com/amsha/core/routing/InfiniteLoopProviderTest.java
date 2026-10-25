@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amsha.llm.api.error.LlmAuthenticationException;
 import com.amsha.llm.api.error.LlmMalformedResponseException;
+import com.amsha.llm.api.error.LlmServiceUnavailableException;
 
 import org.junit.jupiter.api.Test;
 
@@ -89,6 +90,32 @@ class InfiniteLoopProviderTest {
                 0);
 
         assertEquals("recovered", provider.invoke("request"));
+    }
+
+    @Test
+    void repeatedConnectionFailuresStopWithSafeMessage() {
+        AtomicInteger attempts = new AtomicInteger();
+        InfiniteLoopProvider<String, String> provider = new InfiniteLoopProvider<>(
+                List.of(new InfiniteLoopProvider.Slot<>("local", "model")),
+                (model, request) -> {
+                    if (attempts.incrementAndGet() <= 4) {
+                        throw new RuntimeException("Connection refused at http://127.0.0.1:1234");
+                    }
+                    return "unexpected recovery";
+                },
+                1,
+                1,
+                1,
+                0);
+
+        LlmServiceUnavailableException failure =
+                assertThrows(LlmServiceUnavailableException.class, () -> provider.invoke("request"));
+
+        assertEquals(4, attempts.get());
+        assertEquals(
+                "I couldn't reach the AI service after several attempts. Please try again shortly.",
+                failure.getMessage());
+        assertFalse(failure.getMessage().contains("127.0.0.1"));
     }
 
     @Test

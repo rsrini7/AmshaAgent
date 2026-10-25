@@ -123,6 +123,54 @@ class CompactionServiceTest {
     }
 
     @Test
+    void compactionPromptIncludesFirstUserMessage() {
+        List<ChatMessage> msgs = new ArrayList<>();
+        msgs.add(UserMessage.userMessage("Hello, my name is Alice"));
+        for (int i = 1; i < 10; i++) {
+            msgs.add(UserMessage.userMessage("Msg" + i));
+        }
+        when(mockChatStore.getMessages("session1")).thenReturn(msgs);
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("{\"summary\": \"Merged summary\"}"))
+                        .build());
+
+        assertTrue(service.compact("session1", "test-user"));
+
+        ArgumentCaptor<UserMessage> promptCaptor = ArgumentCaptor.forClass(UserMessage.class);
+        verify(mockModel).chat(promptCaptor.capture());
+        String prompt = promptCaptor.getValue().singleText();
+        assertTrue(prompt.contains("FIRST USER MESSAGE"));
+        assertTrue(prompt.contains("Hello, my name is Alice"));
+        assertTrue(prompt.contains("Preserve the first user message"));
+    }
+
+    @Test
+    void compactionUsesPersistedFirstUserMessageAfterTheActiveWindowMovesOn() {
+        List<ChatMessage> currentWindow = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            currentWindow.add(UserMessage.userMessage("Recent message " + i));
+        }
+        when(mockChatStore.getMessages("session1")).thenReturn(currentWindow);
+        when(mockChatStore.getFirstUserMessage("session1"))
+                .thenReturn(Optional.of("Original request from the start of the session"));
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+        when(mockModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("{\"summary\": \"Merged summary\"}"))
+                        .build());
+
+        assertTrue(service.compact("session1", "test-user"));
+
+        ArgumentCaptor<UserMessage> promptCaptor = ArgumentCaptor.forClass(UserMessage.class);
+        verify(mockModel).chat(promptCaptor.capture());
+        assertTrue(promptCaptor.getValue().singleText().contains("Original request from the start of the session"));
+        verify(mockChatStore)
+                .rememberFirstUserMessageIfMissing("session1", "Original request from the start of the session");
+    }
+
+    @Test
     void testBlankGuardHandling() {
         List<ChatMessage> msgs = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
@@ -276,6 +324,12 @@ class CompactionServiceTest {
         assertTrue(
                 template.contains("Do NOT preserve or restate secrets"),
                 "Compaction prompt should exclude secrets from summaries");
+        assertTrue(
+                template.contains("Preserve the first user message"),
+                "Compaction prompt should always preserve how the conversation started");
+        assertFalse(
+                template.contains("Discard: pleasantries"),
+                "Compaction prompt must not discard the first message as a pleasantry");
     }
 
     private interface CapableChatModel extends ChatModel, StrictJsonSchemaCapable {}
@@ -365,6 +419,34 @@ class CompactionServiceTest {
         assertFalse(StructuredSchemaRequests.hasNativeJsonSchema(requests.get(1)));
         UserMessage retryMsg = (UserMessage) requests.get(1).messages().get(0);
         assertTrue(retryMsg.singleText().contains("CRITICAL: You MUST respond ONLY with the summary prose"));
+    }
+
+    @Test
+    void malformedJsonFallbackWithNullTextAbortsWithoutThrowing() {
+        CapableChatModel capableModel = mock(CapableChatModel.class);
+        when(capableModel.supportsStrictJsonSchema()).thenReturn(true);
+        when(capableModel.chat(any(ChatRequest.class)))
+                .thenReturn(ChatResponse.builder()
+                        .aiMessage(AiMessage.aiMessage("{\"summary\":\"truncated"))
+                        .build());
+        AiMessage nullTextMessage = mock(AiMessage.class);
+        when(nullTextMessage.text()).thenReturn(null);
+        when(capableModel.chat(any(UserMessage.class)))
+                .thenReturn(ChatResponse.builder().aiMessage(nullTextMessage).build());
+
+        Instance<StructuredOutputMode> modeInst = mock(Instance.class);
+        when(modeInst.isUnsatisfied()).thenReturn(false);
+        when(modeInst.get()).thenReturn(StructuredOutputMode.NATIVE);
+        service.compactionModel = capableModel;
+        service.compactionModeInstance = modeInst;
+
+        when(mockChatStore.getMessages("session1")).thenReturn(createMessages(10));
+        when(mockPort.findLatestBySessionId("session1")).thenReturn(Optional.empty());
+
+        assertFalse(service.compact("session1", "test-user"));
+        verify(capableModel).chat(any(UserMessage.class));
+        verify(mockPort, never()).upsert(any(CompactionSummaryDto.class));
+        verify(mockChatStore, never()).updateMessages(anyString(), anyList());
     }
 
     @Test

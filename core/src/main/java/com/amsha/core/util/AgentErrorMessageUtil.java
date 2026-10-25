@@ -12,6 +12,7 @@ import com.amsha.core.message.UserMessages;
 import org.jboss.logging.Logger;
 
 public final class AgentErrorMessageUtil {
+    public static final String SYSTEM_ERROR_PREFIX = "SYSTEM_ERROR: ";
 
     private static final Pattern TOKEN_LIMIT_PATTERN = Pattern.compile("Limit (\\d+), Used (\\d+), Requested (\\d+)");
     private static final Pattern RETRY_AFTER_PATTERN = Pattern.compile("Please try again in ([\\dhms.]+)");
@@ -50,7 +51,8 @@ public final class AgentErrorMessageUtil {
             return AI_UNEXPECTED_RESPONSE;
         }
 
-        String stripped = raw.replace("ReasoningEngine error: ", "")
+        String stripped = raw.replace(SYSTEM_ERROR_PREFIX, "")
+                .replace("ReasoningEngine error: ", "")
                 .replace("java.lang.RuntimeException: ", "")
                 .replace("dev.langchain4j.exception.HttpException: ", "")
                 .replace("TOOL_EXECUTION_FAILED: ", "")

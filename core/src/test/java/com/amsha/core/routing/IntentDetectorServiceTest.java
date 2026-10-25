@@ -38,6 +38,21 @@ public class IntentDetectorServiceTest {
     }
 
     @Test
+    void schedulingPriorityPrecedesCodeExecutionFastPath() {
+        String role = service.classify("run this python script tomorrow");
+        Assertions.assertEquals("coordinator", role, "Scheduling priority must win over the coder execution fast path");
+    }
+
+    @Test
+    void negatedCodeExecutionDoesNotUseCoderFastPath() {
+        when(classifierModel.chat(anyString())).thenReturn("coordinator");
+
+        String role = service.classify("Do not execute this Python script");
+
+        Assertions.assertEquals("coordinator", role, "Negated execution must not trigger the coder fast path");
+    }
+
+    @Test
     void testDestructiveOverride_Researcher() {
         // 'saraswati' maps to 'researcher' which is in TOOL_CAPABLE_ROLES
         when(classifierModel.chat(anyString())).thenReturn("saraswati");

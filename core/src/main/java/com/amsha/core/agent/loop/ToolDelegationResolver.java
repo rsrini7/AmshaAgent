@@ -45,21 +45,6 @@ public final class ToolDelegationResolver {
     private static final Set<String> ALL_BUILT_IN_ROLES =
             AgentRoleEnum.values().stream().map(AgentRoleEnum::id).collect(Collectors.toUnmodifiableSet());
 
-    private static final Set<String> MEMORY_ROLES = Set.of(
-            AgentRoleEnum.ARCHITECT_ID,
-            AgentRoleEnum.COORDINATOR_ID,
-            AgentRoleEnum.RESEARCHER_ID,
-            AgentRoleEnum.SYNTHESIZER_ID,
-            AgentRoleEnum.CODER_ID);
-
-    private static final Set<String> RECALL_MEMORY_ROLES = Set.of(
-            AgentRoleEnum.ARCHITECT_ID,
-            AgentRoleEnum.COORDINATOR_ID,
-            AgentRoleEnum.RESEARCHER_ID,
-            AgentRoleEnum.SYNTHESIZER_ID,
-            AgentRoleEnum.CODER_ID,
-            AgentRoleEnum.DEBUGGER_ID);
-
     private static final Map<String, String> EXPLICIT_OWNERS = Map.ofEntries(
             Map.entry(ToolCapability.GITHUB.toolName(), RESEARCHER),
             Map.entry(ToolCapability.SCHEDULE_TASK.toolName(), COORDINATOR),
@@ -92,17 +77,15 @@ public final class ToolDelegationResolver {
                             AgentRoleEnum.SYNTHESIZER_ID)),
             Map.entry(ToolCapability.SCHEDULE_TASK.toolName(), Set.of(COORDINATOR, AgentRoleEnum.SYNTHESIZER_ID)),
             Map.entry(ToolCapability.MANAGE_SCHEDULE.toolName(), Set.of(COORDINATOR, AgentRoleEnum.SYNTHESIZER_ID)),
-            Map.entry(ToolCapability.RECALL_MEMORY_SEARCH.toolName(), RECALL_MEMORY_ROLES),
-            Map.entry(ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName(), MEMORY_ROLES),
-            Map.entry(ToolCapability.CORE_MEMORY_READ.toolName(), MEMORY_ROLES),
-            Map.entry(ToolCapability.CORE_MEMORY_APPEND.toolName(), MEMORY_ROLES),
-            Map.entry(ToolCapability.CORE_MEMORY_REPLACE.toolName(), MEMORY_ROLES),
-            Map.entry(ToolCapability.ARCHIVAL_MEMORY_INSERT.toolName(), MEMORY_ROLES),
+            Map.entry(ToolCapability.RECALL_MEMORY_SEARCH.toolName(), ALL_BUILT_IN_ROLES),
+            Map.entry(ToolCapability.ARCHIVAL_MEMORY_SEARCH.toolName(), ALL_BUILT_IN_ROLES),
+            Map.entry(ToolCapability.CORE_MEMORY_READ.toolName(), ALL_BUILT_IN_ROLES),
+            Map.entry(ToolCapability.CORE_MEMORY_APPEND.toolName(), ALL_BUILT_IN_ROLES),
+            Map.entry(ToolCapability.CORE_MEMORY_REPLACE.toolName(), ALL_BUILT_IN_ROLES),
+            Map.entry(ToolCapability.ARCHIVAL_MEMORY_INSERT.toolName(), ALL_BUILT_IN_ROLES),
             Map.entry(ToolCapability.BROWSER_NAVIGATE.toolName(), Set.of(RESEARCHER)),
             Map.entry(ToolCapability.SANDBOX_EXEC.toolName(), Set.of(CODER, AgentRoleEnum.DEBUGGER_ID)),
-            Map.entry(
-                    ToolCapability.INGEST_DOCUMENT.toolName(),
-                    Set.of(COORDINATOR, AgentRoleEnum.SYNTHESIZER_ID, AgentRoleEnum.NURTURER_ID)),
+            Map.entry(ToolCapability.INGEST_DOCUMENT.toolName(), ALL_BUILT_IN_ROLES),
             Map.entry(ToolCapability.MANAGE_CHECKLIST.toolName(), Set.of(CODER, AgentRoleEnum.DEBUGGER_ID)),
             Map.entry(ToolCapability.REGISTER_MCP_SERVER.toolName(), Set.of(CODER, AgentRoleEnum.DEBUGGER_ID)),
             Map.entry(ToolCapability.WEB_SEARCH_BRAVE.toolName(), Set.of(RESEARCHER, AgentRoleEnum.SYNTHESIZER_ID)),

@@ -43,30 +43,28 @@ class ToolStepValidatorDelegationTest {
     @BeforeEach
     void setUp() {
         validator = new ToolStepValidator(toolRegistry, observers, dynamicToolLookup);
-        when(toolRegistry.findTool(ToolCapability.INGEST_DOCUMENT.toolName()))
+        when(toolRegistry.findTool(ToolCapability.BROWSER_NAVIGATE.toolName()))
                 .thenReturn(Optional.of(mock(AgentTool.class)));
     }
 
     @Test
-    void unauthorizedIngestRequestsFromEveryOtherPersonaDelegateToCoordinator() {
+    void unauthorizedBrowserRequestsFromEveryOtherPersonaDelegateToResearcher() {
         for (AgentRoleEnum role : AgentRoleEnum.values()) {
             AgentExecutionContext context = context(role.id());
             ReasoningStep step = ReasoningStep.pending(
-                    "analysis", ToolCapability.INGEST_DOCUMENT.toolName(), Map.of("text", "remember this"));
+                    "analysis", ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of("url", "https://example.com"));
 
             StepDecision decision = validator.validate(context, List.of(), step, step.action(), 0);
 
-            if (role == AgentRoleEnum.COORDINATOR
-                    || role == AgentRoleEnum.SYNTHESIZER
-                    || role == AgentRoleEnum.NURTURER) {
-                assertNull(decision, () -> role.id() + " already owns ingest_document");
+            if (role == AgentRoleEnum.RESEARCHER) {
+                assertNull(decision, () -> role.id() + " already owns browser_navigate");
             } else {
                 assertEquals(DecisionType.PROCEED, decision.type());
                 assertEquals(
                         ToolCapability.DELEGATE_TO_AGENT.toolName(),
                         decision.step().action());
                 assertEquals(
-                        AgentRoleEnum.COORDINATOR_ID,
+                        AgentRoleEnum.RESEARCHER_ID,
                         decision.step().actionInput().get("agent"));
             }
         }

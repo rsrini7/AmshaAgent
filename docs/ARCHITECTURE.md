@@ -393,21 +393,19 @@ When a `host_exec` goal matches `HostExecTool.BROWSER_PREVIEW_GOAL_PATTERN` and 
 | Role | Persona | Tools | Max Iter |
 |---|---|---|---|
 | `coordinator` | Vishnu | github, web_fetch, schedule/manage, memory (6), ingest_document, self_evolve_reflect, garuda, agent_task | 7 |
-| `coder` | Brahma | sandbox_exec, manage_checklist, register_mcp_server, memory (6), garuda | 15 |
-| `debugger` | Shiva | github, sandbox_exec, manage_checklist, register_mcp_server, recall_memory_search, garuda | 15 |
-| `researcher` | Saraswati | github, web_fetch, brave/serper search, memory (6), garuda, agent_task | 10 |
-| `architect` | Brihaspati | github, memory (6), garuda | 7 |
+| `coder` | Brahma | sandbox_exec, manage_checklist, register_mcp_server, memory (6), ingest_document, garuda | 15 |
+| `debugger` | Shiva | github, sandbox_exec, manage_checklist, register_mcp_server, memory (6), ingest_document, garuda | 15 |
+| `researcher` | Saraswati | github, web_fetch, brave/serper search, memory (6), ingest_document, garuda, agent_task | 10 |
+| `architect` | Brihaspati | github, memory (6), ingest_document, garuda | 7 |
 | `synthesizer` | Dattatreya | github, web_fetch, schedule/manage, brave/serper search, memory (6), ingest_document, garuda, agent_task | 10 |
-| `optimizer` | Ganesha | garuda; unsupported tools redelegate to their owner | 10 |
-| `sentinel` | Kartikeya | garuda; unsupported tools redelegate to their owner | 10 |
-| `healer` | Lakshmi | garuda; unsupported tools redelegate to their owner | 10 |
-| `protector` | Durga | garuda; unsupported tools redelegate to their owner | 10 |
-| `purifier` | Kali | garuda; unsupported tools redelegate to their owner | 10 |
-| `nurturer` | Parvati | garuda, ingest_document | 10 |
+| `optimizer` | Ganesha | memory (6), ingest_document, garuda | 10 |
+| `sentinel` | Kartikeya | memory (6), ingest_document, garuda | 10 |
+| `healer` | Lakshmi | memory (6), ingest_document, garuda | 10 |
+| `protector` | Durga | memory (6), ingest_document, garuda | 10 |
+| `purifier` | Kali | memory (6), ingest_document, garuda | 10 |
+| `nurturer` | Parvati | memory (6), ingest_document, garuda | 10 |
 
-**memory (6)** = `recall_memory_search`, `archival_memory_search`, `core_memory_read`, `core_memory_append`, `core_memory_replace`, `archival_memory_insert` (debugger only gets `recall_memory_search`).
-
-All 12 roles have `garuda` for delegation. An unauthorized known tool is rewritten to a `garuda` call targeting the centralized owner persona; this applies in the normal loop, approval resume, and parallel-batch resume. Tool schemas are dynamically assembled via `@ToolMetadata(defaultRoles=...)`.
+**memory (6)** = `recall_memory_search`, `archival_memory_search`, `core_memory_read`, `core_memory_append`, `core_memory_replace`, `archival_memory_insert`; all 12 built-in roles also have `ingest_document`. All 12 roles have `garuda` for delegation. An unauthorized known tool is rewritten to a `garuda` call targeting the centralized owner persona; this applies in the normal loop, approval resume, and parallel-batch resume. Tool schemas are dynamically assembled via `@ToolMetadata(defaultRoles=...)`.
 
 ---
 
@@ -670,13 +668,13 @@ graph TD
 | Smart Web Fetch | `web_fetch` | `NETWORK_OUTBOUND` | researcher, synthesizer, coordinator |
 | Sandbox Exec | `sandbox_exec` | `EXECUTE_SHELL` | coder, debugger |
 | Playwright CLI | `browser_navigate` | `NETWORK_OUTBOUND` | researcher (delegation owner) |
-| Recall Memory Search | `recall_memory_search` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder, debugger |
-| Archival Memory Search | `archival_memory_search` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder |
-| Core Memory Read | `core_memory_read` | `READ_FS` | architect, coordinator, researcher, synthesizer, coder |
-| Core Memory Append | `core_memory_append` | `WRITE_MEMORY` | architect, coordinator, researcher, synthesizer, coder |
-| Core Memory Replace | `core_memory_replace` | `WRITE_MEMORY` | architect, coordinator, researcher, synthesizer, coder |
-| Archival Memory Insert | `archival_memory_insert` | `WRITE_FS` | architect, coordinator, researcher, synthesizer, coder |
-| Ingest Document | `ingest_document` | `WRITE_MEMORY` | coordinator, synthesizer, nurturer |
+| Recall Memory Search | `recall_memory_search` | `READ_FS` | all 12 roles |
+| Archival Memory Search | `archival_memory_search` | `READ_FS` | all 12 roles |
+| Core Memory Read | `core_memory_read` | `READ_FS` | all 12 roles |
+| Core Memory Append | `core_memory_append` | `WRITE_MEMORY` | all 12 roles |
+| Core Memory Replace | `core_memory_replace` | `WRITE_MEMORY` | all 12 roles |
+| Archival Memory Insert | `archival_memory_insert` | `WRITE_MEMORY` | all 12 roles |
+| Ingest Document | `ingest_document` | `WRITE_MEMORY` | all 12 roles |
 | Schedule Task | `schedule_task` | `SCHEDULE_AUTONOMOUS` | coordinator, synthesizer |
 | Manage Schedule | `manage_schedule` | `READ_FS` | coordinator, synthesizer |
 | Manage Checklist | `manage_checklist` | `READ_FS` | coder, debugger |

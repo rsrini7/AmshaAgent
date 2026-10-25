@@ -8,6 +8,12 @@
         "pattern": "META-INF/skills/.*/SKILL\\.md"
       },
       {
+        "pattern": "\\Qskills/index.txt\\E"
+      },
+      {
+        "pattern": "skills/.*/SKILL\\.md"
+      },
+      {
         "pattern": "META-INF/services/org\\.apache\\.lucene\\..*"
       }
     ]

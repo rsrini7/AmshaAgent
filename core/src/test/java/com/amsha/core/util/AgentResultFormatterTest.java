@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.message.UserMessages;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +35,16 @@ class AgentResultFormatterTest {
         AgentResult failed = AgentResult.failed("⏳ Waiting", AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
         String formatted = AgentResultFormatter.format(failed);
         assertEquals("⏳ Waiting", formatted);
+    }
+
+    @Test
+    void testFormatFailed_withProviderUnavailableMessage_isActionable() {
+        AgentResult failed = AgentResult.failed(
+                AgentErrorMessageUtil.SYSTEM_ERROR_PREFIX + UserMessages.AI_PROVIDER_UNAVAILABLE,
+                AgentResult.FailureCategory.SYSTEM_ERROR,
+                List.of());
+
+        assertEquals("❌ " + UserMessages.AI_PROVIDER_UNAVAILABLE, AgentResultFormatter.format(failed));
     }
 
     @Test

@@ -32,7 +32,9 @@ public class IntentClassificationService {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern HISTORY_QUERY_PATTERN = Pattern.compile(
-            "\\b(summarize|recap|reiterate|what did we|discussed|so far|bullet our points|bullets?|bullet points|bulletized|bulletized summary|history|above|earlier|previous|before|summary)\\b",
+            "\\b(summarize|recap|reiterate|what did we|discussed|so far|bullet our points|bullets?|bullet points|bulletized|bulletized summary|history|above|earlier|previous|before|summary|"
+                    + "first\\s+(?:message|conversation|question|topic|thing|exchange)|conversation\\s+start|"
+                    + "start\\s+of\\s+(?:the\\s+)?conversation|beginning\\s+of\\s+(?:the\\s+)?conversation)\\b",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern IDENTITY_QUERY_PATTERN = Pattern.compile(
@@ -49,7 +51,7 @@ public class IntentClassificationService {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern SCHEDULE_INTENT_PATTERN = Pattern.compile(
-            "\\b(schedule|cron|run at|run every|run daily|run hourly|every\\s+(hour|minute|day|week|month|\\d+)|daily|hourly|weekly|monthly)\\b",
+            "\\b(schedule|cron|run at|run every|run daily|run hourly|every\\s+(hour|minute|day|week|month|\\d+)|daily|hourly|weekly|monthly|today|tonight|tomorrow|next\\s+(hour|day|week|month)|(?:in|after)\\s+\\d+\\s+(seconds?|minutes?|hours?|days?|weeks?|months?))\\b",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern SELF_EVOLVE_INTENT_PATTERN = Pattern.compile(
@@ -79,6 +81,16 @@ public class IntentClassificationService {
     public boolean isHistoryQuery(String text) {
         if (text == null || text.isBlank()) return false;
         return HISTORY_QUERY_PATTERN.matcher(text).find();
+    }
+
+    /**
+     * Detects a short execution follow-up such as "run it" or "execute and share
+     * the result". Unlike {@link #isFollowUpHeuristic(String)} this excludes
+     * retry/continuation phrases so callers can route execution to the coder.
+     */
+    public boolean isExecutionFollowUp(String text) {
+        if (text == null || text.isBlank()) return false;
+        return text.length() < 150 && EXECUTION_FOLLOWUP_PATTERN.matcher(text).matches();
     }
 
     /**
@@ -143,6 +155,14 @@ public class IntentClassificationService {
 
     private static final Pattern FOLLOWUP_PATTERN = Pattern.compile(
             "(?i)^\\s*(?:do\\s+it|(?:do\\s+)?(?:same|again|retry|execute|run|use\\s+sandbox|in\\s+(java|go|python|typescript|kotlin|rust|bash)))\\b.*");
+
+    private static final Pattern EXECUTION_FOLLOWUP_PATTERN = Pattern.compile("(?i)^\\s*(?:"
+            + "do\\s+it"
+            + "|(?:execute|compile|use\\s+sandbox)\\b.*"
+            + "|run\\b.*\\b(?:it|this|code|program|script|snippet|function|class|method|"
+            + "test|tests|build|result|output|app|application|binary|command|sandbox|shell|"
+            + "python|java|node|javascript|typescript|go|rust|bash|sql)\\b.*"
+            + ")");
 
     private static final Pattern CHITCHAT_EXCLUSION_PATTERN =
             Pattern.compile("(?i)^\\s*(thanks|thank\\s+you|ok|okay|cancel|stop|bye|hello|hi|hey)[.!?]?\\s*$");
