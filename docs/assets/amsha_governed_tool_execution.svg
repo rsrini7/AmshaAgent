@@ -25,6 +25,24 @@
     <pattern id="hexes" width="72" height="62" patternUnits="userSpaceOnUse">
       <path d="M18 1L35 10V29L18 38L1 29V10Z M54 32L71 41V60L54 69L37 60V41Z" fill="none" stroke="#90A0B1" stroke-opacity="0.055" stroke-width="1.5"/>
     </pattern>
+    <linearGradient id="amshaLogogold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#FFD166"/>
+          <stop offset="0.5" stop-color="#F4A62A"/>
+          <stop offset="1" stop-color="#D9820B"/>
+        </linearGradient>
+        <linearGradient id="amshaLogoshield" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1B2733"/>
+          <stop offset="1" stop-color="#0D141B"/>
+        </linearGradient>
+        <clipPath id="amshaLogoabdomen">
+          <ellipse cx="64" cy="74" rx="13" ry="18"/>
+        </clipPath>
+        <clipPath id="amshaLogoshieldInner">
+          <path d="M64 15 L105 28 V60 C105 87 86 104.5 64 113.5 C42 104.5 23 87 23 60 V28 Z"/>
+        </clipPath>
+        <pattern id="amshaLogohexagons" width="28" height="49" patternUnits="userSpaceOnUse" patternTransform="scale(0.6) translate(6 2)">
+          <path d="M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z" fill="#F4A62A" fill-opacity="0.1"/>
+        </pattern>
     <style>
       text { font-family: Inter, "Segoe UI", Arial, sans-serif; }
       .eyebrow { font-size: 17px; font-weight: 700; letter-spacing: 2.4px; }
@@ -42,7 +60,66 @@
 
   <!-- Header -->
   <g>
-    <image href="amsha_bee_shield.svg" x="58" y="58" width="52" height="52" aria-label="Amsha Agent bee-and-shield logo"/>
+    <g transform="matrix(0.40625 0 0 0.40625 58 58)" role="img" aria-label="Amsha Agent bee-and-shield logo">
+      <title id="amshaLogoTitle">Amsha Agent logo</title>
+      <path d="M64 6 L114 22 V60 C114 92 92 112 64 122 C36 112 14 92 14 60 V22 Z"
+              fill="url(#amshaLogoshield)" stroke="url(#amshaLogogold)" stroke-width="4" stroke-linejoin="round"/>
+        <g clip-path="url(#amshaLogoshieldInner)">
+          <rect x="10" y="10" width="108" height="108" fill="url(#amshaLogohexagons)"/>
+        </g>
+        <path d="M64 15 L105 28 V60 C105 87 86 104.5 64 113.5 C42 104.5 23 87 23 60 V28 Z"
+              fill="none" stroke="#F4A62A" stroke-opacity="0.55" stroke-width="1.5"/>
+
+        <g transform="translate(38 40) rotate(18) scale(0.8)">
+          <g fill="#F7FBFF" fill-opacity="0.9" stroke="url(#amshaLogogold)" stroke-width="0.9">
+            <ellipse cx="-3.8" cy="-0.5" rx="4.2" ry="2.3" transform="rotate(-32 -3.8 -0.5)"/>
+            <ellipse cx="3.8" cy="-0.5" rx="4.2" ry="2.3" transform="rotate(32 3.8 -0.5)"/>
+          </g>
+          <ellipse cx="0" cy="0.5" rx="3.2" ry="4.6" fill="url(#amshaLogogold)"/>
+          <rect x="-3.2" y="-0.2" width="6.4" height="1.7" fill="#101820"/>
+          <circle cx="0" cy="-4.6" r="2" fill="url(#amshaLogogold)"/>
+        </g>
+        <g transform="translate(90 40) rotate(-18) scale(0.8)">
+          <g fill="#F7FBFF" fill-opacity="0.9" stroke="url(#amshaLogogold)" stroke-width="0.9">
+            <ellipse cx="-3.8" cy="-0.5" rx="4.2" ry="2.3" transform="rotate(-32 -3.8 -0.5)"/>
+            <ellipse cx="3.8" cy="-0.5" rx="4.2" ry="2.3" transform="rotate(32 3.8 -0.5)"/>
+          </g>
+          <ellipse cx="0" cy="0.5" rx="3.2" ry="4.6" fill="url(#amshaLogogold)"/>
+          <rect x="-3.2" y="-0.2" width="6.4" height="1.7" fill="#101820"/>
+          <circle cx="0" cy="-4.6" r="2" fill="url(#amshaLogogold)"/>
+        </g>
+
+        <g fill="#F7FBFF" fill-opacity="0.9" stroke="url(#amshaLogogold)" stroke-width="2">
+          <ellipse cx="44" cy="58" rx="14" ry="7.5" transform="rotate(-34 44 58)"/>
+          <ellipse cx="84" cy="58" rx="14" ry="7.5" transform="rotate(34 84 58)"/>
+        </g>
+
+        <ellipse cx="64" cy="74" rx="13" ry="18" fill="url(#amshaLogogold)"/>
+        <g clip-path="url(#amshaLogoabdomen)" fill="#101820">
+          <rect x="49" y="63" width="30" height="6.5"/>
+          <rect x="49" y="74" width="30" height="6.5"/>
+          <rect x="49" y="85" width="30" height="6.5"/>
+        </g>
+
+        <path d="M64 96 L61.5 90.5 H66.5 Z" fill="#B8760A"/>
+
+        <circle cx="64" cy="48" r="8" fill="url(#amshaLogogold)"/>
+        <circle cx="61" cy="47" r="1.7" fill="#101820"/>
+        <circle cx="67" cy="47" r="1.7" fill="#101820"/>
+
+        <g fill="none" stroke="url(#amshaLogogold)" stroke-width="2.2" stroke-linecap="round">
+          <path d="M60 42 C57 35 53 32 49 33"/>
+          <path d="M68 42 C71 35 75 32 79 33"/>
+        </g>
+
+        <g stroke="#8A5A00" stroke-width="0.8" stroke-linejoin="round">
+          <path d="M56.5 38.5 L57.6 27.5 L60.8 32 L64 26 L67.2 32 L70.4 27.5 L71.5 38.5 Z" fill="url(#amshaLogogold)"/>
+          <rect x="56.5" y="38.5" width="15" height="2.6" rx="1" fill="#B8760A"/>
+          <circle cx="57.6" cy="26.8" r="1.4" fill="url(#amshaLogogold)"/>
+          <circle cx="64" cy="25.2" r="1.4" fill="url(#amshaLogogold)"/>
+          <circle cx="70.4" cy="26.8" r="1.4" fill="url(#amshaLogogold)"/>
+        </g>
+    </g>
     <text x="116" y="91" class="eyebrow" fill="#E8B64F">AMSHA AGENT</text>
     <text x="80" y="169" class="title" fill="#F3F6FA">A governed path from agent to tool</text>
     <text x="82" y="208" class="subtitle" fill="#AAB7C6">The model proposes an action. Runtime policy evaluates it before execution.</text>
