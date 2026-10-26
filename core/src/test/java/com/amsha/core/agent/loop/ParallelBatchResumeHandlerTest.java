@@ -65,6 +65,19 @@ class ParallelBatchResumeHandlerTest {
         return new ParallelBatchResumeHandler(agentStore, toolRegistry, mapper, delegationResolver, guard);
     }
 
+    @Test
+    void missingGuardBlocksPendingToolBeforeInvocation() throws Exception {
+        AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "unsafe")));
+        ParallelBatchResumeHandler handlerWithoutGuard =
+                new ParallelBatchResumeHandler(agentStore, toolRegistry, mapper, delegationResolver, null);
+
+        AgentResult result = handlerWithoutGuard.resumeParallelBatch(
+                mockContext(SESSION), new ArrayList<>(), checkpoint, "TELEGRAM");
+
+        assertNull(result);
+        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
+    }
+
     /**
      * A checkpoint whose pending batch is {@code calls}, with no per-tool decisions and no
      * pre-executed results. Individual tests re-stub what they need.

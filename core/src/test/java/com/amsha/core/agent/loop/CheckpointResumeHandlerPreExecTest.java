@@ -56,6 +56,9 @@ class CheckpointResumeHandlerPreExecTest {
     @Mock
     ReasoningEngine reasoningEngine;
 
+    @Mock
+    ToolInvocationGuard toolInvocationGuard;
+
     ObjectMapper objectMapper = new ObjectMapper();
 
     CheckpointResumeHandler handler;
@@ -63,7 +66,22 @@ class CheckpointResumeHandlerPreExecTest {
     @BeforeEach
     void setup() {
         handler = new CheckpointResumeHandler(
-                agentStore, toolRegistry, objectMapper, null, reasoningEngine, null, null, null, null, null, null);
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                null,
+                reasoningEngine,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new ToolDelegationResolver(),
+                toolInvocationGuard,
+                null);
+        when(toolInvocationGuard.evaluate(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
     }
 
     @Test
