@@ -1,6 +1,7 @@
 amsha:
   data-dir: "./target"
   llm:
+    provider: "ollama"
     model: "test-model"
   workspace:
     root-dir: "./target/workspaces"
