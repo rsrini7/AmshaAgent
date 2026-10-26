@@ -155,17 +155,8 @@ class ParallelBatchResumeHandler {
                 executionCall = new ParallelToolCall(
                         call.callId(), invocationToolName, parsedParams, invocationParamsJson, null, false);
 
-                ToolInvocationGuard.GuardDecision decision = guard != null
-                        ? guard.evaluate(
-                                context.sessionId(),
-                                effectiveRole,
-                                context.autonomyLevel(),
-                                invocationToolName,
-                                parsedParams,
-                                history,
-                                context.goal(),
-                                List.of())
-                        : new ToolInvocationGuard.GuardDecision.Allow();
+                ToolInvocationGuard.GuardDecision decision =
+                        evaluateGuard(context, effectiveRole, invocationToolName, parsedParams, history);
 
                 if (decision instanceof ToolInvocationGuard.GuardDecision.Blocked b) {
                     completed.add(executionCall.withResult(
@@ -225,6 +216,30 @@ class ParallelBatchResumeHandler {
         } catch (Exception e) {
             return handleCorruptBatch(checkpoint, history);
         }
+    }
+
+    private ToolInvocationGuard.GuardDecision evaluateGuard(
+            AgentExecutionContext context,
+            String effectiveRole,
+            String toolName,
+            Map<String, Object> params,
+            List<ReasoningStep> history) {
+        if (guard == null) {
+            log.errorf(
+                    "[ResumeStrategy] Mandatory tool guard unavailable; blocking tool %s in session %s",
+                    toolName, context.sessionId());
+            return new ToolInvocationGuard.GuardDecision.Blocked(
+                    "Tool execution blocked because safety guard unavailable.");
+        }
+        return guard.evaluate(
+                context.sessionId(),
+                effectiveRole,
+                context.autonomyLevel(),
+                toolName,
+                params,
+                history,
+                context.goal(),
+                List.of());
     }
 
     private Optional<DelegatedPause> findDelegatedPause(List<ParallelToolCall> completed) {
