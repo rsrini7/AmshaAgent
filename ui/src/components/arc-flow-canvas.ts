@@ -493,6 +493,10 @@ export class ArcFlowCanvas extends LitElement {
     this._scrubIndex = -1;
     this.dispatchEvent(new CustomEvent('exit-replay', { bubbles: true, composed: true }));
     // Surface the run list so the shell can refresh session runs after replay ends.
+    this._requestRunRefresh();
+  }
+
+  private _requestRunRefresh() {
     this.dispatchEvent(new CustomEvent('refresh-runs', { bubbles: true, composed: true }));
   }
 
@@ -660,6 +664,18 @@ export class ArcFlowCanvas extends LitElement {
         </div>
 
         <div class="toolbar-right">
+          ${!this.isReplayMode
+            ? html`
+                <button
+                  class="ledger-toggle-btn"
+                  @click="${this._requestRunRefresh}"
+                  aria-label="${this.replayRuns.length > 0 ? 'Refresh available runs' : 'Load available runs'}"
+                >
+                  ↻ ${this.replayRuns.length > 0 ? 'Refresh runs' : 'Load runs'}
+                </button>
+              `
+            : nothing}
+
           ${!this.isReplayMode && this.replayRuns.length > 0
             ? html`
                 <div class="runs-dropdown">

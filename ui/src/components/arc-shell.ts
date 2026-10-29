@@ -606,6 +606,9 @@ export class ArcShell extends LitElement {
       event.sessionId === this._sessionId &&
       (status === AGENT_SESSION_STATUS.AWAITING_RETRY || TERMINAL_AGENT_SESSION_STATUSES.has(status))
     ) {
+      if (TERMINAL_AGENT_SESSION_STATUSES.has(status)) {
+        void this._fetchSessionRuns(event.sessionId);
+      }
       window.dispatchEvent(
         new CustomEvent<AgentSessionStatusNotice>(AGENT_SESSION_STATUS_EVENT, {
           detail: {
