@@ -136,6 +136,7 @@ Decisions that define the system structure and operational boundaries:
 
 ### Domain Decisions (`docs/adr/domain/`)
 - [ADR-Identity-Access-and-Workspace-Sharing](adr/domain/ADR-Identity-Access-and-Workspace-Sharing.md) — Multi-user workspace sharing and access control (Status: Implemented).
+- [ADR-Governed-GitHub-README-Connector](adr/domain/ADR-Governed-GitHub-README-Connector.md) — Owner-scoped, read-only GitHub README ingestion (Status: Accepted).
 - [ADR-DuckDB-Auxiliary-Analytical-Store](adr/domain/ADR-DuckDB-Auxiliary-Analytical-Store.md) — Embedded DuckDB analytical store integration (Status: Proposed).
 - [ADR-indian-legal-ai-harness-requirements](adr/domain/ADR-indian-legal-ai-harness-requirements.md) — Indian legal AI evaluation harness requirements (Status: Proposed baseline).
 - [ADR-MCP-Management-UI-and-Channel-Control](adr/domain/ADR-MCP-Management-UI-and-Channel-Control.md) — MCP channel UI and client management (Status: Proposed).

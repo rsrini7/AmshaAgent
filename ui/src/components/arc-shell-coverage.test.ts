@@ -138,6 +138,7 @@ describe('ArcShell routing and live cockpit behavior', () => {
     const client = {
       getSessionRuns: vi.fn().mockResolvedValue([summary]),
       getRunTrace: vi.fn().mockResolvedValue([trace]),
+      getRunEvidence: vi.fn().mockRejectedValue(new Error('evidence unavailable')),
     };
     component._client = client;
 

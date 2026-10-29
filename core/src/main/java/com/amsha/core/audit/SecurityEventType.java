@@ -123,6 +123,8 @@ public enum SecurityEventType {
     // DB Console & Model Arena
     DATABASE_QUERY_FAILED, // DB console query execution error or database unavailable
     PROVIDER_EGRESS_VALIDATED, // Model Arena governed provider egress validation succeeded
+    EXTERNAL_SOURCE_EGRESS_REQUESTED, // Connector egress recorded before outbound HTTP
+    EXTERNAL_SOURCE_INDEX_MUTATED, // External source index write or removal recorded before mutation
     OUTBOUND_EGRESS_DENIED, // Governed outbound HTTP egress rejected by policy
 
     // Decision plane (Jev / System One) — W4 evaluation path
@@ -177,6 +179,8 @@ public enum SecurityEventType {
                     MCP_CREDENTIAL_CLEANUP_FAILED,
                     DATABASE_QUERY_FAILED,
                     PROVIDER_EGRESS_VALIDATED,
+                    EXTERNAL_SOURCE_EGRESS_REQUESTED,
+                    EXTERNAL_SOURCE_INDEX_MUTATED,
                     DELEGATION_DISPATCHED,
                     DECISION_EVALUATION_REQUESTED -> true;
             default -> false;

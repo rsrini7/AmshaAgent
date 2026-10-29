@@ -1,7 +1,7 @@
 import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
 import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto, NetworkProfilePolicyDto, ProviderCatalogModel } from './types';
-import { ExecutionRunSummaryDto, ExecutionTraceDto } from '../types/trace';
+import { ExecutionRunSummaryDto, ExecutionTraceDto, RunEvidenceDto } from '../types/trace';
 import type { ClassifierRuntimeResponse } from './types';
 export type { ClassifierRuntimeResponse, ClassifierSnapshot } from './types';
 
@@ -694,6 +694,10 @@ export class ArcClient {
     return this.request<ExecutionTraceDto[]>(
       `/cockpit/runs/${encodeURIComponent(runId)}/trace?limit=${limit}&offset=${offset}`,
     );
+  }
+
+  async getRunEvidence(runId: string): Promise<RunEvidenceDto> {
+    return this.request<RunEvidenceDto>(`/cockpit/runs/${encodeURIComponent(runId)}/evidence`);
   }
 
   async queryDb(request: DbQueryRequest): Promise<DbQueryResponse> {

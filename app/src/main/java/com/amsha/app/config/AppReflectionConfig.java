@@ -15,6 +15,8 @@ import com.amsha.app.api.PromptAdminResource;
 import com.amsha.app.api.RecallMemoryAdminResource;
 import com.amsha.app.api.SessionResource;
 import com.amsha.app.cli.ModelInstaller;
+import com.amsha.app.connector.github.GitHubAppCredentialStatusResponse;
+import com.amsha.app.connector.github.GitHubReadmeStatusResponse;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
 import com.amsha.app.skill.SkillResource;
@@ -37,6 +39,8 @@ import com.amsha.app.ui.dto.HealthCheckDetail;
 import com.amsha.app.ui.dto.PageDto;
 import com.amsha.app.ui.dto.PendingApprovalDto;
 import com.amsha.app.ui.dto.ProviderHealthSummary;
+import com.amsha.app.ui.dto.RunDecisionEvidenceDto;
+import com.amsha.app.ui.dto.RunEvidenceDto;
 import com.amsha.app.ui.dto.SmallRyeHealthSummary;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceDiagnostics;
 import com.amsha.core.classifier.evaluation.DecisionEvidenceRunAttribution;
@@ -144,6 +148,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             HealthCheckDetail.class,
             DbConnectionPoolSummary.class,
             ProviderHealthSummary.class,
+            RunDecisionEvidenceDto.class,
+            RunEvidenceDto.class,
+            GitHubAppCredentialStatusResponse.class,
+            GitHubReadmeStatusResponse.class,
             ModelInstaller.ModelCatalogEntry.class,
             ModelInstaller.ModelFileSpec.class,
             ModelInstaller.ModelStatus.class

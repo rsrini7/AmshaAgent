@@ -85,6 +85,8 @@ public final class VaultConstants {
 
     /** GitHub personal access token (host/tool secret). */
     public static final String TOOLS_GITHUB_TOKEN = "AMSHA_TOOLS_GITHUB_TOKEN";
+    /** Private key for the selected-repository GitHub App source connector. */
+    public static final String GITHUB_APP_PRIVATE_KEY = "AMSHA_GITHUB_APP_PRIVATE_KEY";
 
     /** Serper web-search API key (host/tool secret). */
     public static final String TOOLS_SERPER_API_KEY = "AMSHA_TOOLS_SERPER_API_KEY";

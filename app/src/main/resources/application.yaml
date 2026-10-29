@@ -372,6 +372,8 @@ smallrye:
         - "decision-evidence/**"
 amsha:
   data-dir: "${AMSHA_DATA_DIR:./data}"
+  github:
+    app-id: "${AMSHA_GITHUB_APP_ID:none}"
   test-data-collection:
     enabled: ${AMSHA_TEST_DATA_COLLECTION_ENABLED:false}
   classifier:

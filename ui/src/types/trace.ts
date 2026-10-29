@@ -162,6 +162,67 @@ export interface ExecutionRunSummaryDto {
   completedAt: string | null;
 }
 
+/** Shared wire values for the bounded run-evidence view. */
+export const RUN_EVIDENCE_VALUE = {
+  END: 'END',
+  OBSERVED: 'OBSERVED',
+  MEASURED: 'MEASURED',
+  PARTIAL: 'PARTIAL',
+  PRICED: 'PRICED',
+  UNPRICED: 'UNPRICED',
+  UNAVAILABLE: 'UNAVAILABLE',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+export const RUN_EVIDENCE_DECISIONS = [
+  'ALLOW',
+  'HITL_REQUIRED',
+  'DENIED',
+  'APPROVED',
+  'AWAITING_APPROVAL',
+  'RESUMED',
+  'UNKNOWN',
+] as const;
+
+export const RUN_EVIDENCE_RISK_LEVELS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
+
+/** Payload-free decision evidence returned by the run-level operator endpoint. */
+export interface RunDecisionEvidenceDto {
+  decision: (typeof RUN_EVIDENCE_DECISIONS)[number];
+  riskLevel: (typeof RUN_EVIDENCE_RISK_LEVELS)[number] | null;
+  timestamp: string;
+}
+
+/** Bounded run-level evidence; absent measurements carry an explicit availability state. */
+export interface RunEvidenceDto {
+  runId: string;
+  outcomeStatus:
+    | typeof RUN_EVIDENCE_VALUE.END
+    | typeof RUN_EVIDENCE_VALUE.UNAVAILABLE
+    | typeof RUN_EVIDENCE_VALUE.UNKNOWN;
+  outcomeAvailability: typeof RUN_EVIDENCE_VALUE.OBSERVED | typeof RUN_EVIDENCE_VALUE.UNAVAILABLE;
+  latencyMs: number | null;
+  latencyAvailability: typeof RUN_EVIDENCE_VALUE.MEASURED | typeof RUN_EVIDENCE_VALUE.UNAVAILABLE;
+  observedEventCount: number;
+  eventsTruncated: boolean;
+  guardDecisions: RunDecisionEvidenceDto[];
+  approvalDecisions: RunDecisionEvidenceDto[];
+  decisionEvidenceTruncated: boolean;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  usageAvailability:
+    | typeof RUN_EVIDENCE_VALUE.OBSERVED
+    | typeof RUN_EVIDENCE_VALUE.PARTIAL
+    | typeof RUN_EVIDENCE_VALUE.UNAVAILABLE;
+  costStatus:
+    | typeof RUN_EVIDENCE_VALUE.PRICED
+    | typeof RUN_EVIDENCE_VALUE.UNPRICED
+    | typeof RUN_EVIDENCE_VALUE.UNAVAILABLE;
+  estimatedCost: number | null;
+  costCurrency: string | null;
+  costReason: string;
+}
+
 /** Persisted execution trace record returned by the replay REST API. */
 export interface ExecutionTraceDto {
   eventId: string;
