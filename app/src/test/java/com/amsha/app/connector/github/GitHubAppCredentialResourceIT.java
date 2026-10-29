@@ -19,9 +19,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPairGenerator;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Map;
 import java.util.UUID;
 
 import com.amsha.app.security.ApiKeyRegistry;
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.persistence.api.IdentityStorePort;
@@ -42,10 +44,13 @@ import org.mockito.Mockito;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 
 @QuarkusTest
+@TestProfile(GitHubAppCredentialResourceIT.DisabledProfile.class)
 class GitHubAppCredentialResourceIT {
 
     @InjectMock
@@ -71,6 +76,13 @@ class GitHubAppCredentialResourceIT {
     private String regularCsrf;
     private String adminWorkspace;
     private String regularWorkspace;
+
+    public static class DisabledProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(ConfigKeys.GITHUB_DOCS_CONNECTOR_ENABLED_PROPERTY, "false");
+        }
+    }
 
     @BeforeEach
     void seedAuthenticatedUsers() {
@@ -107,6 +119,7 @@ class GitHubAppCredentialResourceIT {
                 .body(pem)
                 .put("/api/v1/admin/connectors/github-readme/app-credential");
         assertEquals(200, response.statusCode());
+        assertFalse(response.jsonPath().getBoolean("enabled"));
         assertTrue(response.jsonPath().getBoolean("configured"));
         assertFalse(response.asString().contains(new String(pem, StandardCharsets.US_ASCII)));
 
@@ -121,6 +134,33 @@ class GitHubAppCredentialResourceIT {
                         eq("operation=store keyName=" + VaultConstants.GITHUB_APP_PRIVATE_KEY));
         order.verify(secretVault).storeSystemKey(eq(VaultConstants.GITHUB_APP_PRIVATE_KEY), storedBytes.capture());
         assertTrue(allZero(storedBytes.getValue()));
+    }
+
+    @Test
+    void internalCredentialStatusReportsOnlyPresenceWithoutCaching() {
+        Mockito.when(secretVault.systemKeyExists(VaultConstants.GITHUB_APP_PRIVATE_KEY))
+                .thenReturn(true);
+
+        Response response = adminRequest().get("/api/v1/admin/connectors/github-readme/app-credential");
+
+        assertEquals(200, response.statusCode());
+        assertFalse(response.jsonPath().getBoolean("enabled"));
+        assertTrue(response.jsonPath().getBoolean("configured"));
+        assertEquals("no-store", response.getHeader("Cache-Control"));
+        assertFalse(response.asString().contains(VaultConstants.GITHUB_APP_PRIVATE_KEY));
+        verify(secretVault).systemKeyExists(VaultConstants.GITHUB_APP_PRIVATE_KEY);
+    }
+
+    @Test
+    void internalCredentialStatusReportsMissingKey() {
+        Mockito.when(secretVault.systemKeyExists(VaultConstants.GITHUB_APP_PRIVATE_KEY))
+                .thenReturn(false);
+
+        Response response = adminRequest().get("/api/v1/admin/connectors/github-readme/app-credential");
+
+        assertEquals(200, response.statusCode());
+        assertFalse(response.jsonPath().getBoolean("enabled"));
+        assertFalse(response.jsonPath().getBoolean("configured"));
     }
 
     @Test
@@ -152,9 +192,15 @@ class GitHubAppCredentialResourceIT {
                 .delete("/api/v1/admin/connectors/github-readme/app-credential")
                 .then()
                 .statusCode(403);
+        regularRequest()
+                .when()
+                .get("/api/v1/admin/connectors/github-readme/app-credential")
+                .then()
+                .statusCode(403);
 
         verify(secretVault, never()).storeSystemKey(any(String.class), any(byte[].class));
         verify(secretVault, never()).removeSystemKey(any(String.class));
+        verify(secretVault, never()).systemKeyExists(any(String.class));
     }
 
     private RequestSpecification adminRequest() {

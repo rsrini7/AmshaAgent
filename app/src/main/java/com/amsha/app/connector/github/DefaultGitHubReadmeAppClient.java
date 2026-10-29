@@ -9,8 +9,12 @@ import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
@@ -18,21 +22,18 @@ import com.amsha.security.api.VaultKey;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-/** GitHub App client restricted to the selected repository's public root README. */
+/** GitHub App client limited by the persisted repository and path settings for a connection. */
 @ApplicationScoped
 public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
-
     private static final String API_BASE = "https://api.github.com";
-    private static final String OWNER = "rsrini7";
-    private static final String REPOSITORY = "rsrini7";
-    private static final String FULL_NAME = "rsrini7/rsrini7";
     private static final String INSTALLATION_OPERATION = "get_installation";
     private static final String METADATA_TOKEN_OPERATION = "create_installation_metadata_token";
     private static final String INSTALLATION_REPOSITORIES_OPERATION = "list_installation_repositories";
     private static final String TOKEN_OPERATION = "create_repository_token";
     private static final String REPOSITORY_OPERATION = "read_repository_metadata";
     private static final String COMMIT_OPERATION = "read_default_branch_commit";
-    private static final String README_OPERATION = "read_root_readme";
+    private static final String TREE_OPERATION = "read_default_branch_tree";
+    private static final String DOCUMENT_OPERATION = "read_allowed_markdown";
 
     private final GitHubReadmeTransport transport;
     private final SecretVault secretVault;
@@ -52,7 +53,13 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
     }
 
     @Override
-    public Optional<GitHubReadmeSnapshot> fetchCurrent(String actorUserId) {
+    public GitHubReadmeSnapshot fetchCurrent(String actorUserId, GitHubReadmeConnectionSettings settings) {
+        GitHubReadmeConnectionSettings validatedSettings;
+        try {
+            validatedSettings = GitHubReadmeSourcePolicy.validateFirstConnection(settings);
+        } catch (IllegalArgumentException _) {
+            throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
+        }
         if (actorUserId == null || actorUserId.isBlank() || appId == null || !appId.matches("[0-9]{1,20}")) {
             throw sourceFailure(GitHubReadmeSourceException.Kind.CREDENTIALS_MISSING);
         }
@@ -72,7 +79,7 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
             } catch (IllegalArgumentException _) {
                 throw sourceFailure(GitHubReadmeSourceException.Kind.CREDENTIALS_MISSING);
             }
-            return fetchAuthorizedRepository(actorUserId, appJwt);
+            return fetchAuthorizedRepository(actorUserId, appJwt, validatedSettings);
         } catch (GitHubReadmeSourceException e) {
             throw e;
         } catch (RuntimeException _) {
@@ -80,11 +87,15 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
         }
     }
 
-    private Optional<GitHubReadmeSnapshot> fetchAuthorizedRepository(String actorUserId, String appJwt) {
-        GitHubHttpResponse installationResponse = send(
-                get(API_BASE + "/repos/" + OWNER + "/" + REPOSITORY + "/installation", appJwt),
-                actorUserId,
-                INSTALLATION_OPERATION);
+    private GitHubReadmeSnapshot fetchAuthorizedRepository(
+            String actorUserId, String appJwt, GitHubReadmeConnectionSettings settings) {
+        String[] repositoryParts = settings.repository().split("/", 2);
+        String owner = encodePathSegment(repositoryParts[0]);
+        String repository = encodePathSegment(repositoryParts[1]);
+        String repositoryPath = "/repos/" + owner + "/" + repository;
+
+        GitHubHttpResponse installationResponse =
+                send(get(API_BASE + repositoryPath + "/installation", appJwt), actorUserId, INSTALLATION_OPERATION);
         requireSuccess(installationResponse);
         GitHubReadmePayloadParser.Installation installation = parseInstallation(installationResponse);
 
@@ -105,53 +116,108 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
                 INSTALLATION_REPOSITORIES_OPERATION);
         requireSuccess(installedRepositoriesResponse);
         GitHubReadmePayloadParser.InstalledRepository installedRepository =
-                parseInstalledRepositories(installedRepositoriesResponse);
+                parseInstalledRepositories(installedRepositoriesResponse, settings.repository());
 
-        String tokenBody = "{\"repositories\":[\"" + REPOSITORY + "\"],\"permissions\":{\"contents\":\"read\"}}";
+        String tokenBody =
+                "{\"repositories\":[\"" + repositoryParts[1] + "\"],\"permissions\":{\"contents\":\"read\"}}";
         GitHubHttpResponse tokenResponse = send(
                 post(API_BASE + "/app/installations/" + installation.id() + "/access_tokens", appJwt, tokenBody),
                 actorUserId,
                 TOKEN_OPERATION);
         requireSuccess(tokenResponse);
-        GitHubReadmePayloadParser.InstallationToken token = parseToken(tokenResponse);
+        GitHubReadmePayloadParser.InstallationToken token = parseToken(tokenResponse, settings.repository());
         if (token.repositoryId() != installedRepository.id()) {
             throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
         }
 
-        GitHubHttpResponse repositoryResponse = send(
-                get(API_BASE + "/repos/" + OWNER + "/" + REPOSITORY, token.value()), actorUserId, REPOSITORY_OPERATION);
+        GitHubHttpResponse repositoryResponse =
+                send(get(API_BASE + repositoryPath, token.value()), actorUserId, REPOSITORY_OPERATION);
         requireSuccess(repositoryResponse);
-        if (parser.repositoryIsPrivate(requireJson(repositoryResponse))) {
-            throw sourceFailure(GitHubReadmeSourceException.Kind.ACCESS_REVOKED);
-        }
-        GitHubReadmePayloadParser.Repository repository = parseRepository(repositoryResponse);
-        if (token.repositoryId() != repository.id()) {
+        GitHubReadmePayloadParser.Repository repositoryMetadata =
+                parseRepository(repositoryResponse, settings.repository());
+        if (token.repositoryId() != repositoryMetadata.id()) {
             throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
         }
 
-        String branchPath = encodePathSegment(repository.defaultBranch());
+        String encodedBranch = encodePathSegment(repositoryMetadata.defaultBranch());
         GitHubHttpResponse commitResponse = send(
-                get(API_BASE + "/repos/" + OWNER + "/" + REPOSITORY + "/commits/" + branchPath, token.value()),
+                get(API_BASE + repositoryPath + "/commits/" + encodedBranch, token.value()),
                 actorUserId,
                 COMMIT_OPERATION);
-        if (commitResponse.statusCode() == 404) {
-            return Optional.empty();
-        }
         requireSuccess(commitResponse);
         String commitSha = parseCommit(commitResponse);
 
-        String ref = commitSha;
-        GitHubHttpResponse readmeResponse = send(
-                get(API_BASE + "/repos/" + OWNER + "/" + REPOSITORY + "/contents/README.md?ref=" + ref, token.value()),
+        GitHubHttpResponse treeResponse = send(
+                get(API_BASE + repositoryPath + "/git/trees/" + commitSha + "?recursive=1", token.value()),
                 actorUserId,
-                README_OPERATION);
-        if (readmeResponse.statusCode() == 404) {
-            return Optional.empty();
+                TREE_OPERATION);
+        if (treeResponse.statusCode() == 404) {
+            throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
         }
-        requireSuccess(readmeResponse);
-        GitHubReadmePayloadParser.Readme readme = parseReadme(readmeResponse);
-        return Optional.of(new GitHubReadmeSnapshot(
-                repository.id(), FULL_NAME, repository.defaultBranch(), commitSha, readme.markdown()));
+        requireSuccess(treeResponse);
+        List<GitHubReadmePayloadParser.TreeEntry> allowedEntries = allowedEntries(parseTree(treeResponse), settings);
+        List<GitHubReadmeDocumentSnapshot> documents =
+                fetchDocuments(actorUserId, token.value(), repositoryPath, commitSha, allowedEntries, settings);
+        return new GitHubReadmeSnapshot(
+                repositoryMetadata.id(),
+                settings.repository(),
+                repositoryMetadata.defaultBranch(),
+                commitSha,
+                documents);
+    }
+
+    private List<GitHubReadmePayloadParser.TreeEntry> allowedEntries(
+            List<GitHubReadmePayloadParser.TreeEntry> entries, GitHubReadmeConnectionSettings settings) {
+        ArrayList<GitHubReadmePayloadParser.TreeEntry> allowed = new ArrayList<>();
+        long totalBytes = 0;
+        for (GitHubReadmePayloadParser.TreeEntry entry : entries) {
+            if (!GitHubReadmeSourcePolicy.isAllowedMarkdownPath(settings, entry.path())
+                    || !"blob".equals(entry.type())
+                    || !"100644".equals(entry.mode())) {
+                continue;
+            }
+            if (entry.size() > GitHubReadmeSnapshot.MAX_DOCUMENT_BYTES) {
+                continue;
+            }
+            totalBytes += entry.size();
+            if (allowed.size() >= GitHubReadmeSnapshot.MAX_DOCUMENT_COUNT
+                    || totalBytes > GitHubReadmeSnapshot.MAX_TOTAL_BYTES) {
+                throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
+            }
+            allowed.add(entry);
+        }
+        return List.copyOf(allowed);
+    }
+
+    private List<GitHubReadmeDocumentSnapshot> fetchDocuments(
+            String actorUserId,
+            String token,
+            String repositoryPath,
+            String commitSha,
+            List<GitHubReadmePayloadParser.TreeEntry> entries,
+            GitHubReadmeConnectionSettings settings) {
+        ArrayList<GitHubReadmeDocumentSnapshot> documents = new ArrayList<>(entries.size());
+        for (GitHubReadmePayloadParser.TreeEntry entry : entries) {
+            if (!GitHubReadmeSourcePolicy.isAllowedMarkdownPath(settings, entry.path())) {
+                throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
+            }
+            String encodedPath = encodeDocumentPath(entry.path());
+            GitHubHttpResponse documentResponse = send(
+                    get(API_BASE + repositoryPath + "/contents/" + encodedPath + "?ref=" + commitSha, token),
+                    actorUserId,
+                    DOCUMENT_OPERATION);
+            if (documentResponse.statusCode() == 404) {
+                throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
+            }
+            requireSuccess(documentResponse);
+            GitHubReadmePayloadParser.Readme document = parseDocument(documentResponse, entry.path());
+            if (!entry.sha().equals(document.blobSha())
+                    || document.markdown().getBytes(StandardCharsets.UTF_8).length != entry.size()) {
+                throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
+            }
+            documents.add(new GitHubReadmeDocumentSnapshot(document.path(), document.markdown(), document.blobSha()));
+        }
+        return List.copyOf(documents);
     }
 
     private GitHubReadmePayloadParser.Installation parseInstallation(GitHubHttpResponse response) {
@@ -162,9 +228,10 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
         }
     }
 
-    private GitHubReadmePayloadParser.InstallationToken parseToken(GitHubHttpResponse response) {
+    private GitHubReadmePayloadParser.InstallationToken parseToken(
+            GitHubHttpResponse response, String repositoryFullName) {
         try {
-            return parser.parseToken(requireJson(response), FULL_NAME);
+            return parser.parseToken(requireJson(response), repositoryFullName);
         } catch (IllegalArgumentException _) {
             throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
         }
@@ -178,17 +245,19 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
         }
     }
 
-    private GitHubReadmePayloadParser.InstalledRepository parseInstalledRepositories(GitHubHttpResponse response) {
+    private GitHubReadmePayloadParser.InstalledRepository parseInstalledRepositories(
+            GitHubHttpResponse response, String repositoryFullName) {
         try {
-            return parser.parseInstalledRepositories(requireJson(response), FULL_NAME);
+            return parser.parseInstalledRepositories(requireJson(response), repositoryFullName);
         } catch (IllegalArgumentException _) {
             throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
         }
     }
 
-    private GitHubReadmePayloadParser.Repository parseRepository(GitHubHttpResponse response) {
+    private GitHubReadmePayloadParser.Repository parseRepository(
+            GitHubHttpResponse response, String repositoryFullName) {
         try {
-            return parser.parseRepository(requireJson(response), FULL_NAME);
+            return parser.parseRepository(requireJson(response), repositoryFullName);
         } catch (IllegalArgumentException _) {
             throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
         }
@@ -202,9 +271,17 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
         }
     }
 
-    private GitHubReadmePayloadParser.Readme parseReadme(GitHubHttpResponse response) {
+    private List<GitHubReadmePayloadParser.TreeEntry> parseTree(GitHubHttpResponse response) {
         try {
-            return parser.parseReadme(requireJson(response), GitHubReadmeSnapshot.MAX_BYTES);
+            return parser.parseTree(requireJson(response));
+        } catch (IllegalArgumentException _) {
+            throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
+        }
+    }
+
+    private GitHubReadmePayloadParser.Readme parseDocument(GitHubHttpResponse response, String path) {
+        try {
+            return parser.parseDocument(requireJson(response), path, GitHubReadmeSnapshot.MAX_DOCUMENT_BYTES);
         } catch (IllegalArgumentException _) {
             throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
         }
@@ -250,7 +327,7 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
                 .timeout(Duration.ofSeconds(30))
                 .header("Accept", "application/vnd.github+json")
                 .header("X-GitHub-Api-Version", "2022-11-28")
-                .header("User-Agent", "Amsha-GitHub-Readme-Connector")
+                .header("User-Agent", "Amsha-GitHub-Documentation-Connector")
                 .header("Authorization", "Bearer " + credential)
                 .GET()
                 .build();
@@ -261,7 +338,7 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
                 .timeout(Duration.ofSeconds(30))
                 .header("Accept", "application/vnd.github+json")
                 .header("X-GitHub-Api-Version", "2022-11-28")
-                .header("User-Agent", "Amsha-GitHub-Readme-Connector")
+                .header("User-Agent", "Amsha-GitHub-Documentation-Connector")
                 .header("Authorization", "Bearer " + credential)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
@@ -270,6 +347,12 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
 
     private static String encodePathSegment(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private static String encodeDocumentPath(String path) {
+        return Arrays.stream(path.split("/"))
+                .map(DefaultGitHubReadmeAppClient::encodePathSegment)
+                .collect(Collectors.joining("/"));
     }
 
     private static GitHubReadmeSourceException sourceFailure(GitHubReadmeSourceException.Kind kind) {

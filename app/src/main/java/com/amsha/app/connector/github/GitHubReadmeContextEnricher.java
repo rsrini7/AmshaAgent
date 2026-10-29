@@ -36,6 +36,6 @@ public class GitHubReadmeContextEnricher implements ContextEnricher {
         if (excerpt.isEmpty()) {
             return base;
         }
-        return base + "\n\n## Connected GitHub README context\n" + excerpt.get() + "\n";
+        return base + "\n\n## Connected GitHub documentation context\n" + excerpt.get() + "\n";
     }
 }

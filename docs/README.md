@@ -6,6 +6,8 @@ Welcome to the Amsha Agent architecture, operator, and developer documentation.
 
 ## Current implementation guides
 
+- [GitHub documentation connector guide](GITHUB_DOCUMENTATION_CONNECTOR.md) — source scope, GitHub App setup, connection lifecycle, and retrieval behavior.
+
 - [ONNX Local ML guide](ONNX_LOCAL_ML_GUIDE.md) — MPNet embeddings, BGE reranking, local Whisper, installation, and configuration.
 - [Gnani speech adapters](../llm-providers/README.md#gnani-speech-adapters--opt-in) — opt-in cloud STT/TTS configuration; disabled by default pending retention and key-scope confirmation.
 - [Local ML module README](../local-ml-onnx/README.md) — module configuration and packaged model commands.
@@ -136,7 +138,7 @@ Decisions that define the system structure and operational boundaries:
 
 ### Domain Decisions (`docs/adr/domain/`)
 - [ADR-Identity-Access-and-Workspace-Sharing](adr/domain/ADR-Identity-Access-and-Workspace-Sharing.md) — Multi-user workspace sharing and access control (Status: Implemented).
-- [ADR-Governed-GitHub-README-Connector](adr/domain/ADR-Governed-GitHub-README-Connector.md) — Owner-scoped, read-only GitHub README ingestion (Status: Accepted).
+- [ADR-Governed-GitHub-Documentation-Connector](adr/domain/ADR-Governed-GitHub-Documentation-Connector.md) — Owner-scoped GitHub engineering-document ingestion (Status: Accepted).
 - [ADR-DuckDB-Auxiliary-Analytical-Store](adr/domain/ADR-DuckDB-Auxiliary-Analytical-Store.md) — Embedded DuckDB analytical store integration (Status: Proposed).
 - [ADR-indian-legal-ai-harness-requirements](adr/domain/ADR-indian-legal-ai-harness-requirements.md) — Indian legal AI evaluation harness requirements (Status: Proposed baseline).
 - [ADR-MCP-Management-UI-and-Channel-Control](adr/domain/ADR-MCP-Management-UI-and-Channel-Control.md) — MCP channel UI and client management (Status: Proposed).

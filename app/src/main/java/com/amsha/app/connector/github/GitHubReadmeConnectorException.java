@@ -4,6 +4,7 @@ package com.amsha.app.connector.github;
 public final class GitHubReadmeConnectorException extends RuntimeException {
 
     public enum Kind {
+        DISABLED,
         NOT_CONFIGURED,
         SOURCE_UNAVAILABLE,
         INVALID_SOURCE_RESPONSE,

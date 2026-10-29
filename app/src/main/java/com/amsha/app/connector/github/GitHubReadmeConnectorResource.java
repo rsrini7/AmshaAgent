@@ -17,6 +17,7 @@ import java.io.InputStream;
 import java.security.Principal;
 import java.util.Optional;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.scope.ActiveWorkspaceContext;
 import com.amsha.persistence.api.AccessRoles;
@@ -25,13 +26,13 @@ import com.amsha.persistence.api.WorkspaceMembershipDto;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
-/** Internal owner-only API for the selected GitHub README connector. */
+/** Internal owner-only API for the per-connection GitHub documentation source. */
 @Path("/connectors/github-readme")
 @Produces(MediaType.APPLICATION_JSON)
 @RunOnVirtualThread
 public class GitHubReadmeConnectorResource {
-
     private final GitHubReadmeConnectorService connectorService;
+    private final GitHubReadmeConnectionSettingsParser settingsParser;
     private final IdentityStorePort identityStore;
     private final ActiveWorkspaceContext activeWorkspaceContext;
 
@@ -41,27 +42,47 @@ public class GitHubReadmeConnectorResource {
     @Inject
     public GitHubReadmeConnectorResource(
             GitHubReadmeConnectorService connectorService,
+            GitHubReadmeConnectionSettingsParser settingsParser,
             IdentityStorePort identityStore,
             ActiveWorkspaceContext activeWorkspaceContext) {
         this.connectorService = connectorService;
+        this.settingsParser = settingsParser;
         this.identityStore = identityStore;
         this.activeWorkspaceContext = activeWorkspaceContext;
     }
 
     @POST
     @Path("connect")
-    @Consumes(MediaType.WILDCARD)
+    @Consumes(MediaType.APPLICATION_JSON)
     public Response connect(InputStream requestBody) {
-        Response bodyError = rejectBody(requestBody);
-        return bodyError != null ? bodyError : execute(Operation.CONNECT);
+        Optional<OwnerWorkspace> scope = resolveOwnerWorkspace();
+        if (scope.isEmpty()) {
+            return authorizationFailure();
+        }
+        GitHubReadmeConnectionSettings settings;
+        try {
+            settings = settingsParser.parse(requestBody);
+        } catch (IllegalArgumentException _) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new AmshaErrorResponse(
+                            "invalid_connector_settings", "GitHub connection settings are invalid"))
+                    .build();
+        }
+        try {
+            OwnerWorkspace selected = scope.get();
+            return Response.ok(connectorService.connect(selected.ownerUserId(), selected.workspaceId(), settings))
+                    .build();
+        } catch (GitHubReadmeConnectorException e) {
+            return connectorFailure(e.kind());
+        }
     }
 
     @POST
     @Path("refresh")
     @Consumes(MediaType.WILDCARD)
     public Response refresh(InputStream requestBody) {
-        Response bodyError = rejectBody(requestBody);
-        return bodyError != null ? bodyError : execute(Operation.REFRESH);
+        Response bodyError = rejectUnexpectedBody(requestBody);
+        return bodyError != null ? bodyError : executeRefresh();
     }
 
     @GET
@@ -91,19 +112,15 @@ public class GitHubReadmeConnectorResource {
         }
     }
 
-    private Response execute(Operation operation) {
+    private Response executeRefresh() {
         Optional<OwnerWorkspace> scope = resolveOwnerWorkspace();
         if (scope.isEmpty()) {
             return authorizationFailure();
         }
         OwnerWorkspace selected = scope.get();
         try {
-            GitHubReadmeStatusResponse result =
-                    switch (operation) {
-                        case CONNECT -> connectorService.connect(selected.ownerUserId(), selected.workspaceId());
-                        case REFRESH -> connectorService.refresh(selected.ownerUserId(), selected.workspaceId());
-                    };
-            return Response.ok(result).build();
+            return Response.ok(connectorService.refresh(selected.ownerUserId(), selected.workspaceId()))
+                    .build();
         } catch (GitHubReadmeConnectorException e) {
             return connectorFailure(e.kind());
         }
@@ -135,7 +152,7 @@ public class GitHubReadmeConnectorResource {
         }
     }
 
-    private Response rejectBody(InputStream requestBody) {
+    private Response rejectUnexpectedBody(InputStream requestBody) {
         if (requestBody == null) {
             return null;
         }
@@ -144,8 +161,7 @@ public class GitHubReadmeConnectorResource {
                 return null;
             }
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new AmshaErrorResponse(
-                            "unexpected_body", "This connector operation does not accept a request body"))
+                    .entity(new AmshaErrorResponse("unexpected_body", "Refresh uses the stored connection settings"))
                     .build();
         } catch (IOException _) {
             return Response.status(Response.Status.BAD_REQUEST)
@@ -167,6 +183,14 @@ public class GitHubReadmeConnectorResource {
 
     private static Response connectorFailure(GitHubReadmeConnectorException.Kind kind) {
         return switch (kind) {
+            case DISABLED ->
+                Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                        .entity(new AmshaErrorResponse(
+                                "connector_disabled",
+                                "GitHub documentation connector is disabled; set "
+                                        + ConfigKeys.GITHUB_DOCS_CONNECTOR_ENABLED
+                                        + "=true and restart Amsha to enable it"))
+                        .build();
             case NOT_CONFIGURED ->
                 Response.status(Response.Status.SERVICE_UNAVAILABLE)
                         .entity(new AmshaErrorResponse(
@@ -175,7 +199,7 @@ public class GitHubReadmeConnectorResource {
             case SOURCE_UNAVAILABLE ->
                 Response.status(Response.Status.SERVICE_UNAVAILABLE)
                         .entity(new AmshaErrorResponse(
-                                "source_unavailable", "GitHub README refresh is temporarily unavailable"))
+                                "source_unavailable", "GitHub documentation refresh temporarily unavailable"))
                         .build();
             case INVALID_SOURCE_RESPONSE ->
                 Response.status(Response.Status.BAD_GATEWAY)
@@ -184,14 +208,10 @@ public class GitHubReadmeConnectorResource {
                         .build();
             case INDEX_UNAVAILABLE ->
                 Response.serverError()
-                        .entity(new AmshaErrorResponse("index_unavailable", "GitHub README index could not be updated"))
+                        .entity(new AmshaErrorResponse(
+                                "index_unavailable", "GitHub documentation index could not be updated"))
                         .build();
         };
-    }
-
-    private enum Operation {
-        CONNECT,
-        REFRESH
     }
 
     private record OwnerWorkspace(String ownerUserId, String workspaceId) {}

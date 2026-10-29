@@ -9,6 +9,11 @@ type EndpointCase = {
 };
 
 const endpointCases: EndpointCase[] = [
+  {
+    name: 'GitHub App credential and connector status',
+    invoke: (client) => client.getGitHubAppCredentialStatus(),
+    path: '/admin/connectors/github-readme/app-credential',
+  },
   { name: 'agent list', invoke: (client) => client.getAgents(), path: '/agents' },
   {
     name: 'session status',

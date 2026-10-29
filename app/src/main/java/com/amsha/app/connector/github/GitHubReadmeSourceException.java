@@ -6,6 +6,7 @@ public final class GitHubReadmeSourceException extends RuntimeException {
     public enum Kind {
         CREDENTIALS_MISSING,
         ACCESS_REVOKED,
+        SOURCE_NOT_PUBLIC,
         TEMPORARY_FAILURE,
         INVALID_RESPONSE
     }

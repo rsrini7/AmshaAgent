@@ -3,6 +3,7 @@ package com.amsha.app.connector.github;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -16,12 +17,15 @@ import java.io.InputStream;
 import java.security.Principal;
 import java.util.Arrays;
 
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.persistence.api.AccessRoles;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import io.smallrye.common.annotation.RunOnVirtualThread;
 
@@ -35,14 +39,38 @@ public class GitHubAppCredentialResource {
 
     private final SecretVault secretVault;
     private final AuditService auditService;
+    private final boolean connectorEnabled;
 
     @Context
     SecurityContext securityContext;
 
     @Inject
-    public GitHubAppCredentialResource(SecretVault secretVault, AuditService auditService) {
+    public GitHubAppCredentialResource(
+            SecretVault secretVault,
+            AuditService auditService,
+            @ConfigProperty(name = ConfigKeys.GITHUB_DOCS_CONNECTOR_ENABLED_PROPERTY, defaultValue = "false")
+                    boolean connectorEnabled) {
         this.secretVault = secretVault;
         this.auditService = auditService;
+        this.connectorEnabled = connectorEnabled;
+    }
+
+    @GET
+    public Response status() {
+        if (internalActor() == null) {
+            return forbidden();
+        }
+        try {
+            return Response.ok(new GitHubAppCredentialStatusResponse(
+                            connectorEnabled, secretVault.systemKeyExists(VaultConstants.GITHUB_APP_PRIVATE_KEY)))
+                    .header("Cache-Control", "no-store")
+                    .build();
+        } catch (RuntimeException _) {
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity(new AmshaErrorResponse(
+                            "credential_status_unavailable", "GitHub App credential status is unavailable"))
+                    .build();
+        }
     }
 
     @PUT
@@ -75,7 +103,8 @@ public class GitHubAppCredentialResource {
                     SecurityEventType.VAULT_ACCESS,
                     "operation=store keyName=" + VaultConstants.GITHUB_APP_PRIVATE_KEY);
             secretVault.storeSystemKey(VaultConstants.GITHUB_APP_PRIVATE_KEY, keyBytes);
-            return Response.ok(new GitHubAppCredentialStatusResponse(true)).build();
+            return Response.ok(new GitHubAppCredentialStatusResponse(connectorEnabled, true))
+                    .build();
         } catch (RuntimeException _) {
             return Response.serverError()
                     .entity(new AmshaErrorResponse(

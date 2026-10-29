@@ -9,8 +9,10 @@ import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -18,12 +20,13 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** Strict parser for the small GitHub App and Contents API contracts used by the connector. */
+/** Strict parser for the GitHub App, tree, and Contents API contracts used by the connector. */
 @ApplicationScoped
 public class GitHubReadmePayloadParser {
-
-    private static final String ROOT_README_PATH = "README.md";
     private static final int MAX_TOKEN_CHARS = 2048;
+    private static final int MAX_TREE_ENTRIES = 20_000;
+    private static final int MAX_PATH_CHARS = 1024;
+
     private final ObjectMapper mapper;
 
     @Inject
@@ -69,7 +72,8 @@ public class GitHubReadmePayloadParser {
         JsonNode totalCount = root.path("total_count");
         JsonNode repositories = root.path("repositories");
         if (!totalCount.isIntegralNumber()
-                || totalCount.intValue() != 1
+                || !totalCount.canConvertToLong()
+                || totalCount.longValue() != 1L
                 || !repositories.isArray()
                 || repositories.size() != 1) {
             throw invalidResponse();
@@ -108,24 +112,22 @@ public class GitHubReadmePayloadParser {
     Repository parseRepository(String json, String expectedRepository) {
         JsonNode root = parseObject(json);
         long id = positiveLong(root, "id");
-        if (!expectedRepository.equals(text(root, "full_name", 200))
-                || !root.path("private").isBoolean()
-                || root.path("private").booleanValue()) {
+        String fullName = text(root, "full_name", 200);
+        if (!expectedRepository.equals(fullName)) {
             throw invalidResponse();
+        }
+        JsonNode privateFlag = root.path("private");
+        if (!privateFlag.isBoolean()) {
+            throw invalidResponse();
+        }
+        if (privateFlag.booleanValue()) {
+            throw new GitHubReadmeSourceException(GitHubReadmeSourceException.Kind.SOURCE_NOT_PUBLIC);
         }
         String defaultBranch = text(root, "default_branch", 255);
         if (defaultBranch.contains("\n") || defaultBranch.contains("\r")) {
             throw invalidResponse();
         }
-        return new Repository(id, defaultBranch);
-    }
-
-    boolean repositoryIsPrivate(String json) {
-        JsonNode value = parseObject(json).path("private");
-        if (!value.isBoolean()) {
-            throw invalidResponse();
-        }
-        return value.booleanValue();
+        return new Repository(id, fullName, defaultBranch);
     }
 
     String parseCommitSha(String json) {
@@ -136,9 +138,46 @@ public class GitHubReadmePayloadParser {
         return sha.toLowerCase(Locale.ROOT);
     }
 
-    Readme parseReadme(String json, int maxBytes) {
+    List<TreeEntry> parseTree(String json) {
         JsonNode root = parseObject(json);
-        if (!ROOT_README_PATH.equals(text(root, "path", 256))
+        JsonNode truncated = root.path("truncated");
+        JsonNode tree = root.path("tree");
+        if (!truncated.isBoolean() || truncated.booleanValue() || !tree.isArray() || tree.size() > MAX_TREE_ENTRIES) {
+            throw invalidResponse();
+        }
+        ArrayList<TreeEntry> entries = new ArrayList<>(tree.size());
+        Set<String> paths = new HashSet<>();
+        for (JsonNode entry : tree) {
+            String path = text(entry, "path", MAX_PATH_CHARS);
+            String type = text(entry, "type", 16);
+            String mode = text(entry, "mode", 8);
+            String sha = text(entry, "sha", 64).toLowerCase(Locale.ROOT);
+            if (!GitHubReadmeSourcePolicy.isSafeRelativePath(path)
+                    || !paths.add(path)
+                    || !sha.matches("(?i)([0-9a-f]{40}|[0-9a-f]{64})")) {
+                throw invalidResponse();
+            }
+            long size = 0;
+            if ("blob".equals(type)) {
+                JsonNode sizeNode = entry.path("size");
+                if (!sizeNode.isIntegralNumber() || !sizeNode.canConvertToLong() || sizeNode.longValue() < 0) {
+                    throw invalidResponse();
+                }
+                size = sizeNode.longValue();
+            } else if (!"tree".equals(type) && !"commit".equals(type)) {
+                throw invalidResponse();
+            }
+            if (!validMode(type, mode)) {
+                throw invalidResponse();
+            }
+            entries.add(new TreeEntry(path, type, mode, size, sha));
+        }
+        return List.copyOf(entries);
+    }
+
+    Readme parseDocument(String json, String expectedPath, int maxBytes) {
+        JsonNode root = parseObject(json);
+        if (!expectedPath.equals(text(root, "path", MAX_PATH_CHARS))
                 || !"file".equals(text(root, "type", 32))
                 || !"base64".equals(text(root, "encoding", 32))) {
             throw invalidResponse();
@@ -161,7 +200,16 @@ public class GitHubReadmePayloadParser {
         if (!blobSha.matches("(?i)([0-9a-f]{40}|[0-9a-f]{64})")) {
             throw invalidResponse();
         }
-        return new Readme(markdown, blobSha.toLowerCase(Locale.ROOT));
+        return new Readme(expectedPath, markdown, blobSha.toLowerCase(Locale.ROOT));
+    }
+
+    private static boolean validMode(String type, String mode) {
+        return switch (type) {
+            case "blob" -> Set.of("100644", "100755", "120000").contains(mode);
+            case "tree" -> "040000".equals(mode);
+            case "commit" -> "160000".equals(mode);
+            default -> false;
+        };
     }
 
     private JsonNode parseObject(String json) {
@@ -189,6 +237,9 @@ public class GitHubReadmePayloadParser {
     }
 
     private static String text(JsonNode object, String field, int maxChars) {
+        if (object == null || !object.isObject()) {
+            throw invalidResponse();
+        }
         JsonNode value = object.path(field);
         if (!value.isTextual()
                 || value.textValue().isBlank()
@@ -236,7 +287,7 @@ public class GitHubReadmePayloadParser {
     }
 
     private static IllegalArgumentException invalidResponse() {
-        return new IllegalArgumentException("GitHub response did not match the connector contract");
+        return new IllegalArgumentException("GitHub response did not match connector contract");
     }
 
     record Installation(long id) {}
@@ -257,12 +308,14 @@ public class GitHubReadmePayloadParser {
         }
     }
 
-    record Repository(long id, String defaultBranch) {}
+    record Repository(long id, String fullName, String defaultBranch) {}
 
-    record Readme(String markdown, String blobSha) {
+    record TreeEntry(String path, String type, String mode, long size, String sha) {}
+
+    record Readme(String path, String markdown, String blobSha) {
         @Override
         public String toString() {
-            return "Readme[markdown=[redacted], blobSha=" + blobSha + "]";
+            return "Readme[path=" + path + ", markdown=[redacted], blobSha=" + blobSha + "]";
         }
     }
 }

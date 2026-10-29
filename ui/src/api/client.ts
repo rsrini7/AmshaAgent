@@ -555,6 +555,13 @@ export class ArcClient {
     return this.request<SettingsDto>('/settings');
   }
 
+  async getGitHubAppCredentialStatus(): Promise<{ enabled: boolean; configured: boolean }> {
+    return this.request<{ enabled: boolean; configured: boolean }>(
+      '/admin/connectors/github-readme/app-credential',
+      { cache: 'no-store' },
+    );
+  }
+
   async patchPrompt(prompt: string): Promise<any> {
     return this.request<any>('/settings/prompt', {
       method: 'PATCH',

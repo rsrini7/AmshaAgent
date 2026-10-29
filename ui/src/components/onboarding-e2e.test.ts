@@ -1303,6 +1303,27 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       expect(rendered).toContain('Integrations (Optional)');
       expect(rendered).toContain('Search, GitHub, and browser automation');
       expect(rendered).toContain('AMSHA_TOOLS_PLAYWRIGHT_ENABLED');
+      expect(rendered).toContain('GitHub documentation connector');
+      expect(rendered).toContain('numeric value labeled App ID on the GitHub App\'s General page');
+      expect(rendered).toContain('not the Client ID or Client secret');
+      expect(rendered).toContain('AMSHA_GITHUB_APP_ID');
+      expect(rendered).toContain('Callback URL and Setup URL: leave blank');
+      expect(rendered).toContain('Request user authorization (OAuth) during installation: unchecked');
+      expect(rendered).toContain('Only on this account (@rsrini7)');
+      expect(rendered).toContain('Only select repositories');
+      (step as any)._githubCredentialStatus = 'missing';
+    (step as any)._githubConnectorEnabled = true;
+      const missingCredential = flattenLit(step.render());
+      expect(missingCredential).toContain('GitHub App credential is missing from SecretVault');
+      expect(missingCredential).toContain('mise run github:app-credential-upload');
+      expect(missingCredential).toContain('Check credential again');
+    expect(missingCredential).toContain('AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true');
+
+    (step as any)._githubConnectorEnabled = false;
+    const disabledConnector = flattenLit(step.render());
+    expect(disabledConnector).toContain('GitHub documentation connector is disabled');
+    expect(disabledConnector).toContain('will not index or retrieve repository content');
+    expect(disabledConnector).not.toContain('upload the protected PEM backup again');
 
       (step as any)._next();
       expect(nextCalled).toBe(true);
@@ -1311,7 +1332,25 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       expect(backCalled).toBe(true);
     });
 
-    it('ArcOnboardingStepMemory handles memory toggles, next, and back', () => {
+  it('loads connector enablement separately from GitHub App credential presence', async () => {
+    const step = new ArcOnboardingStepIntegrations();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ enabled: false, configured: true }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await (step as any)._refreshGitHubCredentialStatus();
+
+    expect((step as any)._githubConnectorEnabled).toBe(false);
+    expect((step as any)._githubCredentialStatus).toBe('configured');
+    expect(fetchMock.mock.calls[0][0]).toContain('/admin/connectors/github-readme/app-credential');
+    const rendered = flattenLit(step.render());
+    expect(rendered).toContain('GitHub documentation connector is disabled');
+    expect(rendered).toContain('GitHub App credential is present in Amsha SecretVault.');
+  });
+
+  it('ArcOnboardingStepMemory handles memory toggles, next, and back', () => {
       const step = new ArcOnboardingStepMemory();
       let updatedMemory: any = null;
       let nextCalled = false;

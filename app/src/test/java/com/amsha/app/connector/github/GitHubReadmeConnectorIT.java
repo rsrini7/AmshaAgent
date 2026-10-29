@@ -18,11 +18,12 @@ import jakarta.inject.Inject;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 
 import com.amsha.app.security.ActiveWorkspaceFilter;
 import com.amsha.app.security.ApiKeyRegistry;
+import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
@@ -41,14 +42,20 @@ import org.mockito.Mockito;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 import io.restassured.specification.RequestSpecification;
 
 @QuarkusTest
+@TestProfile(GitHubReadmeConnectorIT.EnabledProfile.class)
 class GitHubReadmeConnectorIT {
 
     private static final String PUBLIC_SENTINEL = "profile-public-content-sentinel";
     private static final String COMMIT_ONE = "1111111111111111111111111111111111111111";
     private static final String COMMIT_TWO = "2222222222222222222222222222222222222222";
+    private static final GitHubReadmeConnectionSettings SETTINGS = GitHubReadmeSourcePolicy.firstConnection();
+    private static final String SETTINGS_BODY =
+            "{\"repository\":\"rsrini7/AmshaAgent\"," + "\"allowedPaths\":[\"README.md\",\"docs/**/*.md\"]}";
 
     @InjectMock
     GitHubReadmeAppClient appClient;
@@ -83,8 +90,16 @@ class GitHubReadmeConnectorIT {
     private String memberSession;
     private String memberCsrf;
 
+    public static class EnabledProfile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(ConfigKeys.GITHUB_DOCS_CONNECTOR_ENABLED_PROPERTY, "true");
+        }
+    }
+
     @BeforeEach
     void resetAndSeedSession() {
+        assertTrue(connectorService.enabled());
         Mockito.reset(appClient, auditService);
         String suffix = UUID.randomUUID().toString();
         owner = "connector-owner-" + suffix;
@@ -123,9 +138,9 @@ class GitHubReadmeConnectorIT {
                 COMMIT_ONE,
                 "## About\n" + PUBLIC_SENTINEL + " aircraft telemetry profile.\n\n## Work\nOther profile text.");
         GitHubReadmeSnapshot second = snapshot(COMMIT_TWO, "## About\nUpdated telemetry profile version.");
-        when(appClient.fetchCurrent(owner)).thenReturn(Optional.of(first), Optional.of(first), Optional.of(second));
+        when(appClient.fetchCurrent(owner, SETTINGS)).thenReturn(first, first, second);
 
-        ownerRequest()
+        connectRequest()
                 .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, ownerWorkspace)
                 .when()
                 .post("/api/v1/connectors/github-readme/connect")
@@ -134,21 +149,34 @@ class GitHubReadmeConnectorIT {
                 .body("state", equalTo("INDEXED"))
                 .body("indexed", equalTo(true))
                 .body("repositoryId", equalTo(42))
+                .body("repository", equalTo("rsrini7/AmshaAgent"))
+                .body("documents.size()", equalTo(2))
+                .body("documents[0].path", equalTo("README.md"))
+                .body("documents[0].commitSha", equalTo(COMMIT_ONE))
+                .body("documents[0].blobSha", equalTo(COMMIT_ONE))
+                .body("documents[1].path", equalTo("docs/architecture.md"))
+                .body("documents[1].commitSha", equalTo(COMMIT_ONE))
+                .body("documents[1].blobSha", equalTo(COMMIT_ONE))
                 .body(not(containsString(PUBLIC_SENTINEL)));
 
-        verify(auditService, times(1))
-                .recordMandatory(
-                        isNull(),
-                        eq(owner),
-                        eq("github-readme-connector"),
-                        eq(SecurityEventType.EXTERNAL_SOURCE_INDEX_MUTATED),
-                        eq("operation=refresh source=github-readme"));
         assertTrue(enrich(ownerWorkspace, owner, "find my aircraft telemetry profile")
                 .contains(PUBLIC_SENTINEL));
         assertFalse(enrich(ownerWorkspace, "another-owner", "find my aircraft telemetry profile")
                 .contains(PUBLIC_SENTINEL));
         assertFalse(enrich(otherWorkspace, owner, "find my aircraft telemetry profile")
                 .contains(PUBLIC_SENTINEL));
+        assertFalse(enrich(memberWorkspace, owner, "find my aircraft telemetry profile")
+                .contains(PUBLIC_SENTINEL));
+        ownerRequest()
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, memberWorkspace)
+                .when()
+                .get("/api/v1/connectors/github-readme/status")
+                .then()
+                .statusCode(200)
+                .body("state", equalTo("NOT_INDEXED"));
+        String architectureContext = enrich(ownerWorkspace, owner, "architecture governance run guide");
+        assertTrue(architectureContext.contains("Source: docs/architecture.md (commit " + COMMIT_ONE + ")"));
+        assertTrue(architectureContext.contains("architecture-doc-only-sentinel"));
 
         ownerRequest()
                 .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, ownerWorkspace)
@@ -167,24 +195,27 @@ class GitHubReadmeConnectorIT {
                 .statusCode(200)
                 .body("commitSha", equalTo(COMMIT_TWO))
                 .body(not(containsString("Updated telemetry profile version")));
+
+        String refreshedContext = enrich(ownerWorkspace, owner, "find my telemetry profile version");
+        assertTrue(refreshedContext.contains("Updated telemetry profile version"));
+        assertFalse(refreshedContext.contains(PUBLIC_SENTINEL));
+        assertTrue(enrich(ownerWorkspace, owner, "architecture governance run guide")
+                .contains("Source: docs/architecture.md (commit " + COMMIT_TWO + ")"));
+
         verify(auditService, times(2))
                 .recordMandatory(
                         isNull(),
                         eq(owner),
                         eq("github-readme-connector"),
                         eq(SecurityEventType.EXTERNAL_SOURCE_INDEX_MUTATED),
-                        eq("operation=refresh source=github-readme"));
-
-        assertTrue(enrich(ownerWorkspace, owner, "find my telemetry profile")
-                .contains("Updated telemetry profile version"));
-        assertFalse(enrich(ownerWorkspace, owner, "find my telemetry profile").contains(PUBLIC_SENTINEL));
+                        eq("operation=refresh source=github-documentation"));
         ownerRequest()
                 .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, otherWorkspace)
                 .when()
                 .get("/api/v1/connectors/github-readme/status")
                 .then()
                 .statusCode(403);
-        verify(appClient, times(3)).fetchCurrent(owner);
+        verify(appClient, times(3)).fetchCurrent(owner, SETTINGS);
     }
 
     @Test
@@ -196,9 +227,9 @@ class GitHubReadmeConnectorIT {
         memberSession = tokens.sessionToken();
         memberCsrf = tokens.csrfToken();
 
-        when(appClient.fetchCurrent(owner))
-                .thenReturn(Optional.of(snapshot(COMMIT_ONE, PUBLIC_SENTINEL + " aircraft telemetry profile.")));
-        connectorService.connect(owner, memberWorkspace);
+        when(appClient.fetchCurrent(owner, SETTINGS))
+                .thenReturn(snapshot(COMMIT_ONE, PUBLIC_SENTINEL + " aircraft telemetry profile."));
+        connectorService.connect(owner, memberWorkspace, SETTINGS);
         assertFalse(enrich(memberWorkspace, member, "find aircraft telemetry profile")
                 .contains(PUBLIC_SENTINEL));
         clearInvocations(appClient);
@@ -221,7 +252,7 @@ class GitHubReadmeConnectorIT {
                 .delete("/api/v1/connectors/github-readme")
                 .then()
                 .statusCode(403);
-        verify(appClient, never()).fetchCurrent(ArgumentMatchers.anyString());
+        verify(appClient, never()).fetchCurrent(ArgumentMatchers.anyString(), ArgumentMatchers.any());
     }
 
     @Test
@@ -235,30 +266,66 @@ class GitHubReadmeConnectorIT {
 
         memberRequest()
                 .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, ownerWorkspace)
+                .contentType("application/json")
+                .body(SETTINGS_BODY)
                 .when()
                 .post("/api/v1/connectors/github-readme/connect")
                 .then()
                 .statusCode(403);
-        verify(appClient, never()).fetchCurrent(ArgumentMatchers.anyString());
+        verify(appClient, never()).fetchCurrent(ArgumentMatchers.anyString(), ArgumentMatchers.any());
     }
 
     @Test
-    void deletionRevocationDisconnectAndTransientFailureHaveDistinctEffects() throws Exception {
-        when(appClient.fetchCurrent(owner))
-                .thenReturn(Optional.of(snapshot(COMMIT_ONE, PUBLIC_SENTINEL + " aircraft telemetry profile.")))
-                .thenThrow(new GitHubReadmeSourceException(GitHubReadmeSourceException.Kind.TEMPORARY_FAILURE))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(snapshot(COMMIT_ONE, PUBLIC_SENTINEL + " aircraft telemetry profile.")))
-                .thenThrow(new GitHubReadmeSourceException(GitHubReadmeSourceException.Kind.ACCESS_REVOKED))
-                .thenReturn(Optional.of(snapshot(COMMIT_ONE, PUBLIC_SENTINEL + " aircraft telemetry profile.")));
+    void privateVisibilityChangeRemovesPreviouslyIndexedDocuments() throws Exception {
+        GitHubReadmeSnapshot publicSnapshot =
+                snapshot(COMMIT_ONE, "## About\n" + PUBLIC_SENTINEL + " architecture guide.");
+        when(appClient.fetchCurrent(owner, SETTINGS))
+                .thenReturn(publicSnapshot)
+                .thenThrow(new GitHubReadmeSourceException(GitHubReadmeSourceException.Kind.SOURCE_NOT_PUBLIC));
 
-        ownerRequest()
-                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
+        connectRequest()
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, ownerWorkspace)
                 .when()
                 .post("/api/v1/connectors/github-readme/connect")
                 .then()
                 .statusCode(200);
 
+        ownerRequest()
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, ownerWorkspace)
+                .when()
+                .post("/api/v1/connectors/github-readme/refresh")
+                .then()
+                .statusCode(200)
+                .body("state", equalTo("REMOVED"));
+
+        assertFalse(enrich(ownerWorkspace, owner, "architecture guide").contains(PUBLIC_SENTINEL));
+        verify(appClient, times(2)).fetchCurrent(owner, SETTINGS);
+    }
+
+    @Test
+    void deletionRevocationDisconnectAndTransientFailureHaveDistinctEffects() throws Exception {
+        GitHubReadmeSnapshot complete =
+                snapshot(COMMIT_ONE, "## About\n" + PUBLIC_SENTINEL + " aircraft telemetry profile.");
+        GitHubReadmeSnapshot afterDocumentDeletion = snapshotWithDocuments(
+                COMMIT_TWO,
+                List.of(new GitHubReadmeDocumentSnapshot(
+                        "README.md",
+                        "## About\n" + PUBLIC_SENTINEL + " aircraft telemetry profile.",
+                        "3333333333333333333333333333333333333333")));
+        when(appClient.fetchCurrent(owner, SETTINGS))
+                .thenReturn(complete)
+                .thenThrow(new GitHubReadmeSourceException(GitHubReadmeSourceException.Kind.TEMPORARY_FAILURE))
+                .thenReturn(afterDocumentDeletion)
+                .thenReturn(complete)
+                .thenThrow(new GitHubReadmeSourceException(GitHubReadmeSourceException.Kind.ACCESS_REVOKED))
+                .thenReturn(complete);
+
+        connectRequest()
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
+                .when()
+                .post("/api/v1/connectors/github-readme/connect")
+                .then()
+                .statusCode(200);
         ownerRequest()
                 .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
                 .when()
@@ -268,7 +335,27 @@ class GitHubReadmeConnectorIT {
                 .body(not(containsString(PUBLIC_SENTINEL)));
         assertTrue(enrich(deleteWorkspace, owner, "find aircraft telemetry profile")
                 .contains(PUBLIC_SENTINEL));
+        assertTrue(enrich(deleteWorkspace, owner, "architecture governance run guide")
+                .contains("architecture-doc-only-sentinel"));
 
+        ownerRequest()
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
+                .when()
+                .post("/api/v1/connectors/github-readme/refresh")
+                .then()
+                .statusCode(200)
+                .body("state", equalTo("INDEXED"))
+                .body("documents.size()", equalTo(1))
+                .body("commitSha", equalTo(COMMIT_TWO));
+        assertFalse(enrich(deleteWorkspace, owner, "architecture governance run guide")
+                .contains("architecture-doc-only-sentinel"));
+
+        connectRequest()
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
+                .when()
+                .post("/api/v1/connectors/github-readme/connect")
+                .then()
+                .statusCode(200);
         ownerRequest()
                 .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
                 .when()
@@ -279,21 +366,7 @@ class GitHubReadmeConnectorIT {
         assertFalse(enrich(deleteWorkspace, owner, "find aircraft telemetry profile")
                 .contains(PUBLIC_SENTINEL));
 
-        ownerRequest()
-                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
-                .when()
-                .post("/api/v1/connectors/github-readme/connect")
-                .then()
-                .statusCode(200);
-        ownerRequest()
-                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
-                .when()
-                .post("/api/v1/connectors/github-readme/refresh")
-                .then()
-                .statusCode(200)
-                .body("state", equalTo("REMOVED"));
-
-        ownerRequest()
+        connectRequest()
                 .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, deleteWorkspace)
                 .when()
                 .post("/api/v1/connectors/github-readme/connect")
@@ -311,6 +384,38 @@ class GitHubReadmeConnectorIT {
     }
 
     @Test
+    void rejectsSecretBearingDocumentsWithoutIndexingOrReturningTheSecret() throws Exception {
+        String secretText = "api" + "_key = " + "super" + "_secret_pass";
+        when(appClient.fetchCurrent(owner, SETTINGS)).thenReturn(snapshot(COMMIT_ONE, secretText));
+
+        String errorBody = connectRequest()
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, bodyWorkspace)
+                .when()
+                .post("/api/v1/connectors/github-readme/connect")
+                .then()
+                .statusCode(502)
+                .extract()
+                .asString();
+        assertFalse(errorBody.contains(secretText));
+        assertFalse(enrich(bodyWorkspace, owner, "api key secret").contains(secretText));
+        ownerRequest()
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, bodyWorkspace)
+                .when()
+                .get("/api/v1/connectors/github-readme/status")
+                .then()
+                .statusCode(200)
+                .body("state", equalTo("NOT_INDEXED"))
+                .body(not(containsString(secretText)));
+        verify(auditService, never())
+                .recordMandatory(
+                        ArgumentMatchers.isNull(),
+                        eq(owner),
+                        eq("github-readme-connector"),
+                        eq(SecurityEventType.EXTERNAL_SOURCE_INDEX_MUTATED),
+                        ArgumentMatchers.anyString());
+    }
+
+    @Test
     void rejectsBodiesAndRequestsWithoutAnActiveWorkspaceBeforeSourceAccess() {
         ownerRequest()
                 .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, bodyWorkspace)
@@ -321,15 +426,21 @@ class GitHubReadmeConnectorIT {
                 .then()
                 .statusCode(400);
         ownerRequest()
+                .contentType("application/json")
+                .body(SETTINGS_BODY)
                 .when()
                 .post("/api/v1/connectors/github-readme/connect")
                 .then()
                 .statusCode(403);
-        verify(appClient, never()).fetchCurrent(ArgumentMatchers.anyString());
+        verify(appClient, never()).fetchCurrent(ArgumentMatchers.anyString(), ArgumentMatchers.any());
     }
 
     private RequestSpecification ownerRequest() {
         return authenticatedRequest(ownerSession, ownerCsrf);
+    }
+
+    private RequestSpecification connectRequest() {
+        return ownerRequest().contentType("application/json").body(SETTINGS_BODY);
     }
 
     private RequestSpecification memberRequest() {
@@ -386,7 +497,19 @@ class GitHubReadmeConnectorIT {
     }
 
     private static GitHubReadmeSnapshot snapshot(String commit, String markdown) {
-        return new GitHubReadmeSnapshot(42, GitHubReadmeSnapshot.EXPECTED_REPOSITORY, "main", commit, markdown);
+        return snapshotWithDocuments(
+                commit,
+                List.of(
+                        new GitHubReadmeDocumentSnapshot("README.md", markdown, commit),
+                        new GitHubReadmeDocumentSnapshot(
+                                "docs/architecture.md",
+                                "## Architecture\narchitecture-doc-only-sentinel architecture governance run guide.",
+                                commit)));
+    }
+
+    private static GitHubReadmeSnapshot snapshotWithDocuments(
+            String commit, List<GitHubReadmeDocumentSnapshot> documents) {
+        return new GitHubReadmeSnapshot(42, "rsrini7/AmshaAgent", "main", commit, documents);
     }
 
     private record SessionTokens(String sessionToken, String csrfToken) {}

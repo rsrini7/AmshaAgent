@@ -16,6 +16,7 @@ import com.amsha.app.api.RecallMemoryAdminResource;
 import com.amsha.app.api.SessionResource;
 import com.amsha.app.cli.ModelInstaller;
 import com.amsha.app.connector.github.GitHubAppCredentialStatusResponse;
+import com.amsha.app.connector.github.GitHubReadmeDocumentStatusResponse;
 import com.amsha.app.connector.github.GitHubReadmeStatusResponse;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
@@ -151,6 +152,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             RunDecisionEvidenceDto.class,
             RunEvidenceDto.class,
             GitHubAppCredentialStatusResponse.class,
+            GitHubReadmeDocumentStatusResponse.class,
             GitHubReadmeStatusResponse.class,
             ModelInstaller.ModelCatalogEntry.class,
             ModelInstaller.ModelFileSpec.class,

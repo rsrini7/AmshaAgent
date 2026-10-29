@@ -9,11 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 class GitHubReadmeIndexKeysTest {
+    private static final String COMMIT_ONE = "1111111111111111111111111111111111111111";
+    private static final String COMMIT_TWO = "2222222222222222222222222222222222222222";
 
     @Test
     void namespaceIsStableAndBoundToBothOwnerAndWorkspace() {
         String first = GitHubReadmeIndexKeys.userNamespace("owner@example.test", "workspace-one");
-
         assertEquals(first, GitHubReadmeIndexKeys.userNamespace("owner@example.test", "workspace-one"));
         assertNotEquals(first, GitHubReadmeIndexKeys.userNamespace("other@example.test", "workspace-one"));
         assertNotEquals(first, GitHubReadmeIndexKeys.userNamespace("owner@example.test", "workspace-two"));
@@ -23,13 +24,21 @@ class GitHubReadmeIndexKeysTest {
     }
 
     @Test
-    void documentKeyIsBoundToRepositoryAndRootPath() {
-        String first = GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "README.md");
-
-        assertEquals(first, GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "README.md"));
-        assertNotEquals(first, GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 43L, "README.md"));
+    void documentKeyIsBoundToRepositoryPathAndCommit() {
+        String first = GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "README.md", COMMIT_ONE);
+        assertEquals(first, GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "README.md", COMMIT_ONE));
+        assertNotEquals(
+                first, GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 43L, "README.md", COMMIT_ONE));
+        assertNotEquals(
+                first, GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "docs/README.md", COMMIT_ONE));
+        assertNotEquals(
+                first, GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "README.md", COMMIT_TWO));
+        assertTrue(GitHubReadmeIndexKeys.isDocumentId(first));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "docs/README.md"));
+                () -> GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "../README.md", COMMIT_ONE));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> GitHubReadmeIndexKeys.documentId("github-readme-user-abc", 42L, "README.md", "bad-sha"));
     }
 }

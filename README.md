@@ -142,11 +142,9 @@ MCP management is available from the `#/mcp` panel, channel-neutral `/mcp ...` c
 See the [MCP management guide](./docs/MCP_MANAGEMENT.md) for lifecycle, approvals, user scope, setup
 links, reconfiguration, import, and testing. Module/API details are in [`mcp/README.md`](./mcp/README.md).
 
-### GitHub README connector
+### GitHub documentation connector
 
-The internal GitHub README connector is restricted to the public root `README.md` in `rsrini7/rsrini7`. It refreshes from the current default branch and indexes content only for the workspace owner who connects it. Install the GitHub App on this repository only and grant read-only Contents access. Set `AMSHA_GITHUB_APP_ID`; upload the App's RSA private key through the internal credential endpoint, which stores it in SecretVault and returns no key material. The connector API returns status metadata only. Disconnecting removes its indexed README; removing the App credential disables future refreshes.
-
-Repository content is available to matching agent context only when the owner and active workspace both match the connection. Other members and workspaces cannot query that index.
+Connect GitHub documentation for owner-scoped retrieval in the Amsha workspace. The connector is disabled by default; set `AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true` and restart Amsha to enable it. See the [connector guide](./docs/GITHUB_DOCUMENTATION_CONNECTOR.md) for setup and source limits.
 
 ## Optional local ONNX model bundles
 
