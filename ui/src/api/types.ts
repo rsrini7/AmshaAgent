@@ -353,3 +353,29 @@ export interface ClassifierSnapshot {
   inFlight: number;
   revision: number;
 }
+
+/** GitHub Documentation Connector types. */
+export interface GitHubReadmeDocumentStatusDto {
+  path: string;
+  commitSha: string;
+  blobSha: string;
+}
+
+export interface GitHubReadmeStatusDto {
+  state: string;
+  indexed: boolean;
+  repositoryId?: number | null;
+  repository?: string | null;
+  allowedPaths?: string[];
+  defaultBranch?: string | null;
+  commitSha?: string | null;
+  documents?: GitHubReadmeDocumentStatusDto[];
+  cleanupPending?: boolean;
+  updatedAt?: string;
+}
+
+export interface GitHubAppCredentialStatusDto {
+  enabled: boolean;
+  configured: boolean;
+}
+

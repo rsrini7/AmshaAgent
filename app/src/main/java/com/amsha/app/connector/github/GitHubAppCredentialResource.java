@@ -39,6 +39,7 @@ public class GitHubAppCredentialResource {
 
     private final SecretVault secretVault;
     private final AuditService auditService;
+    private final GitHubReadmeStartupSync startupSync;
     private final boolean connectorEnabled;
 
     @Context
@@ -48,10 +49,12 @@ public class GitHubAppCredentialResource {
     public GitHubAppCredentialResource(
             SecretVault secretVault,
             AuditService auditService,
+            GitHubReadmeStartupSync startupSync,
             @ConfigProperty(name = ConfigKeys.GITHUB_DOCS_CONNECTOR_ENABLED_PROPERTY, defaultValue = "false")
                     boolean connectorEnabled) {
         this.secretVault = secretVault;
         this.auditService = auditService;
+        this.startupSync = startupSync;
         this.connectorEnabled = connectorEnabled;
     }
 
@@ -103,6 +106,7 @@ public class GitHubAppCredentialResource {
                     SecurityEventType.VAULT_ACCESS,
                     "operation=store keyName=" + VaultConstants.GITHUB_APP_PRIVATE_KEY);
             secretVault.storeSystemKey(VaultConstants.GITHUB_APP_PRIVATE_KEY, keyBytes);
+            startupSync.syncAllWorkspacesAsync();
             return Response.ok(new GitHubAppCredentialStatusResponse(connectorEnabled, true))
                     .build();
         } catch (RuntimeException _) {

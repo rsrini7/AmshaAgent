@@ -26,6 +26,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.core.security.CredentialDetectionResult;
+import com.amsha.core.security.CredentialDetector;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
 import com.amsha.security.api.VaultKey;
@@ -49,6 +51,7 @@ class DefaultGitHubReadmeAppClientTest {
 
     private GitHubReadmeTransport transport;
     private SecretVault secretVault;
+    private CredentialDetector credentialDetector;
     private DefaultGitHubReadmeAppClient client;
     private VaultKey privateKey;
 
@@ -56,6 +59,8 @@ class DefaultGitHubReadmeAppClientTest {
     void setUp() throws Exception {
         transport = mock(GitHubReadmeTransport.class);
         secretVault = mock(SecretVault.class);
+        credentialDetector = mock(CredentialDetector.class);
+        when(credentialDetector.detect(any())).thenReturn(CredentialDetectionResult.CLEAN);
         KeyPair keyPair = generateKeyPair();
         byte[] pem = ("-----BEGIN PRIVATE KEY-----\n"
                         + Base64.getMimeEncoder(64, new byte[] {'\n'})
@@ -66,7 +71,7 @@ class DefaultGitHubReadmeAppClientTest {
         when(secretVault.retrieveSystemKey(VaultConstants.GITHUB_APP_PRIVATE_KEY))
                 .thenReturn(Optional.of(privateKey));
         client = new DefaultGitHubReadmeAppClient(
-                transport, secretVault, new GitHubReadmePayloadParser(new ObjectMapper()), "12345");
+                transport, secretVault, new GitHubReadmePayloadParser(new ObjectMapper()), credentialDetector, "12345");
     }
 
     @Test
@@ -207,6 +212,17 @@ class DefaultGitHubReadmeAppClientTest {
 
         assertEquals(GitHubReadmeSourceException.Kind.CREDENTIALS_MISSING, failure.kind());
         verify(transport, never()).send(any(HttpRequest.class), anyString(), anyString());
+    }
+
+    @Test
+    void excludesMarkdownDocumentsWithDetectedCredentials() throws Exception {
+        stubSuccessfulFetch();
+        when(credentialDetector.detect(DOC_MARKDOWN)).thenReturn(CredentialDetectionResult.of("BEARER_TOKEN"));
+
+        GitHubReadmeSnapshot snapshot = client.fetchCurrent(OWNER, SETTINGS);
+
+        assertEquals(1, snapshot.documents().size());
+        assertEquals("README.md", snapshot.documents().getFirst().path());
     }
 
     private void stubSuccessfulFetch() {

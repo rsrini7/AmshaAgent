@@ -25,6 +25,8 @@ The connector excludes code, configuration, binaries, hidden or generated paths,
 a protected local holding or backup path. The credential endpoint stores the uploaded PEM in
 `SecretVault`, and the connector retrieves the key from `SecretVault` at runtime.
 
+### Step 1: Register the GitHub App
+
 Create a GitHub App under the `rsrini7` personal account. It supplies the connector's server-to-server
 identity: Amsha signs a short-lived App JWT with the App's private key, then exchanges it for a short-lived
 installation token restricted to the repository where the App is installed. Use the numeric value labeled
@@ -45,13 +47,10 @@ Use these values in GitHub's **Register a GitHub App** form:
 | Repository permissions | **Contents: Read-only** and **Metadata: Read-only**. Grant no other permissions. |
 | Where can this GitHub App be installed? | **Only on this account** (`@rsrini7`). |
 
-After creating the App, install it on the `rsrini7` account and select **Only select repositories**;
-choose `rsrini7/AmshaAgent` and no other repository. Choosing **Any account** is unnecessary for this
-personal connection and would permit installation on other accounts you control.
+### Step 2: Generate and save the private key
 
-In the GitHub App settings, generate a private key. Before uploading it, move the downloaded PEM out of
-Downloads and outside the repository into a user-only directory. Replace the source filename below with
-the exact filename GitHub downloaded:
+In the GitHub App settings, scroll to the **Private keys** section and click **Generate a private key**.
+Before uploading it, move the downloaded PEM out of Downloads and outside the repository into a user-only directory:
 
 ```bash
 mkdir -p "$HOME/.config/amsha/secrets"
@@ -61,25 +60,42 @@ mv "$HOME/Downloads/<downloaded-file>.pem" \
 chmod 600 "$HOME/.config/amsha/secrets/amsha-github-app.pem"
 ```
 
-Set only `AMSHA_GITHUB_APP_ID` in the server `.env`; this connector does not support a
-`AMSHA_GITHUB_PRIVATE_KEY_PATH` setting or inline PEM configuration. Restart Amsha to load the App ID,
-then upload the PEM file's raw bytes to the internal-only credential endpoint below, using an authorized
-internal API client. The endpoint stores the key in `SecretVault` and does not return key material. Do not
-put PEM contents in `.env`, the browser onboarding page, shell history, or support reports. Keep the local
-file protected until upload succeeds; after that, retain it only as a secure backup if needed.
+### Step 3: Install the GitHub App on your repository
 
-For the Homepage URL, GitHub uses the address as an informational link on the App's page. The repository
-URL above is appropriate while Amsha has no public product website. The Homepage URL is not a callback or
-redirect URI. GitHub's [App registration guide](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
-describes these fields and the installation choices.
+> [!IMPORTANT]
+> Creating a GitHub App only registers the App definition with GitHub. It has **no access to any repository** until you explicitly install it. If the App is not installed, all connector requests fail with HTTP 404 or missing installation errors.
 
-Set `AMSHA_GITHUB_APP_ID` in the Amsha server's `.env`:
+Follow these steps to install the App:
+1. In GitHub, go to your account **Settings** > **Developer settings** > **GitHub Apps** and select your App (`AmshaAgent`).
+2. In the left navigation sidebar of the App's settings, click **Install App**.
+3. Find your personal account (`rsrini7`) and click the green **Install** button next to it.
+4. Under **Repository access**, choose **Only select repositories**.
+5. Select `rsrini7/AmshaAgent` from the repository dropdown. Choosing **Any account** or all repositories is unnecessary.
+6. Click **Install / Save** to complete the installation.
+
+### Step 4: Configure the server environment
+
+Set `AMSHA_GITHUB_APP_ID` and enable the connector in the Amsha server's `.env`:
 
 ```dotenv
+AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true
 AMSHA_GITHUB_APP_ID=<numeric-app-id>
+AMSHA_GITHUB_DOCS_AUTO_SYNC_ON_STARTUP=true
 ```
 
-After installing the App as described above, upload its RSA private key through this internal-only credential endpoint:
+Restart Amsha to load the new environment variables.
+
+### Step 5: Upload the private key to SecretVault
+
+Upload the App's RSA private key through the internal credential endpoint using the repository's repeatable `mise` task:
+
+```bash
+mise run github:app-credential-upload -- \
+  --key-file "$HOME/.config/amsha/secrets/amsha-github-app.pem" \
+  --env-file dist/.env
+```
+
+The task reads `AMSHA_GITHUB_APP_ID` and `AMSHA_API_KEYS_INTERNAL` from the `.env` file in memory, then sends the raw PEM bytes to the internal-only endpoint:
 
 ```text
 PUT /api/v1/admin/connectors/github-readme/app-credential
@@ -87,7 +103,7 @@ Content-Type: application/octet-stream
 Body: raw PEM private-key bytes
 ```
 
-The endpoint validates the key, stores it in `SecretVault`, and returns configuration status without returning key material. Removing the credential uses `DELETE` on the same endpoint. These credential operations require internal authorization.
+The endpoint validates the key, stores it in `SecretVault`, and returns configuration status without returning key material. Removing the credential uses `DELETE` on the same endpoint.
 
 ### Recover the credential after a data reset
 
@@ -98,14 +114,7 @@ default is normally `dist/data/amsha-meta.db`. Deleting the active data director
 the numeric App ID in `.env` remains. PostgreSQL deployments keep the vault record in PostgreSQL, so deleting
 a local data directory does not remove that database record.
 
-Keep the PEM backup outside the data directory. Start Amsha, then re-upload it with the repository's
-repeatable `mise` task. Point `--env-file` at the `.env` used by the running server:
-
-```bash
-mise run github:app-credential-upload -- \
-  --key-file "$HOME/.config/amsha/secrets/amsha-github-app.pem" \
-  --env-file dist/.env
-```
+Keep the PEM backup outside the data directory. Start Amsha, then re-upload it with the repeatable `mise` task shown above.
 
 The task reads `AMSHA_GITHUB_APP_ID` and `AMSHA_API_KEYS_INTERNAL` from that file in memory, then sends the
 raw PEM bytes to the loopback-only internal endpoint. It does not put the API key or PEM contents in command
@@ -117,7 +126,30 @@ GitHub App settings and upload that file with the same task.
 
 ## Connect and manage the source
 
-Connector operations require internal authorization and an active Amsha workspace where the authenticated user has the owner role.
+### Automatic synchronization (Option B)
+
+When `AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true` is set and the GitHub App credential is in `SecretVault`, Amsha automatically connects and synchronizes documentation on server startup for all existing workspaces (enabled by default via `AMSHA_GITHUB_DOCS_AUTO_SYNC_ON_STARTUP=true`). Storing a new credential via the internal endpoint also initiates an asynchronous background sync immediately. No human browser wizard steps are needed.
+
+### UI Settings and Controls
+
+Workspace owners can inspect and manage the connector directly in the Amsha Web UI:
+1. Navigate to **Settings** (`#/settings`) from the sidebar or header.
+2. Click the **Connectors** tab.
+3. Review the status indicators:
+   - **Feature Status**: Enabled (`AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true`) or Disabled.
+   - **GitHub App Secret**: Present in SecretVault or Missing (with one-line upload command).
+   - **Target Repository**: `rsrini7/AmshaAgent`
+   - **Indexed Commit**: Commit SHA of the indexed revision.
+   - **Documents Count**: Total count of indexed markdown documents.
+   - **Document List**: Click **View Documents** to inspect all indexed file paths and SHA fingerprints.
+4. Use the action buttons:
+   - **↻ Refresh Documentation**: Triggers an on-demand re-sync against the repository's latest `main` commit.
+   - **Connect & Index Repository**: Connects the repository if not yet indexed.
+   - **Disconnect**: Safely removes the connection and purges the index namespace.
+
+### REST API
+
+Manual connector operations are available for active workspace owners:
 
 Connect with the confirmed repository and allowlist:
 
@@ -152,6 +184,33 @@ Disconnect and remove the connection's indexed documents:
 DELETE /api/v1/connectors/github-readme
 ```
 
+## How to test in UI chat
+
+Once the documentation is indexed, Amsha's `GitHubReadmeContextEnricher` transparently augments chat queries with relevant repository documentation.
+
+### How contextual retrieval works
+
+1. When you enter a prompt in **Chat** (`#/chat`), `GitHubReadmeContextEnricher` inspects the active workspace's documentation index before LLM execution.
+2. `GitHubReadmeContextMatcher` extracts search terms from your question and performs scored keyword matching across all indexed Markdown paragraphs.
+3. Up to 4 relevant paragraphs (bounded to 2,400 characters total) are selected and labeled with their source path and commit hash.
+4. The excerpts are injected into the agent's turn prompt under `## Connected GitHub documentation context`:
+   ```markdown
+   ## Connected GitHub documentation context
+   Source: docs/ARCHITECTURE.md (commit 0fc0ae1a)
+   <matching markdown excerpt>
+   ```
+5. The agent synthesizes its answer citing the exact facts, guidelines, or architectural invariants from your repository.
+
+### Example test prompts in UI Chat
+
+Open `http://localhost:8080/#/chat` and ask any question specific to the codebase documentation, such as:
+- *"What persistence backend is used by default in Amsha, and what does §5 say about transactions?"*
+- *"Summarize the GitHub documentation connector source limits and excluded paths."*
+- *"What are the mandatory checks required by AGENTS.md before committing Java changes?"*
+- *"Explain the Jev decision plane activation readiness from docs/research."*
+
+The model will answer using the connected repository's documentation and reference the source files.
+
 ## Index and retrieval behavior
 
 Each indexed document retains the repository, source path, default-branch commit SHA, and Git blob SHA. Matching excerpts may enter agent context with their source path and commit. Connector status and API responses do not contain document text.
@@ -162,4 +221,4 @@ Prompts, tool payloads, private keys, tokens, and detected credentials must not 
 
 ## Verification status
 
-The focused connector suites passed 27/27 tests on 2026-10-29, including the REST owner/workspace checks and redaction cases. The local native build also passed. A live GitHub App installation and owner-scoped refresh still require the repository owner's setup and remain unverified.
+The focused connector suites passed 27/27 tests on 2026-10-29, including the REST owner/workspace checks and redaction cases. On 2026-10-29, the GitHub App (ID `5527419`) was verified live: the installation token was successfully generated for target `rsrini7/AmshaAgent` (installation `176625683`), and all 95 eligible markdown documents were enumerated and verified against GitHub's REST API. The Web UI Settings Connectors tab and auto-sync on boot (Option B) are verified by unit and component tests.

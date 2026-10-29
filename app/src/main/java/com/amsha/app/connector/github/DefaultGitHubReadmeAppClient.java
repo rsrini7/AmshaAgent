@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.amsha.core.security.CredentialDetector;
 import com.amsha.security.api.SecretVault;
 import com.amsha.security.api.VaultConstants;
 import com.amsha.security.api.VaultKey;
@@ -38,6 +39,7 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
     private final GitHubReadmeTransport transport;
     private final SecretVault secretVault;
     private final GitHubReadmePayloadParser parser;
+    private final CredentialDetector credentialDetector;
     private final String appId;
 
     @Inject
@@ -45,10 +47,12 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
             GitHubReadmeTransport transport,
             SecretVault secretVault,
             GitHubReadmePayloadParser parser,
+            CredentialDetector credentialDetector,
             @ConfigProperty(name = "amsha.github.app-id", defaultValue = "") String appId) {
         this.transport = transport;
         this.secretVault = secretVault;
         this.parser = parser;
+        this.credentialDetector = credentialDetector;
         this.appId = appId;
     }
 
@@ -215,9 +219,23 @@ public class DefaultGitHubReadmeAppClient implements GitHubReadmeAppClient {
                     || document.markdown().getBytes(StandardCharsets.UTF_8).length != entry.size()) {
                 throw sourceFailure(GitHubReadmeSourceException.Kind.INVALID_RESPONSE);
             }
+            if (credentialDetected(document.markdown())) {
+                continue;
+            }
             documents.add(new GitHubReadmeDocumentSnapshot(document.path(), document.markdown(), document.blobSha()));
         }
         return List.copyOf(documents);
+    }
+
+    private boolean credentialDetected(String markdown) {
+        if (credentialDetector == null) {
+            return false;
+        }
+        try {
+            return credentialDetector.detect(markdown).detected();
+        } catch (RuntimeException _) {
+            return true;
+        }
     }
 
     private GitHubReadmePayloadParser.Installation parseInstallation(GitHubHttpResponse response) {

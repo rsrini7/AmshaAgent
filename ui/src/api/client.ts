@@ -1,9 +1,9 @@
 import { AgentStatusDto } from './generated/models/AgentStatusDto';
 import { SkillDto } from './generated/models/SkillDto';
-import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto, NetworkProfilePolicyDto, ProviderCatalogModel } from './types';
+import { PendingApprovalDto, ApprovalResultDto, OnboardingStatusDto, SettingsDto, ToolDto, NetworkProfilePolicyDto, ProviderCatalogModel, GitHubReadmeStatusDto, GitHubAppCredentialStatusDto } from './types';
 import { ExecutionRunSummaryDto, ExecutionTraceDto, RunEvidenceDto } from '../types/trace';
 import type { ClassifierRuntimeResponse } from './types';
-export type { ClassifierRuntimeResponse, ClassifierSnapshot } from './types';
+export type { ClassifierRuntimeResponse, ClassifierSnapshot, GitHubReadmeStatusDto, GitHubReadmeDocumentStatusDto, GitHubAppCredentialStatusDto } from './types';
 
 /**
  * Status snapshot returned by GET /sessions/{id}/status/{role}.
@@ -161,6 +161,7 @@ export class ArcClient {
   private static readonly DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
   private static readonly HITL_REQUEST_TIMEOUT_MS = 10_000;
   public static readonly ARENA_REQUEST_TIMEOUT_MS = 60_000;
+  public static readonly CONNECTOR_REQUEST_TIMEOUT_MS = 180_000;
   constructor(
     public readonly baseUrl: string,
     private readonly apiKey?: string,
@@ -555,11 +556,50 @@ export class ArcClient {
     return this.request<SettingsDto>('/settings');
   }
 
-  async getGitHubAppCredentialStatus(): Promise<{ enabled: boolean; configured: boolean }> {
-    return this.request<{ enabled: boolean; configured: boolean }>(
+  async getGitHubAppCredentialStatus(): Promise<GitHubAppCredentialStatusDto> {
+    return this.request<GitHubAppCredentialStatusDto>(
       '/admin/connectors/github-readme/app-credential',
       { cache: 'no-store' },
     );
+  }
+
+  async getGitHubDocsConnectorStatus(): Promise<GitHubReadmeStatusDto> {
+    return this.request<GitHubReadmeStatusDto>('/connectors/github-readme/status', {
+      cache: 'no-store',
+    });
+  }
+
+  async connectGitHubDocs(settings?: {
+    repository?: string;
+    allowedPaths?: string[];
+  }): Promise<GitHubReadmeStatusDto> {
+    return this.request<GitHubReadmeStatusDto>(
+      '/connectors/github-readme/connect',
+      {
+        method: 'POST',
+        body: JSON.stringify(settings ?? {
+          repository: 'rsrini7/AmshaAgent',
+          allowedPaths: ['README.md', 'docs/**/*.md'],
+        }),
+      },
+      ArcClient.CONNECTOR_REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  async refreshGitHubDocs(): Promise<GitHubReadmeStatusDto> {
+    return this.request<GitHubReadmeStatusDto>(
+      '/connectors/github-readme/refresh',
+      {
+        method: 'POST',
+      },
+      ArcClient.CONNECTOR_REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  async disconnectGitHubDocs(): Promise<GitHubReadmeStatusDto> {
+    return this.request<GitHubReadmeStatusDto>('/connectors/github-readme', {
+      method: 'DELETE',
+    });
   }
 
   async patchPrompt(prompt: string): Promise<any> {

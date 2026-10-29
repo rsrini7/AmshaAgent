@@ -95,6 +95,22 @@ describe('ArcSettings', () => {
     expect(rendered).toContain('Allowed Hosts');
     expect(rendered).toContain('Require Egress Proxy');
 
+    (settingsComponent as any)._activeTab = 'connectors';
+    (settingsComponent as any)._githubConnectorEnabled = true;
+    (settingsComponent as any)._githubAppConfigured = true;
+    (settingsComponent as any)._docsStatus = {
+      state: 'INDEXED',
+      indexed: true,
+      repository: 'rsrini7/AmshaAgent',
+      defaultBranch: 'main',
+      commitSha: '0fc0ae1a1234',
+      documents: [{ path: 'README.md', commitSha: '0fc0ae1a1234', blobSha: 'abc' }],
+    };
+    rendered = flattenLit(settingsComponent.render());
+    expect(rendered).toContain('GitHub Documentation Connector');
+    expect(rendered).toContain('rsrini7/AmshaAgent');
+    expect(rendered).toContain('INDEXED');
+
     (settingsComponent as any)._activeTab = 'danger';
     rendered = flattenLit(settingsComponent.render());
     expect(rendered).toContain('Reset & Re-Onboard');
