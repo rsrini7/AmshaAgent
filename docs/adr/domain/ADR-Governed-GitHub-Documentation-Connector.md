@@ -1,6 +1,6 @@
 # ADR: Governed GitHub Documentation Connector
 
-- **Status**: **Accepted** (2026-10-29), amended for engineering-document scope; live installation verification remains pending.
+- **Status**: **Accepted** (2026-10-29), amended for engineering-document scope; live installation and workspace retrieval verified (2026-10-30).
 - **Decision owner:** Amsha Agent repository owner
 - **Feature slug:** `agent-stack-gap-closure`
 - **Related decision:** [Identity and workspace access](ADR-Identity-Access-and-Workspace-Sharing.md)
@@ -46,7 +46,7 @@ The feature is disabled by default through `AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=
 
 The connector provides searchable engineering documentation while preserving least privilege. Repository identity and allowed paths are connection data, while the first-source validator enforces exactly `rsrini7/AmshaAgent`, root `README.md`, and Markdown under `docs/`. Supporting another repository, file type, or path requires an explicit scope decision and policy change; the settings model does not let a caller widen the first connection.
 
-Issue 03 remains open until the revised implementation passes focused checks and a live owner-scoped refresh. The live check requires an App ID, a validated private key in `SecretVault`, and an installation restricted to the selected repository. No live installation or refresh is claimed here.
+Issue 03 has been verified live on 2026-10-30 with the GitHub App installation restricted to `rsrini7/AmshaAgent`, private key in `SecretVault`, and 71 indexed documents at commit `0fc0ae1ad1c963f98cc7d3dd20e9b37d67529ea2`.
 
 Issue 06 platform and release gates remain separate. The parent Jev decision-plane ADR remains **Deferred**; this connector does not activate classifiers or register a production `DecisionEngine`.
 
@@ -56,4 +56,13 @@ The profile-README implementation has been adapted to persisted connection setti
 
 On JDK 25.0.3, six focused connector suites passed 27/27 tests, with 0 failures, 0 errors, and 0 skips. The app reactor PMD gate, FQN cleanup (0 files modified), Spotless apply/check, and documentation verification passed. The local native build passed with `mise run build:native-local` and assembled `dist/amsha-sqlite`; existing `dist/data/` was preserved. The first sandboxed REST attempt could not bind its loopback fixture; the same focused command passed with loopback access enabled.
 
-The owner previously deferred the live App installation and refresh. Issue 03 is therefore `ready-for-human`, not resolved, until that owner-scoped refresh verifies the source paths and current default-branch commit.
+## Live verification checkpoint (2026-10-30)
+
+On 2026-10-30, live GitHub App installation (`5527419`) and owner-scoped documentation synchronization were completed against repository `rsrini7/AmshaAgent`:
+
+1. **Live Source Synchronization**: 71 Markdown documents at commit `0fc0ae1ad1c963f98cc7d3dd20e9b37d67529ea2` were indexed into the local SQLite store (`amsha-meta.db` and `amsha-fts.db`).
+2. **Context Enrichment & Coordinator Direct Response**: In workspace chat, questions concerning repository architecture (e.g. Channel SPI) retrieve matching documentation excerpts directly into prompt context. Coordinator prompt rules explicitly prioritize attached repository context over delegation, preventing redundant research dispatch to Saraswati or external web fetches.
+3. **HITL Parallel Batch Deny**: HITL parallel batch resolution handles `parallel|*` sentinel batch IDs as bulk approvals/denials, eliminating 409 conflict loops when users deny batch operations.
+4. **Onboarding Tenancy Self-Healing**: Onboarding status and setup endpoints omit workspace tenancy headers by default, and stale browser session storage automatically clears on workspace mismatches.
+
+Issue 03 is closed.
