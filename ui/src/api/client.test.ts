@@ -85,6 +85,22 @@ describe('owner API key persistence', () => {
     expect(new Headers(request.headers).has('X-AMSHA-API-KEY')).toBe(false);
     expect(request.cache).toBe('no-store');
   });
+
+  it('omits workspace header when includeWorkspaceId is false', async () => {
+    sessionStorage.setItem('amsha-workspace-id', 'ws-test-123');
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ credentialsOk: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new ArcClient('/api/v1', undefined, true, false).onboardingStatus();
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(new Headers(request.headers).has('X-Amsha-Workspace-Id')).toBe(false);
+  });
 });
 
 describe('bounded HITL requests', () => {

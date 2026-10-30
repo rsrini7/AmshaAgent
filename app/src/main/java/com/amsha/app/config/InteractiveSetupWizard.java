@@ -121,6 +121,7 @@ public class InteractiveSetupWizard {
             System.err.println("  Press Enter to skip a value (you can fill it in .env later).");
             System.err.println();
 
+            printGitHubDocumentationSetupGuide();
             boolean skipTelegram = false;
             boolean askedTelegram = false;
 
@@ -151,6 +152,34 @@ public class InteractiveSetupWizard {
                 promptVariable(envFile, spec);
             }
         }
+    }
+
+    static void printGitHubDocumentationSetupGuide() {
+        System.err.println("  Optional: GitHub documentation connector");
+        System.err.println("  This indexes approved Markdown for private, workspace-scoped search.");
+        System.err.println("  It is separate from AMSHA_TOOLS_GITHUB_TOKEN (the GitHub tool).");
+        System.err.println("  Create a GitHub App with Contents: Read-only and Metadata: Read-only.");
+        System.err.println("  Homepage URL: https://github.com/rsrini7/AmshaAgent");
+        System.err.println("  Callback URL and Setup URL: leave blank; Amsha does not use OAuth.");
+        System.err.println("  Request user authorization (OAuth): leave unchecked.");
+        System.err.println("  Expire user authorization tokens: keep GitHub's default checked.");
+        System.err.println("  Webhooks: turn Active off; leave URL and secret blank.");
+        System.err.println("  Install scope: Only on this account (@rsrini7), then select only");
+        System.err.println("  rsrini7/AmshaAgent when GitHub asks which repositories to install on.");
+        System.err.println("  App ID is the numeric value labeled App ID on the App's General page.");
+        System.err.println("  It is not your username, repository name, Client ID, Client secret,");
+        System.err.println("  or installation ID. Amsha uses it with the private key");
+        System.err.println("  to request a short-lived token for the selected repository.");
+        System.err.println("  Set AMSHA_GITHUB_APP_ID=<numeric-app-id> in this .env file, then restart.");
+        System.err.println("  Connector is disabled by default. To opt in, also set:");
+        System.err.println("  AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true, then restart Amsha.");
+        System.err.println("  Upload the generated private key using the internal connector credential");
+        System.err.println("  endpoint; never paste it into .env or this prompt.");
+        System.err.println("  After deleting the SQLite data directory, restore the key with:");
+        System.err.println("  mise run github:app-credential-upload -- \\");
+        System.err.println("    --key-file \"$HOME/.config/amsha/secrets/amsha-github-app.pem\" \\");
+        System.err.println("    --env-file dist/.env (replace with your server .env path).");
+        System.err.println("  Details: docs/GITHUB_DOCUMENTATION_CONNECTOR.md");
     }
 
     private static void promptProviderSelection() {

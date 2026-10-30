@@ -376,6 +376,19 @@ public final class ConfigKeys {
     /** Base data directory (models, SQLite database, workspaces). */
     public static final String DATA_DIR = "AMSHA_DATA_DIR";
 
+    /** Environment variable enabling the owner-scoped GitHub documentation connector. */
+    public static final String GITHUB_DOCS_CONNECTOR_ENABLED = "AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED";
+
+    /** MicroProfile property enabling the owner-scoped GitHub documentation connector. */
+    public static final String GITHUB_DOCS_CONNECTOR_ENABLED_PROPERTY = "amsha.github.docs-connector.enabled";
+
+    /** Environment variable controlling automatic GitHub documentation sync on server startup. */
+    public static final String GITHUB_DOCS_AUTO_SYNC_ON_STARTUP = "AMSHA_GITHUB_DOCS_AUTO_SYNC_ON_STARTUP";
+
+    /** MicroProfile property controlling automatic GitHub documentation sync on server startup. */
+    public static final String GITHUB_DOCS_AUTO_SYNC_ON_STARTUP_PROPERTY =
+            "amsha.github.docs-connector.auto-sync-on-startup";
+
     /** Root directory for local ONNX models; outranked by the {@code amsha.onnx.model-root} property. */
     public static final String ONNX_MODEL_ROOT = "AMSHA_ONNX_MODEL_ROOT";
 

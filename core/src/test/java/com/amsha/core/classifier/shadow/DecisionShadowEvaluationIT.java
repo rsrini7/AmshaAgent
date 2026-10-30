@@ -43,8 +43,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * End-to-end integration test running the shadow comparison harness against the redacted corpus,
- * verifying real CDI provider wiring and placement validation, and generating bounded evidence.
+ * Runs the redacted decision corpus through the test-only comparison harness and writes aggregate,
+ * payload-free evidence. Candidate model projections are illustrative simulations, not inference.
  */
 class DecisionShadowEvaluationIT {
 
@@ -53,8 +53,8 @@ class DecisionShadowEvaluationIT {
 
     @BeforeEach
     void setUp() throws Exception {
-        try (InputStream stream = getClass().getResourceAsStream("/decision-evidence/corpus-v1.json")) {
-            assertNotNull(stream, "decision-evidence/corpus-v1.json must be present on classpath");
+        try (InputStream stream = getClass().getResourceAsStream("/decision-evidence/corpus-v2.json")) {
+            assertNotNull(stream, "decision-evidence/corpus-v2.json must be present on classpath");
             harness = new DecisionShadowComparisonHarness(stream);
         }
     }

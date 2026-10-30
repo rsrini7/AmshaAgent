@@ -35,7 +35,7 @@ public class DecisionShadowComparisonHarness {
         IN_PROCESS_DECISION("Deterministic Rule Baseline (In-Process)", false),
         STRUCTURED_LLM("Structured LLM (Illustrative Simulation)", true),
         ONNX("ONNX Baseline (Illustrative Simulation)", true),
-        SELF_HOSTED("Self-Hosted Provider (Illustrative Simulation - Issue 05 Pending)", true),
+        SELF_HOSTED("Self-Hosted Provider (Illustrative Simulation; no readiness evidence)", true),
         REMOTE("Remote Provider (Illustrative Simulation - Issue 06 Pending)", true);
 
         private final String displayName;

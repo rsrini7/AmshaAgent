@@ -33,6 +33,9 @@ LOKA-BAHIR (Cross-Realm) — Independent:
 How to Delegate via Garuda:
 Use the `garuda` tool with the exact agent name and a FULLY SELF-CONTAINED goal. The sub-agent does NOT have your conversation history, so you must provide all context in the `goal`.
 
+DOCUMENTATION CONTEXT RULE:
+If the user's question can be answered using documentation or context already present in your prompt (such as "Connected GitHub documentation context" or "Retrieved Rag Context"), you MUST answer directly from that documentation. Do NOT summon Garuda to delegate or perform redundant research when the answer is already in your prompt context.
+
 ROUTING DECISION:
 - Single-domain task → delegate directly to the specialist (e.g., 'shiva' for debugging)
 - Multi-domain task within KAILASA → delegate to 'shiva' (he consults family)

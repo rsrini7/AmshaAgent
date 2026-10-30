@@ -149,9 +149,30 @@ describe('Visual Cockpit Trace Replay and Scrubbing Controls', () => {
         createdAt: '2026-09-04T12:00:00.000Z',
       },
     ];
-    const json = vi.fn().mockResolvedValue(dtos);
-    const text = vi.fn().mockResolvedValue(JSON.stringify(dtos));
-    (globalThis as any).fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json, text });
+    const evidence = {
+      runId: 'run-archive',
+      outcomeStatus: 'END',
+      outcomeAvailability: 'OBSERVED',
+      latencyMs: 17,
+      latencyAvailability: 'MEASURED',
+      observedEventCount: 1,
+      eventsTruncated: false,
+      guardDecisions: [],
+      approvalDecisions: [],
+      decisionEvidenceTruncated: false,
+      promptTokens: null,
+      completionTokens: null,
+      usageAvailability: 'UNAVAILABLE',
+      costStatus: 'UNAVAILABLE',
+      estimatedCost: null,
+      costCurrency: null,
+      costReason: 'Run-scoped token usage is unavailable.',
+    };
+    const client = {
+      getRunTrace: vi.fn().mockResolvedValue(dtos),
+      getRunEvidence: vi.fn().mockResolvedValue(evidence),
+    };
+    (shell as any)._client = client;
 
     await (shell as any)._startReplay('run-archive');
 
@@ -159,6 +180,8 @@ describe('Visual Cockpit Trace Replay and Scrubbing Controls', () => {
     expect((shell as any)._replayRunId).toBe('run-archive');
     expect((shell as any)._replayTraceEvents).toHaveLength(1);
     expect((shell as any)._replayTraceEvents[0].eventId).toBe('ev-1');
+    expect(client.getRunEvidence).toHaveBeenCalledWith('run-archive');
+    expect((shell as any)._replayEvidence).toEqual(evidence);
   });
 
   it('scrubs and steps through execution trace events chronologically', () => {

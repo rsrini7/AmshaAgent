@@ -9,6 +9,34 @@ type EndpointCase = {
 };
 
 const endpointCases: EndpointCase[] = [
+  {
+    name: 'GitHub App credential and connector status',
+    invoke: (client) => client.getGitHubAppCredentialStatus(),
+    path: '/admin/connectors/github-readme/app-credential',
+  },
+  {
+    name: 'GitHub documentation connector status',
+    invoke: (client) => client.getGitHubDocsConnectorStatus(),
+    path: '/connectors/github-readme/status',
+  },
+  {
+    name: 'GitHub documentation connect',
+    invoke: (client) => client.connectGitHubDocs(),
+    path: '/connectors/github-readme/connect',
+    method: 'POST',
+  },
+  {
+    name: 'GitHub documentation refresh',
+    invoke: (client) => client.refreshGitHubDocs(),
+    path: '/connectors/github-readme/refresh',
+    method: 'POST',
+  },
+  {
+    name: 'GitHub documentation disconnect',
+    invoke: (client) => client.disconnectGitHubDocs(),
+    path: '/connectors/github-readme',
+    method: 'DELETE',
+  },
   { name: 'agent list', invoke: (client) => client.getAgents(), path: '/agents' },
   {
     name: 'session status',

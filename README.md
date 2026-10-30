@@ -11,10 +11,10 @@
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
-  ![Java Tests](https://img.shields.io/badge/Tests-9825_passed_%C2%B7_24_skipped_of_9849-brightgreen.svg?style=flat)
-  ![Java Coverage](https://img.shields.io/badge/Coverage-85.87%25-brightgreen.svg?style=flat)
-  ![UI Tests](https://img.shields.io/badge/UI_Tests-334_passing-brightgreen.svg?style=flat)
-  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-76.98%25-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9893_passed_%C2%B7_23_skipped_of_9916-brightgreen.svg?style=flat)
+  ![Java Coverage](https://img.shields.io/badge/Coverage-86.19%25-brightgreen.svg?style=flat)
+  ![UI Tests](https://img.shields.io/badge/UI_Tests-350_passing-brightgreen.svg?style=flat)
+  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-76.66%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
@@ -23,9 +23,9 @@
 > welcome, including bug reports, documentation, tests, and implementation work;
 > see [CONTRIBUTING.md](./CONTRIBUTING.md).
 >
-> **Native platform status:** The latest GraalVM native-image changes have been
-> tested on macOS arm64 only. Linux and Windows native build and runtime testing
-> remain pending.
+> **Native platform status:** macOS arm64 SQLite native build and 10/10 runtime smoke passed on 2026-10-29. Linux arm64 SQLite build and CLI execution passed, but HTTP readiness and the ONNX release matrix remain pending; Linux x86_64 and Windows native checks remain pending.
+>
+> **JVM platform evidence:** SQLite JAR packaging and CLI help passed on macOS arm64; CLI help passed on Linux arm64. HTTP readiness on both targets and Windows JVM runtime checks remain pending.
 
 ---
 
@@ -89,7 +89,7 @@ mise run jar:run-dev-dep -- serve
 
 This starts the web interface at [http://localhost:8080](http://localhost:8080). To work in the interactive CLI, use `mise run jar:run-dev-dep -- chat`. Rerun the task after code changes. It skips tests; run `mise run build:test` when you need the full test suite. This is more reliable for this multi-module project because Quarkus dev mode cannot reload several Amsha module dependencies.
 
-To validate the local GraalVM native-image path, run `mise run build:native-local`, then `mise run native:serve`. Native-image builds take longer and use substantial memory; current native runtime verification is on macOS arm64, while Linux and Windows runtime checks remain pending.
+To validate the local GraalVM native-image path, run `mise run build:native-local`, then `mise run native:serve`. Native-image builds take longer and use substantial memory; full native HTTP/ONNX smoke is verified on macOS arm64. Linux arm64 has a successful SQLite ELF build and CLI launch, but HTTP readiness and the release matrix remain pending; Linux x86_64 and Windows native runtime checks remain pending. JVM HTTP readiness is not claimed.
 
 Quarkus hot reload remains available through `mise run dev` for code that is reloadable in the application module. Changes in non-reloadable Amsha dependencies still require a rebuild or restart. The dev-mode terminal also uses `:` for Quarkus console commands; when Amsha prompts for a value or offers to auto-generate a key, press Enter directly rather than typing `:`.
 
@@ -117,7 +117,7 @@ Quarkus hot reload remains available through `mise run dev` for code that is rel
 - **Secret-safe application logging** — console and file filters redact credential-shaped URLs, bearer values, assignments, formatted parameters, and throwable cause/suppressed chains before rendering
 - **Tamper-evident HMAC audit chain** — every action logged as append-only, verifiable record
 - **MemGPT-style three-tier memory** — prompt-injected Core context, exact-turn Recall history, and semantic Archival knowledge; retrieval combines FTS5 and sqlite-vec with Reciprocal Rank Fusion and an optional local cross-encoder reranker
-- **Opt-in in-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding + optional cross-encoder reranking (`bge-reranker-v1`, BGE Reranker) runs verified local bundles without Python containers, downloads, or external inference sidecars; GraalVM native-image changes are tested on macOS arm64; Linux and Windows native build/runtime validation remains pending
+- **Opt-in in-process local ML inference** — ONNX Runtime (`1.27.0`) and DJL Tokenizers (`0.33.0`) embedding + optional cross-encoder reranking (`bge-reranker-v1`, BGE Reranker) runs verified local bundles without Python containers, downloads, or external inference sidecars; full GraalVM native runtime smoke passed on macOS arm64; Linux arm64 native build and CLI launch passed while HTTP/ONNX release validation is pending; Linux x86_64 and Windows checks remain pending
 - **Vector index descriptor fingerprinting & non-destructive safety** — 15-field `EmbeddingIndexDescriptor` validates model, tokenizer, pooling, and dimension compatibility across SQLite (`sqlite-vec`), PostgreSQL (`pgvector`), and Lucene Filesystem backends; mismatched indices degrade non-destructively to BM25/FTS5 keyword search without auto-deleting vectors
 - **Non-authoritative classifier shadow path** — disabled-by-default intent, tool-risk, and answer-quality adapters emit bounded payload-free comparisons without changing routing, authorization, retry, or answer behavior; reproducible review/training/export tooling is present, while human-approved datasets and promoted models remain pending
 - **classifier safety gate** — core now provides ordered post-policy tool-risk and answer-quality SPIs with monotonic risk upgrades, existing HITL preservation, and one pre-tool retry budget; no active ONNX implementation is wired, so model evidence remains required before behavioral activation
@@ -141,6 +141,10 @@ Quarkus hot reload remains available through `mise run dev` for code that is rel
 MCP management is available from the `#/mcp` panel, channel-neutral `/mcp ...` commands, and REST.
 See the [MCP management guide](./docs/MCP_MANAGEMENT.md) for lifecycle, approvals, user scope, setup
 links, reconfiguration, import, and testing. Module/API details are in [`mcp/README.md`](./mcp/README.md).
+
+### GitHub documentation connector
+
+Connect GitHub documentation for owner-scoped retrieval in the Amsha workspace. The connector is disabled by default; set `AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true` and restart Amsha to enable it. See the [connector guide](./docs/GITHUB_DOCUMENTATION_CONNECTOR.md) for setup and source limits.
 
 ## Optional local ONNX model bundles
 
@@ -267,15 +271,14 @@ See the [Tool Governance Decision Tree](./docs/ARCHITECTURE.md#tool-governance-d
 ## Native binary size
 
 The native binary includes the optional ONNX Runtime and DJL tokenizer libraries so a
-verified local model can run without Python or a sidecar. A current macOS arm64 build
-of `dist/amsha-sqlite` is **381.3 MiB**; size varies by target OS/architecture and
+verified local model can run without Python or a sidecar. The macOS arm64 executable measured **453.3 MiB**; the Linux arm64 executable measured **461.6 MiB** on 2026-10-29; size varies by target OS/architecture and
 GraalVM reachability analysis.
 
 | Contribution | Measured size | Notes |
 | --- | ---: | --- |
 | ONNX Runtime 1.27.0 JAR | 41.4 MiB compressed / 147.6 MiB contents | Contains native libraries for Linux arm64/x64, macOS arm64, and Windows x64. |
 | DJL Tokenizers 0.33.0 JAR | 17.8 MiB compressed / 51.9 MiB contents | Contains Rust tokenizer bindings for the same supported families. |
-| Native-image executable | 381.3 MiB on this build | Includes only resources/code retained by GraalVM; it cannot be accurately split into a fixed “base”, JNI metadata, and dependency total from file size alone. |
+| Native-image executable | 453.3 MiB (macOS arm64, 2026-10-29); 461.6 MiB (Linux arm64, 2026-10-29) | Includes only resources/code retained by GraalVM; it cannot be accurately split into a fixed “base”, JNI metadata, and dependency total from file size alone. |
 | MPNet model bundle | 415.6 MiB external | Installed under gitignored `data/models/`; never embedded in the binary. |
 
 The JAR-content values are supply-chain inventory figures, not additive executable

@@ -13,12 +13,12 @@ import urllib.request
 
 
 BUNDLE_ID = "bge-reranker-v1"
-REVISION = "a76e9c60e58c8e1a1005a76e9389270e5b9fbb40"
+REVISION = "280bcc27a84e0b898c251e06fddb25171bd9b101"
 MODEL_BYTES = 1112459588
 MODEL_SHA256 = "15b9a8c3da82eddf263df571281166e00e9308fe19d077084b642ebfcaf06d2b"
 TOKENIZER_BYTES = 17098079
 TOKENIZER_SHA256 = "48564c5c7d3fa64d85d95e65414a542385f88b0f128fd8d4163fd7a57f2be05c"
-SOURCE_BASE = "https://huggingface.co/Xenova/bge-reranker-base/resolve/main"
+SOURCE_BASE = f"https://huggingface.co/Xenova/bge-reranker-base/resolve/{REVISION}"
 
 
 def sha256_file(path: Path) -> str:

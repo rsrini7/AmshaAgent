@@ -2277,6 +2277,12 @@ Gnani-specific constraints extend these boundaries:
 - **No Hardcoded Static Provider Sets**: `ModelArenaHelper` and health resources MUST NOT hardcode static sets of allowed providers or base URL maps in application source code.
 - **CDI Discovery & Single Source of Truth**: Provider validation and URL resolution MUST query injected CDI `Instance<AgentChatModelProvider>` beans alongside `ModelDefaults` (`ALL_PROVIDERS`, `defaultBaseUrlForProvider()`, `requiresCustomBaseUrl()`, `probeUrlForProvider()`, `authHeadersForProvider()`), allowing newly added providers and dynamic enterprise extensions to be recognized without modifying validation logic.
 
+### 26.6 Run Evidence Projection Invariant (§26.6 INVARIANT)
+- **Bounded Payload-Free Operator Contract**: `/api/v1/cockpit/runs/{runId}/evidence` MUST return a projected, allowlisted evidence contract (`RunEvidenceDto`). Responses MUST NEVER expose raw user prompts, model responses, tool input arguments, or tool outputs.
+- **Strict Bounding & Truncation Signals**: Trace events are bounded to `MAX_EVENTS` (500) and decisions to `MAX_DECISIONS` (100). When trace events exceed stored counts or ceilings, `eventsTruncated` MUST be set to true and latency/outcome fail closed to categorical `UNAVAILABLE`.
+- **Canonical Run ID Format**: Run identifiers MUST match `<sessionId>:turn-<digits>` bounded to $\le 256$ characters; invalid, non-canonical, or unknown run IDs MUST return HTTP 404 without disclosing tenant presence.
+- **Cross-Tenant Inspection Audit**: Internal operators reading cross-tenant run evidence MUST trigger mandatory audit logging (`SESSION_INSPECTED`) before response emission.
+
 ## 27. Decision Plane Invariants
 
 The Jev decision plane is a typed judgment seam (`DecisionEngine`, `DecisionRequest`,
@@ -2405,3 +2411,19 @@ Registering a production `DecisionEngine` bean and enabling the router remain ga
 be presented as doing so. Until those steps are recorded, no production engine bean MUST exist and the
 router's activation gate MUST remain unapproved. This is the boundary that keeps a structural
 guarantee from degrading into a configurational one.
+
+## 28. Governed Documentation Connector Invariants (§28 INVARIANT)
+
+### 28.1 Canonical Source & Path Scope (§28.1 INVARIANT)
+- **Strict Repository & Path Allowlist**: The connector MUST accept only approved repositories (currently `rsrini7/AmshaAgent`) and markdown documentation paths (`README.md`, `docs/**/*.md`). Refresh operations MUST NOT accept branch overrides or expanded path patterns.
+- **Zero Document Body Leakage**: Connector status, audit records, error logs, and administrative responses MUST NEVER echo document contents, git blob text, or markdown bodies.
+- **Fail-Closed Document Validation**: Credential-bearing files, binaries, symlinks, submodules, generated files, and files exceeding size ceilings (64 KiB per doc, 256 docs per refresh, 8 MiB total) MUST fail closed and preserve the last known-good snapshot.
+
+### 28.2 SecretVault & GitHub App Isolation (§28.2 INVARIANT)
+- **Zero Runtime Filesystem Key Reads**: Amsha MUST NOT read the GitHub App private key from local filesystem paths at runtime. The key MUST be retrieved solely from `SecretVault` (`system:github_app_private_key`).
+- **Owner-Only Loopback Upload**: Private key upload MUST be restricted to the loopback-only authenticated administrative endpoint `PUT /api/v1/admin/connectors/github-readme/app-credential` driven by `mise run github:app-credential-upload`.
+- **Short-Lived Ephemeral Tokens**: GitHub App JWTs (RS256, max 10-minute validity) MUST be generated in-memory and exchanged for repository-scoped installation tokens. Tokens MUST NEVER be persisted or logged.
+
+### 28.3 Workspace-Scoped Tenancy & Prompt Priority (§28.3 INVARIANT)
+- **Owner Workspace Gate**: Connect, refresh, status, and disconnect operations require internal owner membership in the target workspace. Archival indices are strictly partitioned by owner user ID and workspace ID (`gh-docs:<hash>`).
+- **Coordinator Context Priority**: When connected documentation is injected into the prompt under `## Connected GitHub documentation context`, coordinator prompt rules MUST prioritize the context and answer directly, forbidding redundant research delegations to Saraswati or external web fetch / search tools.

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.amsha.app.ui.dto.RunEvidenceDto;
 import com.amsha.core.agent.trace.TraceSymbolicationService;
 import com.amsha.core.api.dto.AmshaErrorResponse;
 import com.amsha.core.audit.AuditService;
@@ -41,6 +42,8 @@ import io.smallrye.common.annotation.RunOnVirtualThread;
 public class CockpitResource {
 
     static final int MAX_LIMIT = 500;
+    private static final String RUN_ID_TURN_MARKER = ":turn-";
+    private static final int MAX_RUN_ID_LENGTH = 256;
 
     // Runs listing uses a tighter cap than trace replay: listRuns returns lightweight
     // summaries for a session browser (bounded to 100), while getRunTrace returns heavy
@@ -155,6 +158,42 @@ public class CockpitResource {
         return Response.ok(traces).build();
     }
 
+    /**
+     * Returns a bounded, payload-free evidence summary for one durable run.
+     *
+     * <p>The same owner and internal-operator authorization used by trace replay applies here.
+     * Cross-owner operator reads are audited by {@link #authorizeSessionAccess(String)}.
+     */
+    @GET
+    @Path("runs/{runId}/evidence")
+    public Response getRunEvidence(@PathParam("runId") String runId) {
+        String sessionId = extractSessionId(runId);
+        Response authCheck = authorizeSessionAccess(sessionId);
+        if (authCheck != null) {
+            return authCheck;
+        }
+        if (!isCanonicalRunId(sessionId, runId)) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new AmshaErrorResponse("Run not found"))
+                    .build();
+        }
+        if (traceStoreInstance == null || traceStoreInstance.isUnsatisfied()) {
+            return Response.ok(CockpitRunEvidenceProjector.unavailable(runId, 0))
+                    .build();
+        }
+
+        ExecutionTraceStorePort traceStore = traceStoreInstance.get();
+        long eventCount = traceStore.countByRunId(runId);
+        if (eventCount == 0) {
+            return Response.ok(CockpitRunEvidenceProjector.unavailable(runId, 0))
+                    .build();
+        }
+        List<ExecutionTraceDto> traces =
+                traceStore.findByRunIdBounded(runId, 0, null, 0, CockpitRunEvidenceProjector.MAX_EVENTS);
+        RunEvidenceDto evidence = CockpitRunEvidenceProjector.project(runId, sessionId, eventCount, traces);
+        return Response.ok(evidence).build();
+    }
+
     private Response authorizeSessionAccess(String sessionId) {
         if (sessionId == null || sessionId.isBlank() || sessionCatalogStore == null) {
             return Response.status(Response.Status.NOT_FOUND)
@@ -193,7 +232,7 @@ public class CockpitResource {
                             callerUserId,
                             "operator",
                             SecurityEventType.SESSION_INSPECTED,
-                            "Privileged replay inspection of session " + sessionId);
+                            "Privileged cockpit inspection of session " + sessionId);
                 } catch (Exception auditEx) {
                     log.warnf(
                             auditEx,
@@ -219,8 +258,20 @@ public class CockpitResource {
         if (runId == null) {
             return "";
         }
-        int idx = runId.lastIndexOf(":turn-");
+        int idx = runId.lastIndexOf(RUN_ID_TURN_MARKER);
         return idx > 0 ? runId.substring(0, idx) : runId;
+    }
+
+    private static boolean isCanonicalRunId(String sessionId, String runId) {
+        if (runId == null || runId.length() > MAX_RUN_ID_LENGTH) {
+            return false;
+        }
+        String prefix = sessionId + RUN_ID_TURN_MARKER;
+        if (!runId.startsWith(prefix)) {
+            return false;
+        }
+        String turnNumber = runId.substring(prefix.length());
+        return !turnNumber.isEmpty() && turnNumber.chars().allMatch(digit -> digit >= '0' && digit <= '9');
     }
 
     String resolveUserId() {

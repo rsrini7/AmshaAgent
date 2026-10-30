@@ -3,7 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import { ArcClient } from '../api/client';
 import { consume } from '@lit/context';
 import { arcContext, ArcAppContext } from '../context/arc-context';
-import { SettingsDto, NetworkProfilePolicyDto, EgressMode } from '../api/types';
+import { SettingsDto, NetworkProfilePolicyDto, EgressMode, GitHubReadmeStatusDto, GitHubAppCredentialStatusDto } from '../api/types';
 
 @customElement('arc-settings')
 export class ArcSettings extends LitElement {
@@ -34,11 +34,43 @@ export class ArcSettings extends LitElement {
   private get _client(): ArcClient {
     return new ArcClient('/api/v1', this._appContext?.apiKey || '');
   }
+
+  private async _resolveGitHubDocsOwnerWorkspaceId(): Promise<string> {
+    const workspaceClient = new ArcClient('/api/v1', this._appContext?.apiKey || '', true, false);
+    const memberships = await workspaceClient.getGitHubDocsOwnerWorkspaces();
+    const activeOwnerMemberships = Array.isArray(memberships)
+      ? memberships.filter(
+          (membership) =>
+            membership.status?.toUpperCase() === 'ACTIVE' &&
+            membership.role?.toUpperCase() === 'OWNER' &&
+            typeof membership.workspaceId === 'string' &&
+            membership.workspaceId.trim(),
+        )
+      : [];
+    const selectedWorkspaceId = this._appContext?.workspaceId?.trim();
+    const ownerMembership =
+      activeOwnerMemberships.find((membership) => membership.workspaceId.trim() === selectedWorkspaceId) ??
+      activeOwnerMemberships[0];
+    const workspaceId = ownerMembership?.workspaceId.trim();
+    if (!workspaceId) {
+      throw new Error('GitHub documentation connector requires an active owner workspace.');
+    }
+    return workspaceId;
+  }
   @state() private _loading = false;
   @state() private _error = '';
   @state() private _success = '';
   @state() private _skipOnboarding = false;
   @state() private _settings: SettingsDto | null = null;
+
+  @state() private _githubAppConfigured: boolean | null = null;
+  @state() private _githubConnectorEnabled: boolean | null = null;
+  @state() private _docsStatus: GitHubReadmeStatusDto | null = null;
+  @state() private _docsLoading = false;
+  @state() private _docsActionLoading = false;
+  @state() private _docsError = '';
+  @state() private _docsSuccess = '';
+  @state() private _showDocsList = false;
 
   static styles = css`
     :host {
@@ -90,9 +122,40 @@ export class ArcSettings extends LitElement {
       border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: var(--font-weight-semi);
     }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      padding: var(--space-3) var(--space-6); background: var(--bg-elevated); color: var(--text-primary);
+      border: 1.5px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-weight: var(--font-weight-semi);
+    }
+    .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-danger {
       padding: var(--space-3) var(--space-6); background: var(--error); color: #fff;
       border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: var(--font-weight-semi);
+    }
+
+    .card {
+      background: var(--bg-surface); border: 1.5px solid var(--border); border-radius: var(--radius-lg);
+      padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4);
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: var(--space-1); padding: 4px 10px;
+      border-radius: var(--radius-full); font-size: var(--font-size-xs); font-weight: var(--font-weight-semi);
+    }
+    .badge-success { background: rgba(34,197,94,0.15); color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+    .badge-warning { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .badge-neutral { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border); }
+    .details-table {
+      width: 100%; border-collapse: collapse; font-size: var(--font-size-sm);
+    }
+    .details-table td {
+      padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border);
+    }
+    .details-table td:first-child {
+      font-weight: var(--font-weight-semi); color: var(--text-muted); width: 180px;
+    }
+    .doc-list {
+      max-height: 220px; overflow-y: auto; background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: var(--space-3); font-family: monospace; font-size: var(--font-size-xs);
+      display: flex; flex-direction: column; gap: 4px;
     }
 
     .status-msg { padding: var(--space-3); border-radius: var(--radius-md); font-size: var(--font-size-sm); margin-top: var(--space-4); }
@@ -103,6 +166,7 @@ export class ArcSettings extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     await this._loadSettings();
+    this._loadConnectorStatus();
   }
 
   private async _loadSettings() {
@@ -280,6 +344,7 @@ export class ArcSettings extends LitElement {
         <div class="tab ${this._activeTab === 'prompt' ? 'active' : ''}" role="tab" id="tab-prompt" aria-selected="${this._activeTab === 'prompt'}" aria-controls="panel-prompt" tabindex="${this._activeTab === 'prompt' ? '0' : '-1'}" @click="${() => this._activeTab = 'prompt'}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'prompt'; } }}">System Prompt</div>
         <div class="tab ${this._activeTab === 'voice' ? 'active' : ''}" role="tab" id="tab-voice" aria-selected="${this._activeTab === 'voice'}" aria-controls="panel-voice" tabindex="${this._activeTab === 'voice' ? '0' : '-1'}" @click="${() => this._activeTab = 'voice'}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'voice'; } }}">Speech & Voice</div>
         <div class="tab ${this._activeTab === 'network' ? 'active' : ''}" role="tab" id="tab-network" aria-selected="${this._activeTab === 'network'}" aria-controls="panel-network" tabindex="${this._activeTab === 'network' ? '0' : '-1'}" @click="${() => this._activeTab = 'network'}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'network'; } }}">Network Policy</div>
+        <div class="tab ${this._activeTab === 'connectors' ? 'active' : ''}" role="tab" id="tab-connectors" aria-selected="${this._activeTab === 'connectors'}" aria-controls="panel-connectors" tabindex="${this._activeTab === 'connectors' ? '0' : '-1'}" @click="${() => { this._activeTab = 'connectors'; this._loadConnectorStatus(); }}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'connectors'; this._loadConnectorStatus(); } }}">Connectors</div>
         <div class="tab ${this._activeTab === 'danger' ? 'active' : ''}" role="tab" id="tab-danger" aria-selected="${this._activeTab === 'danger'}" aria-controls="panel-danger" tabindex="${this._activeTab === 'danger' ? '0' : '-1'}" @click="${() => this._activeTab = 'danger'}" @keydown="${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._activeTab = 'danger'; } }}">Danger Zone</div>
       </div>
 
@@ -290,6 +355,7 @@ export class ArcSettings extends LitElement {
       ${this._activeTab === 'prompt' ? this._renderPrompt() : ''}
       ${this._activeTab === 'voice' ? this._renderVoice() : ''}
       ${this._activeTab === 'network' ? this._renderNetworkPolicy() : ''}
+      ${this._activeTab === 'connectors' ? this._renderConnectors() : ''}
       ${this._activeTab === 'danger' ? this._renderDanger() : ''}
     `;
   }
@@ -484,6 +550,240 @@ export class ArcSettings extends LitElement {
                   @click="${() => this._saveNetworkProfile()}">
             Save Network Policy
           </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private async _loadConnectorStatus() {
+    try {
+      this._docsLoading = true;
+      this._docsError = '';
+      let workspaceId: string;
+      try {
+        workspaceId = await this._resolveGitHubDocsOwnerWorkspaceId();
+      } catch (error) {
+        this._docsStatus = null;
+        this._docsError = error instanceof Error ? error.message : 'Could not determine an active owner workspace.';
+        return;
+      }
+      try {
+        const cred = await this._client.getGitHubAppCredentialStatus();
+        this._githubConnectorEnabled = cred.enabled;
+        this._githubAppConfigured = cred.configured;
+      } catch (_) {
+        this._githubConnectorEnabled = null;
+        this._githubAppConfigured = null;
+      }
+      try {
+        const status = await this._client.getGitHubDocsConnectorStatus(workspaceId);
+        this._docsStatus = status;
+      } catch (error) {
+        this._docsStatus = null;
+        this._docsError = `Failed to load connector status: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      }
+    } finally {
+      this._docsLoading = false;
+    }
+  }
+
+  private async _connectDocs() {
+    try {
+      this._docsActionLoading = true;
+      this._docsError = '';
+      this._docsSuccess = '';
+      const workspaceId = await this._resolveGitHubDocsOwnerWorkspaceId();
+      const status = await this._client.connectGitHubDocs(undefined, workspaceId);
+      this._docsStatus = status;
+      this._docsSuccess = `Successfully connected and indexed ${status.documents?.length ?? 0} documents from ${status.repository || 'repository'}.`;
+    } catch (e: any) {
+      this._docsError = 'Failed to connect: ' + (e.message || 'Unknown error');
+    } finally {
+      this._docsActionLoading = false;
+    }
+  }
+
+  private async _refreshDocs() {
+    try {
+      this._docsActionLoading = true;
+      this._docsError = '';
+      this._docsSuccess = '';
+      const workspaceId = await this._resolveGitHubDocsOwnerWorkspaceId();
+      const status = await this._client.refreshGitHubDocs(workspaceId);
+      this._docsStatus = status;
+      this._docsSuccess = `Successfully refreshed documentation (${status.documents?.length ?? 0} documents at commit ${status.commitSha?.substring(0, 7) || 'latest'}).`;
+    } catch (e: any) {
+      this._docsError = 'Failed to refresh documentation: ' + (e.message || 'Unknown error');
+    } finally {
+      this._docsActionLoading = false;
+    }
+  }
+
+  private async _disconnectDocs() {
+    if (!confirm('Are you sure you want to disconnect the GitHub documentation connector? The indexed documents will be removed.')) {
+      return;
+    }
+    try {
+      this._docsActionLoading = true;
+      this._docsError = '';
+      this._docsSuccess = '';
+      const workspaceId = await this._resolveGitHubDocsOwnerWorkspaceId();
+      const status = await this._client.disconnectGitHubDocs(workspaceId);
+      this._docsStatus = status;
+      this._docsSuccess = 'GitHub documentation connector disconnected.';
+    } catch (e: any) {
+      this._docsError = 'Failed to disconnect: ' + (e.message || 'Unknown error');
+    } finally {
+      this._docsActionLoading = false;
+    }
+  }
+
+  private _renderConnectors() {
+    const isIndexed = this._docsStatus?.indexed || this._docsStatus?.state === 'INDEXED';
+    const isEnabled = this._githubConnectorEnabled === true;
+    const isConfigured = this._githubAppConfigured === true;
+    const docCount = this._docsStatus?.documents?.length ?? 0;
+
+    return html`
+      <div class="section">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--space-2)">
+            <div>
+              <h3 style="margin:0;font-size:var(--font-size-lg)">GitHub Documentation Connector</h3>
+              <p class="field-hint" style="margin:var(--space-1) 0 0 0">
+                Synchronizes repository documentation for contextual retrieval and answers in workspace chat.
+              </p>
+            </div>
+            <div>
+              ${!isEnabled
+                ? html`<span class="badge badge-neutral">DISABLED</span>`
+                : !isConfigured
+                  ? html`<span class="badge badge-warning">CREDENTIAL MISSING</span>`
+                  : isIndexed
+                    ? html`<span class="badge badge-success">✓ INDEXED (${docCount} docs)</span>`
+                    : html`<span class="badge badge-warning">NOT INDEXED</span>`}
+            </div>
+          </div>
+
+          ${this._docsError ? html`<div class="status-msg error">${this._docsError}</div>` : ''}
+          ${this._docsSuccess ? html`<div class="status-msg success">${this._docsSuccess}</div>` : ''}
+          ${this._docsActionLoading ? html`
+            <div class="status-msg" style="background:var(--bg-elevated);border:1px solid var(--border)">
+              ⏳ Downloading and indexing repository documentation from GitHub… This may take ~30–45 seconds.
+            </div>
+          ` : ''}
+
+          <table class="details-table">
+            <tbody>
+              <tr>
+                <td>Feature Status</td>
+                <td>
+                  ${this._githubConnectorEnabled === null
+                    ? 'Checking…'
+                    : isEnabled
+                      ? html`<span style="color:var(--success)">● Enabled</span> (<code>AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true</code>)`
+                      : html`<span style="color:var(--text-muted)">○ Disabled</span> (Set <code>AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true</code> in <code>.env</code>)`}
+                </td>
+              </tr>
+              <tr>
+                <td>GitHub App Secret</td>
+                <td>
+                  ${this._githubAppConfigured === null
+                    ? 'Checking…'
+                    : isConfigured
+                      ? html`<span style="color:var(--success)">● Present in SecretVault</span>`
+                      : html`<span style="color:#f59e0b">▲ Missing from SecretVault</span>`}
+                </td>
+              </tr>
+              <tr>
+                <td>Target Repository</td>
+                <td><code>${this._docsStatus?.repository || 'rsrini7/AmshaAgent'}</code></td>
+              </tr>
+              <tr>
+                <td>Default Branch</td>
+                <td><code>${this._docsStatus?.defaultBranch || 'main'}</code></td>
+              </tr>
+              <tr>
+                <td>Indexed Commit</td>
+                <td><code>${this._docsStatus?.commitSha ? this._docsStatus.commitSha.substring(0, 7) : '—'}</code></td>
+              </tr>
+              <tr>
+                <td>Documents Count</td>
+                <td><strong>${docCount}</strong> markdown documents indexed</td>
+              </tr>
+              <tr>
+                <td>Last Synchronized</td>
+                <td>${this._docsStatus?.updatedAt ? new Date(this._docsStatus.updatedAt).toLocaleString() : 'Never'}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          ${!isConfigured && isEnabled
+            ? html`
+                <div class="status-msg" style="background:var(--bg-elevated);border:1px solid var(--border)">
+                  <strong>Upload App Private Key</strong><br />
+                  Run the credential upload command to store your GitHub App private key in SecretVault:
+                  <pre style="margin:var(--space-2) 0 0 0;font-size:var(--font-size-xs)"><code>mise run github:app-credential-upload -- --key-file "$HOME/.config/amsha/secrets/amsha-github-app.pem" --env-file dist/.env</code></pre>
+                </div>
+              `
+            : ''}
+
+          <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:center;margin-top:var(--space-2)">
+            ${isIndexed
+              ? html`
+                  <button
+                    class="btn-primary"
+                    ?disabled="${this._docsActionLoading || !isEnabled}"
+                    @click="${() => this._refreshDocs()}"
+                  >
+                    ${this._docsActionLoading ? 'Refreshing…' : '↻ Refresh Documentation'}
+                  </button>
+                  <button
+                    class="btn-secondary"
+                    ?disabled="${this._docsActionLoading}"
+                    @click="${() => this._disconnectDocs()}"
+                  >
+                    Disconnect
+                  </button>
+                `
+              : html`
+                  <button
+                    class="btn-primary"
+                    ?disabled="${this._docsActionLoading || !isEnabled || !isConfigured}"
+                    @click="${() => this._connectDocs()}"
+                  >
+                    ${this._docsActionLoading ? 'Connecting…' : 'Connect & Index Repository'}
+                  </button>
+                `}
+            <button
+              class="btn-secondary"
+              ?disabled="${this._docsLoading}"
+              @click="${() => this._loadConnectorStatus()}"
+            >
+              Check Status
+            </button>
+            ${docCount > 0
+              ? html`
+                  <button
+                    class="btn-secondary"
+                    style="margin-left:auto"
+                    @click="${() => (this._showDocsList = !this._showDocsList)}"
+                  >
+                    ${this._showDocsList ? 'Hide Documents' : `View ${docCount} Documents`}
+                  </button>
+                `
+              : ''}
+          </div>
+
+          ${this._showDocsList && this._docsStatus?.documents?.length
+            ? html`
+                <div class="doc-list">
+                  ${this._docsStatus.documents.map(
+                    (d) => html`<div>📄 ${d.path} <span style="color:var(--text-muted)">(${d.commitSha.substring(0, 7)})</span></div>`
+                  )}
+                </div>
+              `
+            : ''}
         </div>
       </div>
     `;

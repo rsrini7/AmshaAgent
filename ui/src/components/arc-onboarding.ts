@@ -8,6 +8,7 @@ import {
   readPersistedOwnerApiKey,
 } from '../api/client';
 import { O1DraftPayload, ConnectionDraft, ModelProfileDraft, OnboardingStatusDto, ProviderDescriptor } from '../api/types';
+import { LOGO_SVG_SRC } from '../branding';
 import { formStyles } from './arc-onboarding-styles';
 import './onboarding/arc-onboarding-plan-stepper';
 import './onboarding/arc-onboarding-step-welcome';
@@ -27,7 +28,7 @@ const HTTP_SERVER_ERROR_MIN_STATUS = 500;
 
 @customElement('arc-onboarding')
 export class ArcOnboarding extends LitElement {
-  @state() private _client = new ArcClient('/api/v1');
+  @state() private _client = new ArcClient('/api/v1', undefined, true, false);
 
   @state() private _draftId = '';
   @state() private _currentStepId = 'welcome';
@@ -239,13 +240,24 @@ export class ArcOnboarding extends LitElement {
       } catch (error) {
         // A clean deployment deliberately protects onboarding/status until the
         // first owner exists. Bootstrap is the unauthenticated entry point.
-        if (!(error instanceof ArcApiError) || error.status !== 401) throw error;
-        if (attemptedOwnerApiKey) {
+        // Onboarding requests do not use workspace scope, so keep the selected
+        // workspace intact when retrying without the persisted owner API key.
+        if (error instanceof ArcApiError && error.status === 403) {
+          try {
+            status = await new ArcClient('/api/v1', undefined, false, false).onboardingStatus();
+          } catch (retryError) {
+            if (!(retryError instanceof ArcApiError) || (retryError.status !== 401 && retryError.status !== 403)) {
+              throw retryError;
+            }
+          }
+        } else if (!(error instanceof ArcApiError) || error.status !== 401) {
+          throw error;
+        } else if (attemptedOwnerApiKey) {
           try {
             // Test the HttpOnly cookie without deleting the persisted key first.
             // Only a successful cookie-authenticated response proves the stored
             // header is stale and safe to remove.
-            status = await new ArcClient('/api/v1', undefined, false).onboardingStatus();
+            status = await new ArcClient('/api/v1', undefined, false, false).onboardingStatus();
             clearPersistedOwnerApiKey(attemptedOwnerApiKey);
           } catch (retryError) {
             if (!(retryError instanceof ArcApiError) || retryError.status !== 401) {
@@ -274,7 +286,7 @@ export class ArcOnboarding extends LitElement {
           persistOwnerApiKey(claim.apiKey);
           // Keep the issued credential in memory for this claim flow even if
           // browser storage is restricted; the HttpOnly cookie remains primary.
-          this._client = new ArcClient('/api/v1', claim.apiKey.trim());
+          this._client = new ArcClient('/api/v1', claim.apiKey.trim(), true, false);
         }
       } else if (boot.status === 'CLAIMING') {
         this._bootstrapState = 'CLAIMING';
@@ -355,7 +367,7 @@ export class ArcOnboarding extends LitElement {
         throw new Error('Local recovery did not return an owner credential.');
       }
       persistOwnerApiKey(recovery.apiKey);
-      this._client = new ArcClient('/api/v1', recovery.apiKey.trim());
+      this._client = new ArcClient('/api/v1', recovery.apiKey.trim(), true, false);
       await this._initDraft();
     } catch (error: any) {
       if (error instanceof ArcApiError && error.status === 403) {
@@ -375,7 +387,7 @@ export class ArcOnboarding extends LitElement {
       return;
     }
     persistOwnerApiKey(apiKey);
-    this._client = new ArcClient('/api/v1', apiKey);
+    this._client = new ArcClient('/api/v1', apiKey, true, false);
     await this._initDraft();
   }
 
@@ -659,9 +671,7 @@ export class ArcOnboarding extends LitElement {
         <div class="sr-only" aria-live="polite" id="step-announcer">Step: ${this._currentStepId}</div>
         <div class="wizard-header">
           <div class="brand-mark">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
+            <img src="${LOGO_SVG_SRC}" alt="" width="48" height="48" />
           </div>
           <h1 class="wizard-title">Amsha Agent</h1>
           <p class="wizard-subtitle">AI Agent Infrastructure Onboarding</p>

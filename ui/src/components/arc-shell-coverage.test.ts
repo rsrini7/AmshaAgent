@@ -138,6 +138,7 @@ describe('ArcShell routing and live cockpit behavior', () => {
     const client = {
       getSessionRuns: vi.fn().mockResolvedValue([summary]),
       getRunTrace: vi.fn().mockResolvedValue([trace]),
+      getRunEvidence: vi.fn().mockRejectedValue(new Error('evidence unavailable')),
     };
     component._client = client;
 
@@ -263,6 +264,20 @@ describe('ArcShell routing and live cockpit behavior', () => {
     expect(component._fetchAgents).toHaveBeenCalledOnce();
     expect(component._fetchApprovals).toHaveBeenCalledOnce();
     expect(sseManager.connect).toHaveBeenCalledOnce();
+  });
+
+  it('resolves workspace from authenticated session when session-ready omits it', () => {
+    const { shell } = createShell();
+    const component = shell as any;
+    const resolveWorkspace = vi.spyOn(component, '_fetchActiveWorkspace').mockResolvedValue(undefined);
+    vi.spyOn(component, '_fetchSessionRuns').mockResolvedValue(undefined);
+    vi.spyOn(component, '_startSse').mockImplementation(() => undefined);
+
+    component._onSessionReady(new CustomEvent('session-ready', {
+      detail: { sessionId: 'session-without-workspace', platformId: 'platform-1' },
+    }));
+
+    expect(resolveWorkspace).toHaveBeenCalledOnce();
   });
 
   it('loads shell data, handles unauthorized API responses, and forwards HITL events', async () => {

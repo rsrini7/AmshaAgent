@@ -44,6 +44,7 @@ import {
   AgentTraceEvent,
   isAgentTraceEvent,
   ExecutionRunSummaryDto,
+  RunEvidenceDto,
   toAgentTraceEvent,
 } from '../types/trace';
 
@@ -79,6 +80,7 @@ export class ArcShell extends LitElement {
   @state() private _isReplayMode = false;
   @state() private _replayRunId = '';
   @state() private _replayTraceEvents: AgentTraceEvent[] = [];
+  @state() private _replayEvidence: RunEvidenceDto | null = null;
   @state() private _replayRuns: ExecutionRunSummaryDto[] = [];
   /** Live trace events that arrived while replay was active, pending merge on exit. */
   @state() private _replayBufferedEvents: AgentTraceEvent[] = [];
@@ -401,6 +403,8 @@ export class ArcShell extends LitElement {
     const wsId = customEvent.detail?.workspaceId?.trim();
     if (wsId) {
       this._setWorkspaceId(wsId);
+    } else {
+      this._clearWorkspaceId();
     }
   };
 
@@ -458,9 +462,13 @@ export class ArcShell extends LitElement {
           )
         : [];
       const currentWorkspace = this._workspaceId?.trim();
-      const active =
-        activeMemberships.find((membership: any) => membership.workspaceId.trim() === currentWorkspace) ||
-        activeMemberships[0];
+      const selectedWorkspace = activeMemberships.find(
+        (membership: any) => membership.workspaceId.trim() === currentWorkspace,
+      );
+      const ownerWorkspace = activeMemberships.find(
+        (membership: any) => membership.role?.toUpperCase() === 'OWNER',
+      );
+      const active = selectedWorkspace || ownerWorkspace || activeMemberships[0];
       const wsId = active?.workspaceId?.trim();
       if (wsId) {
         this._setWorkspaceId(wsId);
@@ -543,6 +551,8 @@ export class ArcShell extends LitElement {
     const workspaceId = e.detail?.workspaceId?.trim();
     if (workspaceId) {
       this._setWorkspaceId(workspaceId);
+    } else {
+      void this._fetchActiveWorkspace();
     }
     this._updateContext();
     if (sessionChanged) {
@@ -550,6 +560,7 @@ export class ArcShell extends LitElement {
       this._currentRunId = '';
       this._isReplayMode = false;
       this._replayTraceEvents = [];
+      this._replayEvidence = null;
       this._sseManager?.resetDedup();
       this._fetchSessionRuns(sessionId);
     }
@@ -603,6 +614,9 @@ export class ArcShell extends LitElement {
       event.sessionId === this._sessionId &&
       (status === AGENT_SESSION_STATUS.AWAITING_RETRY || TERMINAL_AGENT_SESSION_STATUSES.has(status))
     ) {
+      if (TERMINAL_AGENT_SESSION_STATUSES.has(status)) {
+        void this._fetchSessionRuns(event.sessionId);
+      }
       window.dispatchEvent(
         new CustomEvent<AgentSessionStatusNotice>(AGENT_SESSION_STATUS_EVENT, {
           detail: {
@@ -655,12 +669,17 @@ export class ArcShell extends LitElement {
 
   async _startReplay(runId: string) {
     if (!runId) return;
+    this._replayEvidence = null;
     try {
       const client = this._client ?? new ArcClient('/api/v1', this._apiKey);
-      const traces = await client.getRunTrace(runId, 500);
+      const [traces, evidence] = await Promise.all([
+        client.getRunTrace(runId, 500),
+        client.getRunEvidence(runId).catch(() => null),
+      ]);
       if (Array.isArray(traces)) {
         this._replayTraceEvents = traces.map(toAgentTraceEvent);
         this._replayRunId = runId;
+        this._replayEvidence = evidence;
         this._isReplayMode = true;
       }
     } catch {
@@ -671,6 +690,7 @@ export class ArcShell extends LitElement {
   _exitReplay() {
     this._isReplayMode = false;
     this._replayTraceEvents = [];
+    this._replayEvidence = null;
     this._replayRunId = '';
     // Merge any live trace events that arrived during replay back into the live buffer so
     // they are not permanently lost.
@@ -817,6 +837,7 @@ export class ArcShell extends LitElement {
             .paradigm=${this._activeParadigm}
             .isReplayMode=${this._isReplayMode}
             .replayRuns=${this._replayRuns}
+            .runEvidence=${this._isReplayMode ? this._replayEvidence : null}
             @start-replay=${(e: CustomEvent) => this._startReplay(e.detail.runId)}
             @exit-replay=${() => this._exitReplay()}
             @refresh-runs=${() => this._fetchSessionRuns(this._sessionId)}

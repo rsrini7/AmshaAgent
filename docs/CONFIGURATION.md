@@ -540,6 +540,16 @@ schema) and must match the model used by every active provider.
 
 MCP management behavior is documented in [MCP Management](./MCP_MANAGEMENT.md).
 
+## GitHub Documentation Connector
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED` | `false` | Enable the owner-scoped GitHub documentation connector (`amsha.github.docs-connector.enabled`). |
+| `AMSHA_GITHUB_DOCS_AUTO_SYNC_ON_STARTUP` | `true` | Automatically connect and sync documentation for workspaces on server startup when the connector is enabled (`amsha.github.docs-connector.auto-sync-on-startup`). |
+| `AMSHA_GITHUB_APP_ID` | `none` | Numeric GitHub App ID used for server-to-server JWT signing and repository installation token exchange (`amsha.github.app-id`). Private key is stored in SecretVault. |
+
+GitHub documentation connector setup, recovery, and retrieval behavior are documented in [GitHub documentation connector](GITHUB_DOCUMENTATION_CONNECTOR.md).
+
 ## Tools
 
 | Variable | Default | Description |

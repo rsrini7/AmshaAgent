@@ -504,6 +504,37 @@ To protect durable vector namespaces (`rag-global`, `archival`) from corrupted c
 
 ---
 
+### Governed GitHub Documentation Connector
+
+The GitHub documentation connector provides durable, owner-scoped repository documentation search and prompt retrieval for workspace chat.
+
+1. **Governed Source & Path Scope**:
+   - Restricted to the approved repository (`rsrini7/AmshaAgent`).
+   - Reads the repository's current default branch and only paths matching `README.md` and `docs/**/*.md`.
+   - Excludes code, binaries, symlinks, submodules, generated artifacts, and files exceeding limits (64 KiB/document, 256 documents/refresh, 8 MiB total).
+   - Incomplete or error responses fail closed and preserve the last known-good snapshot.
+
+2. **GitHub App Authentication & SecretVault Isolation**:
+   - Amsha uses server-to-server GitHub App authentication with an RSA private key stored securely in `SecretVault` (`system:github_app_private_key`).
+   - The local key path (`~/.config/amsha/secrets/amsha-github-app.pem`) is an offline backup; Amsha never reads private keys from the filesystem at runtime. Key upload is executed via loopback using `mise run github:app-credential-upload`.
+   - `GitHubAppJwtSigner` creates short-lived (max 10-minute) RS256 JWTs to mint repository-restricted installation tokens on demand.
+
+3. **Multi-Document Ingestion & Durable Archival Storage**:
+   - `GitHubReadmeIndexStore` shards indexed documents into the workspace's archival memory store using an owner- and workspace-isolated namespace (`gh-docs:<hash>`).
+   - Documents are segmented and stored in `archival_chunks` with both SQLite FTS5 full-text indexing and dense vector embeddings.
+   - Retains per-document provenance (`commitSha`, `blobSha`, `sourcePath`).
+
+4. **Context Enrichment & Coordinator Direct Response**:
+   - `GitHubReadmeContextEnricher` and `GitHubReadmeContextMatcher` intercept chat turns before LLM execution, extracting query keywords and retrieving up to 4 relevant paragraphs (capped at 2,400 characters).
+   - Excerpts are formatted with provenance under `## Connected GitHub documentation context`.
+   - Coordinator prompt templates (`role-coordinator.txt`, `coordinator.txt`, `delegate-to-agent-rules.txt`) define an explicit exception: when repository context is present, the coordinator answers directly rather than delegating to Saraswati or invoking `web_fetch` / external search tools.
+
+5. **Lifecycle, Auto-Sync & UI Management**:
+   - **Boot Auto-Sync (`GitHubReadmeStartupSync`)**: When `AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true` is set and a credential is in `SecretVault`, Amsha automatically syncs documentation on startup for all workspaces.
+   - **UI Controls**: Accessible via **Settings > Connectors** (`#/settings`), enabling owners to inspect commit SHA, document counts, browse indexed files, trigger manual refreshes, or disconnect.
+
+---
+
 ### Behavioral Self-Evolution System
 
 ![Self-evolution lifecycle](./assets/amsha_self_evolve.svg)
@@ -1262,6 +1293,7 @@ The cockpit exposes trace data through the following routes:
 
 - `GET /api/v1/cockpit/sessions/{sessionId}/runs` lists bounded run summaries.
 - `GET /api/v1/cockpit/runs/{runId}/trace` returns bounded trace events for a run.
+- `GET /api/v1/cockpit/runs/{runId}/evidence` returns bounded, payload-free operator evidence for one durable run.
 - `GET /api/v1/cockpit/symbolicate?symbol=...` resolves an allowlisted symbol for the UI.
 - **Stage Lifecycle**: Every agent turn emits versioned, redacted `AgentTraceEvent` objects across the 10-station execution sequence (`INPUT_RECEIVED`, `GOAL_EXPANDED`, `REFLEX_EVALUATED`, `RETRIEVAL_DISPATCHED`, `REASONING_INVOKED`, `TOOL_GUARD_EVALUATED`, `HITL_SUSPENDED`, `TOOL_EXECUTED`, `COMPACTED`, `TURN_COMPLETED`).
 - **Durable Persistence**: Stored via `ExecutionTraceStorePort` across SQLite (`V12__execution_trace.sql`), PostgreSQL, and filesystem backends with complete semantic parity.
@@ -1276,6 +1308,13 @@ The cockpit exposes trace data through the following routes:
 - **Access control and the missing-role path**: the endpoint is guarded by `isInternal()` only and never by `onnxEnabled`, which is what makes it the one part of the local-ML stack validatable with no model bundle. A caller without the `internal` role receives `403`, and the panel renders an explicit *internal role required* notice rather than an empty slot list. That case is kept distinct from `401` (expired session) and from a `403` that is actually a CSRF rejection. A `200` that does not carry all three slots is reported as a malformed contract, not as "nothing configured".
 - **Deliberate scope boundary**: this view reports the classifier slots and nothing else. It makes no claim about the intent router's activation gate, candidate evidence, cost approvals, or rollout ownership, because none of those appear in the response. Reporting them accurately would require a separate read-only API returning safe facts such as `directRoutingPermitted` and `rolloutOwnerConfigured` — and never the rollout owner's name.
 - **No controls**: enable/disable is deliberately absent while the plane is Deferred and no `DecisionEngine` bean exists, since every enable would be rejected with `409 MISSING_READY_IMPLEMENTATION`. See [Jev Decision Plane (Deferred)](#jev-decision-plane-deferred).
+
+### 7. Run-Level Operator Evidence (`GET /api/v1/cockpit/runs/{runId}/evidence`)
+- **Allowlisted Operator Projection**: `CockpitRunEvidenceProjector` transforms raw, stored trace events into a compact, payload-free operator summary (`outcome`, `latencyMillis`, `tokenTotals`, `decisionsCount`, `guardEvaluationsCount`, `approvalsCount`, `costStatus`).
+- **Zero Payload Disclosures**: Never returns prompts, model responses, tool input arguments, or tool outputs in the evidence contract.
+- **Strict Bounding and Truncation Signals**: Trace events are bounded to $\le 500$ events and decisions to $\le 100$. If trace events exceed limits, `eventsTruncated` is marked and unavailable fields fail closed to prevent misleading metrics.
+- **Canonical Run ID Guard**: Requires `<sessionId>:turn-<digits>` format ($\le 256$ chars). Non-canonical or unknown runs return 404.
+- **Visual Presentation**: Displayed in the cockpit via `arc-run-evidence.ts`, giving operators immediate verification of turn success, token cost, and guard evaluations without sensitive inspection frames.
 
 ---
 

@@ -1,9 +1,10 @@
 import { LitElement, css, html, nothing, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { AgentTraceEvent, ExecutionRunSummaryDto } from '../types/trace';
+import { AgentTraceEvent, ExecutionRunSummaryDto, RunEvidenceDto } from '../types/trace';
 import './arc-harness-conveyor';
 import './arc-topology-graph';
 import './arc-overflow-ledger';
+import './arc-run-evidence';
 import { computeAnomalyCounts } from './arc-overflow-ledger';
 
 @customElement('arc-flow-canvas')
@@ -13,6 +14,7 @@ export class ArcFlowCanvas extends LitElement {
   @property({ type: String }) paradigm = '';
   @property({ type: Boolean }) isReplayMode = false;
   @property({ type: Array }) replayRuns: ExecutionRunSummaryDto[] = [];
+  @property({ attribute: false }) runEvidence: RunEvidenceDto | null = null;
 
   @state() private _viewMode: 'conveyor' | 'react' | 'multi_agent' = 'conveyor';
   @state() private _ledgerOpen = false;
@@ -491,6 +493,10 @@ export class ArcFlowCanvas extends LitElement {
     this._scrubIndex = -1;
     this.dispatchEvent(new CustomEvent('exit-replay', { bubbles: true, composed: true }));
     // Surface the run list so the shell can refresh session runs after replay ends.
+    this._requestRunRefresh();
+  }
+
+  private _requestRunRefresh() {
     this.dispatchEvent(new CustomEvent('refresh-runs', { bubbles: true, composed: true }));
   }
 
@@ -625,6 +631,10 @@ export class ArcFlowCanvas extends LitElement {
           `
         : nothing}
 
+      ${this.isReplayMode
+        ? html`<arc-run-evidence .evidence=${this.runEvidence}></arc-run-evidence>`
+        : nothing}
+
       <div class="canvas-toolbar" role="toolbar" aria-label="Visual Cockpit Controls">
         <div class="toolbar-left">
           <div class="run-badge">
@@ -654,6 +664,18 @@ export class ArcFlowCanvas extends LitElement {
         </div>
 
         <div class="toolbar-right">
+          ${!this.isReplayMode
+            ? html`
+                <button
+                  class="ledger-toggle-btn"
+                  @click="${this._requestRunRefresh}"
+                  aria-label="${this.replayRuns.length > 0 ? 'Refresh available runs' : 'Load available runs'}"
+                >
+                  ↻ ${this.replayRuns.length > 0 ? 'Refresh runs' : 'Load runs'}
+                </button>
+              `
+            : nothing}
+
           ${!this.isReplayMode && this.replayRuns.length > 0
             ? html`
                 <div class="runs-dropdown">

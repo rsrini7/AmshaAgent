@@ -286,6 +286,12 @@ and `python3 scripts/test_review_staged.py`.
 
 ## Agent skills
 
+### GitHub documentation connector recovery
+
+The GitHub documentation connector is disabled by default (`AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=false`). Set it to `true` in the running server configuration and restart only when the owner wants the connector active. The enablement status is reported separately from GitHub App credential presence; disabled mode blocks indexing, refresh, and prompt retrieval while allowing disconnect cleanup. The focused integration test profile enables the flag explicitly. See [the connector guide](docs/GITHUB_DOCUMENTATION_CONNECTOR.md#enable-or-disable-the-connector).
+
+When the connector reports its GitHub App credential is missing, or after resetting the active SQLite data directory, restore the PEM with `mise run github:app-credential-upload -- --key-file "$HOME/.config/amsha/secrets/amsha-github-app.pem" --env-file dist/.env` (replace `dist/.env` with the running server's `.env` path). Amsha reads the key from `SecretVault`; the local PEM path is only a protected backup. If the backup is unavailable, generate a replacement GitHub App private key and upload it with the same task. See [GitHub connector credential recovery](docs/GITHUB_DOCUMENTATION_CONNECTOR.md#recover-the-credential-after-a-data-reset) for storage and recovery details.
+
 ### Issue tracker
 
 Issues are tracked as local Markdown files under

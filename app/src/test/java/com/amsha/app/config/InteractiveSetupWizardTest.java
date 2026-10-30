@@ -3,7 +3,9 @@ package com.amsha.app.config;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -58,6 +60,30 @@ class InteractiveSetupWizardTest {
     private static String providerFromSystemOrEnvironment() {
         String systemProvider = System.getProperty(ConfigKeys.LLM_PROVIDER);
         return systemProvider != null ? systemProvider : System.getenv(ConfigKeys.LLM_PROVIDER);
+    }
+
+    @Test
+    void githubDocumentationSetupGuideExplainsAppIdentityAndNarrowAccess() {
+        PrintStream originalErr = System.err;
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (PrintStream captured = new PrintStream(output, true, StandardCharsets.UTF_8)) {
+            System.setErr(captured);
+            InteractiveSetupWizard.printGitHubDocumentationSetupGuide();
+        } finally {
+            System.setErr(originalErr);
+        }
+
+        String guide = output.toString(StandardCharsets.UTF_8);
+        assertTrue(guide.contains("numeric value labeled App ID on the App's General page"));
+        assertTrue(guide.contains("AMSHA_GITHUB_APP_ID=<numeric-app-id>"));
+        assertTrue(guide.contains("AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=true"));
+        assertTrue(guide.contains("Client ID, Client secret"));
+        assertTrue(guide.contains("Callback URL and Setup URL: leave blank"));
+        assertTrue(guide.contains("Request user authorization (OAuth): leave unchecked"));
+        assertTrue(guide.contains("Expire user authorization tokens: keep GitHub's default checked"));
+        assertTrue(guide.contains("Webhooks: turn Active off"));
+        assertTrue(guide.contains("Only on this account (@rsrini7)"));
+        assertTrue(guide.contains("rsrini7/AmshaAgent"));
     }
 
     @Test
