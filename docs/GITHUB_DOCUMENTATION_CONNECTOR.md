@@ -172,6 +172,11 @@ The connector validates and stores these settings, then indexes the current sour
 GET /api/v1/connectors/github-readme/status
 ```
 
+The Settings UI loads eligible scopes from `GET /api/v1/connectors/github-readme/workspaces`. An authenticated
+internal app identity receives only workspaces with an active owner; an owner identity receives only its own
+active owner workspaces. Connector requests still name one workspace explicitly, and the server stores the index
+under that workspace's actual owner identity. Internal access cannot select a workspace without an active owner.
+
 Refresh uses the stored repository and path settings and resolves the current default branch again. It accepts no request body, so a refresh cannot widen the source:
 
 ```text

@@ -3,6 +3,7 @@ package com.amsha.app.connector.github;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,6 +28,10 @@ import com.amsha.common.config.ConfigKeys;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.util.HttpConstants;
+import com.amsha.persistence.api.AccessRoles;
+import com.amsha.persistence.api.ApiCredentialDto;
+import com.amsha.persistence.api.ApiCredentialStorePort;
 import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.persistence.api.IdentityUserDto;
 import com.amsha.persistence.api.IdentityWorkspaceDto;
@@ -34,6 +39,7 @@ import com.amsha.persistence.api.WebSessionDto;
 import com.amsha.persistence.api.WebSessionStorePort;
 import com.amsha.persistence.api.WorkspaceMembershipDto;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +77,12 @@ class GitHubReadmeConnectorIT {
 
     @Inject
     ApiKeyRegistry apiKeyRegistry;
+
+    @Inject
+    ApiCredentialStorePort apiCredentialStore;
+
+    @ConfigProperty(name = "amsha.api.keys")
+    Map<String, String> configuredApiKeys;
 
     @Inject
     GitHubReadmeContextEnricher contextEnricher;
@@ -273,6 +285,72 @@ class GitHubReadmeConnectorIT {
                 .then()
                 .statusCode(403);
         verify(appClient, never()).fetchCurrent(ArgumentMatchers.anyString(), ArgumentMatchers.any());
+    }
+
+    @Test
+    void internalUiCanSelectAnOwnerWorkspaceAndConnectWithinThatScope() throws Exception {
+        String internalApiKey = configuredApiKeys.get(AccessRoles.INTERNAL);
+        assertTrue(internalApiKey != null && !internalApiKey.isBlank());
+        when(appClient.fetchCurrent(owner, SETTINGS)).thenReturn(snapshot(COMMIT_ONE, PUBLIC_SENTINEL));
+
+        given().header(HttpConstants.X_AMSHA_API_KEY, internalApiKey)
+                .when()
+                .get("/api/v1/connectors/github-readme/workspaces")
+                .then()
+                .statusCode(200)
+                .body("workspaceId", hasItem(ownerWorkspace));
+
+        given().header(HttpConstants.X_AMSHA_API_KEY, internalApiKey)
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, ownerWorkspace)
+                .contentType("application/json")
+                .body(SETTINGS_BODY)
+                .when()
+                .post("/api/v1/connectors/github-readme/connect")
+                .then()
+                .statusCode(200)
+                .body("state", equalTo("INDEXED"));
+
+        verify(appClient).fetchCurrent(owner, SETTINGS);
+    }
+
+    @Test
+    void ownerCanListTheirActiveOwnerWorkspaces() {
+        ownerRequest()
+                .when()
+                .get("/api/v1/connectors/github-readme/workspaces")
+                .then()
+                .statusCode(200)
+                .body("workspaceId", hasItem(ownerWorkspace))
+                .body("workspaceId", hasItem(memberWorkspace));
+    }
+
+    @Test
+    void registeredOwnerApiKeyCanListTheirActiveOwnerWorkspaces() {
+        String rawKey = "connector-owner-key-" + UUID.randomUUID();
+        String credentialId = "connector-owner-credential-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        assertTrue(apiCredentialStore.save(new ApiCredentialDto(
+                credentialId,
+                owner,
+                apiKeyRegistry.computeDigest(rawKey),
+                AccessRoles.OWNER,
+                1,
+                null,
+                null,
+                now,
+                now)));
+        apiKeyRegistry.register(owner, rawKey);
+        try {
+            given().header(HttpConstants.X_AMSHA_API_KEY, rawKey)
+                    .when()
+                    .get("/api/v1/connectors/github-readme/workspaces")
+                    .then()
+                    .statusCode(200)
+                    .body("workspaceId", hasItem(ownerWorkspace));
+        } finally {
+            apiKeyRegistry.unregister(rawKey);
+            apiCredentialStore.deleteById(credentialId);
+        }
     }
 
     @Test

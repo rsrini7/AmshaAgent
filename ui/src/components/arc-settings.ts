@@ -34,6 +34,29 @@ export class ArcSettings extends LitElement {
   private get _client(): ArcClient {
     return new ArcClient('/api/v1', this._appContext?.apiKey || '');
   }
+
+  private async _resolveGitHubDocsOwnerWorkspaceId(): Promise<string> {
+    const workspaceClient = new ArcClient('/api/v1', this._appContext?.apiKey || '', true, false);
+    const memberships = await workspaceClient.getGitHubDocsOwnerWorkspaces();
+    const activeOwnerMemberships = Array.isArray(memberships)
+      ? memberships.filter(
+          (membership) =>
+            membership.status?.toUpperCase() === 'ACTIVE' &&
+            membership.role?.toUpperCase() === 'OWNER' &&
+            typeof membership.workspaceId === 'string' &&
+            membership.workspaceId.trim(),
+        )
+      : [];
+    const selectedWorkspaceId = this._appContext?.workspaceId?.trim();
+    const ownerMembership =
+      activeOwnerMemberships.find((membership) => membership.workspaceId.trim() === selectedWorkspaceId) ??
+      activeOwnerMemberships[0];
+    const workspaceId = ownerMembership?.workspaceId.trim();
+    if (!workspaceId) {
+      throw new Error('GitHub documentation connector requires an active owner workspace.');
+    }
+    return workspaceId;
+  }
   @state() private _loading = false;
   @state() private _error = '';
   @state() private _success = '';
@@ -536,6 +559,14 @@ export class ArcSettings extends LitElement {
     try {
       this._docsLoading = true;
       this._docsError = '';
+      let workspaceId: string;
+      try {
+        workspaceId = await this._resolveGitHubDocsOwnerWorkspaceId();
+      } catch (error) {
+        this._docsStatus = null;
+        this._docsError = error instanceof Error ? error.message : 'Could not determine an active owner workspace.';
+        return;
+      }
       try {
         const cred = await this._client.getGitHubAppCredentialStatus();
         this._githubConnectorEnabled = cred.enabled;
@@ -545,10 +576,11 @@ export class ArcSettings extends LitElement {
         this._githubAppConfigured = null;
       }
       try {
-        const status = await this._client.getGitHubDocsConnectorStatus();
+        const status = await this._client.getGitHubDocsConnectorStatus(workspaceId);
         this._docsStatus = status;
-      } catch (_) {
+      } catch (error) {
         this._docsStatus = null;
+        this._docsError = `Failed to load connector status: ${error instanceof Error ? error.message : 'Unknown error'}`;
       }
     } finally {
       this._docsLoading = false;
@@ -560,7 +592,8 @@ export class ArcSettings extends LitElement {
       this._docsActionLoading = true;
       this._docsError = '';
       this._docsSuccess = '';
-      const status = await this._client.connectGitHubDocs();
+      const workspaceId = await this._resolveGitHubDocsOwnerWorkspaceId();
+      const status = await this._client.connectGitHubDocs(undefined, workspaceId);
       this._docsStatus = status;
       this._docsSuccess = `Successfully connected and indexed ${status.documents?.length ?? 0} documents from ${status.repository || 'repository'}.`;
     } catch (e: any) {
@@ -575,7 +608,8 @@ export class ArcSettings extends LitElement {
       this._docsActionLoading = true;
       this._docsError = '';
       this._docsSuccess = '';
-      const status = await this._client.refreshGitHubDocs();
+      const workspaceId = await this._resolveGitHubDocsOwnerWorkspaceId();
+      const status = await this._client.refreshGitHubDocs(workspaceId);
       this._docsStatus = status;
       this._docsSuccess = `Successfully refreshed documentation (${status.documents?.length ?? 0} documents at commit ${status.commitSha?.substring(0, 7) || 'latest'}).`;
     } catch (e: any) {
@@ -593,7 +627,8 @@ export class ArcSettings extends LitElement {
       this._docsActionLoading = true;
       this._docsError = '';
       this._docsSuccess = '';
-      const status = await this._client.disconnectGitHubDocs();
+      const workspaceId = await this._resolveGitHubDocsOwnerWorkspaceId();
+      const status = await this._client.disconnectGitHubDocs(workspaceId);
       this._docsStatus = status;
       this._docsSuccess = 'GitHub documentation connector disconnected.';
     } catch (e: any) {
@@ -632,6 +667,11 @@ export class ArcSettings extends LitElement {
 
           ${this._docsError ? html`<div class="status-msg error">${this._docsError}</div>` : ''}
           ${this._docsSuccess ? html`<div class="status-msg success">${this._docsSuccess}</div>` : ''}
+          ${this._docsActionLoading ? html`
+            <div class="status-msg" style="background:var(--bg-elevated);border:1px solid var(--border)">
+              ⏳ Downloading and indexing repository documentation from GitHub… This may take ~30–45 seconds.
+            </div>
+          ` : ''}
 
           <table class="details-table">
             <tbody>

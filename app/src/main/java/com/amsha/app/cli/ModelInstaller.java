@@ -71,7 +71,15 @@ public final class ModelInstaller {
             "https://huggingface.co/Xenova/whisper-tiny.en/resolve/79fb389fc764e7c395bd330e9531d9d32ada7049/";
     private static final String HF_MPNET_BASE =
             "https://huggingface.co/sentence-transformers/all-mpnet-base-v2/resolve/e8c3b32edf5434bc2275fc9bab85f82640a19130/";
-    private static final String HF_RERANKER_BASE = "https://huggingface.co/Xenova/bge-reranker-base/resolve/main/";
+    private static final String HF_RERANKER_REVISION = "280bcc27a84e0b898c251e06fddb25171bd9b101";
+    private static final String HF_RERANKER_BASE =
+            "https://huggingface.co/Xenova/bge-reranker-base/resolve/" + HF_RERANKER_REVISION + "/";
+    private static final long RERANKER_MODEL_BYTES = 1_112_459_588L;
+    private static final String RERANKER_MODEL_SHA256 =
+            "15b9a8c3da82eddf263df571281166e00e9308fe19d077084b642ebfcaf06d2b";
+    private static final long RERANKER_TOKENIZER_BYTES = 17_098_079L;
+    private static final String RERANKER_TOKENIZER_SHA256 =
+            "48564c5c7d3fa64d85d95e65414a542385f88b0f128fd8d4163fd7a57f2be05c";
 
     private static final String WHISPER_MANIFEST = """
             {
@@ -153,16 +161,16 @@ public final class ModelInstaller {
     private static final String RERANKER_MANIFEST = """
             {
               "bundleId": "bge-reranker-v1",
-              "revision": "a76e9c60e58c8e1a1005a76e9389270e5b9fbb40",
+              "revision": "%s",
               "modelFile": "model.onnx",
-              "modelSha256": "15b9a8c3da82eddf263df571281166e00e9308fe19d077084b642ebfcaf06d2b",
-              "modelBytes": 1112459588,
+              "modelSha256": "%s",
+              "modelBytes": %d,
               "tokenizerFile": "tokenizer.json",
-              "tokenizerSha256": "48564c5c7d3fa64d85d95e65414a542385f88b0f128fd8d4163fd7a57f2be05c",
-              "tokenizerBytes": 17098079,
+              "tokenizerSha256": "%s",
+              "tokenizerBytes": %d,
               "scoring": {
                 "inputType": "text-pair",
-                "tokenizerRevision": "a76e9c60e58c8e1a1005a76e9389270e5b9fbb40",
+                "tokenizerRevision": "%s",
                 "inputIdsName": "input_ids",
                 "attentionMaskName": "attention_mask",
                 "tokenTypeIdsName": null,
@@ -179,13 +187,20 @@ public final class ModelInstaller {
               },
               "source": {
                 "repository": "https://huggingface.co/Xenova/bge-reranker-base",
-                "revision": "a76e9c60e58c8e1a1005a76e9389270e5b9fbb40",
+                "revision": "%s",
                 "modelPath": "onnx/model.onnx",
                 "tokenizerPath": "tokenizer.json",
                 "license": "Apache-2.0"
               }
             }
-            """;
+            """.formatted(
+                    HF_RERANKER_REVISION,
+                    RERANKER_MODEL_SHA256,
+                    RERANKER_MODEL_BYTES,
+                    RERANKER_TOKENIZER_SHA256,
+                    RERANKER_TOKENIZER_BYTES,
+                    HF_RERANKER_REVISION,
+                    HF_RERANKER_REVISION);
 
     private static final ModelCatalogEntry WHISPER_ENTRY = new ModelCatalogEntry(
             WHISPER_BUNDLE_ID,
@@ -246,14 +261,14 @@ public final class ModelInstaller {
             List.of(
                     new ModelFileSpec(
                             "model.onnx",
-                            HF_RERANKER_BASE + "onnx/model_quantized.onnx",
-                            1112459588L,
-                            "15b9a8c3da82eddf263df571281166e00e9308fe19d077084b642ebfcaf06d2b"),
+                            HF_RERANKER_BASE + "onnx/model.onnx",
+                            RERANKER_MODEL_BYTES,
+                            RERANKER_MODEL_SHA256),
                     new ModelFileSpec(
                             "tokenizer.json",
                             HF_RERANKER_BASE + "tokenizer.json",
-                            17098079L,
-                            "48564c5c7d3fa64d85d95e65414a542385f88b0f128fd8d4163fd7a57f2be05c")),
+                            RERANKER_TOKENIZER_BYTES,
+                            RERANKER_TOKENIZER_SHA256)),
             RERANKER_MANIFEST);
 
     private static final List<ModelCatalogEntry> CATALOG = List.of(WHISPER_ENTRY, MPNET_ENTRY, RERANKER_ENTRY);

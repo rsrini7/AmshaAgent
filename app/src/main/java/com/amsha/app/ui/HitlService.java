@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.domain.model.CheckpointRecord;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
@@ -338,10 +339,14 @@ public class HitlService {
             return false;
         }
         String normalizedTool = BatchDecisionUtil.normalizeToolName(toolName);
+        boolean isParallelBatch = toolName != null && toolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
         Map<String, ToolDecision> decisions = readBatchDecisions(cp, taskId);
         ToolDecision requested = approved ? ToolDecision.APPROVED : ToolDecision.DENIED;
         ToolDecision opposite = approved ? ToolDecision.DENIED : ToolDecision.APPROVED;
-        if (normalizedTool == null || normalizedTool.isBlank() || "all".equalsIgnoreCase(normalizedTool)) {
+        if (isParallelBatch
+                || normalizedTool == null
+                || normalizedTool.isBlank()
+                || "all".equalsIgnoreCase(normalizedTool)) {
             if (decisions.values().stream().anyMatch(opposite::equals)) {
                 throw contradictoryDecision(taskId, approved);
             }
@@ -442,7 +447,8 @@ public class HitlService {
 
     private AgentCheckpoint executeResolveDecision(
             AgentCheckpoint cp, boolean approved, String toolName, String reason) {
-        String normalizedTool = BatchDecisionUtil.normalizeToolName(toolName);
+        boolean isParallel = toolName != null && toolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
+        String normalizedTool = isParallel ? "all" : BatchDecisionUtil.normalizeToolName(toolName);
         if (approved) {
             if (normalizedTool != null && !normalizedTool.isBlank() && !"all".equalsIgnoreCase(normalizedTool)) {
                 return checkpointApprovalService.approveTool(cp.getSessionId(), normalizedTool, reason);

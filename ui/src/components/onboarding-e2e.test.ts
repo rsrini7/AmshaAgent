@@ -509,6 +509,7 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
 
   describe('Suite 1: Bootstrap Claim, Session Initialization & Local Recovery E2E', () => {
     it('claims first-owner API key on fresh UNCLAIMED install, stores in localStorage, and starts draft', async () => {
+    sessionStorageMock.setItem('amsha-workspace-id', 'owner-workspace');
       const { fetchMock } = createFetchMock({ bootstrapStatus: 'UNCLAIMED' });
       vi.stubGlobal('fetch', fetchMock);
 
@@ -522,6 +523,12 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       expect((wizard as any)._currentStepId).toBe('welcome');
       expect((wizard as any)._catalog).toHaveLength(3);
       expect((wizard as any)._modelDefaults).toHaveProperty('groq');
+    const statusCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/onboarding/status'));
+    expect(statusCalls).toHaveLength(2);
+    expect(
+      statusCalls.every(([, init]) => getHeader(init.headers, 'X-Amsha-Workspace-Id') === null),
+    ).toBe(true);
+    expect(sessionStorageMock.getItem('amsha-workspace-id')).toBe('owner-workspace');
 
       // Proves: Rendered UI displays welcome step
       const rendered = flattenLit(wizard.render());
@@ -594,9 +601,23 @@ describe('Onboarding Vitest Component/Integration E2E Suite (O1)', () => {
       await (wizard as any)._initDraft();
       expect(eventFired).toBe(true);
     });
-  });
+});
 
-  describe('Suite 2: Schema-Driven Descriptors, Localized i18n & Form Validation E2E', () => {
+it('preserves the selected workspace when onboarding status returns forbidden', async () => {
+  sessionStorageMock.setItem('amsha-workspace-id', 'owner-workspace');
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(mockResponse(403, { error: 'forbidden' }))
+    .mockResolvedValueOnce(mockResponse(200, { credentialsOk: true, skipOnboarding: true }));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const wizard = new ArcOnboarding();
+  await (wizard as any)._initDraft();
+
+  expect(sessionStorageMock.getItem('amsha-workspace-id')).toBe('owner-workspace');
+  expect(dispatchedEvents.some((event) => event.type === 'workspace-set')).toBe(false);
+});
+
+describe('Suite 2: Schema-Driven Descriptors, Localized i18n & Form Validation E2E', () => {
     it('fetches all typed step descriptors and single step descriptor via ArcClient', async () => {
       const { fetchMock } = createFetchMock();
       vi.stubGlobal('fetch', fetchMock);

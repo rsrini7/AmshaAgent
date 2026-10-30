@@ -29,6 +29,7 @@ export class ArcApiError extends Error {
 }
 
 export const OWNER_API_KEY_STORAGE_KEY = 'amsha-owner-api-key';
+const WORKSPACE_ID_HEADER = 'X-Amsha-Workspace-Id';
 
 export function readPersistedOwnerApiKey(): string {
   if (typeof localStorage === 'undefined') return '';
@@ -166,6 +167,7 @@ export class ArcClient {
     public readonly baseUrl: string,
     private readonly apiKey?: string,
     private readonly includePersistedOwnerApiKey = true,
+    private readonly includeWorkspaceId = true,
   ) {}
 
   private headers(): HeadersInit {
@@ -178,9 +180,11 @@ export class ArcClient {
         if (platformId) {
           h['X-AMSHA-PLATFORM-ID'] = platformId;
         }
-        const workspaceId = sessionStorage.getItem('amsha-workspace-id');
-        if (workspaceId) {
-          h['X-Amsha-Workspace-Id'] = workspaceId;
+        if (this.includeWorkspaceId) {
+          const workspaceId = sessionStorage.getItem('amsha-workspace-id');
+          if (workspaceId) {
+            h[WORKSPACE_ID_HEADER] = workspaceId;
+          }
         }
       }
     } catch {
@@ -563,20 +567,26 @@ export class ArcClient {
     );
   }
 
-  async getGitHubDocsConnectorStatus(): Promise<GitHubReadmeStatusDto> {
+  async getGitHubDocsOwnerWorkspaces(): Promise<Array<{ workspaceId: string; status: string; role: string }>> {
+    return this.request('/connectors/github-readme/workspaces', { cache: 'no-store' });
+  }
+
+  async getGitHubDocsConnectorStatus(workspaceId?: string): Promise<GitHubReadmeStatusDto> {
     return this.request<GitHubReadmeStatusDto>('/connectors/github-readme/status', {
       cache: 'no-store',
+      headers: workspaceId ? { [WORKSPACE_ID_HEADER]: workspaceId } : undefined,
     });
   }
 
   async connectGitHubDocs(settings?: {
     repository?: string;
     allowedPaths?: string[];
-  }): Promise<GitHubReadmeStatusDto> {
+  }, workspaceId?: string): Promise<GitHubReadmeStatusDto> {
     return this.request<GitHubReadmeStatusDto>(
       '/connectors/github-readme/connect',
       {
         method: 'POST',
+        headers: workspaceId ? { [WORKSPACE_ID_HEADER]: workspaceId } : undefined,
         body: JSON.stringify(settings ?? {
           repository: 'rsrini7/AmshaAgent',
           allowedPaths: ['README.md', 'docs/**/*.md'],
@@ -586,19 +596,21 @@ export class ArcClient {
     );
   }
 
-  async refreshGitHubDocs(): Promise<GitHubReadmeStatusDto> {
+  async refreshGitHubDocs(workspaceId?: string): Promise<GitHubReadmeStatusDto> {
     return this.request<GitHubReadmeStatusDto>(
       '/connectors/github-readme/refresh',
       {
         method: 'POST',
+        headers: workspaceId ? { [WORKSPACE_ID_HEADER]: workspaceId } : undefined,
       },
       ArcClient.CONNECTOR_REQUEST_TIMEOUT_MS,
     );
   }
 
-  async disconnectGitHubDocs(): Promise<GitHubReadmeStatusDto> {
+  async disconnectGitHubDocs(workspaceId?: string): Promise<GitHubReadmeStatusDto> {
     return this.request<GitHubReadmeStatusDto>('/connectors/github-readme', {
       method: 'DELETE',
+      headers: workspaceId ? { [WORKSPACE_ID_HEADER]: workspaceId } : undefined,
     });
   }
 

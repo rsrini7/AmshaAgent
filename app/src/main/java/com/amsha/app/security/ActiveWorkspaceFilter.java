@@ -9,6 +9,7 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
 
 import com.amsha.core.scope.ActiveWorkspaceContext;
+import com.amsha.persistence.api.AccessRoles;
 import com.amsha.persistence.api.IdentityStorePort;
 
 /** Binds an explicitly selected identity workspace after authentication. */
@@ -40,10 +41,35 @@ public class ActiveWorkspaceFilter implements ContainerRequestFilter {
                 .findMembership(workspaceId, userId)
                 .map(membership -> "ACTIVE".equalsIgnoreCase(membership.status()))
                 .orElse(false);
-        if (!activeMember) {
+        if (!activeMember && !isInternalGitHubConnectorOwnerScope(requestContext, workspaceId)) {
             requestContext.abortWith(Response.status(Response.Status.FORBIDDEN).build());
             return;
         }
         activeWorkspaceContext.setWorkspaceId(workspaceId);
+    }
+
+    private boolean isInternalGitHubConnectorOwnerScope(ContainerRequestContext requestContext, String workspaceId) {
+        var securityContext = requestContext.getSecurityContext();
+        var principal = securityContext.getUserPrincipal();
+        if (principal == null
+                || !AccessRoles.INTERNAL.equalsIgnoreCase(principal.getName())
+                || !securityContext.isUserInRole(AccessRoles.INTERNAL)
+                || !isGitHubConnectorPath(requestContext.getUriInfo().getPath())) {
+            return false;
+        }
+        return identityStore.listMembershipsByWorkspaceId(workspaceId).stream()
+                .anyMatch(membership -> "ACTIVE".equalsIgnoreCase(membership.status())
+                        && AccessRoles.OWNER.equalsIgnoreCase(membership.role()));
+    }
+
+    private static boolean isGitHubConnectorPath(String path) {
+        String normalized = path == null ? "" : path;
+        if (normalized.startsWith("/api/v1/")) {
+            normalized = normalized.substring(7);
+        }
+        if (!normalized.startsWith("/")) {
+            normalized = "/" + normalized;
+        }
+        return normalized.equals("/connectors/github-readme") || normalized.startsWith("/connectors/github-readme/");
     }
 }

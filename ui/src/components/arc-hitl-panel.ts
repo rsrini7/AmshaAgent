@@ -452,9 +452,7 @@ export class ArcHitlPanel extends LitElement {
             : this._statusUnknown.has(a.taskId)
               ? html`
                   <span class="empty">${this._statusNotice[a.taskId] || 'Approval status unknown.'}</span>
-                  ${this._statusConflict.has(a.taskId)
-                    ? ''
-                    : html`<button class="btn btn-approve" @click="${() => this._retry(a.taskId)}">Retry</button>`}
+                  <button class="btn btn-approve" @click="${() => this._retry(a.taskId)}">Retry</button>
                   <button class="btn btn-reject" @click="${() => this._checkStatus(a.taskId)}">Check status</button>
                 `
               : html`

@@ -266,6 +266,20 @@ describe('ArcShell routing and live cockpit behavior', () => {
     expect(sseManager.connect).toHaveBeenCalledOnce();
   });
 
+  it('resolves workspace from authenticated session when session-ready omits it', () => {
+    const { shell } = createShell();
+    const component = shell as any;
+    const resolveWorkspace = vi.spyOn(component, '_fetchActiveWorkspace').mockResolvedValue(undefined);
+    vi.spyOn(component, '_fetchSessionRuns').mockResolvedValue(undefined);
+    vi.spyOn(component, '_startSse').mockImplementation(() => undefined);
+
+    component._onSessionReady(new CustomEvent('session-ready', {
+      detail: { sessionId: 'session-without-workspace', platformId: 'platform-1' },
+    }));
+
+    expect(resolveWorkspace).toHaveBeenCalledOnce();
+  });
+
   it('loads shell data, handles unauthorized API responses, and forwards HITL events', async () => {
     const { shell, windowMock } = createShell();
     const component = shell as any;

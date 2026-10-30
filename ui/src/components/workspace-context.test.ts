@@ -66,6 +66,43 @@ describe('ArcShell workspace authentication lifecycle', () => {
     expect(fetchMock.mock.calls[0]?.[1]?.headers['X-AMSHA-API-KEY']).toBe('test-owner-key');
   });
 
+  it('prefers an active owner workspace when no workspace is selected', async () => {
+    localStorage.setItem('amsha-owner-api-key', 'test-owner-key');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        memberships: [
+          { workspaceId: 'member-workspace', status: 'ACTIVE', role: 'MEMBER' },
+          { workspaceId: 'owner-workspace', status: 'ACTIVE', role: 'OWNER' },
+        ],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const shell = new ArcShell();
+    await (shell as any)._fetchActiveWorkspace();
+
+    expect(sessionStorage.getItem('amsha-workspace-id')).toBe('owner-workspace');
+  });
+
+  it('preserves an explicitly selected active member workspace', async () => {
+    sessionStorage.setItem('amsha-workspace-id', 'member-workspace');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        memberships: [
+          { workspaceId: 'member-workspace', status: 'ACTIVE', role: 'MEMBER' },
+          { workspaceId: 'owner-workspace', status: 'ACTIVE', role: 'OWNER' },
+        ],
+      }),
+    }));
+
+    const shell = new ArcShell();
+    await (shell as any)._fetchActiveWorkspace();
+
+    expect(sessionStorage.getItem('amsha-workspace-id')).toBe('member-workspace');
+  });
+
   it('clears a stored workspace when the authenticated user has no active membership', async () => {
     sessionStorage.setItem('amsha-workspace-id', 'stale-workspace');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ memberships: [] }) }));

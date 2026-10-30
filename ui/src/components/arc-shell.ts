@@ -403,6 +403,8 @@ export class ArcShell extends LitElement {
     const wsId = customEvent.detail?.workspaceId?.trim();
     if (wsId) {
       this._setWorkspaceId(wsId);
+    } else {
+      this._clearWorkspaceId();
     }
   };
 
@@ -460,9 +462,13 @@ export class ArcShell extends LitElement {
           )
         : [];
       const currentWorkspace = this._workspaceId?.trim();
-      const active =
-        activeMemberships.find((membership: any) => membership.workspaceId.trim() === currentWorkspace) ||
-        activeMemberships[0];
+      const selectedWorkspace = activeMemberships.find(
+        (membership: any) => membership.workspaceId.trim() === currentWorkspace,
+      );
+      const ownerWorkspace = activeMemberships.find(
+        (membership: any) => membership.role?.toUpperCase() === 'OWNER',
+      );
+      const active = selectedWorkspace || ownerWorkspace || activeMemberships[0];
       const wsId = active?.workspaceId?.trim();
       if (wsId) {
         this._setWorkspaceId(wsId);
@@ -545,6 +551,8 @@ export class ArcShell extends LitElement {
     const workspaceId = e.detail?.workspaceId?.trim();
     if (workspaceId) {
       this._setWorkspaceId(workspaceId);
+    } else {
+      void this._fetchActiveWorkspace();
     }
     this._updateContext();
     if (sessionChanged) {

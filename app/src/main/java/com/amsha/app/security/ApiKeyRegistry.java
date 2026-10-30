@@ -208,6 +208,12 @@ public class ApiKeyRegistry {
     public boolean hasRole(String key, String role) {
         if (key == null) return false;
         String inputHex = toHex(hmac(key));
+        if (apiCredentialStore.isResolvable()) {
+            Optional<ApiCredentialDto> optCred = apiCredentialStore.get().findByKeyDigest(inputHex);
+            if (optCred.isPresent()) {
+                return hasCredentialRole(optCred.get(), role);
+            }
+        }
         for (Map.Entry<String, String> entry : hmacToKeyName.entrySet()) {
             if (constantTimeEquals(entry.getKey(), inputHex)) {
                 String name = entry.getValue();
@@ -217,24 +223,26 @@ public class ApiKeyRegistry {
                 return "SERVICE".equalsIgnoreCase(role) || name.equalsIgnoreCase(role);
             }
         }
-        if (apiCredentialStore.isResolvable()) {
-            Optional<ApiCredentialDto> optCred = apiCredentialStore.get().findByKeyDigest(inputHex);
-            if (optCred.isPresent() && isBootstrapCredentialEligible(optCred.get())) {
-                ApiCredentialDto cred = optCred.get();
-                Instant now = Instant.now();
-                if ((cred.expiresAt() == null || !cred.expiresAt().isBefore(now)) && cred.revokedAt() == null) {
-                    String roleSet = cred.roleSet();
-                    if (roleSet != null) {
-                        for (String r : roleSet.split(",")) {
-                            String trimmed = r.trim();
-                            if (trimmed.equalsIgnoreCase(role)
-                                    || (AccessRoles.OWNER.equalsIgnoreCase(trimmed)
-                                            && AccessRoles.INTERNAL.equalsIgnoreCase(role))) {
-                                return true;
-                            }
-                        }
-                    }
-                }
+        return false;
+    }
+
+    private boolean hasCredentialRole(ApiCredentialDto credential, String role) {
+        Instant now = Instant.now();
+        if (!isBootstrapCredentialEligible(credential)
+                || (credential.expiresAt() != null && credential.expiresAt().isBefore(now))
+                || credential.revokedAt() != null) {
+            return false;
+        }
+        String roleSet = credential.roleSet();
+        if (roleSet == null) {
+            return false;
+        }
+        for (String value : roleSet.split(",")) {
+            String declaredRole = value.trim();
+            if (declaredRole.equalsIgnoreCase(role)
+                    || (AccessRoles.OWNER.equalsIgnoreCase(declaredRole)
+                            && AccessRoles.INTERNAL.equalsIgnoreCase(role))) {
+                return true;
             }
         }
         return false;

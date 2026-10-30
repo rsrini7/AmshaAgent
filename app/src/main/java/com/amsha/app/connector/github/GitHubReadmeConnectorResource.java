@@ -15,6 +15,7 @@ import jakarta.ws.rs.core.SecurityContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.Principal;
+import java.util.List;
 import java.util.Optional;
 
 import com.amsha.common.config.ConfigKeys;
@@ -49,6 +50,20 @@ public class GitHubReadmeConnectorResource {
         this.settingsParser = settingsParser;
         this.identityStore = identityStore;
         this.activeWorkspaceContext = activeWorkspaceContext;
+    }
+
+    @GET
+    @Path("workspaces")
+    public Response listOwnerWorkspaces() {
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            return authorizationFailure();
+        }
+        if (!securityContext.isUserInRole(AccessRoles.INTERNAL)) {
+            return authorizationFailure();
+        }
+        return Response.ok(activeOwnerMemberships(
+                        securityContext.getUserPrincipal().getName()))
+                .build();
     }
 
     @POST
@@ -139,17 +154,39 @@ public class GitHubReadmeConnectorResource {
             return Optional.empty();
         }
         try {
+            if (AccessRoles.INTERNAL.equalsIgnoreCase(principal.getName())) {
+                return identityStore.listMembershipsByWorkspaceId(workspace.get()).stream()
+                        .filter(GitHubReadmeConnectorResource::isActiveOwner)
+                        .map(membership -> new OwnerWorkspace(membership.userId(), workspace.get()))
+                        .findFirst();
+            }
             Optional<WorkspaceMembershipDto> membership =
                     identityStore.findMembership(workspace.get(), principal.getName());
-            if (membership.isEmpty()
-                    || !"ACTIVE".equalsIgnoreCase(membership.get().status())
-                    || !"OWNER".equalsIgnoreCase(membership.get().role())) {
+            if (membership.isEmpty() || !isActiveOwner(membership.get())) {
                 return Optional.empty();
             }
             return Optional.of(new OwnerWorkspace(principal.getName(), workspace.get()));
         } catch (RuntimeException _) {
             return Optional.empty();
         }
+    }
+
+    private List<WorkspaceMembershipDto> activeOwnerMemberships(String userId) {
+        if (!AccessRoles.INTERNAL.equalsIgnoreCase(userId)) {
+            return identityStore.listMembershipsByUserId(userId).stream()
+                    .filter(GitHubReadmeConnectorResource::isActiveOwner)
+                    .toList();
+        }
+        return identityStore.listWorkspaces().stream()
+                .map(workspace -> identityStore.listMembershipsByWorkspaceId(workspace.workspaceId()).stream()
+                        .filter(GitHubReadmeConnectorResource::isActiveOwner)
+                        .findFirst())
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private static boolean isActiveOwner(WorkspaceMembershipDto membership) {
+        return "ACTIVE".equalsIgnoreCase(membership.status()) && AccessRoles.OWNER.equalsIgnoreCase(membership.role());
     }
 
     private Response rejectUnexpectedBody(InputStream requestBody) {

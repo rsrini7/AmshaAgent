@@ -184,6 +184,27 @@ class ModelInstallerTest {
     }
 
     @Test
+    @DisplayName("reranker catalog pins the verified unquantized model and tokenizer to one revision")
+    void rerankerCatalogPinsConsistentArtifacts() {
+        ModelCatalogEntry entry = ModelInstaller.findModel("reranker").orElseThrow();
+        String revision = "280bcc27a84e0b898c251e06fddb25171bd9b101";
+
+        assertEquals(
+                "https://huggingface.co/Xenova/bge-reranker-base/resolve/" + revision + "/onnx/model.onnx",
+                entry.files().getFirst().remoteUrl());
+        assertEquals(1_112_459_588L, entry.files().getFirst().expectedBytes());
+        assertEquals(
+                "https://huggingface.co/Xenova/bge-reranker-base/resolve/" + revision + "/tokenizer.json",
+                entry.files().get(1).remoteUrl());
+        assertEquals(17_098_079L, entry.files().get(1).expectedBytes());
+        assertTrue(entry.manifestJson().contains("\"revision\": \"" + revision + "\""));
+        assertTrue(entry.manifestJson().contains("\"tokenizerRevision\": \"" + revision + "\""));
+        assertTrue(entry.manifestJson().contains("\"modelPath\": \"onnx/model.onnx\""));
+        assertTrue(entry.manifestJson().contains("\"modelBytes\": 1112459588"));
+        assertTrue(entry.manifestJson().contains("\"tokenizerBytes\": 17098079"));
+    }
+
+    @Test
     @DisplayName("a model resolves by id or by alias, ignoring case and surrounding space")
     void findModelResolvesByIdAndAlias() {
         assertEquals(
