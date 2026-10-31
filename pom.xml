@@ -86,7 +86,7 @@
     <errorprone.version>2.51.0</errorprone.version>
     <quarkus-jdbi.version>1.10.1</quarkus-jdbi.version>
     <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
-    <lucene.version>10.4.0</lucene.version>
+    <lucene.version>10.5.2</lucene.version>
     <djl.version>0.39.0</djl.version>
     <onnxruntime.version>1.31.0</onnxruntime.version>
     <!-- Baked into build-info.properties. "default" = JVM mode (BackendValidator skips).
