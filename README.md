@@ -14,7 +14,7 @@
   ![Java Tests](https://img.shields.io/badge/Tests-9894_passed_%C2%B7_23_skipped_of_9917-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-86.19%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-350_passing-brightgreen.svg?style=flat)
-  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-76.66%25-brightgreen.svg?style=flat)
+  ![UI Coverage](https://img.shields.io/badge/UI_Coverage-77.20%25-brightgreen.svg?style=flat)
   [![Built with Devbox](https://img.shields.io/badge/built_with-devbox-green.svg?style=flat)](https://www.jetify.com/devbox/)
   [![Built with mise](https://img.shields.io/badge/built_with-mise-blue.svg?style=flat)](https://jdx.dev)
 </div>
