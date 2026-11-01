@@ -102,6 +102,7 @@ Decisions that define the system structure and operational boundaries:
 - [ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md) — Typed decision seam for Jev-compatible judgments and Amsha-owned policy (Status: Deferred).
 - [ADR-onboarding-route-assignments](adr/architecture/ADR-onboarding-route-assignments.md) — Onboarding route assignments and model profile mapping (Status: Accepted).
 - [ADR-schedule-task-hitl-under-supervised](adr/architecture/ADR-schedule-task-hitl-under-supervised.md) — Scheduled task HITL governance under supervised autonomy (Status: Accepted).
+- [ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline](adr/architecture/ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline.md) — One-time reset-only exception for the tool-attempt journal baseline (Status: Accepted).
 
 ### Provider Decisions (`docs/adr/providers/`)
 - [ADR-LLM-Provider-Extraction-and-Modularization](adr/providers/ADR-LLM-Provider-Extraction-and-Modularization.md) — Master provider modularization ADR (Status: Implemented).
@@ -179,6 +180,8 @@ Evaluations of alternatives and boundaries that document why specific approaches
 ---
 
 ## 6. Active RFC Proposals (`docs/proposals/`)
+
+- [Tool Attempt Settlement Proposal](proposals/Tool-Attempt-Settlement-Proposal.md) — Durable tool-attempt outcomes, checkpoint recovery, replay locks, and audit delivery.
 
 - [Gnani AI Integration Plan](proposals/Gnani-AI-Integration-Plan-2026-10-20.md) — Opt-in speech adapters have landed behind disabled-by-default gates; open contract and production-egress gates remain.
 

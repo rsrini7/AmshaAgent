@@ -45,7 +45,7 @@ public class LeakedToolCallParser {
 
     /** Generic XML-style wrapper used by some models for tool calls. */
     private static final Pattern XML_FUNCTION_PATTERN =
-            Pattern.compile("(?is)<function\\s*=\\s*\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\\s*>");
+            Pattern.compile("(?is)<(?:function|parameter)\\s*=\\s*\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\\s*>");
 
     /** Generic XML wrapper with JSON body: <tool_call>{"name":"tool", ...}</tool_call>. */
     private static final Pattern XML_JSON_TOOL_CALL_PATTERN =
@@ -235,7 +235,7 @@ public class LeakedToolCallParser {
         }
 
         Map<String, Object> args = new HashMap<>();
-        String tail = answer.substring(function.start());
+        String tail = answer.substring(function.end());
         Matcher params = XML_PARAMETER_PATTERN.matcher(tail);
         while (params.find()) {
             String key = params.group(1);

@@ -149,6 +149,9 @@ if [[ "$VALIDATE_MODE" == true && "$FAST_MODE" == true ]]; then
   fi
 elif [[ "$VALIDATE_MODE" == true ]]; then
   VALIDATION_MODE="full"
+  if [[ ${#VALIDATE_ARGS[@]} -gt 0 ]]; then
+    VALIDATE_ARGS=("--all" "${VALIDATE_ARGS[@]}")
+  fi
 else
   VALIDATION_MODE="none"
 fi
@@ -269,6 +272,7 @@ if [[ "$ONNX_REQUESTED" == false ]] && ! is_process_env_key "AMSHA_ONNX_ENABLED"
   # A file-level ONNX opt-in must not make ordinary validation download or
   # initialize a model. The caller can still explicitly opt in with --onnx.
   export AMSHA_ONNX_ENABLED=false
+  export AMSHA_STT_LOCAL_ENABLED=false
 fi
 if [[ "$VALIDATE_MODE" == true ]] && [[ "$ONNX_REQUESTED" == false ]] \
   && ! is_process_env_key "AMSHA_INFINITE_LOOP_EMBEDDING_PROVIDERS"; then

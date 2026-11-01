@@ -2,7 +2,21 @@
 # common_env.sh — Common environment variables for Amsha Agent validation scripts
 
 # API Keys resolved from the registry
-VALID_KEY="${VALID_KEY:-key-internal-changeme}"
+if [ -z "${AMSHA_API_KEYS_INTERNAL:-}" ]; then
+  if [ -f "$SCRIPT_DIR/../../dist/.env" ]; then
+    _k=$(grep -E "^AMSHA_API_KEYS_INTERNAL=" "$SCRIPT_DIR/../../dist/.env" 2>/dev/null | cut -d= -f2- | tr -d ' "\r\n')
+    [ -n "$_k" ] && AMSHA_API_KEYS_INTERNAL="$_k"
+  fi
+  if [ -z "${AMSHA_API_KEYS_INTERNAL:-}" ] && [ -f "$SCRIPT_DIR/../../.env" ]; then
+    _k=$(grep -E "^AMSHA_API_KEYS_INTERNAL=" "$SCRIPT_DIR/../../.env" 2>/dev/null | cut -d= -f2- | tr -d ' "\r\n')
+    [ -n "$_k" ] && AMSHA_API_KEYS_INTERNAL="$_k"
+  fi
+fi
+if [ -n "${AMSHA_API_KEYS_INTERNAL:-}" ]; then
+  VALID_KEY="${VALID_KEY:-$AMSHA_API_KEYS_INTERNAL}"
+else
+  VALID_KEY="${VALID_KEY:-key-internal-changeme}"
+fi
 if [ -n "${AMSHA_API_KEYS_CI:-}" ]; then
   CI_KEY="$AMSHA_API_KEYS_CI"
 elif [ "${AMSHA_CI:-false}" = "true" ] && [ -z "${CI_KEY:-}" ]; then
