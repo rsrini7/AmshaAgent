@@ -11,7 +11,7 @@
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
-  ![Java Tests](https://img.shields.io/badge/Tests-9893_passed_%C2%B7_23_skipped_of_9916-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9894_passed_%C2%B7_23_skipped_of_9917-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-86.19%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-350_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-76.66%25-brightgreen.svg?style=flat)

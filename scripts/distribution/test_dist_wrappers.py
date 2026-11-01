@@ -83,6 +83,14 @@ class DistributionWrapperContractTest(unittest.TestCase):
         self.assertEqual(validation_log.parent, ROOT)
         self.assertRegex(validation_log.name, r"^amsha-sqlite-validation\.\d+\.log$")
 
+    def test_full_validation_with_onnx_preserves_all_suites(self) -> None:
+        plan = self.parse_plan(
+            self.run_wrapper("sqlite", "--dry-run", "--validate", "--full", "--onnx")
+        )
+        self.assertEqual(plan["validation_mode"], "full")
+        self.assertEqual(plan["validation_args"], "--all --onnx")
+        self.assertEqual(plan["onnx"], "true")
+
     def test_backend_storage_contracts_are_isolated(self) -> None:
         for backend in WRAPPERS:
             with self.subTest(backend=backend):

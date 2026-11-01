@@ -149,6 +149,9 @@ if [[ "$VALIDATE_MODE" == true && "$FAST_MODE" == true ]]; then
   fi
 elif [[ "$VALIDATE_MODE" == true ]]; then
   VALIDATION_MODE="full"
+  if [[ ${#VALIDATE_ARGS[@]} -gt 0 ]]; then
+    VALIDATE_ARGS=("--all" "${VALIDATE_ARGS[@]}")
+  fi
 else
   VALIDATION_MODE="none"
 fi

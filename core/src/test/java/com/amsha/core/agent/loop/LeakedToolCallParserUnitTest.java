@@ -80,6 +80,15 @@ class LeakedToolCallParserUnitTest {
     }
 
     @Test
+    void testXmlToolCallFormatParameterTagVariant() {
+        String answer = "<parameter=\"execute_shell\"><parameter name=\"command\">whoami</parameter></function>";
+        Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);
+        assertTrue(call.isPresent());
+        assertEquals("execute_shell", call.get().toolName());
+        assertEquals("whoami", call.get().arguments().get("command"));
+    }
+
+    @Test
     void testDsmlFormat() {
         String answer = "invoke name=\"execute_shell\"><parameter name=\"command\">date</parameter></invoke>";
         Optional<LeakedToolCall> call = parser.extractLeakedToolCall(answer);

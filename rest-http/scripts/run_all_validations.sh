@@ -87,8 +87,10 @@ PY
 
 # ── Parse args ──
 RUN_ALL=true; FAST=false; LLM=false; RUN_DELEGATION=false; RUN_ADVANCED_IDENTITY=false
+FORCE_ALL=false
 for arg in "$@"; do
   case $arg in
+    --all|--full) FORCE_ALL=true ;;
     --reflex) RUN_ALL=false; RUN_REFLEX=true ;;
     --skills) RUN_ALL=false; RUN_SKILLS=true ;;
     --skills-admission) RUN_ALL=false; RUN_SKILLS_ADMISSION=true ;;
@@ -152,6 +154,10 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [ "$FORCE_ALL" = true ]; then
+  RUN_ALL=true
+fi
 
 # The fast profile includes deterministic MCP handshake checks. Keep the full
 # MCP flow behind --mcp so it can continue exercising tool calls and self-connect.
