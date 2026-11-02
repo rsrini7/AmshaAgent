@@ -18,6 +18,7 @@ import com.amsha.app.cli.ModelInstaller;
 import com.amsha.app.connector.github.GitHubAppCredentialStatusResponse;
 import com.amsha.app.connector.github.GitHubReadmeDocumentStatusResponse;
 import com.amsha.app.connector.github.GitHubReadmeStatusResponse;
+import com.amsha.app.db.ToolAttemptSchemaGuard;
 import com.amsha.app.security.AuthErrorResponse;
 import com.amsha.app.security.RateLimitErrorResponse;
 import com.amsha.app.skill.SkillResource;
@@ -124,6 +125,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             CockpitResource.class,
             CockpitHealthResource.class,
             DbConsoleResource.class,
+            ToolAttemptSchemaGuard.class,
             ModelArenaResource.class,
             // W4 decision evaluation surface: the operator DTOs cross the JSON boundary, so they must
             // be reachable reflectively in a native image. Registered centrally, per AGENTS.md §8.

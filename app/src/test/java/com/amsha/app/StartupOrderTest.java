@@ -6,6 +6,7 @@ import jakarta.annotation.Priority;
 
 import java.lang.reflect.Method;
 
+import com.amsha.app.db.ToolAttemptSchemaGuard;
 import com.amsha.persistence.sqlite.RagSchemaInitializer;
 import com.amsha.persistence.sqlite.SqliteWalConfigurer;
 
@@ -23,18 +24,27 @@ public class StartupOrderTest {
         // This ensures the FTS database is attached before RAG tries to create virtual tables.
 
         Method walMethod = SqliteWalConfigurer.class.getDeclaredMethod("onStartup", StartupEvent.class);
+        Method guardMethod = ToolAttemptSchemaGuard.class.getDeclaredMethod("onStart", StartupEvent.class);
         Method ragMethod = RagSchemaInitializer.class.getDeclaredMethod("onStart", StartupEvent.class);
 
         Priority walPriority = walMethod.getAnnotation(Priority.class);
+        Priority guardPriority = guardMethod.getAnnotation(Priority.class);
         Priority ragPriority = ragMethod.getAnnotation(Priority.class);
 
         assertTrue(walPriority != null, "SqliteWalConfigurer.onStartup should have @Priority");
+        assertTrue(guardPriority != null, "ToolAttemptSchemaGuard.onStart should have @Priority");
         assertTrue(ragPriority != null, "RagSchemaInitializer.onStart should have @Priority");
 
         assertTrue(
-                walPriority.value() < ragPriority.value(),
+                walPriority.value() < guardPriority.value(),
                 "SqliteWalConfigurer priority (" + walPriority.value() + ") "
+                        + "must be smaller than ToolAttemptSchemaGuard priority ("
+                        + guardPriority.value() + ") to configure WAL before schema checks.");
+
+        assertTrue(
+                guardPriority.value() < ragPriority.value(),
+                "ToolAttemptSchemaGuard priority (" + guardPriority.value() + ") "
                         + "must be smaller than RagSchemaInitializer priority ("
-                        + ragPriority.value() + ") " + "to fire first.");
+                        + ragPriority.value() + ") to verify schema before RAG/tool dispatch.");
     }
 }

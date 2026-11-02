@@ -58,6 +58,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsMcpConnectionStoreAdapter.class,
             FsLockManager.class,
             FilesystemFileStore.class,
+            FsSchemaContractManager.class,
+            FsSchemaContractManager.SchemaContractManifest.class,
             FsEvolutionEventStore.class,
             FsExtractedMemoryStore.class,
             FsCoreMemoryStore.class,

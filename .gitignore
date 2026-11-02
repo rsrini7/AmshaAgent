@@ -144,3 +144,5 @@ __pycache__/
 .scratch/
 
 .workbuddy-ai/
+
+app/.env.example
