@@ -132,7 +132,7 @@ try {
     try {
         Push-Location ui
         Write-Host 'ℹ️   Building UI...'
-        npm install --prefer-offline --no-audit
+        npm install --no-save --prefer-offline --no-audit
         npm run build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host '✅  UI built.'
