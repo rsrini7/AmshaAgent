@@ -15,6 +15,13 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    with contextlib.suppress(Exception):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    with contextlib.suppress(Exception):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 DEFAULT_PROVIDERS = "omlx,groq,openrouter"
 DEFAULT_BASE_URLS = {
@@ -51,6 +58,9 @@ TIMEOUT_SECONDS = 3
 
 
 def _primary_provider(environment: dict[str, str]) -> str:
+    provider = environment.get("AMSHA_LLM_PROVIDER", "").strip().lower()
+    if provider and provider != "infinite-loop":
+        return provider
     configured = environment.get("AMSHA_INFINITE_LOOP_LLM_PROVIDERS", DEFAULT_PROVIDERS)
     providers = [item.strip().lower() for item in configured.split(",") if item.strip()]
     if not providers:
@@ -154,7 +164,9 @@ def check(environment: dict[str, str] | None = None) -> int:
             f"(HTTP {status}; {detail}; no completion requested)."
         )
         return 0
-    except ValueError:
+    except (ValueError, KeyError) as error:
+        if isinstance(error, UnicodeError):
+            raise
         print("❌ LLM preflight: invalid provider URL configuration.", file=sys.stderr)
         return 2
 

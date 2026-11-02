@@ -118,6 +118,7 @@
     <tests.timeout.default>5 m</tests.timeout.default>
     <tests.forked.process.timeout.seconds>900</tests.forked.process.timeout.seconds>
     <bytebuddy.version>1.18.8</bytebuddy.version>
+    <python.executable>python3</python.executable>
     <maven.surefire.argLine>-javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/${bytebuddy.version}/byte-buddy-agent-${bytebuddy.version}.jar --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED -Dnet.bytebuddy.experimental=true --enable-native-access=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -Djdk.attach.allowAttachSelf=true -XX:+StartAttachListener</maven.surefire.argLine>
   </properties>
  
@@ -610,7 +611,7 @@
             <phase>verify</phase>
             <goals><goal>exec</goal></goals>
             <configuration>
-              <executable>python3</executable>
+              <executable>${python.executable}</executable>
               <arguments>
                 <argument>./scripts/verify_skillsjar_index.py</argument>
               </arguments>
@@ -644,5 +645,16 @@
   </build>
 
   <profiles>
+    <profile>
+      <id>os-windows</id>
+      <activation>
+        <os>
+          <family>windows</family>
+        </os>
+      </activation>
+      <properties>
+        <python.executable>python</python.executable>
+      </properties>
+    </profile>
   </profiles>
 </project>

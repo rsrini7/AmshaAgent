@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -27,6 +28,7 @@ import com.amsha.common.config.ConfigKeys;
 import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -422,6 +424,9 @@ class ModelInstallerTest {
     @Test
     @DisplayName("an unreadable file reports an I/O error rather than throwing")
     void verifyReportsAnIoErrorForAnUnreadableFile() throws IOException {
+        Assumptions.assumeTrue(
+                FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+                "requires POSIX permissions to make the bundle unreadable");
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
         ModelCatalogEntry entry = entryFor("/ok.bin", PAYLOAD);
         writeValidBundle(entry, PAYLOAD);
@@ -439,6 +444,9 @@ class ModelInstallerTest {
     @Test
     @DisplayName("an existing file that cannot be read is re-downloaded")
     void installRedownloadsAFileItCannotRead() throws IOException {
+        Assumptions.assumeTrue(
+                FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+                "requires POSIX permissions to make the bundle unreadable");
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
         ModelCatalogEntry entry = entryFor("/ok.bin", PAYLOAD);
         writeValidBundle(entry, PAYLOAD);

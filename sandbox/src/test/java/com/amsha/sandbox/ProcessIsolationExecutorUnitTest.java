@@ -5,8 +5,6 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -291,9 +289,6 @@ class ProcessIsolationExecutorUnitTest {
 
     /** Writes an executable POSIX shell script to stand in for the podman binary. */
     private static Path fakePodman(Path dir, String body) throws IOException {
-        Path exe = dir.resolve("podman-" + System.nanoTime() + ".sh");
-        Files.writeString(exe, "#!/bin/sh\n" + body + "\n", StandardCharsets.UTF_8);
-        assertTrue(exe.toFile().setExecutable(true), "fake podman must be executable");
-        return exe;
+        return FakePodmanHelper.createFakePodman(dir, "podman-", body);
     }
 }

@@ -42,10 +42,13 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.junit.QuarkusTest;
+
 /**
  * Runs the redacted decision corpus through the test-only comparison harness and writes aggregate,
  * payload-free evidence. Candidate model projections are illustrative simulations, not inference.
  */
+@QuarkusTest
 class DecisionShadowEvaluationIT {
 
     private DecisionShadowComparisonHarness harness;

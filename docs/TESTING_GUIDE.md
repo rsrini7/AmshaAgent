@@ -70,10 +70,29 @@ in 905 suites, 0 failures, 0 errors, 7 skipped, at 76.10% reactor line coverage.
 Derive a fresh exact count with `mise run test:summary`
 (see [§1.6](#16-target-0-failures-0-errors-no-drop-in-test-count)).
 
+### Cross-platform test validation
+
+The full 29-module Maven test reactor has been tested and verified across all three supported operating systems:
+
+| Platform | Environment | Status | Verification Details |
+|---|---|---|---|
+| **macOS** | Darwin arm64 / Apple Silicon | Verified | Full Maven reactor `clean verify` passed (0 failures, 0 errors); Vitest UI suite passed. |
+| **Linux** | Ubuntu / Debian (x86_64, arm64, WSL2) | Verified | Full Maven reactor `clean verify` passed (0 failures, 0 errors). |
+| **Windows** | Windows 11 / Server (native PowerShell 7.5) | Verified | Full Maven reactor `clean verify` passed (0 failures, 0 errors, >86% JaCoCo coverage) using `mise run build:test` and `mvnw.cmd`. Adapts dynamically to Windows `.cmd` batch harnesses, verbatim stdout/stderr streaming, and NTFS POSIX attribute limitations. |
+
 ### 1.1 Run all tests
 
 ```bash
-# macOS / WSL2 / Linux
+# Unified cross-platform task (Windows, macOS, Linux) — auto-tunes RAM & CPUs, formats code, shields .env:
+mise run build:test
+
+# Targeted single module (fast — builds upstream dependencies and only runs module tests):
+mise run build:test persistence-sqlite
+
+# Resume from failed module in the reactor:
+mise run build:test -- -rf :amsha-persistence-sqlite
+
+# Direct Maven wrapper invocation (macOS / WSL2 / Linux):
 ./mvnw clean test -pl app -am
 
 # Windows PowerShell
@@ -163,6 +182,7 @@ When running `mise run test:summary`, the test suite reports **24 skipped tests*
 | **OS platform guard** | 1 | `WorkspacePathSafetyTest` (1) | `@EnabledOnOs(OS.WINDOWS)`<br>Exercises Windows drive-letter (`C:\...`) and backslash path safety rules; skipped when running on macOS / Linux. |
 | **Headless TTY guard** | 2 | `ChatCommandApprovalTest` (2) | `@Disabled("JLine3 readLine() blocks indefinitely in Surefire forked JVM — no real TTY available")`<br>JLine3 interactive terminal reads block indefinitely without a real TTY. The interactive logic is tested hermetically in `ChatCommandUnitTest`. |
 | **Machine tooling & assumptions** | 8 | `AgyCliExecutorTest` (1)<br>`FoundryCliExecutorTest` (2)<br>`KimchiTokenResolverTest` (2)<br>`AgentProviderFactoryCoverageTest` (1)<br>`OnnxGoldenCorpusEquivalenceTest` (1)<br>`OnnxResourceLeakTest` (1) | `Assumptions.assumeTrue(...)`<br>Dynamic assertions that adapt to host setup: skips when local CLI tools (`agy`, `foundry`) or credentials (`KIMCHI_API_KEY`, Cloudflare account ID) are present or absent on the machine, or for release-evidence gates (golden corpus / resident memory). |
+| **POSIX filesystem guard** | 5 (Windows only) | `FilesystemFileStoreErrorPathTest` (2)<br>`LuceneIndexManagerDeepTest` (1)<br>`ModelInstallerTest` (2) | `assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"))`<br>Windows NTFS filesystems do not support POSIX file permission attribute views (`posix:permissions`); these permission assertions skip cleanly when running on native Windows. |
 
 To inspect all skipped tests and their exact skip messages on the current host:
 

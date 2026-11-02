@@ -42,6 +42,16 @@ Replace `<module>` with the affected Maven module. For a focused test class, add
 ./mvnw clean install -DskipTests
 ```
 
+Alternatively, use `mise run build:test` for unified cross-platform test execution (Windows, macOS, Linux). It automatically auto-tunes RAM and CPU resources, formats code (`scripts/fix_fqns.py` + Spotless), and shields `.env`:
+
+```bash
+# Test a single module (runs upstream dependencies and tests in seconds):
+mise run build:test <module>
+
+# Run full 29-module reactor test suite:
+mise run build:test
+```
+
 For Markdown changes:
 
 ```bash

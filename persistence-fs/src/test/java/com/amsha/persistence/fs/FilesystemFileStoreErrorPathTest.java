@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -155,6 +157,9 @@ class FilesystemFileStoreErrorPathTest {
 
     @Test
     void deleteDirectoryFailsWhenAChildCannotBeRemoved() throws IOException {
+        Assumptions.assumeTrue(
+                FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+                "requires POSIX permissions to make the child unremovable");
         Path locked = store.resolve(List.of("locked"));
         Files.createDirectory(locked);
         Path inner = locked.resolve("inner");
@@ -172,6 +177,9 @@ class FilesystemFileStoreErrorPathTest {
 
     @Test
     void deleteDirectoryFailsWhenTheDirectoryCannotBeWalked() throws IOException {
+        Assumptions.assumeTrue(
+                FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+                "requires POSIX permissions to make the directory unwalkable");
         Path unreadable = store.resolve(List.of("unreadable"));
         Files.createDirectory(unreadable);
         Files.writeString(unreadable.resolve("child.txt"), "x");

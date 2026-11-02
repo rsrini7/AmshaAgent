@@ -365,9 +365,32 @@ mise run help    # or: mise tasks
 ```bash
 mise run build:app              # JVM build, skip tests → quarkus-run.jar
 mise run build:full             # all modules (after branch switch), skip tests
-mise run build:test             # with tests
+mise run build:test             # with tests (supports module targeting & resume)
 mise run build:clean
 ```
+
+### Cross-platform test runner (`build:test`)
+
+`mise run build:test` is the unified cross-platform test runner for the multi-module Maven reactor, validated across **Windows native (pwsh)**, **macOS (Darwin)**, and **Linux**.
+
+Key capabilities:
+- **Dynamic Resource Auto-Tuning**: Auto-detects available system RAM and CPU count per OS (via `[System.GC]::GetGCMemoryInfo()` on Windows, `vm_stat`/`sysctl` on macOS, `/proc/meminfo`/`nproc` on Linux) to set optimal JIT heap sizes and parallel test threads.
+- **Pre-Build Formatting**: Automatically runs `python scripts/fix_fqns.py` and `mvnw spotless:apply -q`. Python detection searches `python`, `py`, and `python3`, automatically bypassing Windows Store App Execution Aliases.
+- **Environment Shielding**: Backs up `.env` to `.env.build-backup` and restores it upon exit, ensuring tests execute against clean hermetic defaults.
+- **Module Targeting & Flags**:
+  ```bash
+  # Test a single module with upstream dependencies:
+  mise run build:test persistence-sqlite
+
+  # Resume from a failed module in the reactor:
+  mise run build:test -- -rf :amsha-persistence-sqlite
+
+  # Run a specific test class or method:
+  mise run build:test -- -pl persistence-sqlite -Dtest=SqliteWalConfigurerTest
+
+  # Run the full reactor clean verify (29 modules):
+  mise run build:test
+  ```
 
 ### .env shielding - secrets stay out of the binary
 

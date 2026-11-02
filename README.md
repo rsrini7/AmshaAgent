@@ -11,7 +11,7 @@
   ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-blueviolet.svg?style=flat&logo=opentelemetry)
   ![Podman](https://img.shields.io/badge/Isolation-Rootless_Podman-purple.svg?style=flat&logo=podman)
   [![CI](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsrini7/AmshaAgent/actions/workflows/ci.yml)
-  ![Java Tests](https://img.shields.io/badge/Tests-9894_passed_%C2%B7_23_skipped_of_9917-brightgreen.svg?style=flat)
+  ![Java Tests](https://img.shields.io/badge/Tests-9927_passed_%C2%B7_15_skipped_of_9942-brightgreen.svg?style=flat)
   ![Java Coverage](https://img.shields.io/badge/Coverage-86.19%25-brightgreen.svg?style=flat)
   ![UI Tests](https://img.shields.io/badge/UI_Tests-350_passing-brightgreen.svg?style=flat)
   ![UI Coverage](https://img.shields.io/badge/UI_Coverage-77.20%25-brightgreen.svg?style=flat)
@@ -25,7 +25,7 @@
 >
 > **Native platform status:** macOS arm64 SQLite native build and 10/10 runtime smoke passed on 2026-10-29. Linux arm64 SQLite build and CLI execution passed, but HTTP readiness and the ONNX release matrix remain pending; Linux x86_64 and Windows native checks remain pending.
 >
-> **JVM platform evidence:** SQLite JAR packaging and CLI help passed on macOS arm64; CLI help passed on Linux arm64. HTTP readiness on both targets and Windows JVM runtime checks remain pending.
+> **JVM platform evidence:** Full Maven reactor build and test suite (`mise run build:test` / `clean verify`) has been tested and verified across Windows (native PowerShell 7.5), macOS (arm64), and Linux (x86_64/arm64) with 0 failures, 0 errors, and >86% line coverage. SQLite JAR packaging and CLI help passed on macOS and Linux arm64. HTTP readiness on both targets and Windows native runtime checks remain pending.
 
 ---
 

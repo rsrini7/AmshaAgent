@@ -37,6 +37,17 @@ class LlmPreflightTest(unittest.TestCase):
         self.assertEqual(open_url.call_args.args[0].full_url, "http://127.0.0.1:8000/v1/models")
         self.assertIn("no completion requested", output.getvalue())
 
+    def test_respects_amsha_llm_provider(self) -> None:
+        output = io.StringIO()
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+        with patch.object(preflight, "urlopen", return_value=response) as open_url:
+            with contextlib.redirect_stdout(output):
+                result = preflight.check({"AMSHA_LLM_PROVIDER": "codex"})
+
+        self.assertEqual(result, 0)
+        self.assertEqual(open_url.call_args.args[0].full_url, "https://chatgpt.com/backend-api/codex/models")
+
     def test_http_auth_response_confirms_reachability_without_claiming_auth(self) -> None:
         output = io.StringIO()
         auth_required = HTTPError("http://provider.invalid/models", 401, "Unauthorized", {}, None)
