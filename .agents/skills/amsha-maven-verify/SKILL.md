@@ -71,6 +71,18 @@ Run only affected test classes first. Use `-pl <module> -am` to compile upstream
 ```
 Confirm output: `Failures: 0, Errors: 0`.
 
+*Fast runner alternative via mise:*
+```bash
+# Test single module with upstream dependencies:
+mise run build:test <module>
+
+# Test specific class or method:
+mise run build:test -- -pl <module> -Dtest=TargetClassTest
+
+# Resume from failed module in reactor:
+mise run build:test -- -rf :amsha-<module>
+```
+
 > **Trap — `-pl <module>` without `-am` can test against STALE installed jars.** A sibling module that is
 > not in the reactor is resolved from `~/.m2`: whatever was last installed, which may predate your working
 > tree. Observed 2026-10-01 — three `core` decoder tests failed "expected `Opinion` but was `NoOpinion`"
