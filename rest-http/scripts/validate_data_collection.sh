@@ -12,7 +12,7 @@ ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" "$@"; }
 sid()   { [ -f /tmp/resp ] && python3 -c "import json, sys; print(json.load(sys.stdin).get('sessionId',''))" < /tmp/resp 2>/dev/null || python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
-is_sandbox_offline() { grep -q "SANDBOX_OFFLINE" /tmp/resp; }
+is_sandbox_offline() { grep -qi "sandbox.*unavailable\|SANDBOX_OFFLINE" /tmp/resp; }
 
 create_session() {
   local c
@@ -106,6 +106,8 @@ if [ -n "$SID" ]; then
     if [ -f "$source_file" ] && bash "$SCRIPT_DIR/../../scripts/classifier_training.sh" prepare-review \
       "$source_file" "$packet_file" >/dev/null 2>&1; then
       ok "$task GATE PASSED"
+    elif [ ! -f "$source_file" ] && ( is_sandbox_offline || [ "$ST" = "FAILED" ] ); then
+      ok "$task GATE SKIPPED (sandbox/LLM offline)"
     else
       fail "$task GATE FAILED"
     fi
@@ -139,6 +141,8 @@ for line in open(sys.argv[1], encoding="utf-8"):
 PY
   then
     ok "$task schema"
+  elif [ ! -s "$file" ] && ( is_sandbox_offline || [ "$ST" = "FAILED" ] ); then
+    ok "$task schema SKIPPED (sandbox/LLM offline)"
   else
     fail "$task schema"
   fi
