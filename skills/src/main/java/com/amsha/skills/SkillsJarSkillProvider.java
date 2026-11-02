@@ -301,11 +301,13 @@ public class SkillsJarSkillProvider implements SkillProvider {
     void scanDirectory(URL url, List<SkillDefinition> skills) {
         try {
             Path dir = Path.of(url.toURI());
-            Files.walk(dir).filter(p -> p.toString().endsWith("/SKILL.md")).forEach(p -> {
-                String relativePath = dir.relativize(p).toString().replace("\\", "/");
-                String resourcePath = SKILLS_DIR + "/" + relativePath;
-                loadSkillFromResource("/" + resourcePath, skills);
-            });
+            Files.walk(dir)
+                    .filter(p -> p.toString().replace('\\', '/').endsWith("/SKILL.md"))
+                    .forEach(p -> {
+                        String relativePath = dir.relativize(p).toString().replace("\\", "/");
+                        String resourcePath = SKILLS_DIR + "/" + relativePath;
+                        loadSkillFromResource("/" + resourcePath, skills);
+                    });
         } catch (Exception e) {
             LOG.warnf("Failed to scan directory %s for SkillsJars: %s", url, e.getMessage());
         }
@@ -482,8 +484,9 @@ public class SkillsJarSkillProvider implements SkillProvider {
         String relative = definition.templateDir();
         if (relative == null || relative.isBlank()) return null;
         Path path = Path.of(relative);
-        if (!path.isAbsolute() && skillHome != null && !skillHome.isBlank())
+        boolean isAbsolute = path.isAbsolute() || relative.startsWith("/") || relative.startsWith("\\");
+        if (!isAbsolute && skillHome != null && !skillHome.isBlank())
             path = Path.of(skillHome).resolve(path);
-        return path.normalize().toString();
+        return path.normalize().toString().replace('\\', '/');
     }
 }

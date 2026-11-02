@@ -16,7 +16,7 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 - Before committing: `mise run sonar:issues` (or the BLOCKER-only variant).
 - Verify changes proportionally: compile affected modules, run focused tests, run
   the PMD gate, and run `./mvnw clean install -DskipTests` after changing a
-  dependency module.
+  dependency module. Prefer `mise run build:test` for running tests (supports single-module, resume, and targeted tests).
 
 ## Non-negotiable invariants
 
@@ -246,6 +246,40 @@ and `python3 scripts/test_review_staged.py`.
 | Classifier controls | `./mvnw -pl local-ml-onnx,app -am -Dtest="OnnxClassifierRuntimeControlTest,OnnxAdminResourceTest,SecurityEventTypeTest" -Dsurefire.failIfNoSpecifiedTests=false test` |
 | Local OMLX / ONNX smoke | `mise run smoke:local-runtime -- native --binary dist/amsha-sqlite` |
 | Local ML / ONNX Release | `bash scripts/verify_native_matrix.sh && bash scripts/verify_onnx_release_provenance.sh` |
+
+### Build and test runner (`mise run build:test`)
+
+Prefer `mise run build:test` for running tests because it automatically tunes cross-platform environment resources (allocating dynamic JIT heap and parallel threads based on available host RAM and CPUs), formats code (`scripts/fix_fqns.py` + Spotless), shields `.env` secrets during execution, and restores state on exit.
+
+Agents should use the following invocation patterns:
+
+- **Single module (fast feedback)**: Pass the bare module directory name to build upstream dependencies and test only that module in seconds:
+  ```bash
+  mise run build:test persistence-sqlite
+  mise run build:test core
+  mise run build:test common
+  mise run build:test llm-providers
+  ```
+  *(Automatically expands `<module>` to `-pl <module> -am verify`)*.
+- **Resume from a failed module**: If a reactor test run fails mid-way, resume from that module without re-running earlier modules:
+  ```bash
+  mise run build:test -- -rf :amsha-persistence-sqlite
+  ```
+  *(Note: The `--` separator is required so `mise` passes the `-rf` flag to the task rather than parsing it as a `mise` flag)*.
+- **Targeted test class or method**: Pass Maven flags through `--`:
+  ```bash
+  mise run build:test -- -pl persistence-sqlite -Dtest=SqliteWalConfigurerTest
+  mise run build:test -- -pl skills -Dtest=SkillsJarSkillProviderTest#testMaybeAugmentBrowserPreviewAndTemplateDir
+  ```
+- **Multiple modules**:
+  ```bash
+  mise run build:test -- -pl common,core -am
+  ```
+- **Full reactor suite**:
+  ```bash
+  mise run build:test
+  ```
+  *(Runs `clean verify -am` across all 29 modules)*.
 
 ### Reusable local runtime smoke
 

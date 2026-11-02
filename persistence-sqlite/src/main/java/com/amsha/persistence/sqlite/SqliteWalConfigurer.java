@@ -63,7 +63,7 @@ public class SqliteWalConfigurer {
             log.info("SQLite: WAL mode and 10s busyTimeout enabled.");
 
             // 2. Attach FTS database for sub-queries
-            if (!ftsDb.getParentFile().exists()) {
+            if (ftsDb.getParentFile() != null && !ftsDb.getParentFile().exists()) {
                 ftsDb.getParentFile().mkdirs();
             }
 
@@ -89,8 +89,8 @@ public class SqliteWalConfigurer {
         String path = jdbcUrl.replace("jdbc:sqlite:", "");
         int qIndex = path.indexOf('?');
         if (qIndex > 0) path = path.substring(0, qIndex);
-        int sep = path.lastIndexOf('/');
-        String dir = sep > 0 ? path.substring(0, sep) : ".";
-        return Path.of(dir, "amsha-fts.db").toFile();
+        Path p = Path.of(path);
+        Path parent = p.getParent();
+        return (parent != null ? parent.resolve("amsha-fts.db") : Path.of("amsha-fts.db")).toFile();
     }
 }

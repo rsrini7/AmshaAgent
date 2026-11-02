@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -291,6 +293,37 @@ class OggOpusToWavConverterTest {
     }
 
     private Path fakeFfmpeg(String name, String body) throws IOException {
+        if (File.separatorChar == '\\') {
+            Path script = tempDir.resolve(name + ".cmd");
+            String cmdBody;
+            if (body.contains("RIFF0000WAVE")) {
+                Path sample = tempDir.resolve("sample.wav");
+                if (!Files.exists(sample)) {
+                    Files.write(sample, "RIFF0000WAVE".getBytes(StandardCharsets.US_ASCII));
+                }
+                cmdBody = "@echo off\r\nsetlocal\r\nfor %%a in (%*) do set \"last=%%~a\"\r\ncopy /y /b \""
+                        + sample.toAbsolutePath()
+                        + "\" \"%last%\" >nul\r\necho fake ffmpeg: transcoded 1>&2\r\nexit /b 0\r\n";
+            } else if (body.contains("boom")) {
+                cmdBody = "@echo off\r\necho fake ffmpeg: boom 1>&2\r\nexit /b 3\r\n";
+            } else if (body.contains("dd if=/dev/zero")) {
+                Path big = tempDir.resolve("oversized.bin");
+                if (!Files.exists(big)) {
+                    Files.write(big, new byte[8192]);
+                }
+                cmdBody = "@echo off\r\nsetlocal\r\nfor %%a in (%*) do set \"last=%%~a\"\r\ncopy /y /b \""
+                        + big.toAbsolutePath() + "\" \"%last%\" >nul\r\nexit /b 0\r\n";
+            } else if (body.contains("mkdir")) {
+                cmdBody =
+                        "@echo off\r\nsetlocal\r\nfor %%a in (%*) do set \"last=%%~a\"\r\nif exist \"%last%\" del /f /q \"%last%\"\r\nmkdir \"%last%\"\r\necho kept > \"%last%\\keep\"\r\nexit /b 0\r\n";
+            } else if (body.contains("sleep")) {
+                cmdBody = "@echo off\r\nping -n 6 127.0.0.1 >nul\r\nexit /b 0\r\n";
+            } else {
+                cmdBody = "@echo off\r\nexit /b 0\r\n";
+            }
+            Files.writeString(script, cmdBody);
+            return script;
+        }
         Path script = tempDir.resolve(name + ".sh");
         Files.writeString(script, "#!/bin/sh\n" + body);
         assertTrue(script.toFile().setExecutable(true), "could not mark " + script + " executable");

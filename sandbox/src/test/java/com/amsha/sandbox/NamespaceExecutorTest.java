@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PipedInputStream;
@@ -101,7 +102,11 @@ class NamespaceExecutorTest {
                 "Test OS",
                 () -> assertThrows(
                         ToolExecutionException.class,
-                        () -> executor.executeInNamespace(tempDir, List.of("sh", "-c", "echo boom; exit 4"))));
+                        () -> executor.executeInNamespace(
+                                tempDir,
+                                File.separatorChar == '\\'
+                                        ? List.of("cmd.exe", "/c", "echo boom & exit 4")
+                                        : List.of("sh", "-c", "echo boom; exit 4"))));
 
         assertEquals(4, ex.exitCode());
         assertTrue(ex.getMessage().contains("boom"));

@@ -2,6 +2,7 @@
 # common_env.sh — Common environment variables for Amsha Agent validation scripts
 
 # API Keys resolved from the registry
+SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 if [ -z "${AMSHA_API_KEYS_INTERNAL:-}" ]; then
   if [ -f "$SCRIPT_DIR/../../dist/.env" ]; then
     _k=$(grep -E "^AMSHA_API_KEYS_INTERNAL=" "$SCRIPT_DIR/../../dist/.env" 2>/dev/null | cut -d= -f2- | tr -d ' "\r\n')
@@ -41,6 +42,13 @@ if [ -f "$COMMON_DIR/../../scripts/lib/repo_root.sh" ]; then
   REPO_ROOT="$(get_repo_root "$COMMON_DIR")"
 else
   REPO_ROOT="$(cd "$COMMON_DIR/../.." && pwd)"
+fi
+
+# Ensure python3 is available and translates /tmp paths in MSYS/Git Bash
+if [ -f "$REPO_ROOT/scripts/lib/python_shim.sh" ]; then
+  # shellcheck source=../../scripts/lib/python_shim.sh
+  source "$REPO_ROOT/scripts/lib/python_shim.sh"
+  ensure_python3_shim || true
 fi
 
 if [ -z "${AMSHA_DATA_DIR:-}" ]; then

@@ -198,7 +198,7 @@ class HostExecToolTest {
 
         List<String> cmd = cmdCaptor.getValue();
         // Expected: [java, -cp, <workspace>, Greet]
-        assertEquals("java", cmd.get(0));
+        assertEquals(tool.codeLanguageDetector.resolveJavaExecutable(), cmd.get(0));
         assertEquals("-cp", cmd.get(1));
         assertEquals("Greet", cmd.get(3), "class name must come from extracted public class");
     }

@@ -51,6 +51,12 @@ Verify with `java -version` (must be JDK 25.x).
 
 ---
 
+## Sandboxed Maven Cache
+
+`scripts/review_staged.sh` invokes `./mvnw` directly. Maven Resolver needs a writable local repository to create `${maven.repo.local}/.locks` and update resolution metadata. In a restricted sandbox, a read-only `~/.m2/repository` can make Spotless, PMD, tests, and native-build checks fail before their goals run, often with a `NamedLockKey` or “Could not open file channel” error.
+
+Deleting `.locks` does not fix a read-only parent; Maven creates the lock directory again. Do not make the shared host cache world-writable or disable Resolver locking. Run the review wrapper where Maven's local repository is writable, or point Maven at a writable scratch repository and seed it from the existing cache when offline. The wrapper intentionally records statuses without command output, so diagnose a broad immediate failure by running the named Maven command separately and checking repository writability. Treat this signature as an environment failure, not a source failure; use a same-hash host review report for the full verification result.
+
 ## The Verification Gate Sequence
 
 Execute gates in order. Each gate must succeed before declaring a change merge-ready.
@@ -64,6 +70,18 @@ Run only affected test classes first. Use `-pl <module> -am` to compile upstream
   -Dtest=TargetClassTest,AnotherClassTest < /dev/null
 ```
 Confirm output: `Failures: 0, Errors: 0`.
+
+*Fast runner alternative via mise:*
+```bash
+# Test single module with upstream dependencies:
+mise run build:test <module>
+
+# Test specific class or method:
+mise run build:test -- -pl <module> -Dtest=TargetClassTest
+
+# Resume from failed module in reactor:
+mise run build:test -- -rf :amsha-<module>
+```
 
 > **Trap — `-pl <module>` without `-am` can test against STALE installed jars.** A sibling module that is
 > not in the reactor is resolved from `~/.m2`: whatever was last installed, which may predate your working

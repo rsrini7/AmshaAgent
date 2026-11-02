@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -268,7 +267,7 @@ class PodmanContainerExecutorTest {
         String result = executor.executeInContainer(
                 "sess-happy", tempDir.resolve("ws"), List.of("echo", "hi"), Map.of("GH_TOKEN", "gh"));
 
-        assertEquals("tool output\n", result);
+        assertEquals("tool output\n", result.replace("\r\n", "\n"));
         verify(span).setAttribute(AgentOTelConstants.ATTR_CONTAINER_IMAGE, executor.getSandboxImage());
         verify(span).setStatus(StatusCode.OK);
         verify(span).end();
@@ -432,10 +431,7 @@ class PodmanContainerExecutorTest {
 
     /** Writes an executable POSIX shell script to use in place of the real podman binary. */
     private Path fakePodman(String body) throws IOException {
-        Path exe = tempDir.resolve("podman-" + UUID.randomUUID() + ".sh");
-        Files.writeString(exe, "#!/bin/sh\n" + body + "\n", StandardCharsets.UTF_8);
-        assertTrue(exe.toFile().setExecutable(true), "fake podman must be executable");
-        return exe;
+        return FakePodmanHelper.createFakePodman(tempDir, "podman-", body);
     }
 
     /** A fake podman reporting a healthy engine, a present image, and a successful tool run. */

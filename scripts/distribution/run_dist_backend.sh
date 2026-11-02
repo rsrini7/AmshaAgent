@@ -79,6 +79,13 @@ if [[ -n "${AMSHA_DIST_BINARY:-}" ]]; then
 fi
 VALIDATION_SCRIPT="${AMSHA_VALIDATION_SCRIPT:-$PROJECT_ROOT/rest-http/scripts/run_all_validations.sh}"
 
+# Cross-platform Python 3 discovery and /tmp path translation for MSYS/Git Bash
+if [[ -f "$PROJECT_ROOT/scripts/lib/python_shim.sh" ]]; then
+  # shellcheck source=../lib/python_shim.sh
+  source "$PROJECT_ROOT/scripts/lib/python_shim.sh"
+  ensure_python3_shim || true
+fi
+
 AUTO_BUILD=false
 VALIDATE_MODE=false
 FAST_MODE=false
@@ -248,6 +255,21 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   # Validation launches the server with stdin closed; never enter the
   # interactive first-run setup in that mode.
   export AMSHA_UI_SKIP_ONBOARDING=true
+
+  # Enable tiered memory subsystems during validation so admin endpoints
+  # exercise the selected persistence backend instead of NoOp fallbacks.
+  if ! is_process_env_key "AMSHA_MEMORY_TIERED_ENABLED"; then
+    export AMSHA_MEMORY_TIERED_ENABLED=true
+  fi
+  if ! is_process_env_key "AMSHA_MEMORY_CORE_ENABLED"; then
+    export AMSHA_MEMORY_CORE_ENABLED=true
+  fi
+  if ! is_process_env_key "AMSHA_MEMORY_RECALL_ENABLED"; then
+    export AMSHA_MEMORY_RECALL_ENABLED=true
+  fi
+  if ! is_process_env_key "AMSHA_MEMORY_ARCHIVAL_ENABLED"; then
+    export AMSHA_MEMORY_ARCHIVAL_ENABLED=true
+  fi
 
   # The decision plane is inert whenever a decision switch is enabled and no
   # DecisionEngine is resolvable, and the startup diagnostic is the only signal for it.
@@ -541,6 +563,9 @@ if [[ "$VALIDATE_MODE" == true ]]; then
         done
       fi
       wait "$server_pid" 2>/dev/null || true
+    fi
+    if [[ -n "${AMSHA_PYTHON3_SHIM_DIR:-}" && -d "$AMSHA_PYTHON3_SHIM_DIR" ]]; then
+      rm -rf "$AMSHA_PYTHON3_SHIM_DIR" 2>/dev/null || true
     fi
     exit "$exit_code"
   }

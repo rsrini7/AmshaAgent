@@ -54,7 +54,7 @@ PROMPT_RESPONSE_FILE="$(mktemp "${_AMSHA_RUN_DIR}/prompt-response.XXXXXX")"
 http_call -o "$PROMPT_RESPONSE_FILE" -X POST \
   -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" \
   -d '{"roleId":"coordinator","sectionKey":"test_section_$$","content":"test prompt","version":1}' \
-  "$B/api/v1/admin/prompts"
+  "$B/api/v1/admin/prompts" >/dev/null
 CODE="$HTTP_CODE"
 PROMPT_ID=$(grep -i '^location:' "$HTTP_HDRS" | tail -n 1 | awk -F'/' '{print $NF}' | tr -d '\r\n')
 [ "$CODE" = "201" ] && ok "$CODE" || fail "$CODE"

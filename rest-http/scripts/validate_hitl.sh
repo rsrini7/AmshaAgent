@@ -20,22 +20,25 @@ info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$(format_http_code "$1")"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m "$CURL_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" "$@"; }
-sid()   { python3 -c "import json; print(json.load(open('$RESP_FILE')).get('sessionId',''))" 2>/dev/null; }
+sid()   { [ -f "$RESP_FILE" ] && python3 -c "import json, sys; print(json.load(sys.stdin).get('sessionId',''))" < "$RESP_FILE" 2>/dev/null || python3 -c "import json; print(json.load(open('$RESP_FILE')).get('sessionId',''))" 2>/dev/null; }
 task_id() {
-  python3 - "$RESP_FILE" "$1" <<'PY'
+  [ -f "$RESP_FILE" ] && python3 - "$1" < "$RESP_FILE" <<'PY' 2>/dev/null
 import json
 import sys
 
-with open(sys.argv[1], encoding="utf-8") as response:
-    payload = json.load(response)
-rows = payload if isinstance(payload, list) else payload.get("items", []) if isinstance(payload, dict) else []
-for row in rows:
-    if isinstance(row, dict) and str(row.get("sessionId", "")) == sys.argv[2]:
-        print(row.get("taskId", ""))
-        break
+try:
+    payload = json.load(sys.stdin)
+    rows = payload if isinstance(payload, list) else payload.get("items", []) if isinstance(payload, dict) else []
+    target_sid = sys.argv[1] if len(sys.argv) > 1 else ""
+    for row in rows:
+        if isinstance(row, dict) and (not target_sid or str(row.get("sessionId", "")) == target_sid):
+            print(row.get("taskId", ""))
+            break
+except Exception:
+    pass
 PY
 }
-is_sandbox_offline() { grep -q "SANDBOX_OFFLINE" "$RESP_FILE"; }
+is_sandbox_offline() { grep -qi "sandbox.*unavailable\|SANDBOX_OFFLINE" "$RESP_FILE"; }
 
 create_session() {
   local c
@@ -53,7 +56,7 @@ trigger_approval() {
 }
 status_is() {
   mute -X GET -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/sessions/$1/status/coordinator" >/dev/null 2>&1
- python3 -c "import json; print(json.load(open('$RESP_FILE')).get('status',''))" 2>/dev/null
+  [ -f "$RESP_FILE" ] && python3 -c "import json, sys; print(json.load(sys.stdin).get('status',''))" < "$RESP_FILE" 2>/dev/null
 }
 run_req() {
   local method="$1" key="$2" url="$3" data="$4"

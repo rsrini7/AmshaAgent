@@ -23,7 +23,7 @@ okh()   { printf "✅ HTTP %s (HITL→approved)\n" "$1"; PASS=$((PASS+1)); }
 warn()  { printf "⚠️  HTTP %s (%s)\n" "$1" "$2"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m 15 -o "$RESP_FILE" -w "%{http_code}" "$@"; }
-sid()   { python3 -c "import json; print(json.load(open('$RESP_FILE')).get('sessionId',''))" 2>/dev/null; }
+sid()   { [ -f "$RESP_FILE" ] && python3 -c "import json, sys; print(json.load(sys.stdin).get('sessionId',''))" < "$RESP_FILE" 2>/dev/null || python3 -c "import json; print(json.load(open('$RESP_FILE')).get('sessionId',''))" 2>/dev/null; }
 
 create_session() {
   local c
