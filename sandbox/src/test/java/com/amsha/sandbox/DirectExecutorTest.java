@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PipedInputStream;
@@ -97,7 +98,12 @@ class DirectExecutorTest {
 
         ToolExecutionException ex = assertThrows(
                 ToolExecutionException.class,
-                () -> executor.executeDirectly(tempDir, List.of("sh", "-c", "echo boom; exit 3"), Map.of()));
+                () -> executor.executeDirectly(
+                        tempDir,
+                        File.separatorChar == '\\'
+                                ? List.of("cmd.exe", "/c", "echo boom & exit 3")
+                                : List.of("sh", "-c", "echo boom; exit 3"),
+                        Map.of()));
 
         assertEquals(3, ex.exitCode());
         assertTrue(ex.getMessage().contains("boom"));
@@ -208,7 +214,12 @@ class DirectExecutorTest {
 
     @Test
     void testWindowsFixupLeavesAWorkingPython3Alone() throws Exception {
-        DirectExecutor executor = new DirectExecutor();
+        DirectExecutor executor = new DirectExecutor() {
+            @Override
+            boolean canRun(String command) {
+                return "python3".equals(command);
+            }
+        };
         Method fixup = DirectExecutor.class.getDeclaredMethod("fixupCommandForWindows", List.class);
         fixup.setAccessible(true);
 
@@ -225,7 +236,8 @@ class DirectExecutorTest {
         Method canRun = DirectExecutor.class.getDeclaredMethod("canRun", String.class);
         canRun.setAccessible(true);
 
-        assertEquals(true, canRun.invoke(executor, "python3"));
+        String existingBinary = File.separatorChar == '\\' ? "java" : "python3";
+        assertEquals(true, canRun.invoke(executor, existingBinary));
         assertEquals(false, canRun.invoke(executor, "non_existent_binary_xyz_123"));
     }
 

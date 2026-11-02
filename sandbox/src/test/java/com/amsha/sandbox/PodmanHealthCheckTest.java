@@ -3,8 +3,6 @@ package com.amsha.sandbox;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -26,10 +24,7 @@ class PodmanHealthCheckTest {
 
     /** Writes an executable POSIX shell script to stand in for the podman binary. */
     private static Path fakePodman(Path dir, String body) throws IOException {
-        Path exe = dir.resolve("podman-" + System.nanoTime() + ".sh");
-        Files.writeString(exe, "#!/bin/sh\n" + body + "\n", StandardCharsets.UTF_8);
-        assertTrue(exe.toFile().setExecutable(true), "fake podman must be executable");
-        return exe;
+        return FakePodmanHelper.createFakePodman(dir, "podman-", body);
     }
 
     @Test

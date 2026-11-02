@@ -145,7 +145,7 @@ public class DirectExecutor {
         return command;
     }
 
-    private boolean canRun(String command) {
+    boolean canRun(String command) {
         try {
             var pb = new ProcessBuilder(command, "--version");
             pb.redirectErrorStream(true);
