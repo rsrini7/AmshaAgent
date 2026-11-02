@@ -18,3 +18,12 @@ from the backlog:**
   [ADR-approval-lease-for-parallel-batches](../adr/architecture/ADR-approval-lease-for-parallel-batches.md)
 
 Detailed checklists and per-item verdicts live in the tracker tickets.
+
+## Audit & Governance
+
+### Audit Decision Replay & Tool Argument Serialization
+- **Origin:** Propose vs. Decide architecture review & audit replayability feedback.
+- **Status:** Backlog / Proposal Ready.
+- **Design Spec:** [docs/proposals/Audit-Decision-Replay-Logging.md](../proposals/Audit-Decision-Replay-Logging.md)
+- **Summary:** Capture redacted and bounded tool arguments (`params`) in `SecurityEventType.TOOL_INVOKED` and `TOOL_BLOCKED` audit events and trace checks so an auditor can deterministically replay policy decisions (`ToolInvocationGuard` / `ToolGovernanceGuard`) against exact historical tool inputs.
+
