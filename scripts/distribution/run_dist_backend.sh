@@ -79,24 +79,11 @@ if [[ -n "${AMSHA_DIST_BINARY:-}" ]]; then
 fi
 VALIDATION_SCRIPT="${AMSHA_VALIDATION_SCRIPT:-$PROJECT_ROOT/rest-http/scripts/run_all_validations.sh}"
 
-# Cross-platform Python 3 shim for environments (such as Git Bash on Windows) where Python 3 is installed as python.exe or py.exe
-PYTHON_SHIM_DIR=""
-if ! command -v python3 >/dev/null 2>&1; then
-  python_fallback=""
-  if command -v python >/dev/null 2>&1; then
-    python_fallback="python"
-  elif command -v py >/dev/null 2>&1; then
-    python_fallback="py"
-  fi
-  if [[ -n "$python_fallback" ]]; then
-    PYTHON_SHIM_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t amsha_py3.XXXXXX 2>/dev/null || true)"
-    if [[ -n "$PYTHON_SHIM_DIR" && -d "$PYTHON_SHIM_DIR" ]]; then
-      printf '#!/usr/bin/env sh\nexec %s "$@"\n' "$python_fallback" > "$PYTHON_SHIM_DIR/python3"
-      chmod +x "$PYTHON_SHIM_DIR/python3"
-      export PATH="$PYTHON_SHIM_DIR:$PATH"
-      trap 'rm -rf "$PYTHON_SHIM_DIR" 2>/dev/null || true' EXIT INT TERM
-    fi
-  fi
+# Cross-platform Python 3 discovery and /tmp path translation for MSYS/Git Bash
+if [[ -f "$PROJECT_ROOT/scripts/lib/python_shim.sh" ]]; then
+  # shellcheck source=../lib/python_shim.sh
+  source "$PROJECT_ROOT/scripts/lib/python_shim.sh"
+  ensure_python3_shim || true
 fi
 
 AUTO_BUILD=false
@@ -562,8 +549,8 @@ if [[ "$VALIDATE_MODE" == true ]]; then
       fi
       wait "$server_pid" 2>/dev/null || true
     fi
-    if [[ -n "${PYTHON_SHIM_DIR:-}" && -d "$PYTHON_SHIM_DIR" ]]; then
-      rm -rf "$PYTHON_SHIM_DIR" 2>/dev/null || true
+    if [[ -n "${AMSHA_PYTHON3_SHIM_DIR:-}" && -d "$AMSHA_PYTHON3_SHIM_DIR" ]]; then
+      rm -rf "$AMSHA_PYTHON3_SHIM_DIR" 2>/dev/null || true
     fi
     exit "$exit_code"
   }

@@ -11,7 +11,7 @@ info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
 mute()  { curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" "$@"; }
-sid()   { python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
+sid()   { [ -f /tmp/resp ] && python3 -c "import json, sys; print(json.load(sys.stdin).get('sessionId',''))" < /tmp/resp 2>/dev/null || python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
 is_sandbox_offline() { grep -q "SANDBOX_OFFLINE" /tmp/resp; }
 
 create_session() {
@@ -51,7 +51,12 @@ if [ "${AMSHA_TEST_DATA_COLLECTION_ENABLED:-false}" != "true" ]; then
   exit 0
 fi
 
-if ! curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/v1/models >/dev/null 2>&1; then
+if [ -f "$SCRIPT_DIR/../../scripts/distribution/check_llm_preflight.py" ]; then
+  if ! python3 "$SCRIPT_DIR/../../scripts/distribution/check_llm_preflight.py" >/dev/null 2>&1; then
+    echo "❌ Configured LLM provider is unreachable. Please start or configure your LLM provider before running this script."
+    exit 1
+  fi
+elif ! curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/v1/models >/dev/null 2>&1; then
   echo "❌ OMLX server is not running on http://127.0.0.1:8000. Please start 'omlx serve' in a separate terminal before running this script."
   exit 1
 fi
@@ -74,7 +79,7 @@ if [ -n "$SID" ]; then
   info "DATA-3: wait for completion"
   ST=""; for i in $(seq 1 60); do
     mute -X GET -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/sessions/$SID/status/coder" >/dev/null 2>&1
-    ST=$(python3 -c "import json; print(json.load(open('/tmp/resp')).get('status',''))" 2>/dev/null)
+    ST=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('status',''))" < /tmp/resp 2>/dev/null || python3 -c "import json; print(json.load(open('/tmp/resp')).get('status',''))" 2>/dev/null)
     if [ "$ST" = "AWAITING_APPROVAL" ]; then
       mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" -d '{"goal":"approve","agentRole":"coder"}' "$B/api/v1/sessions/$SID/run-async" >/dev/null 2>&1
     fi
