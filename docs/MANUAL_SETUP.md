@@ -127,6 +127,21 @@ wsl --shutdown
 
 Reopen your Ubuntu terminal.
 
+### 3.1b Configure Memory & Swap in .wslconfig (Prevents OOM Killer during Builds)
+
+By default, WSL2 allocates only 50% of host RAM and 2GB swap. Running full Quarkus test suites and native compilation can trigger the Linux kernel Out-Of-Memory (OOM) killer.
+
+On Windows, create or edit `%USERPROFILE%\.wslconfig` (e.g. `C:\Users\<username>\.wslconfig`):
+
+```ini
+[wsl2]
+networkingMode=mirrored
+memory=10GB
+swap=8GB
+```
+
+Restart WSL from Windows PowerShell (`wsl --shutdown`) to apply.
+
 ### 3.2 Install JDK 25 via SDKMAN!
 
 ```bash

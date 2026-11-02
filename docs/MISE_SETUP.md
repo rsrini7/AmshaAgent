@@ -770,6 +770,24 @@ mise run podman:start
 mise run build:native
 ```
 
+### WSL2: Java / Quarkus Test Build Killed by OOM Killer (`[build:test] ERROR task failed`)
+
+On Windows WSL2, the default memory allocation is capped at 50% of host RAM and only 2GB swap. Quarkus multi-JVM testing (Maven build runner + Surefire forked JVM + test augmentation) can exceed this threshold and trigger the Linux kernel OOM killer (`dmesg | grep oom-killer`), causing builds to fail abruptly.
+
+To fix this, create or update `.wslconfig` in your Windows user directory (`C:\Users\<username>\.wslconfig` or `/mnt/c/Users/<username>/.wslconfig`):
+
+```ini
+[wsl2]
+networkingMode=mirrored
+memory=10GB
+swap=8GB
+```
+
+Then restart WSL from Windows PowerShell:
+```powershell
+wsl --shutdown
+```
+
 ### Podman socket missing after restart (WSL2)
 
 ```bash

@@ -170,6 +170,21 @@ To inspect all skipped tests and their exact skip messages on the current host:
 python3 -c "import xml.etree.ElementTree as ET, glob; [print(f'{tc.get(\"classname\")}#{tc.get(\"name\")}: {tc.find(\"skipped\").get(\"message\", \"\")}') for r in glob.glob('*/target/surefire-reports/TEST-*.xml') for tc in ET.parse(r).findall('.//testcase') if tc.find('skipped') is not None]"
 ```
 
+### 1.8 WSL2 Memory Requirements for Test Suite
+
+On Windows WSL2, running full test suites or `./scripts/run_dist_{sqlite,pg,fs}.sh` involves Quarkus test augmentation across multiple JVM processes (Maven + Surefire forked JVM + test execution). The default WSL2 memory limit (50% host RAM and 2GB swap) can lead to the Linux kernel OOM killer terminating the build (`[build:test] ERROR task failed` / `dmesg | grep oom-killer`).
+
+Ensure your Windows host has configured sufficient memory and swap in `%USERPROFILE%\.wslconfig` (or `C:\Users\<username>\.wslconfig`):
+
+```ini
+[wsl2]
+networkingMode=mirrored
+memory=10GB
+swap=8GB
+```
+
+Apply by running `wsl --shutdown` from Windows PowerShell before running tests.
+
 ---
 
 ## 2. Environment Configuration for Testing

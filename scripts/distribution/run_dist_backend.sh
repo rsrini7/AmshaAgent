@@ -440,6 +440,16 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
+# Validate mandatory configuration before cleaning state or starting tests
+if [[ "$VALIDATE_MODE" == true ]]; then
+  if [[ -z "${AMSHA_LLM_PROVIDER:-}" ]]; then
+    die "AMSHA_LLM_PROVIDER is not set. Amsha requires an LLM provider to initialize even in validation mode.
+   Set AMSHA_LLM_PROVIDER in .env or dist/.env (e.g. AMSHA_LLM_PROVIDER=ollama), or run: export AMSHA_LLM_PROVIDER=ollama"
+  fi
+  # Ensure first-boot secret seeding so SecretVault does not fail during clean validation
+  export AMSHA_AUTO_SEED_SECRETS="${AMSHA_AUTO_SEED_SECRETS:-true}"
+fi
+
 # Fail before native compilation or --clean when a full validation run cannot
 # reach the primary configured chat provider. Fast validators make no LLM calls.
 if [[ "$VALIDATE_MODE" == true && "$FAST_MODE" == false ]]; then
