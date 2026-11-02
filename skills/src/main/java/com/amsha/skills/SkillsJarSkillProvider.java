@@ -301,11 +301,13 @@ public class SkillsJarSkillProvider implements SkillProvider {
     void scanDirectory(URL url, List<SkillDefinition> skills) {
         try {
             Path dir = Path.of(url.toURI());
-            Files.walk(dir).filter(p -> p.toString().replace('\\', '/').endsWith("/SKILL.md")).forEach(p -> {
-                String relativePath = dir.relativize(p).toString().replace("\\", "/");
-                String resourcePath = SKILLS_DIR + "/" + relativePath;
-                loadSkillFromResource("/" + resourcePath, skills);
-            });
+            Files.walk(dir)
+                    .filter(p -> p.toString().replace('\\', '/').endsWith("/SKILL.md"))
+                    .forEach(p -> {
+                        String relativePath = dir.relativize(p).toString().replace("\\", "/");
+                        String resourcePath = SKILLS_DIR + "/" + relativePath;
+                        loadSkillFromResource("/" + resourcePath, skills);
+                    });
         } catch (Exception e) {
             LOG.warnf("Failed to scan directory %s for SkillsJars: %s", url, e.getMessage());
         }
