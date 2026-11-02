@@ -122,7 +122,28 @@ if ($srcItem) {
 
         $env:MAVEN_OPTS = "$mOpts -Xmx${jitGB}g -Xms${jitGB}g"
         $env:MAVEN_ARGS = "-ntp"
-        & $mvnw clean verify -am "-Dquarkus.test.profile=test"
+
+        $mavenCmd = @('verify')
+        if ($args.Count -eq 0) {
+            $mavenCmd = @('clean', 'verify', '-am')
+        } else {
+            $hasPl = $false
+            $hasRf = $false
+            foreach ($a in $args) {
+                if ($a -match '^-pl' -or $a -match '^--projects') { $hasPl = $true }
+                if ($a -match '^-rf' -or $a -match '^--resume-from') { $hasRf = $true }
+            }
+            if (-not $hasRf -and -not $hasPl -and $args[0] -notmatch '^-') {
+                $mavenCmd += @('-pl', $args[0], '-am')
+                if ($args.Count -gt 1) {
+                    $mavenCmd += $args[1..($args.Count - 1)]
+                }
+            } else {
+                $mavenCmd += $args
+            }
+        }
+        $mavenCmd += @('-Dquarkus.test.profile=test')
+        & $mvnw @mavenCmd
         if ($LASTEXITCODE -ne 0) { throw "Test build failed with exit code $LASTEXITCODE." }
         Write-Host '✅  Tests complete.'
     } finally {
