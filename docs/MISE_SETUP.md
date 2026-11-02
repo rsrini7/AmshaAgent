@@ -788,6 +788,28 @@ Then restart WSL from Windows PowerShell:
 wsl --shutdown
 ```
 
+### Windows: Python was not found / Microsoft Store execution alias popup
+
+On Windows 10/11, running `mise run build:test` or `mise run build:full` can fail during `scripts/fix_fqns.py` formatting with:
+
+> `Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases.`
+
+This occurs because Windows enables default App Execution Aliases redirecting `python3.exe` to the Microsoft Store installer stub instead of your local Python installation.
+
+**Fix:**
+1. Open Windows **Settings** (`Win + I`) → **Apps** → **Advanced app settings** → **App execution aliases**.
+2. Toggle **OFF** both `python.exe` and `python3.exe` under **App Installer**.
+3. If your installer only created `python.exe` (standard `python.org` install), create a `python3.cmd` shim in your Python `Scripts/` directory (e.g. `C:\Python313\Scripts\python3.cmd`):
+   ```cmd
+   @echo off
+   python.exe %*
+   ```
+4. Verify in PowerShell with:
+   ```powershell
+   python --version
+   python3 --version
+   ```
+
 ### Podman socket missing after restart (WSL2)
 
 ```bash

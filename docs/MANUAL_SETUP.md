@@ -233,6 +233,28 @@ $env:DOCKER_HOST = "npipe:////./pipe/podman-machine-default"
 
 Not needed on Windows - use `mvnw.cmd` instead of `./mvnw`.
 
+### 4.4 Disable Windows App Execution Aliases for Python (Recommended One-time Cleanup)
+
+Windows 10/11 includes default App Execution Aliases that redirect `python.exe` and `python3.exe` to the Microsoft Store installer stub. When running builds or tasks that execute `python3 ./scripts/fix_fqns.py`, Windows may intercept the call with:
+
+> `Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases.`
+
+To ensure your installed Python runtime is used:
+
+1. Open Windows **Settings** (`Win + I`).
+2. Navigate to **Apps** → **Advanced app settings** → **App execution aliases**.
+3. Toggle **OFF** both `python.exe` and `python3.exe` under **App Installer**.
+4. If your Python installer only installed `python.exe` (standard for official `python.org` installs), create a `python3.cmd` shim in your Python `Scripts/` directory (e.g. `C:\Python313\Scripts\python3.cmd`):
+   ```cmd
+   @echo off
+   python.exe %*
+   ```
+5. Restart PowerShell and verify with:
+   ```powershell
+   python --version
+   python3 --version
+   ```
+
 ---
 
 ## 5. Clone & Environment Configuration
