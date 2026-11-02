@@ -25,7 +25,7 @@
 >
 > **Native platform status:** macOS arm64 SQLite native build and 10/10 runtime smoke passed on 2026-10-29. Linux arm64 SQLite build and CLI execution passed, but HTTP readiness and the ONNX release matrix remain pending; Linux x86_64 and Windows native checks remain pending.
 >
-> **JVM platform evidence:** SQLite JAR packaging and CLI help passed on macOS arm64; CLI help passed on Linux arm64. HTTP readiness on both targets and Windows JVM runtime checks remain pending.
+> **JVM platform evidence:** Full Maven reactor build and test suite (`mise run build:test` / `clean verify`) has been tested and verified across Windows (native PowerShell 7.5), macOS (arm64), and Linux (x86_64/arm64) with 0 failures, 0 errors, and >86% line coverage. SQLite JAR packaging and CLI help passed on macOS and Linux arm64. HTTP readiness on both targets and Windows native runtime checks remain pending.
 
 ---
 
