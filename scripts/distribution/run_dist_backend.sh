@@ -256,6 +256,21 @@ if [[ "$VALIDATE_MODE" == true ]]; then
   # interactive first-run setup in that mode.
   export AMSHA_UI_SKIP_ONBOARDING=true
 
+  # Enable tiered memory subsystems during validation so admin endpoints
+  # exercise the selected persistence backend instead of NoOp fallbacks.
+  if ! is_process_env_key "AMSHA_MEMORY_TIERED_ENABLED"; then
+    export AMSHA_MEMORY_TIERED_ENABLED=true
+  fi
+  if ! is_process_env_key "AMSHA_MEMORY_CORE_ENABLED"; then
+    export AMSHA_MEMORY_CORE_ENABLED=true
+  fi
+  if ! is_process_env_key "AMSHA_MEMORY_RECALL_ENABLED"; then
+    export AMSHA_MEMORY_RECALL_ENABLED=true
+  fi
+  if ! is_process_env_key "AMSHA_MEMORY_ARCHIVAL_ENABLED"; then
+    export AMSHA_MEMORY_ARCHIVAL_ENABLED=true
+  fi
+
   # The decision plane is inert whenever a decision switch is enabled and no
   # DecisionEngine is resolvable, and the startup diagnostic is the only signal for it.
   # Derive the validator's expectation from the configuration this run actually loads, so a
