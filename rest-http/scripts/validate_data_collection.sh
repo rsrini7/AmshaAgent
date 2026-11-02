@@ -5,14 +5,18 @@
 set +e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common_env.sh"
+RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/amsha_validate_data_collection.XXXXXX")"
+RESP_FILE="$RUN_DIR/resp"
+cleanup() { rm -rf -- "$RUN_DIR"; }
+trap cleanup EXIT INT TERM
 FAIL=0; PASS=0; RL_WAIT=62
 
 info()  { printf "%-4s %-58s " "" "$1"; }
 ok()    { printf "✅ HTTP %s\n" "$1"; PASS=$((PASS+1)); }
 fail()  { printf "❌ HTTP %s\n" "$1"; FAIL=$((FAIL+1)); }
-mute()  { curl -s -m "$CURL_TIMEOUT" -o /tmp/resp -w "%{http_code}" "$@"; }
-sid()   { [ -f /tmp/resp ] && python3 -c "import json, sys; print(json.load(sys.stdin).get('sessionId',''))" < /tmp/resp 2>/dev/null || python3 -c "import json; print(json.load(open('/tmp/resp')).get('sessionId',''))" 2>/dev/null; }
-is_sandbox_offline() { grep -qi "sandbox.*unavailable\|SANDBOX_OFFLINE" /tmp/resp; }
+mute()  { curl -s -m "$CURL_TIMEOUT" -o "$RESP_FILE" -w "%{http_code}" "$@"; }
+sid()   { [ -f "$RESP_FILE" ] && python3 -c "import json, sys; print(json.load(sys.stdin).get('sessionId',''))" < "$RESP_FILE" 2>/dev/null || python3 -c "import json; print(json.load(open('$RESP_FILE')).get('sessionId',''))" 2>/dev/null; }
+is_sandbox_offline() { grep -qi "sandbox.*unavailable\|SANDBOX_OFFLINE" "$RESP_FILE"; }
 
 create_session() {
   local c
@@ -79,7 +83,7 @@ if [ -n "$SID" ]; then
   info "DATA-3: wait for completion"
   ST=""; for i in $(seq 1 60); do
     mute -X GET -H "X-Amsha-API-Key: $VALID_KEY" "$B/api/v1/sessions/$SID/status/coder" >/dev/null 2>&1
-    ST=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('status',''))" < /tmp/resp 2>/dev/null || python3 -c "import json; print(json.load(open('/tmp/resp')).get('status',''))" 2>/dev/null)
+    ST=$(python3 -c "import json, sys; print(json.load(sys.stdin).get('status',''))" < "$RESP_FILE" 2>/dev/null || python3 -c "import json; print(json.load(open('$RESP_FILE')).get('status',''))" 2>/dev/null)
     if [ "$ST" = "AWAITING_APPROVAL" ]; then
       mute -X POST -H "X-Amsha-API-Key: $VALID_KEY" -H "Content-Type: application/json" -d '{"goal":"approve","agentRole":"coder"}' "$B/api/v1/sessions/$SID/run-async" >/dev/null 2>&1
     fi
@@ -89,7 +93,7 @@ if [ -n "$SID" ]; then
   
   if [ "$ST" = "COMPLETED" ]; then
     ok "$ST"
-  elif [ "$ST" = "FAILED" ] && ( is_sandbox_offline || grep -q "Connection refused" /tmp/resp ); then
+  elif [ "$ST" = "FAILED" ] && ( is_sandbox_offline || grep -q "Connection refused" "$RESP_FILE" ); then
     ok "FAILED (tolerated SANDBOX/LLM_OFFLINE)"
   else
     fail "$ST"
