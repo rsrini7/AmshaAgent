@@ -79,6 +79,26 @@ if [[ -n "${AMSHA_DIST_BINARY:-}" ]]; then
 fi
 VALIDATION_SCRIPT="${AMSHA_VALIDATION_SCRIPT:-$PROJECT_ROOT/rest-http/scripts/run_all_validations.sh}"
 
+# Cross-platform Python 3 shim for environments (such as Git Bash on Windows) where Python 3 is installed as python.exe or py.exe
+PYTHON_SHIM_DIR=""
+if ! command -v python3 >/dev/null 2>&1; then
+  python_fallback=""
+  if command -v python >/dev/null 2>&1; then
+    python_fallback="python"
+  elif command -v py >/dev/null 2>&1; then
+    python_fallback="py"
+  fi
+  if [[ -n "$python_fallback" ]]; then
+    PYTHON_SHIM_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t amsha_py3.XXXXXX 2>/dev/null || true)"
+    if [[ -n "$PYTHON_SHIM_DIR" && -d "$PYTHON_SHIM_DIR" ]]; then
+      printf '#!/usr/bin/env sh\nexec %s "$@"\n' "$python_fallback" > "$PYTHON_SHIM_DIR/python3"
+      chmod +x "$PYTHON_SHIM_DIR/python3"
+      export PATH="$PYTHON_SHIM_DIR:$PATH"
+      trap 'rm -rf "$PYTHON_SHIM_DIR" 2>/dev/null || true' EXIT INT TERM
+    fi
+  fi
+fi
+
 AUTO_BUILD=false
 VALIDATE_MODE=false
 FAST_MODE=false
@@ -541,6 +561,9 @@ if [[ "$VALIDATE_MODE" == true ]]; then
         done
       fi
       wait "$server_pid" 2>/dev/null || true
+    fi
+    if [[ -n "${PYTHON_SHIM_DIR:-}" && -d "$PYTHON_SHIM_DIR" ]]; then
+      rm -rf "$PYTHON_SHIM_DIR" 2>/dev/null || true
     fi
     exit "$exit_code"
   }
