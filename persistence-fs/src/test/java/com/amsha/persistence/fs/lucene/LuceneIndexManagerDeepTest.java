@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -42,15 +44,17 @@ class LuceneIndexManagerDeepTest {
     @AfterEach
     void tearDown() throws IOException {
         if (tempDir == null || !Files.exists(tempDir)) return;
-        // Any directory left mode 000 by a failed assertion must be made traversable before cleanup.
-        try (var walk = Files.walk(tempDir)) {
-            walk.forEach(path -> {
-                try {
-                    Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rwx------"));
-                } catch (IOException e) {
-                    // best-effort
-                }
-            });
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            // Any directory left mode 000 by a failed assertion must be made traversable before cleanup.
+            try (var walk = Files.walk(tempDir)) {
+                walk.forEach(path -> {
+                    try {
+                        Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rwx------"));
+                    } catch (IOException e) {
+                        // best-effort
+                    }
+                });
+            }
         }
         try (var walk = Files.walk(tempDir)) {
             walk.sorted(Comparator.reverseOrder()).forEach(path -> {
@@ -100,6 +104,9 @@ class LuceneIndexManagerDeepTest {
 
     @Test
     void indexWrapsAnIoFailureInAnUncheckedIoException() throws IOException {
+        Assumptions.assumeTrue(
+                FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+                "requires POSIX permissions to make the directory unwritable");
         Path indexDir = tempDir.resolve("write-locked-index");
         LuceneIndexManager lucene = new LuceneIndexManager(indexDir, 4);
         lucene.index("d1", "alpha", null, null);
@@ -118,6 +125,9 @@ class LuceneIndexManagerDeepTest {
 
     @Test
     void deleteWrapsAnIoFailureInAnUncheckedIoException() throws IOException {
+        Assumptions.assumeTrue(
+                FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+                "requires POSIX permissions to make the directory unwritable");
         Path indexDir = tempDir.resolve("delete-locked-index");
         LuceneIndexManager lucene = new LuceneIndexManager(indexDir, 4);
         lucene.index("d1", "alpha", null, null);
@@ -135,6 +145,9 @@ class LuceneIndexManagerDeepTest {
 
     @Test
     void searchesWrapAnIoFailureAndNumDocsDegradesToZero() throws IOException {
+        Assumptions.assumeTrue(
+                FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+                "requires POSIX permissions to make the directory unreadable");
         Path indexDir = tempDir.resolve("read-locked-index");
         LuceneIndexManager lucene = new LuceneIndexManager(indexDir, 4);
         lucene.index("d1", "alpha beta", null, new float[] {1f, 0f, 0f, 0f});

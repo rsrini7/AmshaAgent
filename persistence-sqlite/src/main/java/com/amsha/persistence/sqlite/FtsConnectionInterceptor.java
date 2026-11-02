@@ -116,13 +116,15 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
                         "FtsConnectionInterceptor: Cannot ATTACH fts (transaction active). Will retry on next acquire.");
             } else {
                 File ftsDb = ftsDbFile();
-                try {
-                    Files.createDirectories(ftsDb.getParentFile().toPath());
-                } catch (IOException e) {
-                    log.warnf(
-                            LogUtil.relevantThrowable(e),
-                            "Failed to create data directory for FTS: %s",
-                            ftsDb.getParent());
+                if (ftsDb.getParentFile() != null) {
+                    try {
+                        Files.createDirectories(ftsDb.getParentFile().toPath());
+                    } catch (IOException e) {
+                        log.warnf(
+                                LogUtil.relevantThrowable(e),
+                                "Failed to create data directory for FTS: %s",
+                                ftsDb.getParent());
+                    }
                 }
                 String ftsPath = ftsDb.getAbsolutePath().replace("\\", "/");
                 try (Statement stmt = connection.createStatement()) {
@@ -220,8 +222,8 @@ public class FtsConnectionInterceptor implements AgroalPoolInterceptor {
         String path = jdbcUrl.replace("jdbc:sqlite:", "");
         int qIndex = path.indexOf('?');
         if (qIndex > 0) path = path.substring(0, qIndex);
-        int sep = path.lastIndexOf('/');
-        String dir = sep > 0 ? path.substring(0, sep) : ".";
-        return Path.of(dir, "amsha-fts.db").toFile();
+        Path p = Path.of(path);
+        Path parent = p.getParent();
+        return (parent != null ? parent.resolve("amsha-fts.db") : Path.of("amsha-fts.db")).toFile();
     }
 }

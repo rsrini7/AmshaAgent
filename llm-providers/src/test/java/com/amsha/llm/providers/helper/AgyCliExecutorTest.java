@@ -80,8 +80,18 @@ class AgyCliExecutorTest {
 
     // ------------------------------------------------------------------ fake CLI helpers
 
-    /** Writes an executable POSIX shell script and returns its path. */
+    /** Writes an executable shell script and returns its path. */
     private Path cliScript(String body) throws IOException {
+        if (File.separatorChar == '\\') {
+            Path exe = tempDir.resolve("agy-" + UUID.randomUUID() + ".cmd");
+            String cmdBody = "@echo off\r\n";
+            if (body.contains("sleep")) {
+                cmdBody += "ping -n 31 127.0.0.1 >nul\r\n";
+            }
+            cmdBody += "exit /b 0\r\n";
+            Files.writeString(exe, cmdBody, StandardCharsets.UTF_8);
+            return exe;
+        }
         Path exe = tempDir.resolve("agy-" + UUID.randomUUID() + ".sh");
         Files.writeString(exe, "#!/bin/sh\n" + body + "\n", StandardCharsets.UTF_8);
         assertTrue(exe.toFile().setExecutable(true), "could not mark the fake CLI executable");
@@ -90,11 +100,31 @@ class AgyCliExecutorTest {
 
     /** A CLI that prints {@code json} on stdout and exits 0. The quoted heredoc keeps the JSON verbatim. */
     private Path cliEmitting(String json) throws IOException {
+        if (File.separatorChar == '\\') {
+            Path payload = tempDir.resolve("payload-" + UUID.randomUUID() + ".json");
+            Files.writeString(payload, json, StandardCharsets.UTF_8);
+            Path exe = tempDir.resolve("agy-" + UUID.randomUUID() + ".cmd");
+            String cmd = "@echo off\r\ntype \"" + payload.toAbsolutePath() + "\"\r\nexit /b 0\r\n";
+            Files.writeString(exe, cmd, StandardCharsets.UTF_8);
+            return exe;
+        }
         return cliScript("cat <<'" + JSON_DELIMITER + "'\n" + json + "\n" + JSON_DELIMITER);
     }
 
     /** A CLI that writes {@code stderr} (when non-blank) and exits with {@code exitCode}. */
     private Path cliFailing(int exitCode, String stderr) throws IOException {
+        if (File.separatorChar == '\\') {
+            Path exe = tempDir.resolve("agy-" + UUID.randomUUID() + ".cmd");
+            StringBuilder cmd = new StringBuilder("@echo off\r\n");
+            if (!stderr.isBlank()) {
+                Path errFile = tempDir.resolve("err-" + UUID.randomUUID() + ".txt");
+                Files.writeString(errFile, stderr, StandardCharsets.UTF_8);
+                cmd.append("type \"").append(errFile.toAbsolutePath()).append("\" 1>&2\r\n");
+            }
+            cmd.append("exit /b ").append(exitCode).append("\r\n");
+            Files.writeString(exe, cmd.toString(), StandardCharsets.UTF_8);
+            return exe;
+        }
         StringBuilder body = new StringBuilder();
         if (!stderr.isBlank()) {
             body.append("printf '%s' '").append(stderr).append("' >&2\n");
@@ -151,6 +181,8 @@ class AgyCliExecutorTest {
 
     @Test
     void resolveCliPathPrefersAnExecutableUnderTheUserHome() throws IOException {
+        Assumptions.assumeTrue(
+                System.getenv("ANTIGRAVITY_AGENTAPI_EXE") == null, "a custom agy executable is configured");
         String realHome = System.getProperty("user.home");
         Path fakeHome = Files.createTempDirectory("amsha-fake-home-with-agy-");
         try {

@@ -535,7 +535,7 @@ paths: {}</echo>
             <configuration>
               <skip>${skipTests}</skip>
               <target>
-                <exec executable="python3" failonerror="true">
+                <exec executable="${python.executable}" failonerror="true">
                   <arg value="${maven.multiModuleProjectDirectory}/scripts/verify_jacoco_coverage.py"/>
                   <arg value="--minimum"/>
                   <arg value="${jacoco.minimum.line.coverage}"/>

@@ -53,10 +53,12 @@ class OnnxModelBundleRegistryTest {
 
         IOException failure = assertThrows(IOException.class, () -> registry.loadVerified(OnnxModelBundleIds.MPNET));
 
+        boolean windows = OnnxModelInstallGuidance.isWindows();
+        String ext = windows ? ".exe" : "";
         assertTrue(failure.getMessage().contains("mise run jar:run-dev-dep -- models install mpnet"));
-        assertTrue(failure.getMessage().contains("amsha-sqlite models install mpnet"));
-        assertTrue(failure.getMessage().contains("amsha-pg models install mpnet"));
-        assertTrue(failure.getMessage().contains("amsha-fs models install mpnet"));
+        assertTrue(failure.getMessage().contains("amsha-sqlite" + ext + " models install mpnet"));
+        assertTrue(failure.getMessage().contains("amsha-pg" + ext + " models install mpnet"));
+        assertTrue(failure.getMessage().contains("amsha-fs" + ext + " models install mpnet"));
     }
 
     @Test
