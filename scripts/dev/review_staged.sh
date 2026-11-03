@@ -83,6 +83,12 @@ elif [[ "$EVIDENCE_DIR" != /* ]]; then
     EVIDENCE_DIR="$REPO_ROOT/$EVIDENCE_DIR"
 fi
 
+if [[ -n "${AMSHA_SANDBOX_TMPDIR:-}" ]]; then
+    export TMPDIR="$AMSHA_SANDBOX_TMPDIR"
+elif [[ "$(uname -s)" == "Darwin" ]] && [[ "${TMPDIR:-/tmp}" == /var/folders* ]]; then
+    export TMPDIR="/private/tmp"
+fi
+
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/amsha-review-staged.XXXXXX")"
 cleanup() { rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
@@ -256,16 +262,10 @@ if ((UI_CHANGED)) && ((FAST == 0)); then
 fi
 
 if ((NATIVE)) && ((NATIVE_SENSITIVE)); then
-    native_tmpdir="${TMPDIR:-/tmp}"
-    if [[ -n "${AMSHA_SANDBOX_TMPDIR:-}" ]]; then
-        native_tmpdir="$AMSHA_SANDBOX_TMPDIR"
-    elif [[ "$(uname -s)" == "Darwin" ]] && [[ "$native_tmpdir" == /var/folders* ]]; then
-        native_tmpdir="/private/tmp"
-    fi
     if [[ -n "${AMSHA_NATIVE_BUILD_CMD:-}" ]]; then
-        run_check "native local build" env TMPDIR="$native_tmpdir" bash -c "$AMSHA_NATIVE_BUILD_CMD"
+        run_check "native local build" env TMPDIR="$TMPDIR" bash -c "$AMSHA_NATIVE_BUILD_CMD"
     else
-        run_check "native local build" env TMPDIR="$native_tmpdir" mise run build:native-local
+        run_check "native local build" env TMPDIR="$TMPDIR" mise run build:native-local
     fi
 elif ((NATIVE)); then
     record_check "native local build (no native-sensitive files)" SKIP
