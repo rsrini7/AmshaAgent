@@ -140,8 +140,7 @@ class ToolOperationIdentityTest {
                         2,
                         null,
                         ActionLockScope.SESSION_MUTATIONS));
-        assertTrue(
-                ex.getMessage().contains("actionFingerprint must start with sha256:v2: to match fingerprintVersion 2"));
+        assertTrue(ex.getMessage().contains("fingerprintVersion: 2"));
 
         // Non-positive version
         assertThrows(

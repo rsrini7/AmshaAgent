@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.Map;
 
+import com.amsha.persistence.api.ToolAttemptFingerprintFormat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -23,8 +24,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 @ApplicationScoped
 public class ActionFingerprintGenerator {
 
-    public static final String FINGERPRINT_VERSION = "v1";
-    public static final String PREFIX = "sha256:" + FINGERPRINT_VERSION + ":";
+    public static final String FINGERPRINT_VERSION = "v" + ToolAttemptFingerprintFormat.ACTION_FINGERPRINT_VERSION;
+    public static final String PREFIX = ToolAttemptFingerprintFormat.ACTION_V1_PREFIX;
 
     private final ObjectMapper objectMapper;
 

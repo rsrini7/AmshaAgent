@@ -42,4 +42,16 @@ public interface AuditEventStorePort {
      * Returns total count of audit events matching the given filters.
      */
     long countAll(String sessionId, String eventType, Instant from, Instant to);
+
+    /**
+     * Appends an audit event within the store's per-session serialization boundary, invoking
+     * the finalizer to populate sequence and HMAC chain fields per §12.5.
+     *
+     * @param seed the unfinalized audit event seed
+     * @param finalizer the deterministic HMAC finalizer callback
+     * @return the finalized and persisted audit event
+     */
+    default AuditEventDto appendChained(AuditEventDto seed, AuditChainFinalizer finalizer) {
+        throw new UnsupportedOperationException("appendChained is not implemented by this adapter");
+    }
 }

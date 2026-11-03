@@ -3,6 +3,7 @@ package com.amsha.core.tool.attempt;
 import java.util.Objects;
 
 import com.amsha.persistence.api.ActionLockScope;
+import com.amsha.persistence.api.ToolAttemptFingerprintFormat;
 
 /**
  * Result of resolving trusted target identity for a tool invocation per Proposal §4.2 and §12.2.
@@ -27,10 +28,8 @@ public record ToolTargetResolution(
                 throw new IllegalArgumentException("targetFingerprint must start with "
                         + ToolTargetResolver.TARGET_PREFIX + ": " + targetFingerprint);
             }
-            String targetDigest = targetFingerprint.substring(ToolTargetResolver.TARGET_PREFIX.length());
-            if (!CanonicalJsonUtil.isLowercaseHex64(targetDigest)) {
-                throw new IllegalArgumentException(
-                        "targetFingerprint must contain a 64-character lowercase hex digest: " + targetFingerprint);
+            if (!ToolAttemptFingerprintFormat.isValidTargetFingerprint(targetFingerprint)) {
+                throw new IllegalArgumentException("targetFingerprint must be a canonical V1 SHA-256 digest");
             }
             Objects.requireNonNull(resourceType, "resourceType must not be null for TARGET_RESOURCE");
             if (resourceType.isBlank()) {

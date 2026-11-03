@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
+import com.amsha.persistence.api.ToolAttemptFingerprintFormat;
 import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,8 +37,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class ToolTargetResolver {
 
-    public static final String TARGET_FINGERPRINT_VERSION = "v1";
-    public static final String TARGET_PREFIX = "target:sha256:" + TARGET_FINGERPRINT_VERSION + ":";
+    public static final String TARGET_FINGERPRINT_VERSION = ToolAttemptFingerprintFormat.TARGET_FINGERPRINT_VERSION;
+    public static final String TARGET_PREFIX = ToolAttemptFingerprintFormat.TARGET_V1_PREFIX;
     public static final String DOMAIN_TAG = "target";
 
     private final ObjectMapper objectMapper;

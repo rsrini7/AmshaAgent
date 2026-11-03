@@ -34,6 +34,25 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             ExecutionTraceDto.class,
             ExecutionRunSummaryDto.class,
             ExecutionTraceStorePort.class,
-            ActionLockScope.class
+            ActionLockScope.class,
+            ToolAttemptStatus.class,
+            ToolAttemptIdempotencyMode.class,
+            ToolAttemptAuditEventKind.class,
+            ToolAttemptResolutionStatus.class,
+            ActionClaimStatus.class,
+            DurableActionLockStatus.class,
+            ToolAttemptDto.class,
+            DurableActionLockDto.class,
+            ToolAttemptAuditOutboxDto.class,
+            ToolAttemptResolutionDto.class,
+            ToolActionClaimDto.class,
+            ToolAttemptAdmissionRequest.class,
+            ToolAttemptAdmissionResult.class,
+            ToolAttemptAdmissionResult.AdmissionStatus.class,
+            ToolAttemptSettlementFields.class,
+            ToolAttemptTransitionResult.class,
+            ToolAttemptTransitionResult.TransitionStatus.class,
+            ToolAttemptStorePort.class,
+            AuditChainFinalizer.class
         })
 public class TieredMemoryReflectionConfig {}

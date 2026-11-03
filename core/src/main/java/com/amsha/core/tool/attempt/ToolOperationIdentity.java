@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 import com.amsha.persistence.api.ActionLockScope;
+import com.amsha.persistence.api.ToolAttemptFingerprintFormat;
 
 /**
  * Immutable identity model for a tool call operation and its execution attempt per Proposal §4.1 and §12.2.
@@ -35,7 +36,7 @@ public record ToolOperationIdentity(
         String targetFingerprint,
         ActionLockScope lockScope) {
 
-    public static final int CURRENT_FINGERPRINT_VERSION = 1;
+    public static final int CURRENT_FINGERPRINT_VERSION = ToolAttemptFingerprintFormat.ACTION_FINGERPRINT_VERSION;
 
     public ToolOperationIdentity {
         Objects.requireNonNull(workspaceId, "workspaceId must not be null");
@@ -57,15 +58,10 @@ public record ToolOperationIdentity(
             throw new IllegalArgumentException("fingerprintVersion must be positive: " + fingerprintVersion);
         }
         Objects.requireNonNull(actionFingerprint, "actionFingerprint must not be null");
-        String expectedPrefix = "sha256:v" + fingerprintVersion + ":";
-        if (!actionFingerprint.startsWith(expectedPrefix)) {
-            throw new IllegalArgumentException("actionFingerprint must start with " + expectedPrefix
-                    + " to match fingerprintVersion " + fingerprintVersion + ": " + actionFingerprint);
-        }
-        String actionDigest = actionFingerprint.substring(expectedPrefix.length());
-        if (!CanonicalJsonUtil.isLowercaseHex64(actionDigest)) {
+        if (!ToolAttemptFingerprintFormat.isValidActionFingerprint(actionFingerprint, fingerprintVersion)) {
             throw new IllegalArgumentException(
-                    "actionFingerprint must contain a 64-character lowercase hex digest: " + actionFingerprint);
+                    "actionFingerprint must be a canonical versioned SHA-256 digest matching fingerprintVersion: "
+                            + fingerprintVersion);
         }
 
         if (attemptId == null) {
@@ -88,14 +84,8 @@ public record ToolOperationIdentity(
                 throw new IllegalArgumentException(
                         "targetFingerprint must not be null or blank when lockScope is TARGET_RESOURCE");
             }
-            if (!targetFingerprint.startsWith(ToolTargetResolver.TARGET_PREFIX)) {
-                throw new IllegalArgumentException("targetFingerprint must start with "
-                        + ToolTargetResolver.TARGET_PREFIX + ": " + targetFingerprint);
-            }
-            String targetDigest = targetFingerprint.substring(ToolTargetResolver.TARGET_PREFIX.length());
-            if (!CanonicalJsonUtil.isLowercaseHex64(targetDigest)) {
-                throw new IllegalArgumentException(
-                        "targetFingerprint must contain a 64-character lowercase hex digest: " + targetFingerprint);
+            if (!ToolAttemptFingerprintFormat.isValidTargetFingerprint(targetFingerprint)) {
+                throw new IllegalArgumentException("targetFingerprint must be a canonical V1 SHA-256 digest");
             }
         } else if (lockScope == ActionLockScope.SESSION_MUTATIONS || lockScope == ActionLockScope.EXACT_REQUEST) {
             if (targetFingerprint != null) {
