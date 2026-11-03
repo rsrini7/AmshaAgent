@@ -392,4 +392,23 @@ public final class CanonicalJsonUtil {
     public static String sha256Hex(byte[] data) {
         return HexFormat.of().formatHex(sha256(data));
     }
+
+    /**
+     * Returns true if the given string is a valid lowercase 64-character hexadecimal digest.
+     *
+     * @param hex string to check
+     * @return true if string consists of exactly 64 lowercase hexadecimal characters ([0-9a-f])
+     */
+    public static boolean isLowercaseHex64(String hex) {
+        if (hex == null || hex.length() != 64) {
+            return false;
+        }
+        for (int i = 0; i < 64; i++) {
+            char c = hex.charAt(i);
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

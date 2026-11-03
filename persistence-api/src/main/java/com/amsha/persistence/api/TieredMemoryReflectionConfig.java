@@ -33,6 +33,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             VersionConflictException.class,
             ExecutionTraceDto.class,
             ExecutionRunSummaryDto.class,
-            ExecutionTraceStorePort.class
+            ExecutionTraceStorePort.class,
+            ActionLockScope.class
         })
 public class TieredMemoryReflectionConfig {}

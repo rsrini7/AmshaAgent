@@ -115,12 +115,15 @@ import com.amsha.core.skill.SkillPromptParams;
 import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.state.ActiveWork;
 import com.amsha.core.state.ActivityPhase;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
+import com.amsha.core.tool.attempt.ToolTargetResolution;
 import com.amsha.core.tools.CheckList;
 import com.amsha.core.tools.CheckListEvent;
 import com.amsha.core.tools.CheckListItem;
 import com.amsha.core.tools.CheckListStatus;
 import com.amsha.core.tools.ToolDiscoveryCompleted;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.persistence.api.ActionLockScope;
 import com.amsha.persistence.api.SessionCatalogEntry;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
@@ -294,7 +297,10 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             GovernedHttpClient.class,
             OutboundHttpException.class,
             OutboundHttpException.Category.class,
-            IntentDecisionRouter.class
+            IntentDecisionRouter.class,
+            ToolOperationIdentity.class,
+            ToolTargetResolution.class,
+            ActionLockScope.class
         },
         classNames = {
             "com.amsha.core.agent.reasoning.AttachmentContentMapper",
