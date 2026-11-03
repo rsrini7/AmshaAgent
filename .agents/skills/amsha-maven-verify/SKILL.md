@@ -57,6 +57,30 @@ Verify with `java -version` (must be JDK 25.x).
 
 Deleting `.locks` does not fix a read-only parent; Maven creates the lock directory again. Do not make the shared host cache world-writable or disable Resolver locking. Run the review wrapper where Maven's local repository is writable, or point Maven at a writable scratch repository and seed it from the existing cache when offline. The wrapper intentionally records statuses without command output, so diagnose a broad immediate failure by running the named Maven command separately and checking repository writability. Treat this signature as an environment failure, not a source failure; use a same-hash host review report for the full verification result.
 
+### Native Build Gate in Sandboxed Environments
+
+`scripts/review_staged.sh --native` invokes `mise run build:native-local`. In restricted sandboxes, `mise` cache/state writes may be denied, and GraalVM's native-image compiler (`clang`) will fail to create temporary files in macOS's default `/var/folders` with `Operation not permitted`.
+
+When running in a restricted sandbox:
+1. Ensure `TMPDIR` points to an allowed temporary directory (such as `/private/tmp`).
+2. Run the verified standalone native build with a writable scratch Maven repository:
+
+```bash
+TMPDIR=/private/tmp \
+./mvnw clean verify -Pnative -pl app -am -DskipTests \
+  -Dmaven.repo.local=/private/tmp/amsha-m2 \
+  -Damsha.build.backend=sqlite -Damsha.persistence.backend=sqlite \
+  -Dquarkus.profile=prod -Dquarkus.native.container-build=false
+```
+
+Alternatively, set `AMSHA_NATIVE_BUILD_CMD` and `AMSHA_MAVEN_REPO_LOCAL` so `scripts/review_staged.sh --native` executes the standalone command directly with the scratch cache:
+
+```bash
+export AMSHA_MAVEN_REPO_LOCAL="/private/tmp/amsha-m2"
+export AMSHA_NATIVE_BUILD_CMD="TMPDIR=/private/tmp ./mvnw clean verify -Pnative -pl app -am -DskipTests -Dmaven.repo.local=/private/tmp/amsha-m2 -Damsha.build.backend=sqlite -Damsha.persistence.backend=sqlite -Dquarkus.profile=prod -Dquarkus.native.container-build=false"
+scripts/review_staged.sh --native
+```
+
 ## The Verification Gate Sequence
 
 Execute gates in order. Each gate must succeed before declaring a change merge-ready.

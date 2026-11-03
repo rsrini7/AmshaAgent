@@ -31,6 +31,9 @@ Options:
 
 Environment:
   AMSHA_REVIEW_EVIDENCE_DIR  Default evidence directory.
+  AMSHA_MAVEN_REPO_LOCAL     Custom local Maven repository directory.
+  AMSHA_NATIVE_BUILD_CMD     Custom native build command override.
+  AMSHA_SANDBOX_TMPDIR       Custom temporary directory (default /private/tmp on macOS in sandbox).
 EOF
 }
 
@@ -217,15 +220,23 @@ fi
 
 if ((JAVA_CHANGED)) && ((FAST == 0)); then
     if [[ -x ./mvnw ]]; then
+        MVN_CMD=(./mvnw)
+        if [[ -n "${AMSHA_MAVEN_REPO_LOCAL:-}" ]]; then
+            MVN_CMD+=("-Dmaven.repo.local=$AMSHA_MAVEN_REPO_LOCAL")
+        fi
+        if [[ -n "${MAVEN_ARGS:-}" ]]; then
+            read -r -a parsed_maven_args <<< "$MAVEN_ARGS"
+            MVN_CMD+=("${parsed_maven_args[@]}")
+        fi
         if [[ -n "$MAVEN_MODULES" ]]; then
-            run_check "Spotless check ($MAVEN_MODULES)" ./mvnw -q -pl "$MAVEN_MODULES" -am spotless:check
-            run_check "PMD gate ($MAVEN_MODULES)" ./mvnw -q -pl "$MAVEN_MODULES" -am pmd:check -DskipTests
+            run_check "Spotless check ($MAVEN_MODULES)" "${MVN_CMD[@]}" -q -pl "$MAVEN_MODULES" -am spotless:check
+            run_check "PMD gate ($MAVEN_MODULES)" "${MVN_CMD[@]}" -q -pl "$MAVEN_MODULES" -am pmd:check -DskipTests
             if ((FULL)); then
-                run_check "affected Maven test suites ($MAVEN_MODULES)" ./mvnw -q -pl "$MAVEN_MODULES" -am test -Dsurefire.failIfNoSpecifiedTests=false
+                run_check "affected Maven test suites ($MAVEN_MODULES)" "${MVN_CMD[@]}" -q -pl "$MAVEN_MODULES" -am test -Dsurefire.failIfNoSpecifiedTests=false
             elif [[ -n "$TEST_CLASSES" ]]; then
-                run_check "staged focused tests ($TEST_CLASSES)" ./mvnw -q -pl "$MAVEN_MODULES" -am -Dtest="$TEST_CLASSES" -Dsurefire.failIfNoSpecifiedTests=false test
+                run_check "staged focused tests ($TEST_CLASSES)" "${MVN_CMD[@]}" -q -pl "$MAVEN_MODULES" -am -Dtest="$TEST_CLASSES" -Dsurefire.failIfNoSpecifiedTests=false test
             else
-                run_check "affected Maven compile ($MAVEN_MODULES)" ./mvnw -q -pl "$MAVEN_MODULES" -am compile -DskipTests
+                run_check "affected Maven compile ($MAVEN_MODULES)" "${MVN_CMD[@]}" -q -pl "$MAVEN_MODULES" -am compile -DskipTests
             fi
         else
             record_check "Java module detection" FAIL
@@ -245,7 +256,17 @@ if ((UI_CHANGED)) && ((FAST == 0)); then
 fi
 
 if ((NATIVE)) && ((NATIVE_SENSITIVE)); then
-    run_check "native local build" mise run build:native-local
+    native_tmpdir="${TMPDIR:-/tmp}"
+    if [[ -n "${AMSHA_SANDBOX_TMPDIR:-}" ]]; then
+        native_tmpdir="$AMSHA_SANDBOX_TMPDIR"
+    elif [[ "$(uname -s)" == "Darwin" ]] && [[ "$native_tmpdir" == /var/folders* ]]; then
+        native_tmpdir="/private/tmp"
+    fi
+    if [[ -n "${AMSHA_NATIVE_BUILD_CMD:-}" ]]; then
+        run_check "native local build" env TMPDIR="$native_tmpdir" bash -c "$AMSHA_NATIVE_BUILD_CMD"
+    else
+        run_check "native local build" env TMPDIR="$native_tmpdir" mise run build:native-local
+    fi
 elif ((NATIVE)); then
     record_check "native local build (no native-sensitive files)" SKIP
 fi
