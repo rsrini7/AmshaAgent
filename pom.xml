@@ -94,6 +94,7 @@
     <amsha.build.backend>default</amsha.build.backend>
     <commons-lang3.version>3.21.0</commons-lang3.version>
     <commons-text.version>1.15.0</commons-text.version>
+    <java-json-canonicalization.version>1.1</java-json-canonicalization.version>
     <cron-utils.version>9.2.1</cron-utils.version>
     <owasp-sanitizer.version>20260313.1</owasp-sanitizer.version>
     <openinference-langchain4j.version>0.1.8</openinference-langchain4j.version>
@@ -380,6 +381,11 @@
         <groupId>org.fusesource.jansi</groupId>
         <artifactId>jansi</artifactId>
         <version>${jansi.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.erdtman</groupId>
+        <artifactId>java-json-canonicalization</artifactId>
+        <version>${java-json-canonicalization.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

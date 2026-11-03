@@ -27,3 +27,17 @@ licensed under the SIL Open Font License 1.1.
 
 - Upstream: https://github.com/rsms/inter
 - License: https://openfontlicense.org/
+
+## java-json-canonicalization
+
+- Version: 1.1
+- Coordinates: `io.github.erdtman:java-json-canonicalization:1.1`
+- Upstream: https://github.com/erdtman/java-json-canonicalization
+- License: Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+RFC 8785 JSON Canonicalization Scheme (JCS) library used by `amsha-core` for
+action fingerprint generation. Pinned artifact checksum:
+
+| File | SHA-256 |
+| --- | --- |
+| `java-json-canonicalization-1.1.jar` | `ed12a01f28d147898312963a1f704e90290b67a61f34fa3a761f41c134f4e691` |
