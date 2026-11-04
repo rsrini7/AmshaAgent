@@ -23,6 +23,7 @@ incidents live in [Architecture Invariants](docs/Architecture_Invariants.md).
 ### Git staging and review hygiene
 
 - Never stage or unstage files (`git add`, `git reset`, `git restore --staged`, `git commit`). Leave all git staging and commit decisions exclusively to the human user for review and learning.
+- On `git@github.com: Permission denied (publickey)` push failure, follow [GitHub SSH authentication recovery](#github-ssh-authentication-recovery).
 
 ### Transactions, persistence, and native image
 
@@ -325,6 +326,23 @@ Agents should use the following invocation patterns:
 The GitHub documentation connector is disabled by default (`AMSHA_GITHUB_DOCS_CONNECTOR_ENABLED=false`). Set it to `true` in the running server configuration and restart only when the owner wants the connector active. The enablement status is reported separately from GitHub App credential presence; disabled mode blocks indexing, refresh, and prompt retrieval while allowing disconnect cleanup. The focused integration test profile enables the flag explicitly. See [the connector guide](docs/GITHUB_DOCUMENTATION_CONNECTOR.md#enable-or-disable-the-connector).
 
 When the connector reports its GitHub App credential is missing, or after resetting the active SQLite data directory, restore the PEM with `mise run github:app-credential-upload -- --key-file "$HOME/.config/amsha/secrets/amsha-github-app.pem" --env-file dist/.env` (replace `dist/.env` with the running server's `.env` path). Amsha reads the key from `SecretVault`; the local PEM path is only a protected backup. If the backup is unavailable, generate a replacement GitHub App private key and upload it with the same task. See [GitHub connector credential recovery](docs/GITHUB_DOCUMENTATION_CONNECTOR.md#recover-the-credential-after-a-data-reset) for storage and recovery details.
+
+### GitHub SSH authentication recovery
+
+When `git push` fails with `git@github.com: Permission denied (publickey)`:
+
+1. **Verify key registration**: Check whether the public key is active on GitHub: `curl -s https://github.com/<username>.keys`. If expired or absent, generate a new ED25519 key (`ssh-keygen -t ed25519 -C "<email>" -f ~/.ssh/id_ed25519 -N ""`), copy with `pbcopy < ~/.ssh/id_ed25519.pub`, and register it as an **Authentication Key** at GitHub Settings > SSH and GPG keys.
+2. **Kill stale macOS ssh-agent**: A zombie agent daemon can hang or fail ED25519 signature negotiation. Terminate it with `pkill -f "ssh-agent"`.
+3. **Isolate key in `~/.ssh/config`**: Bypass macOS launchd agent socket issues and force OpenSSH to present the private key directly (`chmod 600 ~/.ssh/config`):
+   ```ssh-config
+   Host github.com
+       HostName github.com
+       User git
+       IdentityFile ~/.ssh/id_ed25519
+       IdentitiesOnly yes
+       IdentityAgent none
+   ```
+4. **Verify handshake and push**: Run `ssh -T git@github.com` (expects `Hi <user>! You've successfully authenticated`) and test with `git push --dry-run`. If rejected immediately after registering a new key, pause 3–5 minutes for GitHub edge replication and rate-limit cooldown before retrying.
 
 ### Issue tracker
 
