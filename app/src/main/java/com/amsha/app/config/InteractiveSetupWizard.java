@@ -219,6 +219,7 @@ public class InteractiveSetupWizard {
     }
 
     private static void ensureBaseConfigsInEnv(Path envFile) {
+        patchBaseConfig(envFile, ConfigKeys.AUTO_SEED_SECRETS_ENV, "true");
         String provider = configuredProvider();
         if (provider.isBlank()) return;
         EnvConfigInitializer.patchEnvFile(

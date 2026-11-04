@@ -270,6 +270,20 @@ class InteractiveSetupWizardTest {
     }
 
     @Test
+    void ensureBaseConfigs_patchesAutoSeedSecretsWhenMissing(@TempDir Path tempDir) throws Exception {
+        Path envFile = tempDir.resolve(".env");
+        Files.writeString(envFile, "AMSHA_LLM_PROVIDER=ollama\n");
+        System.setProperty(ConfigKeys.LLM_PROVIDER, "ollama");
+
+        Method ensure = InteractiveSetupWizard.class.getDeclaredMethod("ensureBaseConfigsInEnv", Path.class);
+        ensure.setAccessible(true);
+        ensure.invoke(null, envFile);
+
+        String content = Files.readString(envFile);
+        assertTrue(content.contains("AMSHA_AUTO_SEED_SECRETS=true"));
+    }
+
+    @Test
     void testHelperMethodsViaReflection() throws Exception {
         String authHmacKey = VaultConstants.AUTH_HMAC_KEY;
         assertTrue(InteractiveSetupWizard.isAutoGeneratableKey(authHmacKey));
