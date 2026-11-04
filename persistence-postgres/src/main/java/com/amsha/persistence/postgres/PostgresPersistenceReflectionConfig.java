@@ -62,6 +62,7 @@ import com.amsha.persistence.postgres.jdbi.RagChunkJdbiDao;
 import com.amsha.persistence.postgres.jdbi.RecallMemoryJdbiDao;
 import com.amsha.persistence.postgres.jdbi.SecretJdbiDao;
 import com.amsha.persistence.postgres.jdbi.SkillJdbiDao;
+import com.amsha.persistence.postgres.jdbi.ToolAttemptJdbiDao;
 import com.amsha.persistence.postgres.jdbi.VectorIndexMetadataJdbiDao;
 import com.amsha.persistence.postgres.jdbi.WebSessionJdbiDao;
 
@@ -135,6 +136,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnboardingExtensionStateJdbiDao.class,
             LlmProfilePostgresDao.class,
             VectorIndexMetadataJdbiDao.class,
+            ToolAttemptJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             // Store adapters (CDI beans)
@@ -167,6 +169,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresOnboardingDraftStoreAdapter.class,
             PostgresOnboardingCommitReceiptStoreAdapter.class,
             PostgresOnboardingExtensionStateStoreAdapter.class,
-            PostgresLlmProfileStoreAdapter.class
+            PostgresLlmProfileStoreAdapter.class,
+            PostgresToolAttemptStoreAdapter.class,
+            PostgresToolAttemptAdmissionHandler.class,
+            PostgresToolAttemptResolutionHandler.class
         })
 public class PostgresPersistenceReflectionConfig {}

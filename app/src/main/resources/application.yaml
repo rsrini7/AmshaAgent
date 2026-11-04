@@ -1185,6 +1185,11 @@ amsha:
       java-executable: "${AMSHA_HOST_EXEC_JAVA_EXECUTABLE:${AMSHA_SANDBOX_JAVA_EXECUTABLE:}}"
       go-executable: "${AMSHA_HOST_EXEC_GO_EXECUTABLE:${AMSHA_SANDBOX_GO_EXECUTABLE:}}"
 
+    attempt:
+      retention: "${AMSHA_TOOLS_ATTEMPT_RETENTION:30d}"
+      retention-enabled: "${AMSHA_TOOLS_ATTEMPT_RETENTION_ENABLED:true}"
+      retention-cron: "${AMSHA_TOOLS_ATTEMPT_RETENTION_CRON:0 0 3 * * ?}"
+
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names
     delegate-approver-ids: ""  # (§75-B1) comma-separated user IDs

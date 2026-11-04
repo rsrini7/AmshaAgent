@@ -67,6 +67,24 @@ public record ToolAttemptAdmissionRequest(
         Objects.requireNonNull(createdAt, "createdAt must not be null");
     }
 
+    /**
+     * Returns whether a persisted attempt has the same durable identity as this request.
+     *
+     * @param attempt persisted attempt to compare
+     * @return true when all request identity fields match
+     */
+    public boolean matchesAttemptIdentity(ToolAttemptDto attempt) {
+        return attempt != null
+                && workspaceId.equals(attempt.workspaceId())
+                && sessionId.equals(attempt.sessionId())
+                && operationId.equals(attempt.operationId())
+                && toolName.equals(attempt.toolName())
+                && actionFingerprint.equals(attempt.actionFingerprint())
+                && fingerprintVersion == attempt.fingerprintVersion()
+                && Objects.equals(targetFingerprint, attempt.targetFingerprint())
+                && idempotencyMode == attempt.idempotencyModeSnapshot();
+    }
+
     private static void validateCanonicalUuid(String value, String fieldName) {
         Objects.requireNonNull(value, fieldName + " must not be null");
         if (!CANONICAL_UUID_PATTERN.matcher(value).matches()) {

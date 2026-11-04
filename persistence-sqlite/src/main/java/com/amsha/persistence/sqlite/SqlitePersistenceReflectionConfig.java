@@ -60,6 +60,7 @@ import com.amsha.persistence.sqlite.jdbi.PromptJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.RecallMemoryJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.SecretJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.SkillJdbiDao;
+import com.amsha.persistence.sqlite.jdbi.ToolAttemptJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.VectorIndexMetadataJdbiDao;
 import com.amsha.persistence.sqlite.jdbi.WebSessionJdbiDao;
 
@@ -131,6 +132,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OnboardingExtensionStateJdbiDao.class,
             LlmProfileJdbiDao.class,
             VectorIndexMetadataJdbiDao.class,
+            ToolAttemptJdbiDao.class,
             // JDBI infrastructure
             JdbiProducer.class,
             JdbiRetryWrapper.class,
@@ -165,6 +167,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SqliteOnboardingCommitReceiptStoreAdapter.class,
             SqliteOnboardingExtensionStateStoreAdapter.class,
             SqliteLlmProfileStoreAdapter.class,
+            SqliteToolAttemptStoreAdapter.class,
+            SqliteToolAttemptAdmissionHandler.class,
+            SqliteToolAttemptResolutionHandler.class,
             // Existing infrastructure
             GlobalKnowledgeBase.class,
             SessionKnowledgeBase.class,

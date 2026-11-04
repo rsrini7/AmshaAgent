@@ -565,6 +565,9 @@ GitHub documentation connector setup, recovery, and retrieval behavior are docum
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_COMMAND` | `npx` | MCP server launch command |
 | `AMSHA_TOOLS_PLAYWRIGHT_MCP_ARGS` | `@playwright/mcp` | MCP server args |
 | `AMSHA_TOOLS_PLAYWRIGHT_RESUMPTION_STALE_MARK_SECONDS` | `300` | Playwright resume staleness (s) |
+| `AMSHA_TOOLS_ATTEMPT_RETENTION` | `30d` | Retention window for terminal tool attempts, locks, resolutions, and delivered outbox rows |
+| `AMSHA_TOOLS_ATTEMPT_RETENTION_ENABLED` | `true` | Enable scheduled background pruning of retention-eligible tool attempt records |
+| `AMSHA_TOOLS_ATTEMPT_RETENTION_CRON` | `0 0 3 * * ?` | Cron expression for daily tool attempt retention sweep (03:00 daily) |
 | `AMSHA_TOOLS_HOST_EXEC_SKILLS` | `jdb-debugger` | Skills allowed to use host_exec tool (comma-separated) |
 | `AMSHA_HOST_EXEC_MAX_OUTPUT_CHARS` | `8192` | Max output chars for host_exec tool (falls back to sandbox max) |
 | `AMSHA_HOST_EXEC_PYTHON_EXECUTABLE` | — | Python executable path for host_exec (falls back to sandbox python) |

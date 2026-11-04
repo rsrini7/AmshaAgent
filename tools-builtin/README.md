@@ -44,6 +44,9 @@ Open-ended research starts with `brave_web_search` or `serper_web_search`. For e
 | `amsha.tools.host-exec.python-executable` | `(auto)` | Configured Python executable for host execution |
 | `amsha.tools.host-exec.java-executable` | `(auto)` | Configured Java executable for host execution |
 | `amsha.tools.host-exec.go-executable` | `(auto)` | Configured Go executable for host execution |
+| `amsha.tools.attempt.retention` | `30d` | Retention window for terminal tool attempts, locks, resolutions, and delivered outbox rows |
+| `amsha.tools.attempt.retention-enabled` | `true` | Enable scheduled background pruning of retention-eligible tool attempt records |
+| `amsha.tools.attempt.retention-cron` | `0 0 3 * * ?` | Cron expression for daily tool attempt retention sweep (03:00 daily) |
 | `amsha.sandbox.max-output-chars` | `8192` | Max output characters for sandboxed tool execution |
 | `amsha.sandbox.python-executable` | `(auto)` | Configured Python executable for sandboxed execution |
 | `amsha.sandbox.java-executable` | `(auto)` | Configured Java executable for sandboxed execution |

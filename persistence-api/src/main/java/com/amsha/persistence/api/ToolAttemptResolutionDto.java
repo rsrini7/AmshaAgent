@@ -105,4 +105,29 @@ public record ToolAttemptResolutionDto(
             throw new IllegalArgumentException(fieldName + " must be a canonical lowercase UUID: " + value);
         }
     }
+
+    /**
+     * Validates that the provided authorization outbox event matches this resolution record.
+     *
+     * @param outbox authorization audit outbox record to validate
+     */
+    public void validateAuthorizationOutbox(ToolAttemptAuditOutboxDto outbox) {
+        Objects.requireNonNull(outbox, "authorizationOutboxEvent must not be null");
+        if (!authorizationOutboxEventId.equals(outbox.eventId())) {
+            throw new IllegalArgumentException("Authorization outbox event ID mismatch: " + authorizationOutboxEventId
+                    + " vs " + outbox.eventId());
+        }
+        if (!resolutionId.equals(outbox.resolutionId())) {
+            throw new IllegalArgumentException("Authorization outbox event resolutionId does not match resolutionId: "
+                    + outbox.resolutionId() + " vs " + resolutionId);
+        }
+        if (outbox.eventKind() != ToolAttemptAuditEventKind.ACTION_RESOLUTION_AUTHORIZED) {
+            throw new IllegalArgumentException(
+                    "Authorization outbox event kind must be ACTION_RESOLUTION_AUTHORIZED: " + outbox.eventKind());
+        }
+        if (!workspaceId.equals(outbox.workspaceId())) {
+            throw new IllegalArgumentException(
+                    "Authorization outbox event workspaceId does not match resolution: " + outbox.workspaceId());
+        }
+    }
 }
