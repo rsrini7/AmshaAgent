@@ -343,6 +343,11 @@ When `git push` fails with `git@github.com: Permission denied (publickey)`:
        IdentityAgent none
    ```
 4. **Verify handshake and push**: Run `ssh -T git@github.com` (expects `Hi <user>! You've successfully authenticated`) and test with `git push --dry-run`. If rejected immediately after registering a new key, pause 3–5 minutes for GitHub edge replication and rate-limit cooldown before retrying.
+5. **HTTPS fallback (Recommended)**: If macOS SSH agent drops or edge rate-limits persist, switch to HTTPS using a personal access token (`repo` scope) stored in macOS Keychain (`credential.helper=osxkeychain`):
+   ```bash
+   git remote set-url origin https://github.com/<owner>/<repo>.git
+   printf "protocol=https\nhost=github.com\nusername=<user>\npassword=<token>\n" | git credential-osxkeychain store
+   ```
 
 ### Issue tracker
 
