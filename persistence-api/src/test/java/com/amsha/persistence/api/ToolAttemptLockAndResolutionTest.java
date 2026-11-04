@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Instant;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -153,7 +154,7 @@ class ToolAttemptLockAndResolutionTest {
                 VALID_UUID_2,
                 "ws-1",
                 "actor-1",
-                "HUMAN_APPROVAL",
+                ToolAttemptResolutionDto.KIND_VERIFIED_POSTCONDITION,
                 ToolAttemptResolutionStatus.PENDING,
                 VALID_UUID_3,
                 ACTION_FINGERPRINT,
@@ -174,7 +175,7 @@ class ToolAttemptLockAndResolutionTest {
                         VALID_UUID_2,
                         "ws-1",
                         "actor-1",
-                        "HUMAN_APPROVAL",
+                        ToolAttemptResolutionDto.KIND_VERIFIED_POSTCONDITION,
                         ToolAttemptResolutionStatus.PENDING,
                         VALID_UUID_3,
                         ACTION_FINGERPRINT,
@@ -193,7 +194,7 @@ class ToolAttemptLockAndResolutionTest {
                         VALID_UUID_2,
                         "ws-1",
                         "actor-1",
-                        "HUMAN_APPROVAL",
+                        ToolAttemptResolutionDto.KIND_VERIFIED_POSTCONDITION,
                         ToolAttemptResolutionStatus.APPLIED,
                         VALID_UUID_3,
                         ACTION_FINGERPRINT,
@@ -220,7 +221,7 @@ class ToolAttemptLockAndResolutionTest {
                         VALID_UUID_2,
                         "ws-1",
                         "actor-1",
-                        "HUMAN_APPROVAL",
+                        ToolAttemptResolutionDto.KIND_VERIFIED_POSTCONDITION,
                         ToolAttemptResolutionStatus.PENDING,
                         VALID_UUID_3,
                         ACTION_FINGERPRINT,
@@ -237,7 +238,7 @@ class ToolAttemptLockAndResolutionTest {
                         VALID_UUID_2,
                         "ws-1",
                         "actor-1",
-                        "HUMAN_APPROVAL",
+                        ToolAttemptResolutionDto.KIND_VERIFIED_POSTCONDITION,
                         ToolAttemptResolutionStatus.EXPIRED,
                         VALID_UUID_3,
                         ACTION_FINGERPRINT,
@@ -254,7 +255,7 @@ class ToolAttemptLockAndResolutionTest {
                         VALID_UUID_2,
                         "ws-1",
                         "actor-1",
-                        "HUMAN_APPROVAL",
+                        ToolAttemptResolutionDto.KIND_VERIFIED_POSTCONDITION,
                         ToolAttemptResolutionStatus.APPLIED,
                         VALID_UUID_3,
                         ACTION_FINGERPRINT,
@@ -270,7 +271,7 @@ class ToolAttemptLockAndResolutionTest {
                 VALID_UUID_2,
                 "ws-1",
                 "actor-1",
-                "HUMAN_APPROVAL",
+                ToolAttemptResolutionDto.KIND_VERIFIED_POSTCONDITION,
                 ToolAttemptResolutionStatus.APPLIED,
                 VALID_UUID_3,
                 ACTION_FINGERPRINT,
@@ -331,6 +332,87 @@ class ToolAttemptLockAndResolutionTest {
                         VALID_UUID_2,
                         now,
                         null));
+    }
+
+    @Test
+    void testResolutionDtoRetryAuthorizationClassification() {
+        Instant now = Instant.now();
+
+        ToolAttemptResolutionDto retryResolution = new ToolAttemptResolutionDto(
+                VALID_UUID_1,
+                VALID_UUID_2,
+                "ws-1",
+                "actor-1",
+                ToolAttemptResolutionDto.KIND_ONE_SHOT_RETRY,
+                ToolAttemptResolutionStatus.PENDING,
+                VALID_UUID_3,
+                ACTION_FINGERPRINT,
+                TARGET_FINGERPRINT,
+                "sha256:evidence",
+                VALID_UUID_4,
+                null,
+                now,
+                null);
+        Assertions.assertTrue(retryResolution.isRetryAuthorization());
+
+        ToolAttemptResolutionDto postconditionResolution = new ToolAttemptResolutionDto(
+                VALID_UUID_1,
+                VALID_UUID_2,
+                "ws-1",
+                "actor-1",
+                ToolAttemptResolutionDto.KIND_VERIFIED_POSTCONDITION,
+                ToolAttemptResolutionStatus.PENDING,
+                VALID_UUID_3,
+                ACTION_FINGERPRINT,
+                TARGET_FINGERPRINT,
+                "sha256:evidence",
+                VALID_UUID_4,
+                null,
+                now,
+                null);
+        Assertions.assertFalse(postconditionResolution.isRetryAuthorization());
+
+        ToolAttemptResolutionDto operatorResolution = new ToolAttemptResolutionDto(
+                VALID_UUID_1,
+                VALID_UUID_2,
+                "ws-1",
+                "actor-1",
+                ToolAttemptResolutionDto.KIND_OPERATOR_ACKNOWLEDGEMENT,
+                ToolAttemptResolutionStatus.PENDING,
+                VALID_UUID_3,
+                ACTION_FINGERPRINT,
+                null,
+                "sha256:evidence",
+                VALID_UUID_4,
+                null,
+                now,
+                null);
+        Assertions.assertFalse(operatorResolution.isRetryAuthorization());
+    }
+
+    @Test
+    void testResolutionDtoRejectsUnknownResolutionKinds() {
+        assertThrows(IllegalArgumentException.class, () -> pendingResolution("UNRECOGNIZED_KIND"));
+        assertThrows(IllegalArgumentException.class, () -> pendingResolution("human_operator_retry"));
+        assertThrows(IllegalArgumentException.class, () -> pendingResolution("one_shot_retry"));
+    }
+
+    private static ToolAttemptResolutionDto pendingResolution(String resolutionKind) {
+        return new ToolAttemptResolutionDto(
+                VALID_UUID_1,
+                VALID_UUID_2,
+                "ws-1",
+                "actor-1",
+                resolutionKind,
+                ToolAttemptResolutionStatus.PENDING,
+                VALID_UUID_3,
+                ACTION_FINGERPRINT,
+                TARGET_FINGERPRINT,
+                "sha256:evidence",
+                VALID_UUID_4,
+                null,
+                Instant.now(),
+                null);
     }
 
     // =========================================================================

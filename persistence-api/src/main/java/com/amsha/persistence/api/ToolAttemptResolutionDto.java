@@ -2,6 +2,7 @@ package com.amsha.persistence.api;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -26,6 +27,27 @@ public record ToolAttemptResolutionDto(
     private static final Pattern CANONICAL_UUID_PATTERN =
             Pattern.compile("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
 
+    /** Standard resolution kind for fresh one-shot retry authorizations (§8.1, §12.4). */
+    public static final String KIND_ONE_SHOT_RETRY = "ONE_SHOT_RETRY";
+
+    /** Standard resolution kind for read-only postcondition verification of target resources (§8.1). */
+    public static final String KIND_VERIFIED_POSTCONDITION = "VERIFIED_POSTCONDITION";
+
+    /** Standard resolution kind for operator acknowledgement of indeterminate session uncertainty (§8.1). */
+    public static final String KIND_OPERATOR_ACKNOWLEDGEMENT = "OPERATOR_ACKNOWLEDGEMENT";
+
+    private static final Set<String> SUPPORTED_RESOLUTION_KINDS =
+            Set.of(KIND_ONE_SHOT_RETRY, KIND_VERIFIED_POSTCONDITION, KIND_OPERATOR_ACKNOWLEDGEMENT);
+
+    /**
+     * Returns true if this resolution represents a one-shot retry authorization that must be
+     * consumed exclusively via {@link ToolAttemptStorePort#applyResolutionAndAdmitRetry}.
+     * {@link ToolAttemptStorePort#applyResolution} must reject retry authorizations.
+     */
+    public boolean isRetryAuthorization() {
+        return KIND_ONE_SHOT_RETRY.equals(resolutionKind);
+    }
+
     public ToolAttemptResolutionDto {
         validateCanonicalUuid(resolutionId, "resolutionId");
         validateCanonicalUuid(lockId, "lockId");
@@ -40,6 +62,9 @@ public record ToolAttemptResolutionDto(
         Objects.requireNonNull(resolutionKind, "resolutionKind must not be null");
         if (resolutionKind.isBlank()) {
             throw new IllegalArgumentException("resolutionKind must not be blank");
+        }
+        if (!SUPPORTED_RESOLUTION_KINDS.contains(resolutionKind)) {
+            throw new IllegalArgumentException("Unsupported resolutionKind");
         }
         Objects.requireNonNull(resolutionStatus, "resolutionStatus must not be null");
         validateCanonicalUuid(originAttemptId, "originAttemptId");
