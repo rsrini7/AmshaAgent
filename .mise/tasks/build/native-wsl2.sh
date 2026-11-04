@@ -136,12 +136,13 @@ fi
 
 # ── Environment Setup ───────────────────────────────────────────────
 if [ "$STRATEGY" = "local" ]; then
-    echo "🔍  Ensuring GraalVM is active via mise..."
-    GRAAL_PATH=$(mise where java@graalvm-community-25.0.2 2>/dev/null || true)
+    GRAAL_VERSION="${AMSHA_GRAALVM_VERSION:-oracle-graalvm-25.0.5}"
+    echo "🔍  Ensuring GraalVM is active via mise ($GRAAL_VERSION)..."
+    GRAAL_PATH=$(mise where "java@$GRAAL_VERSION" 2>/dev/null || true)
     if [ -z "$GRAAL_PATH" ]; then
         echo "ℹ️   GraalVM not found. Installing..."
-        mise install java@graalvm-community-25.0.2
-        GRAAL_PATH=$(mise where java@graalvm-community-25.0.2)
+        mise install "java@$GRAAL_VERSION"
+        GRAAL_PATH=$(mise where "java@$GRAAL_VERSION")
     fi
     export GRAALVM_HOME="$GRAAL_PATH"
     export JAVA_HOME="$GRAAL_PATH"

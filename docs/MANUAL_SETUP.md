@@ -941,7 +941,7 @@ docker compose restart amsha
 
 ## 13. JDK Management
 
-Amsha Agent uses two JDKs: **Temurin 25** for all dev/build/jar tasks, and **GraalVM Community 25.0.2** only for native builds.
+Amsha Agent uses two JDKs: **Temurin 25** for all dev/build/jar tasks, and **GraalVM 25.0.5** (`oracle-graalvm-25.0.5` / `mandrel-25.0.5.0-Final+java25`) only for native builds.
 
 ### 13.1 Switch to GraalVM (for native builds)
 

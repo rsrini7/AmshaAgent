@@ -78,9 +78,10 @@ try {
     $targetGB = [Math]::Max(2, [Math]::Min([Math]::Floor($availGB * 0.6), 6)) # 60%, capped at 6G for lowmem
     Write-Host "🧠 Allocating ${targetGB}G for native-image (Low-Mem: 60% of ${availGB}G available)..."
 
-    mise use --path mise.toml java@graalvm-community-25.0.2
+    $graalVersion = if ($env:AMSHA_GRAALVM_VERSION) { $env:AMSHA_GRAALVM_VERSION } else { 'oracle-graalvm-25.0.5' }
+    mise use --path mise.toml "java@$graalVersion"
     # ... jenv bypass ...
-    $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
+    $graalPath = (mise where "java@$graalVersion").Trim()
     $env:GRAALVM_HOME = $graalPath
     $env:JAVA_HOME = $graalPath
 

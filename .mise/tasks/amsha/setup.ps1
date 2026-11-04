@@ -86,9 +86,10 @@ if (-not $IsWindows) {
     Write-Host '✅  mvnw marked executable.'
 }
 
-Write-Host 'Installing JDKs (temurin-25 + graalvm-community-25.0.2)...'
+$graalVersion = if ($env:AMSHA_GRAALVM_VERSION) { $env:AMSHA_GRAALVM_VERSION } else { 'oracle-graalvm-25.0.5' }
+Write-Host "Installing JDKs (temurin-25 + $graalVersion)..."
 mise install java@temurin-25
-mise install java@graalvm-community-25.0.2 --quiet
+mise install "java@$graalVersion" --quiet
 Write-Host '✅  Both JDKs installed.'
 
 Write-Host 'Installing usage globally (required for tab completion)...'

@@ -49,8 +49,9 @@ try {
     $targetGB = [Math]::Max(4, [Math]::Floor($availGB * 0.85))
     Write-Host "🧠 Allocating ${targetGB}G for native-image (85% of ${availGB}G available RAM)..."
 
-    mise use --path mise.toml java@graalvm-community-25.0.2
-    $graalPath = (mise where java@graalvm-community-25.0.2).Trim()
+    $graalVersion = if ($env:AMSHA_GRAALVM_VERSION) { $env:AMSHA_GRAALVM_VERSION } else { 'oracle-graalvm-25.0.5' }
+    mise use --path mise.toml "java@$graalVersion"
+    $graalPath = (mise where "java@$graalVersion").Trim()
     $env:GRAALVM_HOME = $graalPath
     $env:JAVA_HOME = $graalPath
     $nativeAdditionalBuildArgs = @()

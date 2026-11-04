@@ -972,7 +972,7 @@ mise run build:native-local-all      # All 3 variants → dist/amsha-sqlite, dis
 ```
 
 **What mise tasks do:**
-1. Auto-switch JDK to GraalVM Community 25 (via `mise use java@graalvm-community-25.0.2`)
+1. Auto-switch JDK to GraalVM 25 (via `mise use java@oracle-graalvm-25.0.5`, configurable via `$env:AMSHA_GRAALVM_VERSION`)
 2. Bake `quarkus.amsha.build.backend` property into `build-info.properties`
 3. Build native image with memory auto-tuning (85% of available RAM)
 4. Copy final binary to `dist/` with correct name (`amsha`, `amsha-pg`, `amsha-fs`)

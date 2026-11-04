@@ -43,7 +43,7 @@ Quarkus dev mode remains available for reloadable application code, but several 
 
 - **One config, all platforms** - `mise.toml` runs identically on Windows, macOS, Linux, WSL2 via PowerShell.
 - **Pins JDK 25 (Temurin) per-project** - consistent `java -version` everywhere.
-- **Manages both JDKs** - Temurin 25 (dev/build) and GraalVM Community 25.0.2 (native) side-by-side.
+- **Manages both JDKs** - Temurin 25 (dev/build) and GraalVM 25.0.5 (native) side-by-side.
 - **Auto-loads `.env`** into every task and your shell when you `cd` into the project.
 - **Tab completion** - `mise run <TAB>` lists and filters all task names. Powered by the `usage` tool, installed automatically.
 
@@ -153,7 +153,7 @@ mise run jar:run-dev-dep -- serve  # packaged app; rebuilds dependencies first
 |---|---|---|
 | `powershell` | latest | All task scripts - runs identically on all platforms |
 | `java` | temurin-25 | Default JDK for all dev, build, jar, native-run tasks |
-| `java` | graalvm-community-25.0.2 | Native image compilation only |
+| `java` | oracle-graalvm-25.0.5 | Native image compilation only (override via `AMSHA_GRAALVM_VERSION`) |
 | `maven` | 3.9 | Build tool |
 | `usage` | latest | `mise run <TAB>` tab completion |
 | `python` | **not pinned** | Every script/harness task invokes bare `python3` — see the note below |
@@ -255,7 +255,7 @@ Amsha Agent/
 
 > `mise.bash.toml`, `mise.pwsh.toml`, `scripts/windows/`, and `mise-tasks/` are **no longer needed** - safe to delete.
 
-> **JDK default**: `temurin-25` is active for everything except `build:native`, `build:native-local`, and `build:native-lowmem`, which auto-switch to `graalvm-community-25.0.2` and back.
+> **JDK default**: `temurin-25` is active for everything except `build:native`, `build:native-local`, and `build:native-lowmem`, which auto-switch to `oracle-graalvm-25.0.5` and back.
 
 > **vec/data paths**: `dev*` tasks pass `../lib/vec0` and `../data` because `quarkus:dev` forks Maven inside `app/`. All other tasks use `./lib/vec0` and `./data`.
 
@@ -268,7 +268,7 @@ Amsha Agent uses **two JDKs** managed entirely by mise:
 | JDK | Version | Used for |
 |---|---|---|
 | Temurin (default) | `temurin-25` | All dev, build, jar, native-run tasks |
-| GraalVM Community | `graalvm-community-25.0.2` | `build:native`, `build:native-local`, `build:native-lowmem` only |
+| GraalVM 25 | `oracle-graalvm-25.0.5` | `build:native`, `build:native-local`, `build:native-lowmem` only |
 
 ```bash
 mise run jdk:status       # see active JDK + all installed
@@ -298,7 +298,7 @@ mise run help    # or: mise tasks
 | `mise run setup:wsl-crlf` | Fix CRLF in mvnw (WSL2 after Windows clone) |
 | `mise run setup:env-check` | Validate `.env` for missing/placeholder values |
 | **`mise run jdk:status`** | Show active JDK + all installed |
-| `mise run jdk:graalvm` | Switch to GraalVM Community 25.0.2 |
+| `mise run jdk:graalvm` | Switch to GraalVM 25.0.5 |
 | `mise run jdk:temurin` | Switch back to Temurin 25 |
 | `mise run jdk:install` | Install both JDKs (idempotent) |
 | **`mise run build:app`** | JVM build, skip tests — fast daily driver |
@@ -874,5 +874,5 @@ The `.env` file has placeholder values like `key-<random>`. The `amsha` launcher
 
 ***
 
-*Amsha Agent V0.1.0 · Quarkus 3.40.1.1 · JDK 25 · mise · Temurin 25 + GraalVM Community 25.0.2*
+*Amsha Agent V0.1.0 · Quarkus 3.40.1.1 · JDK 25 · mise · Temurin 25 + GraalVM 25.0.5*
 *One config · All platforms · PowerShell everywhere*

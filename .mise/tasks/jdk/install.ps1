@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
 #MISE shell = "pwsh -NonInteractive -Command"
-#MISE description = "Install both JDKs (temurin-25 + graalvm-community-25.0.2) - safe to re-run"
+#MISE description = "Install both JDKs (temurin-25 + oracle-graalvm-25.0.5) - safe to re-run"
 $ErrorActionPreference = 'Stop'
 mise install
-mise install java@graalvm-community-25.0.2 --quiet
+$graalVersion = if ($env:AMSHA_GRAALVM_VERSION) { $env:AMSHA_GRAALVM_VERSION } else { 'oracle-graalvm-25.0.5' }
+mise install "java@$graalVersion" --quiet
 mise ls java
