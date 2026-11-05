@@ -470,7 +470,9 @@ public class ChatHistoryAssembler {
 
     private List<ParallelToolCall> deserializeBatch(ReasoningStep step) {
         try {
-            Object raw = step.actionInput() != null ? step.actionInput().get("batch") : null;
+            Object raw = step.actionInput() != null
+                    ? step.actionInput().get(ReasoningStep.PARALLEL_BATCH_ACTION_INPUT_KEY)
+                    : null;
             if (raw == null) return null;
             String json = raw instanceof String s ? s : objectMapper.writeValueAsString(raw);
             return objectMapper.readValue(json, new TypeReference<List<ParallelToolCall>>() {});

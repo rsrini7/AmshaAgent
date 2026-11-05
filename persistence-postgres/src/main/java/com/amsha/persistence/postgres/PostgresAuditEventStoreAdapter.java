@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.amsha.persistence.api.AuditChainFinalizer;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
 import com.amsha.persistence.api.PersistenceBackend;
@@ -44,6 +45,25 @@ public class PostgresAuditEventStoreAdapter implements AuditEventStorePort {
     public void save(AuditEventDto dto) {
         log.tracef("save event session=%s type=%s", dto.sessionId(), dto.eventType());
         jdbi.useExtension(AuditJdbiDao.class, dao -> dao.save(dto));
+    }
+
+    @Override
+    public AuditEventDto appendChained(AuditEventDto seed, AuditChainFinalizer finalizer) {
+        return jdbi.inTransaction(handle -> {
+            AuditJdbiDao dao = handle.attach(AuditJdbiDao.class);
+            dao.acquireSessionChainLock(seed.sessionId());
+            if (seed.idempotencyKey() != null) {
+                Optional<AuditEventDto> existing = dao.findByIdempotencyKey(seed.sessionId(), seed.idempotencyKey());
+                if (existing.isPresent()) {
+                    return existing.get();
+                }
+            }
+            long sequence = dao.getMaxSequence(seed.sessionId()) + 1;
+            String previousHash = dao.findLatestHash(seed.sessionId()).orElse(null);
+            AuditEventDto finalized = AuditEventStorePort.finalizeAndValidate(seed, sequence, previousHash, finalizer);
+            dao.save(finalized);
+            return finalized;
+        });
     }
 
     @Override

@@ -233,12 +233,11 @@ class ParallelToolStepExecutorTest {
 
     private static List<ParallelToolCall> rewriteDelegatedCalls(
             List<ParallelToolCall> calls, List<ParallelToolCall> completed) throws Exception {
-        var method = ParallelToolStepExecutor.class.getDeclaredMethod("rewriteDelegatedCalls", List.class, List.class);
-        method.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        List<ParallelToolCall> result =
-                (List<ParallelToolCall>) method.invoke(new ParallelToolStepExecutor(), calls, completed);
-        return result;
+        ParallelToolPauseSupport support = new ParallelToolPauseSupport(
+                new ObjectMapper(),
+                Mockito.mock(BatchResultAggregator.class),
+                Mockito.mock(ApprovalCheckpointManager.class));
+        return support.rewriteDelegatedCalls(calls, completed);
     }
 
     @Test
@@ -708,7 +707,8 @@ class ParallelToolStepExecutorTest {
                         new ToolInvocationGuard.GuardDecision.PauseForApproval(frame),
                         new ToolInvocationGuard.GuardDecision.Allow(),
                         new ToolInvocationGuard.GuardDecision.Allow());
-        Mockito.when(fixture.sequential.invoke(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+        Mockito.when(fixture.sequential.invoke(
+                        ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenAnswer(invocation -> ToolResponse.success("pre-" + invocation.getArgument(0)));
 
         StepDecision decision = fixture.build(inlineExecutor())
@@ -722,7 +722,7 @@ class ParallelToolStepExecutorTest {
         assertEquals(DecisionType.PROCEED, decision.type());
         assertEquals("[web_search → OK], [web_fetch → OK]", decision.step().observation());
         Mockito.verify(fixture.sequential, Mockito.times(2))
-                .invoke(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
+                .invoke(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
         Mockito.verifyNoInteractions(fixture.checkpointManager);
     }
 
@@ -745,7 +745,8 @@ class ParallelToolStepExecutorTest {
                         // Pre-execution split: call 1 stays pending, call 2 is safe to run now.
                         new ToolInvocationGuard.GuardDecision.PauseForApproval(frame),
                         new ToolInvocationGuard.GuardDecision.Allow());
-        Mockito.when(fixture.sequential.invoke(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+        Mockito.when(fixture.sequential.invoke(
+                        ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(ToolResponse.success("pre-ok"));
         stubPersistWithPreExecuted(fixture, AgentResult.awaitingApproval(frame, "sess-1", List.of()));
 
@@ -759,7 +760,12 @@ class ParallelToolStepExecutorTest {
         assertEquals(DecisionType.TERMINAL, decision.type());
         assertInstanceOf(AgentResult.AwaitingApproval.class, decision.result());
         // Only the safe call runs; the paused one is handed to the checkpoint.
-        Mockito.verify(fixture.sequential).invoke("web_fetch", Map.of("url", "b"), "sess-1");
+        Mockito.verify(fixture.sequential)
+                .invoke(
+                        ArgumentMatchers.eq("web_fetch"),
+                        ArgumentMatchers.eq(Map.of("url", "b")),
+                        ArgumentMatchers.eq("sess-1"),
+                        ArgumentMatchers.any());
         verifyPersistWithPreExecuted(fixture);
     }
 

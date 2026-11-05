@@ -139,7 +139,8 @@ class ToolStepHandlerInvocationTest {
         AgentExecutionContext ctx = context("sess1", "coder", "run code");
         ReasoningStep step = ReasoningStep.pending("t", SANDBOX, Map.of("code", "int x"));
         allowGuard();
-        when(invoker.invoke(eq(SANDBOX), any(), eq("sess1"))).thenReturn(ToolResponse.infraFailure("sandbox offline"));
+        when(invoker.invoke(eq(SANDBOX), any(), eq("sess1"), anyString()))
+                .thenReturn(ToolResponse.infraFailure("sandbox offline"));
 
         List<ReasoningStep> history = new ArrayList<>();
         StepDecision decision = handler.invokeToolAndObserve(ctx, history, step, 0, List.of());
@@ -163,7 +164,7 @@ class ToolStepHandlerInvocationTest {
         ReasoningStep step = ReasoningStep.pending("t", SANDBOX, Map.of("code", "int x"));
         allowGuard();
         ToolResponse.ToolFailure failure = toolFailure("compile error");
-        when(invoker.invoke(eq(SANDBOX), any(), anyString())).thenReturn(failure);
+        when(invoker.invoke(eq(SANDBOX), any(), anyString(), anyString())).thenReturn(failure);
         when(recoveryService.shouldAttemptRecovery("coder", SANDBOX, failure)).thenReturn(true);
 
         List<ReasoningStep> history = new ArrayList<>();
@@ -174,7 +175,7 @@ class ToolStepHandlerInvocationTest {
         // Auto-heal already "attempted" escalation, so the generic hook is suppressed.
         verify(escalationHandler, never()).attemptGenericEscalation(any(), anyString(), any(), any());
         assertEquals(DecisionType.PROCEED, decision.type());
-        verify(invoker, times(1)).invoke(eq(SANDBOX), any(), anyString());
+        verify(invoker, times(1)).invoke(eq(SANDBOX), any(), anyString(), anyString());
     }
 
     @Test
@@ -183,7 +184,7 @@ class ToolStepHandlerInvocationTest {
         ReasoningStep step = ReasoningStep.pending("t", SANDBOX, Map.of("code", "int x", "language", "java"));
         allowGuard();
         ToolResponse.ToolFailure failure = toolFailure("compile error");
-        when(invoker.invoke(eq(SANDBOX), any(), anyString())).thenReturn(failure);
+        when(invoker.invoke(eq(SANDBOX), any(), anyString(), anyString())).thenReturn(failure);
         when(recoveryService.shouldAttemptRecovery("coder", SANDBOX, failure)).thenReturn(true);
         recoveryReturns(ExecutionFailureRecoveryService.RecoveryResult.success("public class Main {}", 1), "java");
         when(recoveryService.validateForExecution("public class Main {}", "java"))
@@ -196,7 +197,7 @@ class ToolStepHandlerInvocationTest {
 
         verify(escalationHandler).attemptEscalationAfterHealFailure(eq(ctx), any(), eq(failure));
         // Pre-execution validation rejected the fix, so podman is never invoked a second time.
-        verify(invoker, times(1)).invoke(eq(SANDBOX), any(), anyString());
+        verify(invoker, times(1)).invoke(eq(SANDBOX), any(), anyString(), anyString());
         assertEquals(DecisionType.PROCEED, decision.type());
     }
 
@@ -206,7 +207,7 @@ class ToolStepHandlerInvocationTest {
         ReasoningStep step = ReasoningStep.pending("t", SANDBOX, Map.of("code", "int x", "language", "java"));
         allowGuard();
         ToolResponse.ToolFailure failure = toolFailure("compile error");
-        when(invoker.invoke(eq(SANDBOX), any(), anyString()))
+        when(invoker.invoke(eq(SANDBOX), any(), anyString(), anyString()))
                 .thenReturn(failure, ToolResponse.failure(1, "still broken"));
         when(recoveryService.shouldAttemptRecovery("coder", SANDBOX, failure)).thenReturn(true);
         recoveryReturns(ExecutionFailureRecoveryService.RecoveryResult.success("int y", 1), "java");
@@ -221,7 +222,7 @@ class ToolStepHandlerInvocationTest {
                 ArgumentCaptor.forClass(ToolResponse.ToolFailure.class);
         verify(escalationHandler).attemptEscalationAfterHealFailure(eq(ctx), any(), escalatedWith.capture());
         assertEquals("still broken", escalatedWith.getValue().output());
-        verify(invoker, times(2)).invoke(eq(SANDBOX), any(), anyString());
+        verify(invoker, times(2)).invoke(eq(SANDBOX), any(), anyString(), anyString());
     }
 
     @Test
@@ -230,7 +231,7 @@ class ToolStepHandlerInvocationTest {
         ReasoningStep step = ReasoningStep.pending("t", SANDBOX, Map.of("code", "int x", "language", "java"));
         allowGuard();
         ToolResponse.ToolFailure failure = toolFailure("compile error");
-        when(invoker.invoke(eq(SANDBOX), any(), anyString())).thenReturn(failure);
+        when(invoker.invoke(eq(SANDBOX), any(), anyString(), anyString())).thenReturn(failure);
         when(recoveryService.shouldAttemptRecovery("coder", SANDBOX, failure)).thenReturn(true);
         recoveryReturns(
                 ExecutionFailureRecoveryService.RecoveryResult.failure("Debug delegation failed: timeout"), "java");
@@ -241,7 +242,7 @@ class ToolStepHandlerInvocationTest {
 
         verify(escalationHandler).attemptEscalationAfterHealFailure(eq(ctx), any(), eq(failure));
         verify(recoveryService, never()).validateForExecution(anyString(), anyString());
-        verify(invoker, times(1)).invoke(eq(SANDBOX), any(), anyString());
+        verify(invoker, times(1)).invoke(eq(SANDBOX), any(), anyString(), anyString());
     }
 
     @Test
@@ -253,7 +254,7 @@ class ToolStepHandlerInvocationTest {
         ApprovalFrame frame = new ApprovalFrame(SANDBOX, Map.of(), RiskLevel.MEDIUM);
         // First invocation fails; the re-execution raises RequiresApprovalException, which
         // invokeTool turns into a ShortCircuit that invokeToolWithParams converts to a failure.
-        when(invoker.invoke(eq(SANDBOX), any(), anyString()))
+        when(invoker.invoke(eq(SANDBOX), any(), anyString(), anyString()))
                 .thenReturn(failure)
                 .thenThrow(new RequiresApprovalException(frame, "sess1"));
         when(recoveryService.shouldAttemptRecovery("coder", SANDBOX, failure)).thenReturn(true);
@@ -280,7 +281,7 @@ class ToolStepHandlerInvocationTest {
         ReasoningStep step = ReasoningStep.pending("t", "my_tool", Map.of("k", "v"));
         allowGuard();
         ToolResponse.ToolFailure failure = toolFailure("transient");
-        when(invoker.invoke(eq("my_tool"), any(), anyString())).thenReturn(failure);
+        when(invoker.invoke(eq("my_tool"), any(), anyString(), anyString())).thenReturn(failure);
         when(escalationHandler.attemptGenericEscalation(eq(ctx), eq("my_tool"), any(), eq(failure)))
                 .thenReturn(ToolResponse.success("recovered"));
 
@@ -298,7 +299,8 @@ class ToolStepHandlerInvocationTest {
         AgentExecutionContext ctx = context("sess1", "researcher", "do thing");
         ReasoningStep step = ReasoningStep.pending("t", "my_tool", Map.of());
         allowGuard();
-        when(invoker.invoke(eq("my_tool"), any(), anyString())).thenThrow(new IllegalStateException("transport reset"));
+        when(invoker.invoke(eq("my_tool"), any(), anyString(), anyString()))
+                .thenThrow(new IllegalStateException("transport reset"));
 
         List<ReasoningStep> history = new ArrayList<>();
         StepDecision decision = handler.invokeToolAndObserve(ctx, history, step, 0, List.of());
@@ -319,7 +321,8 @@ class ToolStepHandlerInvocationTest {
         ReasoningStep step = ReasoningStep.pending("t", GITHUB, Map.of("target", "rsrini7"));
         allowGuard();
         ApprovalFrame frame = new ApprovalFrame(GITHUB, Map.of("target", "rsrini7"), RiskLevel.MEDIUM);
-        when(invoker.invoke(eq(GITHUB), any(), anyString())).thenThrow(new RequiresApprovalException(frame, "sess1"));
+        when(invoker.invoke(eq(GITHUB), any(), anyString(), anyString()))
+                .thenThrow(new RequiresApprovalException(frame, "sess1"));
         when(checkpointManager.persist(eq(ctx), eq(frame), anyList(), eq("TELEGRAM"), eq("chat1")))
                 .thenReturn(AgentResult.awaitingApproval(frame, "sess1", List.of()));
 
@@ -331,7 +334,10 @@ class ToolStepHandlerInvocationTest {
         ArgumentCaptor<List<ReasoningStep>> persisted = ArgumentCaptor.forClass(List.class);
         verify(checkpointManager).persist(eq(ctx), eq(frame), persisted.capture(), eq("TELEGRAM"), eq("chat1"));
         assertEquals(1, persisted.getValue().size());
-        assertSame(step, persisted.getValue().getFirst());
+        ReasoningStep persistedStep = persisted.getValue().getFirst();
+        assertEquals(step.action(), persistedStep.action());
+        assertEquals(step.actionInput(), persistedStep.actionInput());
+        assertTrue(persistedStep.operationId() != null);
         // The pause path must not append to the caller's live history.
         assertEquals(0, history.size());
     }
@@ -343,7 +349,7 @@ class ToolStepHandlerInvocationTest {
         allowGuard();
         String paused = UserMessages.delegationPaused(
                 "saraswati", "web_fetch", "[{\"toolName\":\"web_fetch\",\"params\":{\"url\":\"https://x\"}}]");
-        when(invoker.invoke(eq(DELEGATE), any(), anyString())).thenReturn(ToolResponse.success(paused));
+        when(invoker.invoke(eq(DELEGATE), any(), anyString(), anyString())).thenReturn(ToolResponse.success(paused));
         when(checkpointManager.persistDelegatedWait(eq(ctx), eq(DELEGATE), any(), anyList()))
                 .thenReturn(false);
 

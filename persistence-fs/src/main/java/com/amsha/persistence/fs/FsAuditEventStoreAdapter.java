@@ -3,12 +3,24 @@ package com.amsha.persistence.fs;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 
+import com.amsha.persistence.api.AuditChainFinalizer;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
 import com.amsha.persistence.api.PersistenceBackend;
@@ -25,6 +37,7 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
 
     private static final Logger log = Logger.getLogger(FsAuditEventStoreAdapter.class);
     private static final String DOMAIN = "audit";
+    private final ConcurrentHashMap<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
 
     @Inject
     FilesystemFileStore store;
@@ -45,6 +58,79 @@ public class FsAuditEventStoreAdapter implements AuditEventStorePort {
         }
 
         store.write(List.of(DOMAIN, sessionDir, fileName), dto);
+    }
+
+    @Override
+    public AuditEventDto appendChained(AuditEventDto seed, AuditChainFinalizer finalizer) {
+        return withSessionLock(seed.sessionId(), () -> {
+            SessionIndex index = rebuildIndex(seed.sessionId());
+            if (seed.idempotencyKey() != null) {
+                for (IndexEntry entry : index.events) {
+                    if (seed.idempotencyKey().equals(entry.idempotencyKey)) {
+                        Optional<AuditEventDto> existing = store.readOptional(
+                                List.of(DOMAIN, seed.sessionId(), entry.id + ".json"), AuditEventDto.class);
+                        if (existing.isPresent()) {
+                            saveIndex(seed.sessionId(), index);
+                            return existing.get();
+                        }
+                    }
+                }
+            }
+            String previousHash = index.events.isEmpty()
+                    ? null
+                    : store.readOptional(
+                                    List.of(DOMAIN, seed.sessionId(), index.events.getLast().id + ".json"),
+                                    AuditEventDto.class)
+                            .map(AuditEventDto::hmacHash)
+                            .orElse(null);
+            AuditEventDto finalized =
+                    AuditEventStorePort.finalizeAndValidate(seed, index.maxSequence + 1, previousHash, finalizer);
+            store.write(List.of(DOMAIN, seed.sessionId(), finalized.id() + ".json"), finalized);
+            index.maxSequence = finalized.sequence();
+            index.events.add(new IndexEntry(
+                    finalized.id().toString(),
+                    finalized.idempotencyKey(),
+                    finalized.eventType(),
+                    finalized.timestamp()));
+            saveIndex(seed.sessionId(), index);
+            return finalized;
+        });
+    }
+
+    private <T> T withSessionLock(String sessionId, Supplier<T> action) {
+        ReentrantLock jvmLock = sessionLocks.computeIfAbsent(sessionId, _ -> new ReentrantLock());
+        jvmLock.lock();
+        try {
+            Path lockPath = store.resolve(List.of(DOMAIN, sessionId, ".append.lock"));
+            Files.createDirectories(lockPath.getParent());
+            try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                    FileLock fileLock = channel.lock()) {
+                if (!fileLock.isValid()) {
+                    throw new IllegalStateException("Audit session lock is not valid");
+                }
+                return action.get();
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to lock audit session", e);
+        } finally {
+            jvmLock.unlock();
+        }
+    }
+
+    private SessionIndex rebuildIndex(String sessionId) {
+        SessionIndex index = new SessionIndex();
+        List<AuditEventDto> events = store.list(List.of(DOMAIN, sessionId), ".json").stream()
+                .filter(name -> !"index.json".equals(name))
+                .map(name -> store.readOptional(List.of(DOMAIN, sessionId, name), AuditEventDto.class))
+                .flatMap(Optional::stream)
+                .sorted(Comparator.comparingLong(AuditEventDto::sequence))
+                .toList();
+        for (AuditEventDto event : events) {
+            index.maxSequence = Math.max(index.maxSequence, event.sequence());
+            index.events.add(new IndexEntry(
+                    event.id().toString(), event.idempotencyKey(), event.eventType(), event.timestamp()));
+        }
+        return index;
     }
 
     @Override

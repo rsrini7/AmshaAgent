@@ -239,7 +239,8 @@ class ToolStepHandlerGuardTest {
 
         when(guard.evaluate(anyString(), anyString(), any(), anyString(), any(), anyList(), anyString(), anyList()))
                 .thenReturn(null);
-        when(invoker.invoke(eq("my_tool"), any(), anyString())).thenReturn(ToolResponse.success("Tool Output"));
+        when(invoker.invoke(eq("my_tool"), any(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("Tool Output"));
 
         List<ReasoningStep> history = new ArrayList<>();
         StepDecision decision = handler.invokeToolAndObserve(ctx, history, step, 0, List.of());

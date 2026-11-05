@@ -2,8 +2,10 @@ package com.amsha.core.agent.reasoning;
 
 import jakarta.annotation.Nullable;
 
+import java.util.List;
 import java.util.Map;
 
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -86,17 +88,39 @@ public sealed interface ReasoningStep
 
     boolean isTruncationRecovery();
 
+    /**
+     * Stable server-generated identity for a tool operation, when this step is a tool call.
+     * Older or non-tool steps return {@code null}.
+     *
+     * @return canonical lowercase UUID, or {@code null} when no operation is attached
+     */
+    @Nullable
+    default String operationId() {
+        return null;
+    }
+
     // Sentinel constants
     String FINISH = "FINISH";
     String OBSERVE = "OBSERVE";
     String PARALLEL_SENTINEL_DUNDER = "__parallel__";
     String PARALLEL_SENTINEL_PIPE_PREFIX = "parallel|";
+    String PARALLEL_BATCH_ACTION_INPUT_KEY = "batch";
     String ACTION_INPUT_ANSWER_KEY = "answer";
     String ACTION_INPUT_INTERCEPTED_EXECUTION_KEY = "__intercepted_unrequested_execution";
 
     @JsonIgnore
     default boolean isParallelBatch() {
-        return this instanceof ParallelStep;
+        return ReasoningStepSupport.isParallelBatch(this);
+    }
+
+    /** Attaches an orchestration-owned operation identity to a tool call. */
+    default ReasoningStep withOperationId(String operationId) {
+        return ReasoningStepSupport.withOperationId(this, operationId);
+    }
+
+    /** Replaces the serialized calls carried by a parallel step. */
+    default ReasoningStep withParallelCalls(List<ParallelToolCall> calls) {
+        return ReasoningStepSupport.withParallelCalls(this, calls);
     }
 
     /** Tool invocation step. */
@@ -114,8 +138,45 @@ public sealed interface ReasoningStep
             String traceId,
             String rootCauseClass,
             boolean isFastPath,
-            @JsonProperty(defaultValue = "false") boolean isTruncationRecovery)
-            implements ReasoningStep {}
+            @JsonProperty(defaultValue = "false") boolean isTruncationRecovery,
+            @Nullable String operationId)
+            implements ReasoningStep {
+        public ToolCallStep {
+            if (operationId != null) {
+                ToolOperationIdentity.validateCanonicalUuid(operationId, "operationId");
+            }
+        }
+
+        /** Compatibility constructor for existing tool-step factories and callers. */
+        public ToolCallStep(
+                String thought,
+                String action,
+                Map<String, Object> actionInput,
+                String observation,
+                int inputTokens,
+                int outputTokens,
+                Boolean success,
+                String errorCode,
+                String traceId,
+                String rootCauseClass,
+                boolean isFastPath,
+                boolean isTruncationRecovery) {
+            this(
+                    thought,
+                    action,
+                    actionInput,
+                    observation,
+                    inputTokens,
+                    outputTokens,
+                    success,
+                    errorCode,
+                    traceId,
+                    rootCauseClass,
+                    isFastPath,
+                    isTruncationRecovery,
+                    null);
+        }
+    }
 
     /** Observation or system directive step. */
     @JsonDeserialize(using = JsonDeserializer.None.class)
@@ -327,124 +388,15 @@ public sealed interface ReasoningStep
     }
 
     default ReasoningStep withObservation(String observation, Boolean success) {
-        return switch (this) {
-            case ToolCallStep s ->
-                new ToolCallStep(
-                        s.thought,
-                        s.action,
-                        s.actionInput,
-                        observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        success,
-                        s.errorCode,
-                        s.traceId,
-                        s.rootCauseClass,
-                        s.isFastPath,
-                        s.isTruncationRecovery);
-            case ObservationStep s ->
-                new ObservationStep(
-                        s.thought,
-                        observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        success,
-                        s.errorCode,
-                        s.traceId,
-                        s.rootCauseClass,
-                        s.isTruncationRecovery);
-            case FinishStep s -> s;
-            case ParallelStep s ->
-                new ParallelStep(
-                        s.thought,
-                        s.actionInput,
-                        observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        success,
-                        s.isTruncationRecovery);
-        };
+        return ReasoningStepSupport.withObservation(this, observation, success);
     }
 
     default ReasoningStep withDiagnostics(
             String observation, Boolean success, String errorCode, String traceId, String rootCauseClass) {
-        return switch (this) {
-            case ToolCallStep s ->
-                new ToolCallStep(
-                        s.thought,
-                        s.action,
-                        s.actionInput,
-                        observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        success,
-                        errorCode,
-                        traceId,
-                        rootCauseClass,
-                        s.isFastPath,
-                        s.isTruncationRecovery);
-            case ObservationStep s ->
-                new ObservationStep(
-                        s.thought,
-                        observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        success,
-                        errorCode,
-                        traceId,
-                        rootCauseClass,
-                        s.isTruncationRecovery);
-            case FinishStep s -> s;
-            case ParallelStep s ->
-                new ParallelStep(
-                        s.thought,
-                        s.actionInput,
-                        observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        success,
-                        s.isTruncationRecovery);
-        };
+        return ReasoningStepSupport.withDiagnostics(this, observation, success, errorCode, traceId, rootCauseClass);
     }
 
     default ReasoningStep withTruncationRecovery(boolean truncationRecovery) {
-        return switch (this) {
-            case ToolCallStep s ->
-                new ToolCallStep(
-                        s.thought,
-                        s.action,
-                        s.actionInput,
-                        s.observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        s.success,
-                        s.errorCode,
-                        s.traceId,
-                        s.rootCauseClass,
-                        s.isFastPath,
-                        truncationRecovery);
-            case ObservationStep s ->
-                new ObservationStep(
-                        s.thought,
-                        s.observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        s.success,
-                        s.errorCode,
-                        s.traceId,
-                        s.rootCauseClass,
-                        truncationRecovery);
-            case FinishStep s ->
-                new FinishStep(s.thought, s.actionInput, s.inputTokens, s.outputTokens, truncationRecovery);
-            case ParallelStep s ->
-                new ParallelStep(
-                        s.thought,
-                        s.actionInput,
-                        s.observation,
-                        s.inputTokens,
-                        s.outputTokens,
-                        s.success,
-                        truncationRecovery);
-        };
+        return ReasoningStepSupport.withTruncationRecovery(this, truncationRecovery);
     }
 }

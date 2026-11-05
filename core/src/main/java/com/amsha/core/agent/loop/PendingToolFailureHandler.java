@@ -6,10 +6,10 @@ import java.util.Map;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.result.AgentResult;
+import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.message.UserMessages;
-import com.amsha.core.scope.WorkspaceContext;
-import com.amsha.core.tools.ToolRegistry;
-import com.amsha.core.util.AgentErrorMessageUtil;
+import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,7 +21,6 @@ final class PendingToolFailureHandler {
     private static final Logger log = Logger.getLogger(PendingToolFailureHandler.class);
 
     private final ObjectMapper objectMapper;
-    private final ToolRegistry toolRegistry;
     private final ReasoningEngine reasoningEngine;
     private final ExecutionFailureRecoveryService recoveryService;
     private final PersonaEscalationService escalationService;
@@ -29,13 +28,11 @@ final class PendingToolFailureHandler {
 
     PendingToolFailureHandler(
             ObjectMapper objectMapper,
-            ToolRegistry toolRegistry,
             ReasoningEngine reasoningEngine,
             ExecutionFailureRecoveryService recoveryService,
             PersonaEscalationService escalationService,
             PendingToolResumeExecutor executor) {
         this.objectMapper = objectMapper;
-        this.toolRegistry = toolRegistry;
         this.reasoningEngine = reasoningEngine;
         this.recoveryService = recoveryService;
         this.escalationService = escalationService;
@@ -81,46 +78,27 @@ final class PendingToolFailureHandler {
         }
 
         log.infof(
-                "[AutoHeal-Resume] Recovery succeeded, re-executing sandbox_exec with fixed code (attempts=%d)",
-                recovery.attemptsUsed());
+                "[AutoHeal-Resume] Corrected command requires a fresh approval (attempts=%d)", recovery.attemptsUsed());
         String fixedParamsJson = buildFixedParamsJson(request.paramsJson(), "code", recovery.fixedCode());
-        ToolResponse retriedResponse;
+        PendingToolResumeSupport.Replacement replacement;
         try {
-            retriedResponse = WorkspaceContext.runWithFullAutonomy(
-                    request.sessionId(),
-                    request.context().userId(),
-                    request.context().chatId(),
-                    request.effectiveRole(),
-                    request.channelType(),
-                    request.context().channelPlatformId(),
-                    () -> toolRegistry.invokeTool(request.toolName(), fixedParamsJson, request.sessionId()));
+            replacement = executor.persistReplacementOperation(
+                    request,
+                    request.toolName(),
+                    fixedParamsJson,
+                    CheckpointStatus.AWAITING_APPROVAL,
+                    "The original sandbox operation failed; corrected code is awaiting approval.");
         } catch (Exception e) {
-            log.warnf("[AutoHeal-Resume] Re-execution threw exception: %s", LogUtil.rootMessage(e));
+            log.warnf("[AutoHeal-Resume] Could not persist corrected action: %s", LogUtil.rootMessage(e));
             return AgentResult.failed(
-                    "Tool execution failed during auto-heal: " + AgentErrorMessageUtil.safeMessage(e),
+                    "Corrected sandbox action could not be persisted.",
                     AgentResult.FailureCategory.SYSTEM_ERROR,
                     List.copyOf(request.history()));
         }
-
-        if (retriedResponse instanceof ToolResponse.ToolSuccess success) {
-            executor.recordReasoningStep(
-                    request.toolName(),
-                    fixedParamsJson,
-                    success.output(),
-                    true,
-                    request.history(),
-                    request.sessionId());
-            executor.completeInProgressCheckpoint(request.checkpoint());
-            return request.stateMachineRunner().runFinishPass(request.context(), reasoningEngine, request.history());
-        }
-        if (retriedResponse instanceof ToolResponse.ToolFailure retryFailure && !retryFailure.isInfraFailure()) {
-            log.warnf("[AutoHeal-Resume] Re-execution failed: %s", retryFailure.output());
-            String failMsg =
-                    retryFailure.output() != null ? retryFailure.output() : "Tool execution failed after auto-heal";
-            return AgentResult.failed(
-                    failMsg, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(request.history()));
-        }
-        return null;
+        return AgentResult.awaitingApproval(
+                new ApprovalFrame(request.toolName(), replacement.params(), RiskLevel.HIGH),
+                request.sessionId(),
+                List.copyOf(request.history()));
     }
 
     AgentResult tryEscalation(PendingToolResumeExecutor.PendingToolRequest request, ToolResponse response) {

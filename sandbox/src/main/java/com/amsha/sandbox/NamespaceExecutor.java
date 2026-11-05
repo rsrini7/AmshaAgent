@@ -12,6 +12,8 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -28,6 +30,12 @@ public class NamespaceExecutor {
      * Falls back gracefully on non-Linux (dev/macOS/Windows).
      */
     public String executeInNamespace(Path workspaceRoot, List<String> command) throws Exception {
+        return executeInNamespace(workspaceRoot, command, "process:legacy", SandboxAttemptLifecycle.NONE);
+    }
+
+    public String executeInNamespace(
+            Path workspaceRoot, List<String> command, String executionHandle, SandboxAttemptLifecycle lifecycle)
+            throws Exception {
         boolean isLinux =
                 System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
         ProcessBuilder pb;
@@ -43,9 +51,18 @@ public class NamespaceExecutor {
             pb.directory(workspaceDir);
         }
         pb.redirectErrorStream(true);
-        var process = startProcess(pb);
+        lifecycle.launchRequested(executionHandle);
+        Process process;
+        try {
+            lifecycle.executionStarting();
+            process = startProcess(pb);
+        } catch (IOException | RuntimeException e) {
+            lifecycle.launchFailedBeforeStart();
+            throw e;
+        }
 
         try {
+            lifecycle.executorStarted(SandboxProcessIdentity.from(process));
             ProcessOutput processOutput = waitForProcess(process);
             String output = processOutput.output();
             if (!processOutput.finished()) {

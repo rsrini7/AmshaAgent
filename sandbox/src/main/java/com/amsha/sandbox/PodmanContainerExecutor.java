@@ -24,6 +24,8 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.common.util.PathSanitizer;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
+import com.amsha.tool.api.ToolExecutionContext;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -125,6 +127,28 @@ public class PodmanContainerExecutor {
     public String executeInContainer(
             String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets)
             throws Exception {
+        return executeInContainer(
+                sessionId, null, workspaceRoot, command, requiredSecrets, SandboxAttemptLifecycle.NONE);
+    }
+
+    public String executeInContainer(
+            ToolExecutionContext context,
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, String> requiredSecrets,
+            SandboxAttemptLifecycle lifecycle)
+            throws Exception {
+        return executeInContainer(context.sessionId(), context, workspaceRoot, command, requiredSecrets, lifecycle);
+    }
+
+    private String executeInContainer(
+            String sessionId,
+            ToolExecutionContext attemptContext,
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, String> requiredSecrets,
+            SandboxAttemptLifecycle lifecycle)
+            throws Exception {
 
         var resolvedSecrets = secretResolver.resolveSecrets(requiredSecrets);
 
@@ -136,8 +160,10 @@ public class PodmanContainerExecutor {
         try (var transport = new TmpfsSecretTransport(sessionId)) {
             List<String> transportArgs = transport.prepare(resolvedSecrets);
 
-            String containerName = "zc-" + sessionId.substring(0, Math.min(8, sessionId.length())) + "-"
-                    + Long.toHexString(System.nanoTime());
+            String containerName = attemptContext == null
+                    ? "zc-" + sessionId.substring(0, Math.min(8, sessionId.length())) + "-"
+                            + Long.toHexString(System.nanoTime())
+                    : attemptContainerName(attemptContext);
 
             Span span = otelContext.childSpan(sessionId, AgentOTelConstants.SPAN_TOOL_CONTAINER_EXEC);
             span.setAttribute(AgentOTelConstants.ATTR_CONTAINER_IMAGE, getSandboxImage());
@@ -146,9 +172,36 @@ public class PodmanContainerExecutor {
 
             activeContainerNames.add(containerName);
             try (Scope scope = span.makeCurrent()) {
-                List<String> podmanCmd = buildPodmanCmd(containerName, transportArgs, workspaceRoot, command);
-                var process = prepareAndStartProcess(sessionId, podmanCmd, transport);
+                List<String> podmanCmd = attemptContext == null
+                        ? buildPodmanCmd(containerName, transportArgs, workspaceRoot, command)
+                        : buildAttemptPodmanCmd(
+                                containerName,
+                                transportArgs,
+                                workspaceRoot,
+                                command,
+                                attemptContext.workspaceId(),
+                                attemptContext.attemptId());
+                if (attemptContext != null) {
+                    lifecycle.launchRequested("podman-container:" + containerName);
+                }
+                lifecycle.executionStarting();
+                Process process;
+                try {
+                    process = prepareAndStartProcess(sessionId, podmanCmd, transport);
+                } catch (IOException | RuntimeException e) {
+                    lifecycle.launchFailedBeforeStart();
+                    throw e;
+                }
                 String result = readSandboxOutputAndGetResult(process, command);
+                if (attemptContext != null) {
+                    String containerId = PodmanAttemptContainerSupport.awaitOwnedContainerStart(
+                            podmanPath, containerName, attemptContext, process);
+                    lifecycle.executorStarted("container:" + containerId);
+                    result = PodmanAttemptContainerSupport.awaitContainer(
+                            podmanPath, resolveTimeout(command), containerName, attemptContext);
+                } else {
+                    lifecycle.executorStarted(SandboxProcessIdentity.from(process));
+                }
                 span.setStatus(StatusCode.OK);
                 return result;
             } catch (Exception e) {
@@ -159,7 +212,9 @@ public class PodmanContainerExecutor {
                 throw e;
             } finally {
                 span.end();
-                activeContainerNames.remove(containerName);
+                if (attemptContext == null) {
+                    activeContainerNames.remove(containerName);
+                }
             }
         }
     }
@@ -213,6 +268,47 @@ public class PodmanContainerExecutor {
         podmanCmd.add(getSandboxImage());
         podmanCmd.addAll(command);
         return podmanCmd;
+    }
+
+    List<String> buildAttemptPodmanCmd(
+            String containerName,
+            List<String> transportArgs,
+            Path workspaceRoot,
+            List<String> command,
+            String workspaceId,
+            String attemptId) {
+        return PodmanAttemptContainerSupport.buildAttemptCommand(
+                buildPodmanCmd(containerName, transportArgs, workspaceRoot, command),
+                containerName,
+                workspaceId,
+                attemptId);
+    }
+
+    private String attemptContainerName(ToolExecutionContext context) {
+        if (context.attemptId() == null
+                || context.workspaceId() == null
+                || context.workspaceId().isBlank()) {
+            throw new IllegalArgumentException("Sandbox attempt identity is required.");
+        }
+        return attemptContainerName(context.attemptId());
+    }
+
+    static String attemptContainerName(String attemptId) {
+        return PodmanAttemptContainerSupport.attemptContainerName(attemptId);
+    }
+
+    public void releaseSettledAttempt(ToolExecutionContext context) {
+        String containerName = attemptContainerName(context);
+        if (!activeContainerNames.contains(containerName)) {
+            return;
+        }
+        try {
+            if (PodmanAttemptContainerSupport.releaseSettledAttempt(podmanPath, containerName, context)) {
+                activeContainerNames.remove(containerName);
+            }
+        } catch (Exception e) {
+            log.warnf(LogUtil.relevantThrowable(e), "Failed to release settled container: %s", LogUtil.rootMessage(e));
+        }
     }
 
     private Process prepareAndStartProcess(String sessionId, List<String> podmanCmd, TmpfsSecretTransport transport)

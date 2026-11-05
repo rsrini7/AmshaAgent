@@ -27,12 +27,14 @@ import com.amsha.core.agent.trace.TracePublisher;
 import com.amsha.core.agent.trace.TraceStage;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.hitl.ApprovalLeaseStore;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.security.AutonomyPolicy;
 import com.amsha.core.skill.CompiledSkillEntry;
 import com.amsha.core.tool.DynamicToolAdmission;
 import com.amsha.core.tool.DynamicToolAdmissionLookup;
 import com.amsha.core.tool.InterceptorPriority;
 import com.amsha.core.tool.ToolGuardInterceptor;
+import com.amsha.core.tool.attempt.DurableToolAttemptGuard;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.ToolOperation;
@@ -85,6 +87,9 @@ public class ToolInvocationGuard {
     @Inject
     TracePublisher tracePublisher;
 
+    @Inject
+    DurableToolAttemptGuard durableToolAttemptGuard;
+
     private static final int MAX_DEDUP_SESSIONS = 1000;
     private final Map<String, Map<String, String>> sessionDedupeCache = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> sessionOrder = new ConcurrentLinkedDeque<>();
@@ -115,11 +120,14 @@ public class ToolInvocationGuard {
     public sealed interface GuardDecision
             permits GuardDecision.Allow,
                     GuardDecision.Deduplicate,
+                    GuardDecision.DurableReplay,
                     GuardDecision.PauseForApproval,
                     GuardDecision.Blocked {
         record Allow() implements GuardDecision {}
 
         record Deduplicate(String cachedObservation) implements GuardDecision {}
+
+        record DurableReplay(String observation, boolean succeeded, String errorCode) implements GuardDecision {}
 
         record PauseForApproval(ApprovalFrame frame) implements GuardDecision {}
 
@@ -160,14 +168,6 @@ public class ToolInvocationGuard {
             }
         }
         IdempotencyMode mode = toolOpt.map(AgentTool::idempotencyMode).orElse(IdempotencyMode.NON_IDEMPOTENT);
-
-        if (mode != IdempotencyMode.NON_IDEMPOTENT) {
-            GuardDecision dedupResult = checkDeduplication(sessionId, toolName, params, history);
-            if (dedupResult != null) {
-                publishGuardCheck(sessionId, toolName, dedupResult, null);
-                return dedupResult;
-            }
-        }
 
         boolean isInternalTool = toolOpt.isPresent();
         final DynamicToolAdmission dynamicAdmission;
@@ -243,6 +243,22 @@ public class ToolInvocationGuard {
                 || ((roleRequiresApproval || staticRequiresApproval) && !AutonomyLevel.FULL.equals(level))
                 || autonomyDrivenPause;
 
+        GuardDecision durableDecision = durableToolAttemptGuard == null
+                ? null
+                : durableToolAttemptGuard
+                        .check(WorkspaceContext.activeWorkspaceId().orElse(null), sessionId, toolName, params, mode)
+                        .map(decision -> switch (decision.kind()) {
+                            case BLOCKED -> new GuardDecision.Blocked(decision.observation());
+                            case REPLAY ->
+                                new GuardDecision.DurableReplay(
+                                        decision.observation(), decision.succeeded(), decision.errorCode());
+                        })
+                        .orElse(null);
+        if (durableDecision instanceof GuardDecision.Blocked) {
+            publishGuardCheck(
+                    sessionId, toolName, durableDecision, op.riskLevel().name());
+            return durableDecision;
+        }
         if (!isExempt && hitlRequired) {
             // Approval lease (ADR-approval-lease-for-parallel-batches): satisfies ONLY the
             // human prompt. All mandatory checks above already ran, Blocked returns all
@@ -266,6 +282,15 @@ public class ToolInvocationGuard {
         }
         GuardDecision postPolicyDecision =
                 applyPostPolicyToolRisk(agentRole, level, toolName, params, history, goal, op);
+        if (postPolicyDecision instanceof GuardDecision.Allow && durableDecision != null) {
+            postPolicyDecision = durableDecision;
+        }
+        if (postPolicyDecision instanceof GuardDecision.Allow && mode != IdempotencyMode.NON_IDEMPOTENT) {
+            GuardDecision dedupResult = checkDeduplication(sessionId, toolName, params, history);
+            if (dedupResult != null) {
+                postPolicyDecision = dedupResult;
+            }
+        }
         if (postPolicyDecision instanceof GuardDecision.Allow) {
             observeProvisionalAllow(sessionId, agentRole, level, toolName, op, params, goal);
         }
@@ -286,6 +311,7 @@ public class ToolInvocationGuard {
                 switch (decision) {
                     case GuardDecision.Allow() -> "ALLOW";
                     case GuardDecision.Deduplicate(var cached) -> "ALLOW";
+                    case GuardDecision.DurableReplay _ -> "ALLOW";
                     case GuardDecision.PauseForApproval(var frame) -> "HITL_REQUIRED";
                     case GuardDecision.Blocked(var observation) -> "DENIED";
                 };

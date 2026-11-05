@@ -196,6 +196,13 @@ CREATE TABLE IF NOT EXISTS reasoning_step_attempt (
 
 CREATE INDEX IF NOT EXISTS idx_reasoning_step_attempt_step ON reasoning_step_attempt (checkpoint_id, reasoning_step_id);
 
+-- Mutable per-session serialization rows for chained WORM audit appends.
+-- Audit event rows remain immutable; append transactions update this lock row instead.
+CREATE TABLE IF NOT EXISTS audit_chain_lock (
+    session_id TEXT NOT NULL PRIMARY KEY,
+    lock_version INTEGER NOT NULL DEFAULT 0 CHECK (lock_version >= 0)
+);
+
 -- SQLite foreign keys are not enabled globally; enforce the composite relationship and cascade via triggers (§12.4)
 CREATE TRIGGER IF NOT EXISTS trg_reasoning_step_attempt_fk_ins
 BEFORE INSERT ON reasoning_step_attempt

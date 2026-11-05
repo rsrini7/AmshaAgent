@@ -4,9 +4,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.Arrays;
 
 import com.amsha.core.domain.model.AuditEvent;
+import com.amsha.core.domain.model.AuditEventRecord;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
 
@@ -15,48 +16,54 @@ import io.quarkus.arc.Unremovable;
 @ApplicationScoped
 @Unremovable
 public class AuditEventRecorder {
-
     @Inject
     AuditEventStorePort auditStore;
 
     @Inject
     AuditHashUtil hashUtil;
 
-    @Inject
-    SessionAuditSequencer sequencer;
-
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public void record(AuditEvent event) {
-        if (event.getIdempotencyKey() != null) {
-            if (auditStore.countByIdempotencyKey(event.getIdempotencyKey()) > 0) {
-                return;
-            }
-        }
+        recordWithReceipt(event);
+    }
 
-        ReentrantLock lock = sequencer.lockFor(event.getSessionId());
-        lock.lock();
+    /**
+     * Appends a chained audit event and returns the durable event ID. The store performs the
+     * idempotency check under the same serialization boundary as sequence allocation.
+     */
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    public String recordWithReceipt(AuditEvent event) {
+        byte[] resolvedKey = hashUtil.copyHmacKeyForLocalAppend();
         try {
-            long currentMax = auditStore.getMaxSequence(event.getSessionId());
-            event.setSequence(currentMax + 1);
-
-            String prevHash = findLatestHash(event.getSessionId());
-            hashUtil.calculateChainFields(event, prevHash);
-
-            validateBeforePersist(event);
-            auditStore.save(toDto(event));
+            AuditEventDto finalized = auditStore.appendChained(toDto(event), (seed, sequence, previousHash) -> {
+                AuditEventRecord chained = AuditEventRecord.fromDto(seed);
+                chained.setSequence(sequence);
+                hashUtil.calculateChainFields(chained, previousHash, resolvedKey);
+                validateBeforePersist(chained);
+                return toDto(chained);
+            });
+            event.setSequence(finalized.sequence());
+            event.setPrevHash(finalized.prevHash());
+            event.setHmacHash(finalized.hmacHash());
+            return finalized.id().toString();
         } finally {
-            lock.unlock();
+            Arrays.fill(resolvedKey, (byte) 0);
         }
     }
 
     public void validateBeforePersist(AuditEvent event) {
-        if (event.getSessionId() == null || event.getSessionId().isBlank())
-            throw new IllegalStateException("AuditEvent.sessionId must not be null/blank");
-        if (event.getPrevHash() == null || event.getPrevHash().isBlank())
-            throw new IllegalStateException("AuditEvent.prevHash must not be null - genesis hash failed");
-        if (event.getHmacHash() == null || event.getHmacHash().isBlank())
-            throw new IllegalStateException("AuditEvent.hmacHash must not be null - HMAC failed");
-        if (event.getSequence() < 0) throw new IllegalStateException("AuditEvent.sequence must be >= 0");
+        if (event.getSessionId() == null || event.getSessionId().isBlank()) {
+            throw new IllegalStateException("AuditEvent.sessionId must not be null or blank");
+        }
+        if (event.getPrevHash() == null || event.getPrevHash().isBlank()) {
+            throw new IllegalStateException("AuditEvent.prevHash must not be null; genesis hash failed");
+        }
+        if (event.getHmacHash() == null || event.getHmacHash().isBlank()) {
+            throw new IllegalStateException("AuditEvent.hmacHash must not be null; HMAC failed");
+        }
+        if (event.getSequence() <= 0) {
+            throw new IllegalStateException("AuditEvent.sequence must be positive");
+        }
     }
 
     @Transactional(Transactional.TxType.SUPPORTS)
@@ -64,15 +71,15 @@ public class AuditEventRecorder {
         return auditStore.findLatestHash(sessionId).orElse(null);
     }
 
-    private AuditEventDto toDto(AuditEvent entity) {
+    AuditEventDto toDto(AuditEvent entity) {
         return new AuditEventDto(
                 entity.getId(),
                 entity.getSessionId(),
                 entity.getUserId(),
                 entity.getAgentRole(),
                 entity.getGoalHash(),
-                entity.getOutcome() != null ? entity.getOutcome().name() : null,
-                entity.getEventType() != null ? entity.getEventType().name() : null,
+                entity.getOutcome() == null ? null : entity.getOutcome().name(),
+                entity.getEventType() == null ? null : entity.getEventType().name(),
                 entity.getEventDetail(),
                 entity.getInputTokens(),
                 entity.getOutputTokens(),

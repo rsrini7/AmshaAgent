@@ -59,6 +59,7 @@ public class ToolAttemptSchemaGuard implements HealthCheck {
             "tool_action_claim",
             "tool_action_lock",
             "tool_attempt_outbox",
+            "audit_chain_lock",
             "tool_attempt_resolution",
             "reasoning_step_attempt");
 

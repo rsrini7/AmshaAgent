@@ -79,6 +79,10 @@ public class AuditHashUtil {
         return result.clone();
     }
 
+    public byte[] copyHmacKeyForLocalAppend() {
+        return getHmacKey();
+    }
+
     /**
      * Computes the SHA-256 hash of the input string and returns it as a hex string.
      * Prevents raw PII or secrets from being stored directly when hashing goals or
@@ -105,8 +109,11 @@ public class AuditHashUtil {
     }
 
     public String hmacHex(String data) {
+        return hmacHex(data, getHmacKey());
+    }
+
+    private String hmacHex(String data, byte[] key) {
         try {
-            byte[] key = getHmacKey();
             Mac mac = Mac.getInstance(CryptoConstants.HMAC_SHA256);
             SecretKeySpec secretKeySpec = new SecretKeySpec(key, CryptoConstants.HMAC_SHA256);
             mac.init(secretKeySpec);
@@ -137,6 +144,10 @@ public class AuditHashUtil {
      * @param lastHash The HMAC hash of the previous event in the session chain (nullable for genesis).
      */
     public void calculateChainFields(AuditEvent event, String lastHash) {
+        calculateChainFields(event, lastHash, null);
+    }
+
+    public void calculateChainFields(AuditEvent event, String lastHash, byte[] resolvedKey) {
         String prevHash = lastHash;
         if (prevHash == null) {
             prevHash = sha256hex("GENESIS:" + event.getSessionId());
@@ -144,6 +155,9 @@ public class AuditHashUtil {
         event.setPrevHash(prevHash);
 
         String payload = event.computePayloadStr();
-        event.setHmacHash(hmacHex(prevHash + "|" + payload));
+        event.setHmacHash(
+                resolvedKey == null
+                        ? hmacHex(prevHash + "|" + payload)
+                        : hmacHex(prevHash + "|" + payload, resolvedKey));
     }
 }

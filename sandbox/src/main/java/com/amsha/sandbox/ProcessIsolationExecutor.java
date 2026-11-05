@@ -11,10 +11,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
+import com.amsha.tool.api.ToolExecutionContext;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -104,19 +106,55 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
     @Override
     public SandboxResult executeSandboxed(
             String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets) {
+        return executeSandboxedInternal(
+                sessionId, null, workspaceRoot, command, requiredSecrets, SandboxAttemptLifecycle.NONE);
+    }
+
+    @Override
+    public SandboxResult executeSandboxed(
+            ToolExecutionContext context,
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, String> requiredSecrets,
+            SandboxAttemptLifecycle lifecycle) {
+        return executeSandboxedInternal(
+                context.sessionId(), context, workspaceRoot, command, requiredSecrets, lifecycle);
+    }
+
+    @Override
+    public void releaseSettledAttempt(ToolExecutionContext context) {
+        podmanExecutor.releaseSettledAttempt(context);
+    }
+
+    private SandboxResult executeSandboxedInternal(
+            String sessionId,
+            ToolExecutionContext context,
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, String> requiredSecrets,
+            SandboxAttemptLifecycle lifecycle) {
 
         try {
             if (!sandboxEnabled
                     || SandboxStrategy.NONE == sandboxStrategy
                     || SandboxStrategy.DIRECT == sandboxStrategy) {
+                if (context == null) {
+                    return SandboxResult.success(directExecutor.executeDirectly(
+                            workspaceRoot,
+                            rewriteContainerPaths(command, workspaceRoot),
+                            resolveFallbackSecrets(requiredSecrets)));
+                }
                 return SandboxResult.success(directExecutor.executeDirectly(
                         workspaceRoot,
                         rewriteContainerPaths(command, workspaceRoot),
-                        resolveFallbackSecrets(requiredSecrets)));
+                        resolveFallbackSecrets(requiredSecrets),
+                        processExecutionHandle(context),
+                        lifecycle));
             }
 
             if (SandboxStrategy.PODMAN == sandboxStrategy && circuitBreaker.shouldAttemptPodman()) {
-                SandboxResult podmanResult = tryPodmanExecution(sessionId, workspaceRoot, command, requiredSecrets);
+                SandboxResult podmanResult =
+                        tryPodmanExecution(sessionId, context, workspaceRoot, command, requiredSecrets, lifecycle);
                 if (podmanResult != null) {
                     return podmanResult;
                 }
@@ -125,14 +163,21 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
             // Podman circuit is open (or strategy is NAMESPACE) - fall back to namespace isolation.
             // NOTE: requiredSecrets are NOT injected in namespace mode (see class-level Javadoc).
             try {
+                if (context == null) {
+                    return SandboxResult.success(namespaceExecutor.executeInNamespace(
+                            workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                }
                 return SandboxResult.success(namespaceExecutor.executeInNamespace(
-                        workspaceRoot, rewriteContainerPaths(command, workspaceRoot)));
+                        workspaceRoot,
+                        rewriteContainerPaths(command, workspaceRoot),
+                        processExecutionHandle(context),
+                        lifecycle));
             } catch (Exception nsEx) {
-                if (allowInsecureFallback) {
+                if (allowInsecureFallback && !lifecycle.hasLaunchIntent()) {
                     log.warnf(
                             "[SANDBOX] Namespace unavailable (type=%s) - degrading to host execution",
                             nsEx.getClass().getSimpleName());
-                    return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
+                    return fallbackToHostExecution(workspaceRoot, command, requiredSecrets, context, lifecycle);
                 }
                 throw nsEx;
             }
@@ -176,7 +221,12 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
     }
 
     private SandboxResult tryPodmanExecution(
-            String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets)
+            String sessionId,
+            ToolExecutionContext context,
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, String> requiredSecrets,
+            SandboxAttemptLifecycle lifecycle)
             throws Exception {
 
         if (!circuitBreaker.shouldAttemptPodman()) {
@@ -184,14 +234,16 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
         }
         CircuitBreakerState stateAtCall = circuitBreaker.getState();
         try {
-            String result = podmanExecutor.executeInContainer(sessionId, workspaceRoot, command, requiredSecrets);
+            String result = context == null
+                    ? podmanExecutor.executeInContainer(sessionId, workspaceRoot, command, requiredSecrets)
+                    : podmanExecutor.executeInContainer(context, workspaceRoot, command, requiredSecrets, lifecycle);
             circuitBreaker.recordSuccess();
             return SandboxResult.success(result);
 
         } catch (SandboxImageMissingException e) {
             log.errorf("[SANDBOX] Image missing (session=%s)", sessionId);
-            if (allowInsecureFallback) {
-                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
+            if (allowInsecureFallback && !lifecycle.hasLaunchIntent()) {
+                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets, context, lifecycle);
             }
             return SandboxResult.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
 
@@ -199,8 +251,8 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
             log.warnf(
                     "Podman unavailable (type=%s) - checking fallback for session %s",
                     e.getClass().getSimpleName(), sessionId);
-            if (allowInsecureFallback) {
-                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
+            if (allowInsecureFallback && !lifecycle.hasLaunchIntent()) {
+                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets, context, lifecycle);
             }
             circuitBreaker.recordFailure(stateAtCall);
             return SandboxResult.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
@@ -209,11 +261,14 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
             log.warnf(
                     "Podman unavailable (type=%s) - checking fallback for session %s",
                     e.getClass().getSimpleName(), sessionId);
-            if (allowInsecureFallback) {
-                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets);
+            if (allowInsecureFallback && !lifecycle.hasLaunchIntent()) {
+                return fallbackToHostExecution(workspaceRoot, command, requiredSecrets, context, lifecycle);
             }
             circuitBreaker.recordFailure(stateAtCall);
             return SandboxResult.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
+
+        } catch (ConfirmedSandboxTimeoutException e) {
+            return SandboxResult.timedOut(e.output());
 
         } catch (ToolExecutionException e) {
             throw e;
@@ -226,10 +281,29 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
     }
 
     private SandboxResult fallbackToHostExecution(
-            Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets) throws Exception {
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, String> requiredSecrets,
+            ToolExecutionContext context,
+            SandboxAttemptLifecycle lifecycle)
+            throws Exception {
         log.warn("[SANDBOX] allow-insecure-fallback enabled - degrading to host execution");
+        if (context == null) {
+            return SandboxResult.success(directExecutor.executeDirectly(
+                    workspaceRoot,
+                    rewriteContainerPaths(command, workspaceRoot),
+                    resolveFallbackSecrets(requiredSecrets)));
+        }
         return SandboxResult.success(directExecutor.executeDirectly(
-                workspaceRoot, rewriteContainerPaths(command, workspaceRoot), resolveFallbackSecrets(requiredSecrets)));
+                workspaceRoot,
+                rewriteContainerPaths(command, workspaceRoot),
+                resolveFallbackSecrets(requiredSecrets),
+                processExecutionHandle(context),
+                lifecycle));
+    }
+
+    private static String processExecutionHandle(ToolExecutionContext context) {
+        return context == null || context.attemptId() == null ? "process:legacy" : "process:" + context.attemptId();
     }
 
     private Map<String, byte[]> resolveFallbackSecrets(Map<String, String> requiredSecrets) {

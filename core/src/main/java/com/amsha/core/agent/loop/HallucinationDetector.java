@@ -152,7 +152,7 @@ class HallucinationDetector {
                 ToolCapability.SCHEDULE_TASK.toolName().equals(toolCall.action())
                         && Boolean.TRUE.equals(toolCall.success());
             case ReasoningStep.ParallelStep parallel -> {
-                Object batchRaw = parallel.actionInput().get("batch");
+                Object batchRaw = parallel.actionInput().get(ReasoningStep.PARALLEL_BATCH_ACTION_INPUT_KEY);
                 if (!(batchRaw instanceof String batchJson) || batchJson.isBlank()) yield false;
                 try {
                     List<ParallelToolCall> calls =

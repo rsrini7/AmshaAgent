@@ -1,6 +1,7 @@
 package com.amsha.core.agent.reasoning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -55,5 +56,29 @@ class ParallelToolSerializationTest {
         assertEquals("call_0", res.callId());
         assertEquals("File contents here", res.observation());
         assertTrue(res.success());
+    }
+
+    @Test
+    void operationIdentitySurvivesCheckpointAndParallelCallSerialization() throws Exception {
+        String operationId = "123e4567-e89b-12d3-a456-426614174000";
+        ReasoningStep pending = ReasoningStep.pending("execute", "file_read", Map.of("path", "a.txt"))
+                .withOperationId(operationId);
+        ReasoningStep restored = mapper.readValue(mapper.writeValueAsBytes(pending), ReasoningStep.class);
+
+        assertEquals(operationId, restored.operationId());
+        assertEquals(operationId, restored.withObservation("read", true).operationId());
+
+        ParallelToolCall call = ParallelToolCall.pending("call_0", "file_read", Map.of("path", "a.txt"), "{}")
+                .withOperationId(operationId);
+        List<ParallelToolCall> restoredCalls = mapper.readValue(
+                mapper.writeValueAsBytes(List.of(call)), new TypeReference<List<ParallelToolCall>>() {});
+
+        assertEquals(operationId, restoredCalls.getFirst().operationId());
+        assertEquals(
+                operationId, restoredCalls.getFirst().withResult("read", true).operationId());
+
+        ReasoningStep legacy = mapper.readValue(
+                mapper.writeValueAsBytes(ReasoningStep.pending("execute", "file_read", Map.of())), ReasoningStep.class);
+        assertNull(legacy.operationId());
     }
 }

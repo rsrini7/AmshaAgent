@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.RequiresSecret;
 import com.amsha.security.api.ToolOperation;
@@ -86,8 +87,10 @@ class ToolRegistryTest {
     @Test
     void testGovernanceBlocksUnpermittedRole() {
         WorkspaceContext.run(TEST_SESSION, "unknown_role", "", AutonomyLevel.READONLY, "unknown_role", () -> {
-            ToolResponse response = registry.invokeTool(
-                    ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of("agent", "coder", "goal", "list"));
+            ToolResponse response = registry.invokeToolWithOperationId(
+                    ToolCapability.DELEGATE_TO_AGENT.toolName(),
+                    Map.of("agent", "coder", "goal", "list"),
+                    ToolOperationIdentity.generateCanonicalUuid());
 
             assertEquals(403, response.exitCode(), "Should return 403 Forbidden");
         });
@@ -101,7 +104,8 @@ class ToolRegistryTest {
         WorkspaceContext.run(TEST_SESSION, "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> registry.invokeTool("nonexistent-tool", Collections.emptyMap()));
+                    () -> registry.invokeToolWithOperationId(
+                            "nonexistent-tool", Collections.emptyMap(), ToolOperationIdentity.generateCanonicalUuid()));
         });
     }
 

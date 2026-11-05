@@ -2,6 +2,7 @@ package com.amsha.persistence.api;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -51,7 +52,30 @@ public interface AuditEventStorePort {
      * @param finalizer the deterministic HMAC finalizer callback
      * @return the finalized and persisted audit event
      */
-    default AuditEventDto appendChained(AuditEventDto seed, AuditChainFinalizer finalizer) {
-        throw new UnsupportedOperationException("appendChained is not implemented by this adapter");
+    AuditEventDto appendChained(AuditEventDto seed, AuditChainFinalizer finalizer);
+
+    static AuditEventDto finalizeAndValidate(
+            AuditEventDto seed, long sequence, String previousHash, AuditChainFinalizer finalizer) {
+        Objects.requireNonNull(seed, "seed must not be null");
+        Objects.requireNonNull(finalizer, "finalizer must not be null");
+        if (seed.sessionId() == null || seed.sessionId().isBlank()) {
+            throw new IllegalArgumentException("Audit event sessionId must not be blank");
+        }
+        AuditEventDto finalized = Objects.requireNonNull(
+                finalizer.finalizeChain(seed, sequence, previousHash), "finalizer returned null");
+        if (!Objects.equals(seed.id(), finalized.id())
+                || !Objects.equals(seed.sessionId(), finalized.sessionId())
+                || !Objects.equals(seed.idempotencyKey(), finalized.idempotencyKey())
+                || sequence != finalized.sequence()
+                || finalized.prevHash() == null
+                || finalized.prevHash().isBlank()
+                || finalized.hmacHash() == null
+                || finalized.hmacHash().isBlank()) {
+            throw new IllegalStateException("Audit finalizer violated the chained append contract");
+        }
+        if (previousHash != null && !previousHash.equals(finalized.prevHash())) {
+            throw new IllegalStateException("Audit finalizer changed the previous chain hash");
+        }
+        return finalized;
     }
 }

@@ -115,6 +115,8 @@ import com.amsha.core.skill.SkillPromptParams;
 import com.amsha.core.speech.SpeechDeliveryService;
 import com.amsha.core.state.ActiveWork;
 import com.amsha.core.state.ActivityPhase;
+import com.amsha.core.tool.attempt.ToolAttemptAuditOutboxRelay;
+import com.amsha.core.tool.attempt.ToolAttemptExecutionService;
 import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.amsha.core.tool.attempt.ToolTargetResolution;
 import com.amsha.core.tools.CheckList;
@@ -298,6 +300,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             OutboundHttpException.class,
             OutboundHttpException.Category.class,
             IntentDecisionRouter.class,
+            ToolAttemptAuditOutboxRelay.class,
+            ToolAttemptExecutionService.class,
             ToolOperationIdentity.class,
             ToolTargetResolution.class,
             ActionLockScope.class

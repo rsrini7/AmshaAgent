@@ -313,7 +313,7 @@ class ToolAttemptOutboxAndAuditTest {
     }
 
     @Test
-    void testAuditEventStorePortDefaultAppendChainedThrows() {
+    void testAuditEventStorePortRejectsUnfinalizedChainResults() {
         AuditEventStorePort port = new AuditEventStorePort() {
             @Override
             public void save(AuditEventDto dto) {}
@@ -358,6 +358,11 @@ class ToolAttemptOutboxAndAuditTest {
             public long countAll(String sessionId, String eventType, Instant from, Instant to) {
                 return 0;
             }
+
+            @Override
+            public AuditEventDto appendChained(AuditEventDto seed, AuditChainFinalizer finalizer) {
+                return AuditEventStorePort.finalizeAndValidate(seed, 1L, null, finalizer);
+            }
         };
 
         Instant now = Instant.now();
@@ -381,6 +386,6 @@ class ToolAttemptOutboxAndAuditTest {
                 null,
                 null);
 
-        assertThrows(UnsupportedOperationException.class, () -> port.appendChained(seed, (s, _, _) -> s));
+        assertThrows(IllegalStateException.class, () -> port.appendChained(seed, (s, _, _) -> s));
     }
 }

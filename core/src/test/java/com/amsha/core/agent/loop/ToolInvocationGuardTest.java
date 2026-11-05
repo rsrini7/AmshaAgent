@@ -158,7 +158,7 @@ class ToolInvocationGuardTest {
         assertTrue(((ToolInvocationGuard.GuardDecision.Deduplicate) result)
                 .cachedObservation()
                 .contains("result 1"));
-        verify(postPolicyToolRiskDispatcher, never()).evaluateResolution(any());
+        verify(postPolicyToolRiskDispatcher).evaluateResolution(any());
     }
 
     @Test

@@ -25,6 +25,10 @@ public record ToolAttemptSettlementFields(
         return new ToolAttemptSettlementFields(timestamp, null, null, null, null);
     }
 
+    public static ToolAttemptSettlementFields forLaunch(Instant timestamp, String executionHandle) {
+        return new ToolAttemptSettlementFields(timestamp, executionHandle, null, null, null);
+    }
+
     public static ToolAttemptSettlementFields forRunning(
             Instant timestamp, String executionHandle, String processStartIdentity) {
         return new ToolAttemptSettlementFields(timestamp, executionHandle, processStartIdentity, null, null);

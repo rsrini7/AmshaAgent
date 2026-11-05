@@ -24,10 +24,14 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tool.DynamicToolInvoker;
+import com.amsha.core.tool.attempt.ToolAttemptExecutionService;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
+import com.amsha.persistence.api.ToolAttemptStatus;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.security.api.ToolOperation;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.DynamicToolDescriptor;
+import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolCategory;
 import com.amsha.tool.api.ToolExecutionContext;
@@ -51,6 +55,7 @@ class ToolRegistryUnitTest {
     private Event<ToolDiscoveryCompleted> toolDiscoveryCompleted;
     private SkillRegistry skillRegistry;
     private Instance<DynamicToolInvoker> dynamicToolInvokers;
+    private ToolAttemptExecutionService toolAttemptExecutionService;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -63,6 +68,25 @@ class ToolRegistryUnitTest {
         toolDiscoveryCompleted = mock(Event.class);
         skillRegistry = mock(SkillRegistry.class);
         dynamicToolInvokers = mock(Instance.class);
+        toolAttemptExecutionService = mock(ToolAttemptExecutionService.class);
+        ToolAttemptExecutionService.AttemptHandle attemptHandle = mock(ToolAttemptExecutionService.AttemptHandle.class);
+        ToolAttemptExecutionService.Admission admission = mock(ToolAttemptExecutionService.Admission.class);
+        when(admission.shouldExecute()).thenReturn(true);
+        when(admission.handle()).thenReturn(attemptHandle);
+        when(admission.immediateResponse()).thenReturn(ToolResponse.failure(409, "blocked"));
+        when(toolAttemptExecutionService.admit(
+                        nullable(String.class),
+                        nullable(String.class),
+                        nullable(String.class),
+                        nullable((Class<Map<String, Object>>) (Class<?>) Map.class),
+                        nullable(IdempotencyMode.class),
+                        nullable(String.class)))
+                .thenReturn(admission);
+        when(toolAttemptExecutionService.attach(any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(toolAttemptExecutionService.settle(any(), anyString(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
+        when(toolAttemptExecutionService.sanitizeWithoutAttempt(anyString(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
 
         registry.discoveryService = discoveryService;
         registry.governanceGuard = governanceGuard;
@@ -71,6 +95,7 @@ class ToolRegistryUnitTest {
         registry.toolDiscoveryCompleted = toolDiscoveryCompleted;
         registry.skillRegistry = skillRegistry;
         registry.dynamicToolInvokers = dynamicToolInvokers;
+        registry.toolAttemptExecutionService = toolAttemptExecutionService;
         registry.objectMapper = new ObjectMapper();
         // Redirect the sandbox workspace off the repo tree: invokeSandboxed() creates directories.
         registry.workspaceRootDir = tempDir.toString();
@@ -93,6 +118,15 @@ class ToolRegistryUnitTest {
      * <b>null</b> and the for-loop dies with an NPE instead of falling through to the "unknown tool"
      * branch. A fresh iterator is supplied per call because the loop consumes it.
      */
+    private ToolResponse invokeWithIdentity(String toolName, Map<String, Object> params) {
+        return registry.invokeToolWithOperationId(toolName, params, ToolOperationIdentity.generateCanonicalUuid());
+    }
+
+    private ToolResponse invokeWithIdentity(String toolName, String paramsJson, String sessionId) {
+        return registry.invokeToolWithOperationId(
+                toolName, paramsJson, sessionId, ToolOperationIdentity.generateCanonicalUuid());
+    }
+
     private void withDynamicInvoker(DynamicToolInvoker invoker) {
         when(dynamicToolInvokers.isUnsatisfied()).thenReturn(false);
         doAnswer(inv -> {
@@ -158,6 +192,32 @@ class ToolRegistryUnitTest {
     }
 
     @Test
+    void invokeToolPropagatesOperationIdentityToToolExecutionContext() {
+        CapturingTool tool = new CapturingTool("capture_operation_id");
+        register(tool);
+        String operationId = "123e4567-e89b-12d3-a456-426614174099";
+
+        ToolResponse response = registry.invokeToolWithOperationId(tool.name(), Map.of(), operationId);
+
+        assertEquals("ok", response.output());
+        assertNotNull(tool.capturedContext);
+        assertEquals(operationId, tool.capturedContext.operationId());
+    }
+
+    @Test
+    void legacyRegistryInvocationWithoutOperationIdFailsClosed() {
+        CapturingTool tool = new CapturingTool("missing_operation_id");
+        register(tool);
+
+        ToolResponse response = registry.invokeTool(tool.name(), Map.of());
+
+        assertFalse(response.success());
+        assertEquals(409, response.exitCode());
+        assertNull(tool.capturedContext);
+        verify(toolAttemptExecutionService, never()).admit(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void testToSafeDirName() {
         assertEquals("session_123", ToolRegistry.toSafeDirName("session:123"));
         assertEquals("safe-session", ToolRegistry.toSafeDirName("safe-session"));
@@ -178,11 +238,11 @@ class ToolRegistryUnitTest {
 
     @Test
     void testHeadroomToolCallIntercepted() {
-        ToolResponse resp1 = registry.invokeTool("headroom_search", Map.of());
+        ToolResponse resp1 = invokeWithIdentity("headroom_search", Map.of());
         assertNotNull(resp1);
         assertTrue(resp1.success());
 
-        ToolResponse resp2 = registry.invokeTool("headroom", Map.of());
+        ToolResponse resp2 = invokeWithIdentity("headroom", Map.of());
         assertNotNull(resp2);
         assertTrue(resp2.success());
     }
@@ -190,7 +250,7 @@ class ToolRegistryUnitTest {
     @Test
     void testInvokeUnknownToolThrows() {
         when(discoveryService.getToolIndex()).thenReturn(Map.of());
-        assertThrows(IllegalArgumentException.class, () -> registry.invokeTool("unknown_tool", Map.of()));
+        assertThrows(IllegalArgumentException.class, () -> invokeWithIdentity("unknown_tool", Map.of()));
     }
 
     @Test
@@ -203,7 +263,7 @@ class ToolRegistryUnitTest {
 
         when(discoveryService.getToolIndex()).thenReturn(Map.of("simple_tool", mockTool));
 
-        ToolResponse resp = registry.invokeTool("simple_tool", Map.of("p", "v"));
+        ToolResponse resp = invokeWithIdentity("simple_tool", Map.of("p", "v"));
         assertNotNull(resp);
         assertTrue(resp.success());
         assertEquals("ok", resp.output());
@@ -231,10 +291,20 @@ class ToolRegistryUnitTest {
         registry.beanManager = mock(BeanManager.class);
         when(registry.beanManager.getBeans(Object.class)).thenReturn(Collections.emptySet());
 
-        ToolResponse resp = registry.invokeTool("sandboxed_tool", Map.of());
+        ToolResponse resp = invokeWithIdentity("sandboxed_tool", Map.of());
         assertNotNull(resp);
         assertFalse(resp.success());
         assertEquals("Sandbox execution environment is currently unavailable.", resp.output());
+    }
+
+    @Test
+    void sandboxContainerCleanupRequiresConfirmedAttemptOutcome() {
+        assertTrue(ToolRegistry.canReleaseSandboxAttempt(ToolAttemptStatus.SETTLED_SUCCESS));
+        assertTrue(ToolRegistry.canReleaseSandboxAttempt(ToolAttemptStatus.SETTLED_ERROR));
+        assertTrue(ToolRegistry.canReleaseSandboxAttempt(ToolAttemptStatus.TIMED_OUT));
+        assertTrue(ToolRegistry.canReleaseSandboxAttempt(ToolAttemptStatus.CANCELLED_BEFORE_LAUNCH));
+        assertFalse(ToolRegistry.canReleaseSandboxAttempt(ToolAttemptStatus.INDETERMINATE));
+        assertFalse(ToolRegistry.canReleaseSandboxAttempt(ToolAttemptStatus.RUNNING));
     }
 
     @Test
@@ -248,7 +318,7 @@ class ToolRegistryUnitTest {
                 .when(governanceGuard)
                 .verifyRoleCapability(any(), eq("guarded_tool"));
 
-        ToolResponse resp1 = registry.invokeTool("guarded_tool", Map.of());
+        ToolResponse resp1 = invokeWithIdentity("guarded_tool", Map.of());
         assertFalse(resp1.success());
         assertTrue(resp1.output().contains("Role forbidden"));
 
@@ -257,7 +327,7 @@ class ToolRegistryUnitTest {
                 .when(governanceGuard)
                 .verifyAutonomy(any(), eq("guarded_tool"), any(), any());
 
-        ToolResponse resp2 = registry.invokeTool("guarded_tool", Map.of());
+        ToolResponse resp2 = invokeWithIdentity("guarded_tool", Map.of());
         assertFalse(resp2.success());
         assertTrue(resp2.output().contains("Autonomy policy denied"));
     }
@@ -286,7 +356,7 @@ class ToolRegistryUnitTest {
         input.put("hallucinated", "extra");
         input.put("null_key", null);
 
-        ToolResponse resp = registry.invokeTool("schema_tool", input);
+        ToolResponse resp = invokeWithIdentity("schema_tool", input);
         assertTrue(resp.success());
         assertEquals("keys=[allowed]", resp.output());
     }
@@ -301,7 +371,7 @@ class ToolRegistryUnitTest {
 
         when(discoveryService.getToolIndex()).thenReturn(Map.of("failing_tool", mockTool));
 
-        ToolResponse resp = registry.invokeTool("failing_tool", Map.of());
+        ToolResponse resp = invokeWithIdentity("failing_tool", Map.of());
         assertNotNull(resp);
         assertFalse(resp.success());
     }
@@ -355,7 +425,7 @@ class ToolRegistryUnitTest {
         when(invoker.invoke(eq("remote"), any(), any())).thenReturn(ToolResponse.success("from remote"));
         withDynamicInvoker(invoker);
 
-        ToolResponse resp = registry.invokeTool("remote", Map.of());
+        ToolResponse resp = invokeWithIdentity("remote", Map.of());
 
         assertEquals("from remote", resp.output());
         verify(governanceGuard).verifyAutonomy(any(), eq("remote"), eq(ToolOperation.READ_FS), any());
@@ -373,7 +443,7 @@ class ToolRegistryUnitTest {
                 .when(governanceGuard)
                 .verifyAutonomy(any(), eq("remote"), any(), any());
 
-        ToolResponse resp = registry.invokeTool("remote", Map.of());
+        ToolResponse resp = invokeWithIdentity("remote", Map.of());
 
         assertEquals(403, resp.exitCode());
         assertTrue(resp.output().contains("shell not permitted"));
@@ -388,7 +458,7 @@ class ToolRegistryUnitTest {
         when(invoker.findTool("ghost")).thenReturn(Optional.empty());
         withDynamicInvoker(invoker);
 
-        assertThrows(IllegalArgumentException.class, () -> registry.invokeTool("ghost", Map.of()));
+        assertThrows(IllegalArgumentException.class, () -> invokeWithIdentity("ghost", Map.of()));
     }
 
     // ---------- audit behaviour ----------
@@ -401,7 +471,7 @@ class ToolRegistryUnitTest {
         when(discoveryService.getToolIndex()).thenReturn(Map.of("guarded_tool", mockTool));
         doThrow(new SecurityException("denied")).when(governanceGuard).verifyRoleCapability(any(), eq("guarded_tool"));
 
-        registry.invokeTool("guarded_tool", Map.of());
+        invokeWithIdentity("guarded_tool", Map.of());
 
         // A denied invocation must not be audited as TOOL_INVOKED - it never ran.
         verify(auditService, never()).record(any(), any(), any(), any(), anyString());
@@ -417,7 +487,7 @@ class ToolRegistryUnitTest {
         when(mockTool.execute(any(), any())).thenReturn(ToolResponse.failure(2, "bad input"));
         when(discoveryService.getToolIndex()).thenReturn(Map.of("failing", mockTool));
 
-        ToolResponse resp = registry.invokeTool("failing", Map.of());
+        ToolResponse resp = invokeWithIdentity("failing", Map.of());
 
         assertEquals(2, resp.exitCode());
         verify(governanceGuard).recordToolFailureAudit(any(), eq("failing"), any());
@@ -442,7 +512,7 @@ class ToolRegistryUnitTest {
         Map<String, Object> input = new HashMap<>();
         input.put("explicitNull", null);
 
-        ToolResponse resp = registry.invokeTool("keep_nulls", input);
+        ToolResponse resp = invokeWithIdentity("keep_nulls", input);
 
         assertEquals("hasNull=true", resp.output());
     }
@@ -460,7 +530,7 @@ class ToolRegistryUnitTest {
         });
         when(discoveryService.getToolIndex()).thenReturn(Map.of("free_form", mockTool));
 
-        ToolResponse resp = registry.invokeTool("free_form", Map.of("anything", "goes"));
+        ToolResponse resp = invokeWithIdentity("free_form", Map.of("anything", "goes"));
 
         // An empty schema means "no declared constraint", so nothing is stripped.
         assertEquals("keys=[anything]", resp.output());
@@ -473,7 +543,7 @@ class ToolRegistryUnitTest {
         when(discoveryService.getToolIndex()).thenReturn(Map.of());
 
         // Only the exact name or the prefix are intercepted; a name merely containing "headroom" is not.
-        assertThrows(IllegalArgumentException.class, () -> registry.invokeTool("my_headroom", Map.of()));
+        assertThrows(IllegalArgumentException.class, () -> invokeWithIdentity("my_headroom", Map.of()));
     }
 
     // ---------- exception handling ----------
@@ -495,7 +565,7 @@ class ToolRegistryUnitTest {
                 .thenThrow(new InvocationException(new IllegalStateException("real root cause")));
         when(discoveryService.getToolIndex()).thenReturn(Map.of("wrapped_tool", mockTool));
 
-        ToolResponse resp = registry.invokeTool("wrapped_tool", Map.of());
+        ToolResponse resp = invokeWithIdentity("wrapped_tool", Map.of());
 
         assertFalse(resp.success());
         assertTrue(resp.output().contains("real root cause"), "root cause must surface, got: " + resp.output());
@@ -514,7 +584,7 @@ class ToolRegistryUnitTest {
         when(discoveryService.getToolIndex()).thenReturn(Map.of("violating_tool", mockTool));
 
         // Fail-closed: a compliance breach must abort the loop rather than degrade to a tool failure.
-        assertThrows(ComplianceViolationException.class, () -> registry.invokeTool("violating_tool", Map.of()));
+        assertThrows(ComplianceViolationException.class, () -> invokeWithIdentity("violating_tool", Map.of()));
     }
 
     @Test
@@ -527,7 +597,7 @@ class ToolRegistryUnitTest {
                 .thenThrow(new IllegalStateException("Cannot run program \"gh\": error=2, No such file"));
         when(discoveryService.getToolIndex()).thenReturn(Map.of(ToolCapability.GITHUB.toolName(), mockTool));
 
-        ToolResponse resp = registry.invokeTool(ToolCapability.GITHUB.toolName(), Map.of());
+        ToolResponse resp = invokeWithIdentity(ToolCapability.GITHUB.toolName(), Map.of());
 
         assertTrue(resp.output().contains("GitHub integration is not available"), "got: " + resp.output());
         assertFalse(resp.output().startsWith("EXECUTION_FAILED"));
@@ -542,7 +612,7 @@ class ToolRegistryUnitTest {
         when(mockTool.execute(any(), any())).thenThrow(new IllegalStateException("Cannot run program \"gh\""));
         when(discoveryService.getToolIndex()).thenReturn(Map.of("some_other_tool", mockTool));
 
-        ToolResponse resp = registry.invokeTool("some_other_tool", Map.of());
+        ToolResponse resp = invokeWithIdentity("some_other_tool", Map.of());
 
         assertTrue(resp.output().startsWith("EXECUTION_FAILED: "));
         assertEquals("TOOL_EXECUTION_FAILED", resp.errorCode());
@@ -555,7 +625,7 @@ class ToolRegistryUnitTest {
         CapturingTool tool = new CapturingTool("json_tool");
         register(tool);
 
-        registry.invokeTool("json_tool", "{\"key\": \"value\"}", "sess-1");
+        invokeWithIdentity("json_tool", "{\"key\": \"value\"}", "sess-1");
 
         assertEquals(Map.of("key", "value"), tool.capturedParams);
     }
@@ -565,7 +635,7 @@ class ToolRegistryUnitTest {
         when(discoveryService.getToolIndex()).thenReturn(Map.of());
 
         IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class, () -> registry.invokeTool("json_tool", "{not json", "sess-1"));
+                IllegalArgumentException.class, () -> invokeWithIdentity("json_tool", "{not json", "sess-1"));
 
         assertTrue(ex.getMessage().contains("Failed to deserialize tool parameters for json_tool"));
     }
@@ -577,7 +647,7 @@ class ToolRegistryUnitTest {
         CapturingTool tool = new CapturingTool("ctx_tool");
         register(tool);
 
-        registry.invokeTool("ctx_tool", Map.of());
+        invokeWithIdentity("ctx_tool", Map.of());
 
         assertEquals("system", tool.capturedContext.sessionId());
         assertEquals("system", tool.capturedContext.chatId());
@@ -597,7 +667,7 @@ class ToolRegistryUnitTest {
                 .where(WorkspaceContext.AGENT_ROLE, AgentRoleEnum.COORDINATOR.id())
                 .where(WorkspaceContext.AUTONOMY, AutonomyLevel.FULL)
                 .where(WorkspaceContext.CHANNEL_TYPE, "telegram")
-                .run(() -> registry.invokeTool("ctx_tool", Map.of()));
+                .run(() -> invokeWithIdentity("ctx_tool", Map.of()));
 
         assertEquals("sess-42", tool.capturedContext.sessionId());
         assertEquals("chat-9", tool.capturedContext.chatId());
@@ -611,7 +681,7 @@ class ToolRegistryUnitTest {
         register(tool);
 
         ScopedValue.where(WorkspaceContext.AGENT_ROLE, AgentRoleEnum.SKILL_PREFIX + "reporting")
-                .run(() -> registry.invokeTool("ctx_tool", Map.of()));
+                .run(() -> invokeWithIdentity("ctx_tool", Map.of()));
 
         // The mocked registry holds no such skill, so the lookup happens and yields null/false.
         // Called TWICE, not once: createExecutionContext() resolves skillHome and browserPreview
@@ -627,7 +697,7 @@ class ToolRegistryUnitTest {
         register(tool);
 
         ScopedValue.where(WorkspaceContext.AGENT_ROLE, AgentRoleEnum.COORDINATOR.id())
-                .run(() -> registry.invokeTool("ctx_tool", Map.of()));
+                .run(() -> invokeWithIdentity("ctx_tool", Map.of()));
 
         verify(skillRegistry, never()).findByName(anyString());
         assertNull(tool.capturedContext.skillHome());

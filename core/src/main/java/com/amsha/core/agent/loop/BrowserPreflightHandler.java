@@ -21,6 +21,7 @@ import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.message.UserMessages;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.CronTimeResolver;
 import com.amsha.tool.api.AgentTool;
@@ -108,6 +109,9 @@ public class BrowserPreflightHandler {
             return Optional.empty();
         }
         ReasoningStep preflightStep = preflightOpt.get();
+        if (preflightStep instanceof ReasoningStep.ToolCallStep && preflightStep.operationId() == null) {
+            preflightStep = preflightStep.withOperationId(ToolOperationIdentity.generateCanonicalUuid());
+        }
         try {
             ToolInvocationGuard.GuardDecision guardDecision = invocationGuard.evaluate(
                     context.sessionId(),
@@ -129,6 +133,18 @@ public class BrowserPreflightHandler {
             if (guardDecision instanceof ToolInvocationGuard.GuardDecision.Blocked blocked) {
                 return Optional.of(AgentResult.failed(
                         blocked.observation(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history)));
+            }
+            if (guardDecision instanceof ToolInvocationGuard.GuardDecision.DurableReplay replay) {
+                ReasoningStep completed = preflightStep.withDiagnostics(
+                        replay.observation(), replay.succeeded(), replay.errorCode(), null, null);
+                history.add(completed);
+                if (replay.succeeded()) {
+                    return Optional.of(AgentResult.finished(replay.observation(), List.copyOf(history)));
+                }
+                return Optional.of(AgentResult.failed(
+                        "Previously executed tool attempt failed: " + replay.observation(),
+                        AgentResult.FailureCategory.SYSTEM_ERROR,
+                        List.copyOf(history)));
             }
             if (guardDecision instanceof ToolInvocationGuard.GuardDecision.Deduplicate duplicate) {
                 ReasoningStep completed = preflightStep.withObservation(duplicate.cachedObservation(), true);
@@ -219,7 +235,8 @@ public class BrowserPreflightHandler {
         if (!suggestedCronSource.isBlank()) {
             scope = scope.where(WorkspaceContext.SUGGESTED_CRON_SOURCE, suggestedCronSource);
         }
-        return scope.call(() -> toolInvoker.invoke(step.action(), step.actionInput(), context.sessionId()));
+        return scope.call(
+                () -> toolInvoker.invoke(step.action(), step.actionInput(), context.sessionId(), step.operationId()));
     }
 
     private static String suggestedValue(AgentExecutionContext context, String key) {

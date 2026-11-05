@@ -47,6 +47,7 @@ class ToolAttemptSchemaGuardTest {
             stmt.execute("CREATE TABLE tool_action_claim (workspace_id TEXT, session_id TEXT);");
             stmt.execute("CREATE TABLE tool_action_lock (lock_id TEXT);");
             stmt.execute("CREATE TABLE tool_attempt_outbox (event_id TEXT);");
+            stmt.execute("CREATE TABLE audit_chain_lock (session_id TEXT, lock_version INTEGER);");
             stmt.execute("CREATE TABLE tool_attempt_resolution (resolution_id TEXT);");
             stmt.execute("CREATE TABLE reasoning_step_attempt (step_id TEXT, attempt_id TEXT);");
         }
@@ -95,6 +96,7 @@ class ToolAttemptSchemaGuardTest {
                 stmt.execute("CREATE TABLE tool_action_claim (workspace_id TEXT);");
                 stmt.execute("CREATE TABLE tool_action_lock (lock_id TEXT);");
                 stmt.execute("CREATE TABLE tool_attempt_outbox (event_id TEXT);");
+                stmt.execute("CREATE TABLE audit_chain_lock (session_id TEXT, lock_version INTEGER);");
                 stmt.execute("CREATE TABLE tool_attempt_resolution (resolution_id TEXT);");
                 stmt.execute("CREATE TABLE reasoning_step_attempt (step_id TEXT);");
             }

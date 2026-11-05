@@ -261,6 +261,10 @@ Set `AMSHA_UI_SKIP_ONBOARDING=true` if you want the web UI to skip the setup wiz
 
 See the [Tool Governance Decision Tree](./docs/ARCHITECTURE.md#tool-governance-decision-tree) for the full governance path.
 
+Pending tool-attempt audit delivery runs once per minute by default. Configure or disable the
+sweep with `AMSHA_TOOLS_ATTEMPT_AUDIT_OUTBOX_CRON` and
+`AMSHA_TOOLS_ATTEMPT_AUDIT_OUTBOX_ENABLED`; see the [configuration reference](./docs/CONFIGURATION.md).
+
 ### Governed Outbound Transport for LLMs & Arena
 <img src="./docs/assets/amsha_governed_transport.svg" alt="Governed LLM Transport" width="100%">
 

@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.amsha.persistence.api.AuditChainFinalizer;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.AuditEventStorePort;
 
@@ -26,6 +27,24 @@ public class MockAuditEventStorePort implements AuditEventStorePort {
     @Override
     public void save(AuditEventDto dto) {
         store.computeIfAbsent(dto.sessionId(), k -> new ArrayList<>()).add(dto);
+    }
+
+    @Override
+    public synchronized AuditEventDto appendChained(AuditEventDto seed, AuditChainFinalizer finalizer) {
+        List<AuditEventDto> events = store.computeIfAbsent(seed.sessionId(), _ -> new ArrayList<>());
+        if (seed.idempotencyKey() != null) {
+            Optional<AuditEventDto> existing = events.stream()
+                    .filter(event -> seed.idempotencyKey().equals(event.idempotencyKey()))
+                    .findFirst();
+            if (existing.isPresent()) {
+                return existing.get();
+            }
+        }
+        long sequence = events.stream().mapToLong(AuditEventDto::sequence).max().orElse(0L) + 1;
+        String previousHash = events.isEmpty() ? null : events.getLast().hmacHash();
+        AuditEventDto finalized = AuditEventStorePort.finalizeAndValidate(seed, sequence, previousHash, finalizer);
+        events.add(finalized);
+        return finalized;
     }
 
     @Override

@@ -16,6 +16,11 @@ import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 @RegisterConstructorMapper(AuditEventDto.class)
 public interface AuditJdbiDao {
 
+    @SqlUpdate("INSERT INTO audit_chain_lock (session_id, lock_version) "
+            + "VALUES (:sessionId, 1) "
+            + "ON CONFLICT (session_id) DO UPDATE SET lock_version = lock_version + 1")
+    void acquireSessionChainLock(@Bind("sessionId") String sessionId);
+
     @SqlUpdate(
             "INSERT INTO audit_event (id, sessionId, userId, agentRole, goalHash, outcome, eventType, eventDetail, inputTokens, outputTokens, usdCost, timestamp, iterationsUsed, app_version, idempotency_key, sequence, hmacHash, prevHash) VALUES (:id, :sessionId, :userId, :agentRole, :goalHash, :outcome, :eventType, :eventDetail, :inputTokens, :outputTokens, :usdCost, :timestamp, :iterationsUsed, :appVersion, :idempotencyKey, :sequence, :hmacHash, :prevHash)")
     void save(@BindMethods AuditEventDto dto);
@@ -27,6 +32,13 @@ public interface AuditJdbiDao {
     @SqlQuery(
             "SELECT hmacHash FROM audit_event WHERE sessionId = :sessionId ORDER BY sequence DESC, timestamp DESC LIMIT 1")
     Optional<String> findLatestHash(@Bind("sessionId") String sessionId);
+
+    @SqlQuery("SELECT id, sessionId, userId, agentRole, goalHash, outcome, eventType, eventDetail, inputTokens, "
+            + "outputTokens, usdCost, timestamp, iterationsUsed, app_version AS \"appVersion\", "
+            + "idempotency_key AS \"idempotencyKey\", sequence, hmacHash, prevHash "
+            + "FROM audit_event WHERE sessionId = :sessionId AND idempotency_key = :key "
+            + "ORDER BY sequence ASC LIMIT 1")
+    Optional<AuditEventDto> findByIdempotencyKey(@Bind("sessionId") String sessionId, @Bind("key") String key);
 
     @SqlQuery("SELECT COUNT(*) FROM audit_event WHERE idempotency_key = :key")
     long countByIdempotencyKey(@Bind("key") String key);

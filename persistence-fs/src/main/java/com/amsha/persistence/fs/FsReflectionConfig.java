@@ -170,6 +170,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             "com.amsha.persistence.fs.FsEvolutionEventStore$EventBatch",
             "com.amsha.persistence.fs.FsSecretStoreAdapter$SecretRecord",
             "com.amsha.persistence.fs.FsAuditEventStoreAdapter$IndexEntry",
+            "com.amsha.persistence.fs.FsAuditEventStoreAdapter$SessionIndex",
             "com.amsha.persistence.fs.FsMemoryRetrievalAdapter$IndexEntry",
             "com.amsha.persistence.fs.FsExecutionTraceStoreAdapter$RunEvents",
             "com.amsha.persistence.fs.FsExecutionTraceStoreAdapter$SessionIndex",

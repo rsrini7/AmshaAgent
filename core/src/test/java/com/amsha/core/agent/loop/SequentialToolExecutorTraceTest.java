@@ -29,6 +29,7 @@ import io.opentelemetry.context.Context;
  * Visual Cockpit live trace.
  */
 class SequentialToolExecutorTraceTest {
+    private static final String OPERATION_ID = "00000000-0000-0000-0000-000000000001";
 
     private final TracePublisher tracePublisher = mock(TracePublisher.class);
     private final ArgumentCaptor<AgentTraceEvent> captor = ArgumentCaptor.forClass(AgentTraceEvent.class);
@@ -39,8 +40,10 @@ class SequentialToolExecutorTraceTest {
         var guard = mock(ToolInvocationGuard.class);
         var executor = new SequentialToolExecutor(toolInvoker, guard, tracePublisher);
 
-        var call = ParallelToolCall.pending("call_0", "search", Map.of("q", "x"), "{\"q\":\"x\"}");
-        when(toolInvoker.invoke(eq("search"), any(), eq("sess-1"))).thenReturn(ToolResponse.success("found"));
+        var call = ParallelToolCall.pending("call_0", "search", Map.of("q", "x"), "{\"q\":\"x\"}")
+                .withOperationId(OPERATION_ID);
+        when(toolInvoker.invoke(eq("search"), any(), eq("sess-1"), eq(OPERATION_ID)))
+                .thenReturn(ToolResponse.success("found"));
 
         executor.execute(context(), call, Context.current());
 
@@ -59,8 +62,9 @@ class SequentialToolExecutorTraceTest {
         var guard = mock(ToolInvocationGuard.class);
         var executor = new SequentialToolExecutor(toolInvoker, guard, tracePublisher);
 
-        var call = ParallelToolCall.pending("call_0", "calc", Map.of(), "{}");
-        when(toolInvoker.invoke(eq("calc"), any(), eq("sess-1"))).thenReturn(ToolResponse.failure(1, "boom"));
+        var call = ParallelToolCall.pending("call_0", "calc", Map.of(), "{}").withOperationId(OPERATION_ID);
+        when(toolInvoker.invoke(eq("calc"), any(), eq("sess-1"), eq(OPERATION_ID)))
+                .thenReturn(ToolResponse.failure(1, "boom"));
 
         executor.execute(context(), call, Context.current());
 
@@ -77,9 +81,10 @@ class SequentialToolExecutorTraceTest {
         var guard = mock(ToolInvocationGuard.class);
         var executor = new SequentialToolExecutor(toolInvoker, guard, tracePublisher);
 
-        when(toolInvoker.invoke(eq("safe_read"), any(), eq("sess-1"))).thenReturn(ToolResponse.success("ok"));
+        when(toolInvoker.invoke(eq("safe_read"), any(), eq("sess-1"), eq(OPERATION_ID)))
+                .thenReturn(ToolResponse.success("ok"));
 
-        executor.invoke("safe_read", Map.of("path", "/x"), "sess-1");
+        executor.invoke("safe_read", Map.of("path", "/x"), "sess-1", OPERATION_ID);
 
         verify(tracePublisher, times(2)).publish(captor.capture());
         var statuses =

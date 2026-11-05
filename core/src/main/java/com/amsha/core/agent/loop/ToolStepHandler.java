@@ -21,6 +21,7 @@ import com.amsha.core.message.UserMessages;
 import com.amsha.core.observability.AgentObserver;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.skill.CompiledSkillEntry;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.AgentSentinels;
 import com.amsha.tool.api.ToolCapability;
@@ -148,13 +149,17 @@ public class ToolStepHandler {
             int consecutiveFailures,
             List<CompiledSkillEntry> skillSnapshot) {
 
+        if (step instanceof ReasoningStep.ToolCallStep && step.operationId() == null) {
+            step = step.withOperationId(ToolOperationIdentity.generateCanonicalUuid());
+        }
+
         // Parallel batch - delegate to ParallelToolStepExecutor
         if (step.isParallelBatch()) {
             return parallelExecutor.execute(context, history, step, consecutiveFailures);
         }
 
         // Phase 1 - Guard
-        StepDecision guardDecision = evaluateGuard(context, history, step, skillSnapshot);
+        StepDecision guardDecision = evaluateGuard(context, history, step, consecutiveFailures, skillSnapshot);
         if (guardDecision != null) return guardDecision;
 
         // Phase 2 - Invoke
@@ -187,8 +192,8 @@ public class ToolStepHandler {
             log.infof(
                     "[AutoHeal] Detected recoverable sandbox_exec failure for session %s, invoking Shiva debugger",
                     context.sessionId());
-            String originalCode = extractParam(params, "code");
-            String language = extractParam(params, "language");
+            String originalCode = ToolStepContextSupport.extractParam(params, "code");
+            String language = ToolStepContextSupport.extractParam(params, "language");
             if (language == null || language.isBlank()) {
                 log.warnf(
                         "[AutoHeal] Skipping recovery for session %s because sandbox_exec language is missing",
@@ -290,6 +295,7 @@ public class ToolStepHandler {
             AgentExecutionContext context,
             List<ReasoningStep> history,
             ReasoningStep step,
+            int consecutiveFailures,
             List<CompiledSkillEntry> skillSnapshot) {
 
         if (context.autonomyLevel() == AutonomyLevel.READONLY) {
@@ -316,6 +322,13 @@ public class ToolStepHandler {
                 context.goal(),
                 skillSnapshot);
 
+        if (decision instanceof ToolInvocationGuard.GuardDecision.DurableReplay replay) {
+            ReasoningStep replayedStep =
+                    step.withDiagnostics(replay.observation(), replay.succeeded(), replay.errorCode(), null, null);
+            history.add(replayedStep);
+            observers.forEach(o -> o.onStepComplete(context.sessionId(), context.agentRole(), replayedStep));
+            return StepDecision.proceedWithFailures(replayedStep, replay.succeeded() ? 0 : consecutiveFailures + 1);
+        }
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate d) {
             final ReasoningStep dedupStep = step.withObservation(d.cachedObservation(), true);
             history.add(dedupStep);
@@ -399,9 +412,11 @@ public class ToolStepHandler {
         String exceptionClass = "none";
 
         try {
-            final String suggestedCron = suggestedContextValue(context, "SUGGESTED_CRON");
-            final String suggestedNextFireTime = suggestedContextValue(context, "SUGGESTED_NEXT_FIRE_TIME");
-            final String suggestedCronSource = suggestedContextValue(context, "SUGGESTED_CRON_SOURCE");
+            final String suggestedCron = ToolStepContextSupport.suggestedContextValue(context, "SUGGESTED_CRON");
+            final String suggestedNextFireTime =
+                    ToolStepContextSupport.suggestedContextValue(context, "SUGGESTED_NEXT_FIRE_TIME");
+            final String suggestedCronSource =
+                    ToolStepContextSupport.suggestedContextValue(context, "SUGGESTED_CRON_SOURCE");
 
             return WorkspaceContext.run(
                     context.sessionId(),
@@ -418,7 +433,7 @@ public class ToolStepHandler {
                                 .where(WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME, suggestedNextFireTime)
                                 .where(WorkspaceContext.SUGGESTED_CRON_SOURCE, suggestedCronSource)
                                 .call(() -> new InvokeResult.Responded(
-                                        invoker.invoke(toolName, params, context.sessionId())));
+                                        invoker.invoke(toolName, params, context.sessionId(), step.operationId())));
                     });
         } catch (RequiresApprovalException e) {
             exceptionClass = e.getClass().getSimpleName();
@@ -432,25 +447,6 @@ public class ToolStepHandler {
         } finally {
             sample.stop(timer.tag("exception", exceptionClass).register(meterRegistry));
         }
-    }
-
-    private String extractParam(Map<String, Object> params, String key) {
-        Object val = params.get(key);
-        return val instanceof String s ? s : (val != null ? val.toString() : "");
-    }
-
-    /**
-     * Reads a scheduling hint from the execution context.
-     *
-     * <p>Returns "" — never {@code String.valueOf(null)}'s "null" — when the key is absent.
-     * A literal "null" is non-blank, so consumers treat a missing hint as a real value and
-     * silently skip their cron fallback; {@code ScopedValue} also rejects null bindings, so
-     * an empty string is the only safe representation of "not provided".
-     */
-    private static String suggestedContextValue(AgentExecutionContext context, String key) {
-        if (context == null || context.data() == null) return "";
-        Object value = context.data().get(key);
-        return value == null ? "" : String.valueOf(value);
     }
 
     private ToolResponse invokeToolWithParams(

@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import jakarta.enterprise.event.Event;
@@ -17,6 +20,7 @@ import com.amsha.core.events.ToolExecutionEvent;
 import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.observability.AgentOtelContext;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.tool.api.ToolResponse;
 
@@ -59,19 +63,33 @@ class ToolInvokerTest {
 
     @Test
     void testInvokeTool_success() {
-        when(toolRegistry.invokeTool(anyString(), anyMap())).thenReturn(ToolResponse.success("success"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyMap(), anyString()))
+                .thenReturn(ToolResponse.success("success"));
 
-        ToolResponse response = invoker.invoke("tool", Map.of(), "s1");
+        ToolResponse response = invokeWithIdentity("tool", Map.of(), "s1");
 
         assertTrue(response.success());
         assertEquals("success", response.output());
     }
 
     @Test
-    void testInvokeTool_securityException() {
-        when(toolRegistry.invokeTool(anyString(), anyMap())).thenThrow(new SecurityException("Blocked"));
+    void invokeWithOperationIdForwardsIdentityToRegistry() {
+        String operationId = "123e4567-e89b-12d3-a456-426614174099";
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyMap(), eq(operationId)))
+                .thenReturn(ToolResponse.success("success"));
 
-        ToolResponse response = invoker.invoke("tool", Map.of(), "s1");
+        ToolResponse response = invoker.invoke("file_read", Map.of(), "s-operation", operationId);
+
+        assertEquals("success", response.output());
+        verify(toolRegistry).invokeToolWithOperationId("file_read", Map.of(), operationId);
+    }
+
+    @Test
+    void testInvokeTool_securityException() {
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyMap(), anyString()))
+                .thenThrow(new SecurityException("Blocked"));
+
+        ToolResponse response = invokeWithIdentity("tool", Map.of(), "s1");
 
         assertFalse(response.success());
         assertTrue(response.output().contains("Security violation"));
@@ -80,9 +98,10 @@ class ToolInvokerTest {
 
     @Test
     void testInvokeTool_genericException() {
-        when(toolRegistry.invokeTool(anyString(), anyMap())).thenThrow(new RuntimeException("Crash"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyMap(), anyString()))
+                .thenThrow(new RuntimeException("Crash"));
 
-        ToolResponse response = invoker.invoke("tool", Map.of(), "s1");
+        ToolResponse response = invokeWithIdentity("tool", Map.of(), "s1");
 
         assertFalse(response.success());
         assertTrue(response.output().contains("Tool execution error"));
@@ -92,9 +111,10 @@ class ToolInvokerTest {
     @Test
     void testInvokeTool_requiresApprovalExceptionBubblesUp() {
         RequiresApprovalException ex = new RequiresApprovalException("tool", "{}", "s1");
-        when(toolRegistry.invokeTool(anyString(), anyMap())).thenThrow(ex);
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyMap(), anyString()))
+                .thenThrow(ex);
 
-        assertThrows(RequiresApprovalException.class, () -> invoker.invoke("tool", Map.of(), "s1"));
+        assertThrows(RequiresApprovalException.class, () -> invokeWithIdentity("tool", Map.of(), "s1"));
     }
 
     @Test
@@ -102,7 +122,7 @@ class ToolInvokerTest {
         String sessionId = "s-halted-" + System.currentTimeMillis();
         WorkspaceManager.haltSession(sessionId);
         try {
-            ToolResponse response = invoker.invoke("any_tool", Map.of(), sessionId);
+            ToolResponse response = invokeWithIdentity("any_tool", Map.of(), sessionId);
             assertFalse(response.success());
             assertEquals(499, response.exitCode());
             assertTrue(response.output().contains("Execution aborted"));
@@ -115,12 +135,25 @@ class ToolInvokerTest {
     void testInvokeTool_interruptedThreadAbortsToolInvocation() {
         Thread.currentThread().interrupt();
         try {
-            ToolResponse response = invoker.invoke("any_tool", Map.of(), "s-normal");
+            ToolResponse response = invokeWithIdentity("any_tool", Map.of(), "s-normal");
             assertFalse(response.success());
             assertEquals(499, response.exitCode());
             assertTrue(response.output().contains("Execution aborted"));
         } finally {
             Thread.interrupted(); // clear interrupted status
         }
+    }
+
+    @Test
+    void legacyInvocationWithoutOperationIdFailsClosed() {
+        ToolResponse response = invoker.invoke("tool", Map.of(), "s1");
+
+        assertFalse(response.success());
+        assertEquals(409, response.exitCode());
+        verifyNoInteractions(toolRegistry);
+    }
+
+    private ToolResponse invokeWithIdentity(String toolName, Map<String, Object> params, String sessionId) {
+        return invoker.invoke(toolName, params, sessionId, ToolOperationIdentity.generateCanonicalUuid());
     }
 }

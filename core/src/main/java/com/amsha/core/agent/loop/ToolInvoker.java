@@ -12,6 +12,7 @@ import com.amsha.core.governance.RequiresApprovalException;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.observability.AgentOtelContext;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.tool.attempt.ToolAttemptExecutionService;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.tool.api.ToolResponse;
 
@@ -58,6 +59,14 @@ public class ToolInvoker {
      * @throws RequiresApprovalException If the tool requires human approval.
      */
     public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
+        return invoke(toolName, params, sessionId, null);
+    }
+
+    /** Invokes a tool while preserving the stable identity of its logical operation. */
+    public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId, String operationId) {
+        if (operationId == null || operationId.isBlank()) {
+            return ToolResponse.failure(409, ToolAttemptExecutionService.MISSING_OPERATION_ID_OUTPUT);
+        }
         if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(sessionId)) {
             log.warnf(
                     "[TOOL] invoke aborted - session %s is halted or thread interrupted: tool=%s", sessionId, toolName);
@@ -72,15 +81,17 @@ public class ToolInvoker {
         String role = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
         toolEvent.fireAsync(ToolExecutionEvent.call(toolName, sessionId, userId, role, params, null));
         try (Scope _ = toolSpan.makeCurrent()) {
-            ToolResponse response = toolRegistry.invokeTool(toolName, params);
+            ToolResponse response = operationId == null
+                    ? toolRegistry.invokeTool(toolName, params)
+                    : toolRegistry.invokeToolWithOperationId(toolName, params, operationId);
             if (Thread.currentThread().isInterrupted() || WorkspaceManager.isSessionHalted(sessionId)) {
                 log.warnf(
                         "[TOOL] invoke completed but session %s was halted or thread interrupted: tool=%s",
                         sessionId, toolName);
                 return ToolResponse.failure(499, "Execution aborted: session is halted or thread was interrupted.");
             }
-            String rawObservation = response.output();
-            String sanitizedObservation = observationSanitizer.sanitize(toolName, rawObservation);
+            // ToolRegistry returns every executed observation after the canonical transformer chain.
+            String sanitizedObservation = response.output();
 
             if (response instanceof ToolResponse.ToolFailure failure) {
                 int exit = failure.exitCode();
@@ -95,20 +106,7 @@ public class ToolInvoker {
                 }
             }
 
-            ToolResponse result =
-                    switch (response) {
-                        case ToolResponse.ToolSuccess _ -> ToolResponse.success(sanitizedObservation);
-                        case ToolResponse.ToolFailure failure ->
-                            new ToolResponse.ToolFailure(
-                                    failure.exitCode(),
-                                    sanitizedObservation,
-                                    failure.isInfraFailure(),
-                                    failure.errorCode(),
-                                    failure.traceId(),
-                                    failure.rootCauseClass());
-                        case ToolResponse.ToolPending pending ->
-                            new ToolResponse.ToolPending(sanitizedObservation, pending.approvalToken());
-                    };
+            ToolResponse result = response;
             // Fire TOOL_RESULT/TOOL_ERROR event for self-evolve trace capture
             boolean isSuccess = result instanceof ToolResponse.ToolSuccess;
             toolEvent.fireAsync(ToolExecutionEvent.result(

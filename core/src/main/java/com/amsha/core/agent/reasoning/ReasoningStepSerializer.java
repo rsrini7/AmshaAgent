@@ -50,6 +50,9 @@ public class ReasoningStepSerializer extends JsonSerializer<ReasoningStep> {
         gen.writeStringField("rootCauseClass", value.rootCauseClass());
         gen.writeBooleanField("isFastPath", value.isFastPath());
         gen.writeBooleanField("isTruncationRecovery", value.isTruncationRecovery());
+        if (value.operationId() != null) {
+            gen.writeStringField("operationId", value.operationId());
+        }
 
         gen.writeEndObject();
     }

@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.amsha.core.persistence.AsyncPersistenceEngine;
 import com.amsha.core.persistence.PersistenceEvent;
@@ -60,6 +62,24 @@ class ComplianceAuditServiceTest {
                         "ses-2", "u1", "coordinator", SecurityEventType.VAULT_ACCESS, "vault read"));
         assertEquals("ses-2", ex.getSessionId());
         assertEquals(SecurityEventType.VAULT_ACCESS, ex.getEventType());
+    }
+
+    @Test
+    void recordMandatoryWithReceiptReturnsDurableAuditEventId() {
+        doAnswer(invocation -> {
+                    PersistenceEvent event = invocation.getArgument(0);
+                    event.getDbAction().execute();
+                    return null;
+                })
+                .when(persistenceEngine)
+                .submitCritical(any());
+        when(auditEventRecorder.recordWithReceipt(any())).thenReturn("00000000-0000-0000-0000-000000000099");
+
+        String eventId = complianceAuditService.recordMandatoryWithReceipt(
+                "session-4", "user-4", "coordinator", SecurityEventType.TOOL_ATTEMPT_ADMITTED, "{}", "outbox-key");
+
+        assertEquals("00000000-0000-0000-0000-000000000099", eventId);
+        verify(auditEventRecorder).recordWithReceipt(any());
     }
 
     @Test

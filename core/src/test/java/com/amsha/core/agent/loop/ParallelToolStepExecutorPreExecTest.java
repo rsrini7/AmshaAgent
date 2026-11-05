@@ -72,6 +72,12 @@ class ParallelToolStepExecutorPreExecTest {
         setField(executor, "rateLimitTracker", rateLimitTracker);
         setField(executor, "observers", observers);
         setField(executor, "preExecutableTools", Optional.of(List.of("safe_read")));
+        BatchResultAggregator batchResultAggregator = new BatchResultAggregator(objectMapper, observers);
+        setField(executor, "batchResultAggregator", batchResultAggregator);
+        setField(
+                executor,
+                "pauseSupport",
+                new ParallelToolPauseSupport(objectMapper, batchResultAggregator, checkpointManager));
 
         SequentialToolExecutor sequentialToolExecutor = new SequentialToolExecutor();
         setField(sequentialToolExecutor, "toolInvoker", toolInvoker);
@@ -169,6 +175,7 @@ class ParallelToolStepExecutorPreExecTest {
     void executeWithMixedTools_PreExecutesSafeTool() {
         String sessionId = "123-456";
         String agentRole = "COORDINATOR";
+        String operationId = "00000000-0000-0000-0000-000000000001";
 
         AgentExecutionContext context = new AgentExecutionContext(
                 sessionId,
@@ -186,7 +193,7 @@ class ParallelToolStepExecutorPreExecTest {
                 null);
 
         var calls = List.of(
-                new ParallelToolCall("c1", "safe_read", Map.of(), "{}", null, true),
+                new ParallelToolCall("c1", "safe_read", Map.of(), "{}", null, true, operationId),
                 new ParallelToolCall("c2", "unsafe_write", Map.of(), "{}", null, true));
 
         ReasoningStep batchStep = ReasoningStep.parallelBatch("thought", Map.of("batch", calls), 0, 0)
@@ -199,12 +206,12 @@ class ParallelToolStepExecutorPreExecTest {
                 .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
                         new ApprovalFrame("unsafe_write", Map.of(), RiskLevel.MEDIUM)));
 
-        when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId)))
+        when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId), eq(operationId)))
                 .thenReturn(ToolResponse.success("pre-exec-data"));
 
         executor.execute(context, Collections.emptyList(), batchStep, 0);
 
-        verify(toolInvoker, times(1)).invoke(eq("safe_read"), any(), any());
+        verify(toolInvoker, times(1)).invoke(eq("safe_read"), any(), eq(sessionId), eq(operationId));
         verify(checkpointManager).persistBatchWithPreExecuted(eq(context), anyList(), any(), anyList(), any(), any());
     }
 
@@ -240,7 +247,7 @@ class ParallelToolStepExecutorPreExecTest {
                 .thenReturn(new ToolInvocationGuard.GuardDecision.PauseForApproval(
                         new ApprovalFrame("unsafe_write", Map.of(), RiskLevel.MEDIUM)));
 
-        when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId)))
+        when(toolInvoker.invoke(eq("safe_read"), any(), eq(sessionId), any()))
                 .thenThrow(new RuntimeException("IO error during pre-exec"));
 
         executor.execute(context, Collections.emptyList(), batchStep, 0);

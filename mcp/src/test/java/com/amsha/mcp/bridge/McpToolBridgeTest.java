@@ -11,6 +11,7 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Optional;
 
+import com.amsha.core.agent.loop.ToolInvocationGuard;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.tools.ToolRegistry;
@@ -19,6 +20,7 @@ import com.amsha.mcp.config.McpToolAllowlist;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +37,7 @@ class McpToolBridgeTest {
     private ToolRegistry mockRegistry;
     private McpToolAllowlist mockAllowlist;
     private ToolSchemaProvider mockSchemaProvider;
+    private ToolInvocationGuard mockToolInvocationGuard;
 
     @BeforeEach
     void setUp() {
@@ -42,10 +45,23 @@ class McpToolBridgeTest {
         mockRegistry = mock(ToolRegistry.class);
         mockAllowlist = mock(McpToolAllowlist.class);
         mockSchemaProvider = mock(ToolSchemaProvider.class);
+        mockToolInvocationGuard = mock(ToolInvocationGuard.class);
         bridge.toolRegistry = mockRegistry;
+        bridge.toolInvocationGuard = mockToolInvocationGuard;
         bridge.allowlist = mockAllowlist;
+        bridge.objectMapper = new ObjectMapper();
         bridge.schemaProvider = mockSchemaProvider;
         bridge.auditService = mock(AuditService.class);
+        when(mockToolInvocationGuard.evaluate(
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.any(),
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.anyMap(),
+                        ArgumentMatchers.anyList(),
+                        ArgumentMatchers.nullable(String.class),
+                        ArgumentMatchers.anyList()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
         bridge.clearCache();
     }
 
@@ -107,10 +123,11 @@ class McpToolBridgeTest {
     @Test
     void testInvokeAllowlistedTool() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
-        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString()))
+        when(mockRegistry.invokeToolWithOperationId(
+                        eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString(), anyString()))
                 .thenReturn(ToolResponse.success("ok"));
 
-        String result = bridge.executeTool(new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", null));
+        String result = bridge.executeTool(request(ToolCapability.GITHUB.toolName(), "{}"));
         assertEquals("ok", result);
     }
 
@@ -124,9 +141,54 @@ class McpToolBridgeTest {
     }
 
     @Test
+    void testMissingMcpIdentityFailsClosedBeforeAuditOrToolExecution() {
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
+
+        String result = bridge.executeTool(new McpToolRequest(ToolCapability.GITHUB.toolName(), "{}", null));
+
+        assertEquals("Error: MCP client and session identifiers are required.", result);
+        Mockito.verifyNoInteractions(mockToolInvocationGuard);
+        Mockito.verifyNoInteractions(mockRegistry);
+        Mockito.verifyNoInteractions(bridge.auditService);
+    }
+
+    @Test
+    void testMandatoryGuardBlocksMcpToolBeforeRegistryInvocation() {
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
+        when(mockToolInvocationGuard.evaluate(
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.any(),
+                        ArgumentMatchers.anyString(),
+                        ArgumentMatchers.anyMap(),
+                        ArgumentMatchers.anyList(),
+                        ArgumentMatchers.nullable(String.class),
+                        ArgumentMatchers.anyList()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Blocked("sensitive detail"));
+
+        String result = bridge.executeTool(request(ToolCapability.GITHUB.toolName(), "{}"));
+
+        assertEquals("Error: Tool invocation was blocked by mandatory safety checks.", result);
+        Mockito.verify(mockRegistry, Mockito.never())
+                .invokeToolWithOperationId(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString(), anyString());
+    }
+
+    @Test
+    void testInvalidMcpParametersFailClosedBeforeGuard() {
+        when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
+
+        String result = bridge.executeTool(request(ToolCapability.GITHUB.toolName(), "{malformed"));
+
+        assertEquals("Error: Tool parameters are invalid.", result);
+        Mockito.verifyNoInteractions(mockToolInvocationGuard);
+        Mockito.verifyNoInteractions(mockRegistry);
+    }
+
+    @Test
     void testAuditRecordsHaveDistinctIdentities() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
-        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString()))
+        when(mockRegistry.invokeToolWithOperationId(
+                        eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString(), anyString()))
                 .thenReturn(ToolResponse.success("ok"));
 
         // Client A
@@ -178,7 +240,8 @@ class McpToolBridgeTest {
     @Test
     void testRoleMappingFromCapabilities() {
         when(mockAllowlist.exposedTools()).thenReturn(List.of(ToolCapability.GITHUB.toolName()));
-        when(mockRegistry.invokeTool(eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString()))
+        when(mockRegistry.invokeToolWithOperationId(
+                        eq(ToolCapability.GITHUB.toolName()), eq("{}"), anyString(), anyString()))
                 .thenReturn(ToolResponse.success("ok"));
 
         McpToolRequest reqCoder = new McpToolRequest(
@@ -187,7 +250,10 @@ class McpToolBridgeTest {
                 HttpServerRequest.class.cast(Proxy.newProxyInstance(
                         getClass().getClassLoader(), new Class[] {HttpServerRequest.class}, (p, m, args) -> {
                             if ("headers".equals(m.getName()))
-                                return MultiMap.caseInsensitiveMultiMap().add("X-MCP-Capabilities", "code_generation");
+                                return MultiMap.caseInsensitiveMultiMap()
+                                        .add("X-MCP-Client-ID", "role-client")
+                                        .add("X-MCP-Session-ID", "role-session")
+                                        .add("X-MCP-Capabilities", "code_generation");
                             return null;
                         })));
         bridge.executeTool(reqCoder);
@@ -210,5 +276,20 @@ class McpToolBridgeTest {
         when(mockRegistry.findTool("missing_tool")).thenReturn(Optional.empty());
 
         assertThrows(IllegalStateException.class, () -> bridge.warmSchemaCache());
+    }
+
+    private static McpToolRequest request(String toolName, String paramsJson) {
+        HttpServerRequest httpRequest = HttpServerRequest.class.cast(Proxy.newProxyInstance(
+                McpToolBridgeTest.class.getClassLoader(),
+                new Class[] {HttpServerRequest.class},
+                (proxy, method, args) -> {
+                    if ("headers".equals(method.getName())) {
+                        return MultiMap.caseInsensitiveMultiMap()
+                                .add("X-MCP-Client-ID", "test-client")
+                                .add("X-MCP-Session-ID", "test-session");
+                    }
+                    return null;
+                }));
+        return new McpToolRequest(toolName, paramsJson, httpRequest);
     }
 }

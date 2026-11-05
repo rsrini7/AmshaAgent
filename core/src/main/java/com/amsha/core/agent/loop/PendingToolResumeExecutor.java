@@ -2,8 +2,8 @@ package com.amsha.core.agent.loop;
 
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 
-import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
@@ -16,7 +16,6 @@ import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.persistence.api.CheckpointStatus;
-import com.amsha.persistence.api.ToolDecision;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
@@ -34,6 +33,7 @@ final class PendingToolResumeExecutor {
     private final StatefulAgentStore agentStore;
     private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper;
+    private final PendingToolResumeSupport resumeSupport;
     private final ReasoningEngine reasoningEngine;
     private final ToolDelegationResolver delegationResolver;
     private final ToolInvocationGuard guard;
@@ -51,11 +51,12 @@ final class PendingToolResumeExecutor {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
         this.objectMapper = objectMapper;
+        this.resumeSupport = new PendingToolResumeSupport(objectMapper, agentStore);
         this.reasoningEngine = reasoningEngine;
         this.delegationResolver = delegationResolver;
         this.guard = guard;
-        this.failureHandler = new PendingToolFailureHandler(
-                objectMapper, toolRegistry, reasoningEngine, recoveryService, escalationService, this);
+        this.failureHandler =
+                new PendingToolFailureHandler(objectMapper, reasoningEngine, recoveryService, escalationService, this);
     }
 
     AgentResult execute(
@@ -81,10 +82,36 @@ final class PendingToolResumeExecutor {
             return runFinishPassWithRetry(stateMachineRunner, context, history, sessionId, null);
         }
 
+        Map<String, Object> pendingParams = resumeSupport.parsePausedParams(paramsJson);
+        String operationId = PendingToolOperationIdLookup.find(history, toolName, pendingParams)
+                .orElse(null);
+        if (operationId == null) {
+            String reason = "Pending tool checkpoint is missing its operation identity.";
+            agentStore.markFailed(checkpoint, reason);
+            return AgentResult.failed(reason, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+        }
+
         var owner = delegationResolver.resolveOwner(effectiveRole, toolName);
         if (owner.isPresent()) {
             toolName = ToolCapability.DELEGATE_TO_AGENT.toolName();
-            paramsJson = buildDelegationParams(originalToolName, paramsJson, owner.get());
+            paramsJson = resumeSupport.buildDelegationParams(originalToolName, paramsJson, owner.get());
+            try {
+                operationId = resumeSupport
+                        .persistReplacementOperation(
+                                checkpoint,
+                                history,
+                                operationId,
+                                toolName,
+                                paramsJson,
+                                effectiveRole,
+                                CheckpointStatus.IN_PROGRESS,
+                                "Pending action redirected to the authorized delegated tool.")
+                        .operationId();
+            } catch (Exception e) {
+                String reason = "Delegated tool identity could not be persisted.";
+                agentStore.markFailed(checkpoint, reason);
+                return AgentResult.failed(reason, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+            }
             log.warnf(
                     "[ResumeStrategy] Redirecting unauthorized pending tool %s from role %s to %s in session %s",
                     originalToolName, effectiveRole, owner.get(), sessionId);
@@ -102,6 +129,7 @@ final class PendingToolResumeExecutor {
                 toolName,
                 originalToolName,
                 paramsJson,
+                operationId,
                 sessionId,
                 effectiveRole));
     }
@@ -137,7 +165,7 @@ final class PendingToolResumeExecutor {
     }
 
     private AgentResult executeAttempt(PendingToolRequest request) throws Exception {
-        Map<String, Object> params = parseParams(request.paramsJson());
+        Map<String, Object> params = resumeSupport.parseParams(request.paramsJson());
         if (guard == null) {
             log.errorf("[ResumeStrategy] Mandatory tool guard unavailable for session %s", request.sessionId());
             return AgentResult.failed(
@@ -163,12 +191,32 @@ final class PendingToolResumeExecutor {
         if (decision instanceof ToolInvocationGuard.GuardDecision.PauseForApproval pause) {
             return AgentResult.awaitingApproval(pause.frame(), request.sessionId(), List.copyOf(request.history()));
         }
+        if (decision instanceof ToolInvocationGuard.GuardDecision.DurableReplay replay) {
+            recordReasoningStep(
+                    request.toolName(),
+                    request.paramsJson(),
+                    replay.observation(),
+                    replay.succeeded(),
+                    replay.errorCode(),
+                    request.operationId(),
+                    request.history(),
+                    request.sessionId());
+            completeInProgressCheckpoint(request.checkpoint());
+            return runFinishPassWithRetry(
+                    request.stateMachineRunner(),
+                    request.context(),
+                    request.history(),
+                    request.sessionId(),
+                    request.toolName());
+        }
         if (decision instanceof ToolInvocationGuard.GuardDecision.Deduplicate deduplicate) {
             recordReasoningStep(
                     request.toolName(),
                     request.paramsJson(),
                     deduplicate.cachedObservation(),
                     true,
+                    null,
+                    request.operationId(),
                     request.history(),
                     request.sessionId());
             completeInProgressCheckpoint(request.checkpoint());
@@ -187,7 +235,8 @@ final class PendingToolResumeExecutor {
                 request.effectiveRole(),
                 request.channelType(),
                 request.context().channelPlatformId(),
-                () -> toolRegistry.invokeTool(request.toolName(), request.paramsJson(), request.sessionId()));
+                () -> toolRegistry.invokeToolWithOperationId(
+                        request.toolName(), request.paramsJson(), request.sessionId(), request.operationId()));
         if (response instanceof ToolResponse.ToolFailure failure && failure.isInfraFailure()) {
             return AgentResult.failed(
                     "⚠️ " + failure.output(), AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(request.history()));
@@ -198,6 +247,8 @@ final class PendingToolResumeExecutor {
                 request.paramsJson(),
                 response.output(),
                 response instanceof ToolResponse.ToolSuccess,
+                null,
+                request.operationId(),
                 request.history(),
                 request.sessionId());
         if (ToolCapability.INGEST_DOCUMENT.toolName().equals(request.originalToolName())) {
@@ -209,14 +260,20 @@ final class PendingToolResumeExecutor {
             if (success.output() != null && success.output().contains(UserMessages.DELEGATION_PAUSED_MARKER)) {
                 String pausedTool = UserMessages.extractPausedTool(success.output());
                 String pausedParamsJson = UserMessages.extractPausedParamsJson(success.output());
-                Map<String, Object> pausedParams = parsePausedParams(pausedParamsJson);
+                Map<String, Object> pausedParams = resumeSupport.parsePausedParams(pausedParamsJson);
                 if (pausedTool == null || pausedTool.isBlank() || pausedParamsJson == null || pausedParams == null) {
                     return AgentResult.failed(
                             "Delegated approval payload was invalid and was not resumed.",
                             AgentResult.FailureCategory.SYSTEM_ERROR,
                             List.copyOf(request.history()));
                 }
-                if (!persistDelegatedWait(request)) {
+                if (!resumeSupport.persistDelegatedWait(
+                        request.checkpoint(),
+                        request.sessionId(),
+                        request.originalToolName(),
+                        request.effectiveRole(),
+                        request.paramsJson(),
+                        request.history())) {
                     return AgentResult.failed(
                             "Could not persist delegated wait state.",
                             AgentResult.FailureCategory.SYSTEM_ERROR,
@@ -253,48 +310,8 @@ final class PendingToolResumeExecutor {
      * launching a duplicate child. The child checkpoint remains the source of
      * truth for the pending tool approval.
      */
-    private boolean persistDelegatedWait(PendingToolRequest request) {
-        AgentCheckpoint checkpoint = request.checkpoint();
-        agentStore.clearBatchResuming(request.sessionId());
-        checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-        checkpoint.setPendingToolName(request.originalToolName());
-        checkpoint.setPendingToolRole(request.effectiveRole());
-        checkpoint.setPendingToolParametersJson(request.paramsJson());
-        checkpoint.setPreExecutedResults(null);
-        try {
-            checkpoint.setBatchToolDecisions(
-                    objectMapper.writeValueAsString(Map.of(request.originalToolName(), ToolDecision.APPROVED)));
-            agentStore.saveWithSteps(checkpoint, request.history());
-            return true;
-        } catch (Exception e) {
-            log.warnf(
-                    "[DELEGATION] Could not persist parent delegated wait for %s: %s",
-                    request.sessionId(), LogUtil.rootMessage(e));
-            return false;
-        }
-    }
-
-    private Map<String, Object> parsePausedParams(String paramsJson) {
-        if (paramsJson == null || paramsJson.isBlank() || "{}".equals(paramsJson.trim())) {
-            return Map.of();
-        }
-        try {
-            return parseParams(paramsJson);
-        } catch (Exception e) {
-            log.warnf("Failed to parse delegated approval parameters: %s", LogUtil.rootMessage(e));
-            return null;
-        }
-    }
-
-    private Map<String, Object> parseParams(String paramsJson) throws Exception {
-        if (paramsJson == null || paramsJson.isBlank()) {
-            return Map.of();
-        }
-        return objectMapper.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-    }
-
     private AgentResult handleFailure(PendingToolRequest request, ToolResponse response) {
-        String url = extractUrlFromParams(request.paramsJson());
+        String url = resumeSupport.extractUrlFromParams(request.paramsJson());
         if (response != null && !response.success() && url != null && !url.isBlank()) {
             String fallbackGoal = null;
             String fallbackMessage = null;
@@ -384,36 +401,7 @@ final class PendingToolResumeExecutor {
     }
 
     private AgentResult handleResumeExecutionError(PendingToolRequest request, Exception e) {
-        AgentCheckpoint checkpoint = request.checkpoint();
-        checkpoint.setStatus(CheckpointStatus.FAILED);
-        checkpoint.setPendingToolName(null);
-        checkpoint.setPendingToolParametersJson(null);
-        agentStore.save(checkpoint);
-        String message = AgentErrorMessageUtil.safeMessage(e);
-        log.errorf(
-                "Resume tool execution failed for session=%s tool=%s: %s",
-                request.sessionId(), request.toolName(), message);
-        return AgentResult.failed(
-                "TOOL_EXECUTION_FAILED: " + message,
-                AgentResult.FailureCategory.SYSTEM_ERROR,
-                List.copyOf(request.history()));
-    }
-
-    private String buildDelegationParams(String toolName, String paramsJson, String owner) {
-        Map<String, Object> params = Map.of();
-        if (paramsJson != null && !paramsJson.isBlank()) {
-            try {
-                params = objectMapper.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-            } catch (Exception e) {
-                log.warnf("[ResumeStrategy] Could not parse pending %s: %s", toolName, LogUtil.rootMessage(e));
-            }
-        }
-        try {
-            return objectMapper.writeValueAsString(
-                    Map.of("agent", owner, "goal", ToolStepResolutionUtils.buildDelegateGoal(toolName, params)));
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not build delegation request for " + toolName, e);
-        }
+        return resumeSupport.handleResumeExecutionError(request, e);
     }
 
     void recordReasoningStep(
@@ -421,6 +409,29 @@ final class PendingToolResumeExecutor {
             String paramsJson,
             String output,
             boolean success,
+            List<ReasoningStep> history,
+            String sessionId) {
+        recordReasoningStep(tool, paramsJson, output, success, null, null, history, sessionId);
+    }
+
+    void recordReasoningStep(
+            String tool,
+            String paramsJson,
+            String output,
+            boolean success,
+            String errorCode,
+            List<ReasoningStep> history,
+            String sessionId) {
+        recordReasoningStep(tool, paramsJson, output, success, errorCode, null, history, sessionId);
+    }
+
+    void recordReasoningStep(
+            String tool,
+            String paramsJson,
+            String output,
+            boolean success,
+            String errorCode,
+            String operationId,
             List<ReasoningStep> history,
             String sessionId) {
         Map<String, Object> params = Map.of();
@@ -431,8 +442,20 @@ final class PendingToolResumeExecutor {
         } catch (Exception e) {
             log.warnf("Failed to parse resumed tool params for session %s", sessionId);
         }
-        history.add(ReasoningStep.pending("Executing " + tool + " after human approval.", tool, params, 0, 0)
-                .withObservation(output, success));
+        ReasoningStep pending =
+                ReasoningStep.pending("Executing " + tool + " after human approval.", tool, params, 0, 0);
+        if (operationId != null) {
+            pending = pending.withOperationId(operationId);
+        }
+        ReasoningStep completed = pending.withDiagnostics(output, success, errorCode, null, null);
+        if (operationId != null) {
+            OptionalInt pendingIndex = PendingToolOperationIdLookup.findUniquePendingIndex(history, operationId);
+            if (pendingIndex.isPresent()) {
+                history.set(pendingIndex.getAsInt(), completed);
+                return;
+            }
+        }
+        history.add(completed);
     }
 
     void completeInProgressCheckpoint(AgentCheckpoint checkpoint) {
@@ -442,15 +465,14 @@ final class PendingToolResumeExecutor {
         agentStore.save(checkpoint);
     }
 
-    private static String extractUrlFromParams(String paramsJson) {
-        if (paramsJson == null || paramsJson.isBlank()) {
-            return null;
-        }
-        int keyIndex = paramsJson.indexOf("\"url\"");
-        int colon = keyIndex < 0 ? -1 : paramsJson.indexOf(':', keyIndex + 5);
-        int firstQuote = colon < 0 ? -1 : paramsJson.indexOf('"', colon + 1);
-        int secondQuote = firstQuote < 0 ? -1 : paramsJson.indexOf('"', firstQuote + 1);
-        return secondQuote > firstQuote ? paramsJson.substring(firstQuote + 1, secondQuote) : null;
+    PendingToolResumeSupport.Replacement persistReplacementOperation(
+            PendingToolRequest request,
+            String toolName,
+            String paramsJson,
+            CheckpointStatus status,
+            String previousObservation)
+            throws Exception {
+        return resumeSupport.persistReplacementOperation(request, toolName, paramsJson, status, previousObservation);
     }
 
     record PendingToolRequest(
@@ -462,6 +484,7 @@ final class PendingToolResumeExecutor {
             String toolName,
             String originalToolName,
             String paramsJson,
+            String operationId,
             String sessionId,
             String effectiveRole) {}
 }

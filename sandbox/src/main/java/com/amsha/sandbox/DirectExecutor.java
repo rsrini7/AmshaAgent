@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
 import com.amsha.core.tools.LanguageIds;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -29,6 +30,16 @@ public class DirectExecutor {
     /** Dev mode: no isolation, direct execution. */
     public String executeDirectly(Path workspaceRoot, List<String> command, Map<String, byte[]> secrets)
             throws Exception {
+        return executeDirectly(workspaceRoot, command, secrets, "process:legacy", SandboxAttemptLifecycle.NONE);
+    }
+
+    public String executeDirectly(
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, byte[]> secrets,
+            String executionHandle,
+            SandboxAttemptLifecycle lifecycle)
+            throws Exception {
         List<String> finalCommand = fixupCommandForWindows(command);
         var pb = new ProcessBuilder(finalCommand);
         File workspaceDir = workspaceRoot.toFile();
@@ -43,9 +54,17 @@ public class DirectExecutor {
                 pb.environment().put(entry.getKey(), new String(entry.getValue(), StandardCharsets.UTF_8));
             }
         }
-        var process = startProcess(pb);
-
+        lifecycle.launchRequested(executionHandle);
+        Process process;
         try {
+            lifecycle.executionStarting();
+            process = startProcess(pb);
+        } catch (IOException | RuntimeException e) {
+            lifecycle.launchFailedBeforeStart();
+            throw e;
+        }
+        try {
+            lifecycle.executorStarted(SandboxProcessIdentity.from(process));
             ProcessOutput processOutput = waitForProcess(process);
             if (!processOutput.finished()) {
                 throw new SecurityException("Tool timed out after " + timeoutSeconds + "s");

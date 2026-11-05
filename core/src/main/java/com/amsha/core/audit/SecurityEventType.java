@@ -16,6 +16,12 @@ public enum SecurityEventType {
     TOOL_EXECUTED, // recorded at the end of tool execution
     TOOL_BLOCKED, // SecurityException from autonomy check
     TOOL_FAILED, // Audit
+    TOOL_ATTEMPT_ADMITTED,
+    TOOL_LAUNCH_REQUESTED,
+    TOOL_ATTEMPT_SETTLED,
+    TOOL_ACTION_LOCKED,
+    TOOL_ACTION_RESOLUTION_AUTHORIZED,
+    TOOL_ACTION_RESOLVED,
 
     // Approval flow
     APPROVAL_GRANTED, // user replied /approve

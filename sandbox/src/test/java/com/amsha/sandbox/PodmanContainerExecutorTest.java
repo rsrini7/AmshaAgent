@@ -12,6 +12,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -127,6 +128,23 @@ class PodmanContainerExecutorTest {
         assertTrue(cmd.contains("--memory=512m"));
         assertTrue(cmd.contains("--cpus=0.5"));
         assertTrue(cmd.contains("ls"));
+    }
+
+    @Test
+    void attemptContainerCommandPersistsOwnershipLabelsAndRetainsContainer() {
+        String attemptId = "00000000-0000-0000-0000-000000000002";
+        String containerName = PodmanContainerExecutor.attemptContainerName(attemptId);
+        List<String> command = executor.buildAttemptPodmanCmd(
+                containerName, List.of(), Path.of("/tmp/workspace"), List.of("echo", "safe"), "workspace/a", attemptId);
+
+        assertEquals("zc-00000000000000000000000000000002", containerName);
+        assertTrue(command.contains("--detach"));
+        assertFalse(command.contains("--rm"));
+        assertTrue(command.contains("--label=amsha.workspace-id="
+                + Base64.getUrlEncoder()
+                        .withoutPadding()
+                        .encodeToString("workspace/a".getBytes(StandardCharsets.UTF_8))));
+        assertTrue(command.contains("--label=amsha.tool-attempt-id=" + attemptId));
     }
 
     @Test

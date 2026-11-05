@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.scope.WorkspaceContext;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -266,7 +267,8 @@ public class ParallelToolCallCollapser {
             } catch (Exception e) {
                 log.warnf("Failed to serialize params for tool %s: %s", name, LogUtil.rootMessage(e));
             }
-            calls.add(ParallelToolCall.pending(callId, name, params, paramsJson));
+            calls.add(ParallelToolCall.pending(callId, name, params, paramsJson)
+                    .withOperationId(ToolOperationIdentity.generateCanonicalUuid()));
         }
 
         if (calls.size() == 1) {
@@ -278,7 +280,7 @@ public class ParallelToolCallCollapser {
         Map<String, Object> batchPayload;
         try {
             String batchJson = objectMapper.writeValueAsString(calls);
-            batchPayload = Map.of("batch", batchJson);
+            batchPayload = Map.of(ReasoningStep.PARALLEL_BATCH_ACTION_INPUT_KEY, batchJson);
         } catch (Exception e) {
             log.errorf("Failed to serialize parallel batch for session %s: %s", sessionId, LogUtil.rootMessage(e));
             ToolExecutionRequest req = requests.getFirst();

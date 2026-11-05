@@ -23,6 +23,7 @@ import io.opentelemetry.context.Context;
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("java:S1192")
 class SequentialToolExecutorTest {
+    private static final String OPERATION_ID = "123e4567-e89b-12d3-a456-426614174099";
 
     @Mock
     ToolInvoker toolInvoker;
@@ -40,20 +41,22 @@ class SequentialToolExecutorTest {
     @Test
     void invoke_DelegatesToToolInvoker() {
         Map<String, Object> params = Map.of("query", "hello");
-        when(toolInvoker.invoke("search", params, "sess-1")).thenReturn(ToolResponse.success("result"));
+        when(toolInvoker.invoke("search", params, "sess-1", OPERATION_ID)).thenReturn(ToolResponse.success("result"));
 
-        ToolResponse response = executor.invoke("search", params, "sess-1");
+        ToolResponse response = executor.invoke("search", params, "sess-1", OPERATION_ID);
 
         assertEquals("result", response.output());
         assertTrue(response.success());
-        verify(toolInvoker).invoke("search", params, "sess-1");
+        verify(toolInvoker).invoke("search", params, "sess-1", OPERATION_ID);
     }
 
     @Test
     void execute_WithToolSuccess_RecordsToolCallAndReturnsResult() {
         var ctx = context();
-        var call = ParallelToolCall.pending("call_0", "search", Map.of("q", "test"), "{\"q\":\"test\"}");
-        when(toolInvoker.invoke(eq("search"), any(), eq("sess-1"))).thenReturn(ToolResponse.success("found"));
+        var call = ParallelToolCall.pending("call_0", "search", Map.of("q", "test"), "{\"q\":\"test\"}")
+                .withOperationId(OPERATION_ID);
+        when(toolInvoker.invoke(eq("search"), any(), eq("sess-1"), eq(OPERATION_ID)))
+                .thenReturn(ToolResponse.success("found"));
 
         ParallelToolCall result = executor.execute(ctx, call, Context.current());
 
@@ -65,8 +68,8 @@ class SequentialToolExecutorTest {
     @Test
     void execute_WithToolFailure_ReturnsFailedResult() {
         var ctx = context();
-        var call = ParallelToolCall.pending("call_0", "calc", Map.of(), "{}");
-        when(toolInvoker.invoke(eq("calc"), any(), eq("sess-1")))
+        var call = ParallelToolCall.pending("call_0", "calc", Map.of(), "{}").withOperationId(OPERATION_ID);
+        when(toolInvoker.invoke(eq("calc"), any(), eq("sess-1"), eq(OPERATION_ID)))
                 .thenReturn(ToolResponse.failure(1, "division by zero"));
 
         ParallelToolCall result = executor.execute(ctx, call, Context.current());
@@ -78,8 +81,9 @@ class SequentialToolExecutorTest {
     @Test
     void execute_WithToolPending_ReturnsFailedWithPendingOutput() {
         var ctx = context();
-        var call = ParallelToolCall.pending("call_0", "approve_me", Map.of(), "{}");
-        when(toolInvoker.invoke(eq("approve_me"), any(), eq("sess-1")))
+        var call =
+                ParallelToolCall.pending("call_0", "approve_me", Map.of(), "{}").withOperationId(OPERATION_ID);
+        when(toolInvoker.invoke(eq("approve_me"), any(), eq("sess-1"), eq(OPERATION_ID)))
                 .thenReturn(ToolResponse.pending("need approval", "tok_x"));
 
         ParallelToolCall result = executor.execute(ctx, call, Context.current());
@@ -91,8 +95,9 @@ class SequentialToolExecutorTest {
     @Test
     void execute_WithOtelContextNull_DoesNotThrow() {
         var ctx = context();
-        var call = ParallelToolCall.pending("call_0", "search", Map.of(), "{}");
-        when(toolInvoker.invoke(eq("search"), any(), eq("sess-1"))).thenReturn(ToolResponse.success("ok"));
+        var call = ParallelToolCall.pending("call_0", "search", Map.of(), "{}").withOperationId(OPERATION_ID);
+        when(toolInvoker.invoke(eq("search"), any(), eq("sess-1"), eq(OPERATION_ID)))
+                .thenReturn(ToolResponse.success("ok"));
 
         assertDoesNotThrow(() -> executor.execute(ctx, call, null));
     }
@@ -100,8 +105,9 @@ class SequentialToolExecutorTest {
     @Test
     void execute_WhenToolInvokerThrows_ReturnsErrorResult() {
         var ctx = context();
-        var call = ParallelToolCall.pending("call_0", "search", Map.of(), "{}");
-        when(toolInvoker.invoke(eq("search"), any(), eq("sess-1"))).thenThrow(new RuntimeException("timeout"));
+        var call = ParallelToolCall.pending("call_0", "search", Map.of(), "{}").withOperationId(OPERATION_ID);
+        when(toolInvoker.invoke(eq("search"), any(), eq("sess-1"), eq(OPERATION_ID)))
+                .thenThrow(new RuntimeException("timeout"));
 
         ParallelToolCall result = executor.execute(ctx, call, Context.current());
 

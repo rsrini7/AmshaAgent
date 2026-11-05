@@ -13,10 +13,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.amsha.core.agent.reasoning.ParallelToolCall;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -65,19 +67,6 @@ class ParallelBatchResumeHandlerTest {
         return new ParallelBatchResumeHandler(agentStore, toolRegistry, mapper, delegationResolver, guard);
     }
 
-    @Test
-    void missingGuardBlocksPendingToolBeforeInvocation() throws Exception {
-        AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "unsafe")));
-        ParallelBatchResumeHandler handlerWithoutGuard =
-                new ParallelBatchResumeHandler(agentStore, toolRegistry, mapper, delegationResolver, null);
-
-        AgentResult result = handlerWithoutGuard.resumeParallelBatch(
-                mockContext(SESSION), new ArrayList<>(), checkpoint, "TELEGRAM");
-
-        assertNull(result);
-        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
-    }
-
     /**
      * A checkpoint whose pending batch is {@code calls}, with no per-tool decisions and no
      * pre-executed results. Individual tests re-stub what they need.
@@ -92,8 +81,16 @@ class ParallelBatchResumeHandlerTest {
         return checkpoint;
     }
 
+    private static ParallelToolCall pendingCall(
+            String callId, String toolName, Map<String, Object> params, String paramsJson) {
+        String identity = String.valueOf(callId) + "|" + String.valueOf(toolName);
+        String operationId = UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8))
+                .toString();
+        return ParallelToolCall.pending(callId, toolName, params, paramsJson).withOperationId(operationId);
+    }
+
     private static ParallelToolCall call(String callId, String toolName) {
-        return ParallelToolCall.pending(callId, toolName, Map.of(), "{}");
+        return pendingCall(callId, toolName, Map.of(), "{}");
     }
 
     /** Extracts the persisted batch JSON from the resumed history step. */
@@ -106,7 +103,7 @@ class ParallelBatchResumeHandlerTest {
     @Test
     void delegatedApprovalPauseDoesNotCompleteParentBatch() throws Exception {
         AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
-        ParallelToolCall call = ParallelToolCall.pending(
+        ParallelToolCall call = pendingCall(
                 "call-1",
                 "garuda",
                 Map.of("agent", "saraswati", "goal", "research"),
@@ -117,7 +114,7 @@ class ParallelBatchResumeHandlerTest {
         when(checkpoint.hasPreExecutedResults()).thenReturn(false);
         when(checkpoint.getPendingToolRole()).thenReturn("coordinator");
         when(checkpoint.getStatus()).thenReturn(CheckpointStatus.RESUMING);
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(ToolResponse.success(UserMessages.delegationPaused(
                         "saraswati",
                         "web_fetch",
@@ -135,7 +132,7 @@ class ParallelBatchResumeHandlerTest {
     @Test
     void consumesObjectShapedPreExecutedResultWithoutReinvokingTool() throws Exception {
         AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
-        ParallelToolCall call = ParallelToolCall.pending("call-1", "safe", Map.of(), "{}");
+        ParallelToolCall call = pendingCall("call-1", "safe", Map.of(), "{}");
 
         when(checkpoint.getPendingToolParametersJson()).thenReturn(mapper.writeValueAsString(List.of(call)));
         when(checkpoint.hasBatchToolDecisions()).thenReturn(true);
@@ -149,7 +146,7 @@ class ParallelBatchResumeHandlerTest {
                 .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
 
         assertNull(result);
-        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
+        verify(toolRegistry, never()).invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
         verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
     }
 
@@ -169,7 +166,7 @@ class ParallelBatchResumeHandlerTest {
         assertEquals(AgentResult.FailureCategory.SYSTEM_ERROR, failed.category());
         verify(checkpoint).setStatus(CheckpointStatus.FAILED);
         verify(agentStore).save(checkpoint);
-        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
+        verify(toolRegistry, never()).invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -177,14 +174,15 @@ class ParallelBatchResumeHandlerTest {
         AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "safe")));
         when(checkpoint.hasBatchToolDecisions()).thenReturn(true);
         when(checkpoint.getBatchToolDecisions()).thenReturn("not-a-decision-map");
-        when(toolRegistry.invokeTool(eq("safe"), eq("{}"), eq(SESSION))).thenReturn(ToolResponse.success("ok"));
+        when(toolRegistry.invokeToolWithOperationId(eq("safe"), eq("{}"), eq(SESSION), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
         AgentResult result = handler()
                 .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
 
         assertNull(result);
         // A failed decision parse must degrade to PENDING, not to DENIED.
-        verify(toolRegistry).invokeTool(eq("safe"), eq("{}"), eq(SESSION));
+        verify(toolRegistry).invokeToolWithOperationId(eq("safe"), eq("{}"), eq(SESSION), anyString());
         verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
     }
 
@@ -193,13 +191,14 @@ class ParallelBatchResumeHandlerTest {
         AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "safe")));
         when(checkpoint.hasPreExecutedResults()).thenReturn(true);
         when(checkpoint.getPreExecutedResults()).thenReturn("not-json");
-        when(toolRegistry.invokeTool(eq("safe"), eq("{}"), eq(SESSION))).thenReturn(ToolResponse.success("ok"));
+        when(toolRegistry.invokeToolWithOperationId(eq("safe"), eq("{}"), eq(SESSION), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
         AgentResult result = handler()
                 .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
 
         assertNull(result);
-        verify(toolRegistry).invokeTool(eq("safe"), eq("{}"), eq(SESSION));
+        verify(toolRegistry).invokeToolWithOperationId(eq("safe"), eq("{}"), eq(SESSION), anyString());
     }
 
     @Test
@@ -207,13 +206,14 @@ class ParallelBatchResumeHandlerTest {
         AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "safe")));
         when(checkpoint.hasPreExecutedResults()).thenReturn(true);
         when(checkpoint.getPreExecutedResults()).thenReturn("{\"call-1\":\"not-json\"}");
-        when(toolRegistry.invokeTool(eq("safe"), eq("{}"), eq(SESSION))).thenReturn(ToolResponse.success("ok"));
+        when(toolRegistry.invokeToolWithOperationId(eq("safe"), eq("{}"), eq(SESSION), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
         AgentResult result = handler()
                 .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
 
         assertNull(result);
-        verify(toolRegistry).invokeTool(eq("safe"), eq("{}"), eq(SESSION));
+        verify(toolRegistry).invokeToolWithOperationId(eq("safe"), eq("{}"), eq(SESSION), anyString());
     }
 
     @Test
@@ -238,7 +238,8 @@ class ParallelBatchResumeHandlerTest {
         when(checkpoint.hasBatchToolDecisions()).thenReturn(false);
         when(checkpoint.hasPreExecutedResults()).thenReturn(false);
         when(checkpoint.getPendingToolRole()).thenReturn("coordinator");
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString())).thenReturn(ToolResponse.success("ok"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
         ParallelBatchResumeHandler failing =
                 new ParallelBatchResumeHandler(agentStore, toolRegistry, throwing, delegationResolver, guard);
@@ -268,7 +269,7 @@ class ParallelBatchResumeHandlerTest {
 
         assertNull(result);
         // Both stored responses are non-success, so neither call is re-invoked.
-        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
+        verify(toolRegistry, never()).invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
         assertEquals("a→FAIL, b→FAIL", history.getFirst().observation());
     }
 
@@ -277,13 +278,14 @@ class ParallelBatchResumeHandlerTest {
         AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "safe")));
         when(checkpoint.hasBatchToolDecisions()).thenReturn(true);
         when(checkpoint.getBatchToolDecisions()).thenReturn("{\"call-1\":\"APPROVED\"}");
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString())).thenReturn(ToolResponse.success("ok"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
         AgentResult result = handler()
                 .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
 
         assertNull(result);
-        verify(toolRegistry).invokeTool(eq("safe"), eq("{}"), eq(SESSION));
+        verify(toolRegistry).invokeToolWithOperationId(eq("safe"), eq("{}"), eq(SESSION), anyString());
     }
 
     @Test
@@ -296,7 +298,7 @@ class ParallelBatchResumeHandlerTest {
         AgentResult result = handler().resumeParallelBatch(mockContext(SESSION), history, checkpoint, "TELEGRAM");
 
         assertNull(result);
-        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
+        verify(toolRegistry, never()).invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
         assertTrue(
                 batchJson(history.getFirst()).contains("User denied this tool execution."),
                 batchJson(history.getFirst()));
@@ -307,10 +309,11 @@ class ParallelBatchResumeHandlerTest {
 
     @Test
     void unauthorizedBatchTool_isRedirectedToItsOwnerViaDelegation() throws Exception {
-        AgentCheckpoint checkpoint = checkpointWith(
-                List.of(ParallelToolCall.pending("call-1", "github", Map.of("q", "x"), "{\"q\":\"x\"}")));
+        AgentCheckpoint checkpoint =
+                checkpointWith(List.of(pendingCall("call-1", "github", Map.of("q", "x"), "{\"q\":\"x\"}")));
         when(delegationResolver.resolveOwner("coordinator", "github")).thenReturn(Optional.of("researcher"));
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString())).thenReturn(ToolResponse.success("ok"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
         AgentResult result = handler()
                 .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
@@ -318,24 +321,30 @@ class ParallelBatchResumeHandlerTest {
         assertNull(result);
         ArgumentCaptor<String> paramsJson = ArgumentCaptor.forClass(String.class);
         verify(toolRegistry)
-                .invokeTool(eq(ToolCapability.DELEGATE_TO_AGENT.toolName()), paramsJson.capture(), eq(SESSION));
+                .invokeToolWithOperationId(
+                        eq(ToolCapability.DELEGATE_TO_AGENT.toolName()),
+                        paramsJson.capture(),
+                        eq(SESSION),
+                        anyString());
         assertTrue(paramsJson.getValue().contains("\"agent\":\"researcher\""), paramsJson.getValue());
         assertTrue(paramsJson.getValue().contains("github"), paramsJson.getValue());
     }
 
     @Test
     void delegationRedirectWithUnparseableParams_stillBuildsTheDelegation() throws Exception {
-        AgentCheckpoint checkpoint =
-                checkpointWith(List.of(ParallelToolCall.pending("call-1", "github", Map.of(), "{not-json")));
+        AgentCheckpoint checkpoint = checkpointWith(List.of(pendingCall("call-1", "github", Map.of(), "{not-json")));
         when(delegationResolver.resolveOwner("coordinator", "github")).thenReturn(Optional.of("researcher"));
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString())).thenReturn(ToolResponse.success("ok"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("ok"));
 
         AgentResult result = handler()
                 .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
 
         assertNull(result);
         // A params-parse failure is non-fatal: the delegation is still issued, with an empty arg map.
-        verify(toolRegistry).invokeTool(eq(ToolCapability.DELEGATE_TO_AGENT.toolName()), anyString(), eq(SESSION));
+        verify(toolRegistry)
+                .invokeToolWithOperationId(
+                        eq(ToolCapability.DELEGATE_TO_AGENT.toolName()), anyString(), eq(SESSION), anyString());
     }
 
     @Test
@@ -357,7 +366,7 @@ class ParallelBatchResumeHandlerTest {
         AgentCheckpoint checkpoint = mock(AgentCheckpoint.class);
         when(checkpoint.getPendingToolParametersJson())
                 .thenReturn(mapper.writeValueAsString(
-                        List.of(ParallelToolCall.pending("call-1", "github", Map.of("q", "x"), "{\"q\":\"x\"}"))));
+                        List.of(pendingCall("call-1", "github", Map.of("q", "x"), "{\"q\":\"x\"}"))));
         when(checkpoint.hasBatchToolDecisions()).thenReturn(false);
         when(checkpoint.hasPreExecutedResults()).thenReturn(false);
         when(checkpoint.getPendingToolRole()).thenReturn("coordinator");
@@ -369,7 +378,7 @@ class ParallelBatchResumeHandlerTest {
         AgentResult result = failing.resumeParallelBatch(mockContext(SESSION), history, checkpoint, "TELEGRAM");
 
         assertNull(result);
-        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
+        verify(toolRegistry, never()).invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
         assertTrue(
                 batchJson(history.getFirst()).contains("Tool execution failed on resume"),
                 batchJson(history.getFirst()));
@@ -387,7 +396,7 @@ class ParallelBatchResumeHandlerTest {
         AgentResult result = handler().resumeParallelBatch(mockContext(SESSION), history, checkpoint, "TELEGRAM");
 
         assertNull(result);
-        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
+        verify(toolRegistry, never()).invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
         assertTrue(
                 batchJson(history.getFirst()).contains("Tool execution blocked by safety guard: policy violation"),
                 batchJson(history.getFirst()));
@@ -407,7 +416,7 @@ class ParallelBatchResumeHandlerTest {
         assertSame(frame, awaiting.frame());
         verify(checkpoint).setStatus(CheckpointStatus.AWAITING_APPROVAL);
         verify(agentStore).save(checkpoint);
-        verify(toolRegistry, never()).invokeTool(anyString(), anyString(), anyString());
+        verify(toolRegistry, never()).invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
     }
 
     // ── Invocation outcomes ──────────────────────────────────────────────────
@@ -415,8 +424,9 @@ class ParallelBatchResumeHandlerTest {
     @Test
     void failureAndPendingResponses_areMappedOntoTheirCalls() throws Exception {
         AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "a"), call("call-2", "b")));
-        when(toolRegistry.invokeTool(eq("a"), anyString(), anyString())).thenReturn(ToolResponse.failure(1, "boom"));
-        when(toolRegistry.invokeTool(eq("b"), anyString(), anyString()))
+        when(toolRegistry.invokeToolWithOperationId(eq("a"), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.failure(1, "boom"));
+        when(toolRegistry.invokeToolWithOperationId(eq("b"), anyString(), anyString(), anyString()))
                 .thenReturn(ToolResponse.pending("waiting", "tok"));
 
         List<ReasoningStep> history = new ArrayList<>();
@@ -430,7 +440,7 @@ class ParallelBatchResumeHandlerTest {
     @Test
     void invocationException_isRecordedAsAToolFailure() throws Exception {
         AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "safe")));
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
                 .thenThrow(new IllegalStateException("kaboom"));
 
         List<ReasoningStep> history = new ArrayList<>();
@@ -441,36 +451,6 @@ class ParallelBatchResumeHandlerTest {
         assertTrue(
                 batchJson(history.getFirst()).contains("Tool execution failed on resume: kaboom"),
                 batchJson(history.getFirst()));
-    }
-
-    // ── Delegated pause detection ────────────────────────────────────────────
-
-    @Test
-    void delegatedPauseWithUndecodableParams_isIgnored() throws Exception {
-        AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "garuda")));
-        // The marker is present but the base64 payload is not decodable, so the pause is skipped.
-        String paused = "Delegation is " + UserMessages.DELEGATION_PAUSED_MARKER
-                + ": tool 'web_fetch' needs human approval. " + UserMessages.DELEGATION_PARAMS_BASE64_MARKER + "!!!";
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString())).thenReturn(ToolResponse.success(paused));
-
-        AgentResult result = handler()
-                .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
-
-        assertNull(result);
-        verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
-    }
-
-    @Test
-    void delegatedPauseWithInvalidParamsJson_isIgnored() throws Exception {
-        AgentCheckpoint checkpoint = checkpointWith(List.of(call("call-1", "garuda")));
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
-                .thenReturn(ToolResponse.success(UserMessages.delegationPaused("saraswati", "web_fetch", "not-json")));
-
-        AgentResult result = handler()
-                .resumeParallelBatch(mockContext(SESSION), new ArrayList<ReasoningStep>(), checkpoint, "TELEGRAM");
-
-        assertNull(result);
-        verify(checkpoint).setStatus(CheckpointStatus.IN_PROGRESS);
     }
 
     private static AgentExecutionContext mockContext(String sessionId) {

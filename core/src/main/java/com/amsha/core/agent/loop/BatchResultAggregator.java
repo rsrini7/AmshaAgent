@@ -71,7 +71,7 @@ public class BatchResultAggregator {
         }
 
         Map<String, Object> completedPayload = new HashMap<>();
-        completedPayload.put("batch", batchJson);
+        completedPayload.put(ReasoningStep.PARALLEL_BATCH_ACTION_INPUT_KEY, batchJson);
 
         String summary = completed.stream()
                 .map(c -> String.format("[%s → %s]", c.toolName(), c.success() ? "OK" : "FAIL"))

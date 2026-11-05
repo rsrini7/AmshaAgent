@@ -4,6 +4,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.tool.api.ToolExecutionContext;
+
 /**
  * Decoupled SPI port for executing commands in a sandboxed isolation environment.
  */
@@ -22,4 +24,17 @@ public interface SandboxExecutionPort {
      */
     SandboxResult executeSandboxed(
             String sessionId, Path workspaceRoot, List<String> command, Map<String, String> requiredSecrets);
+
+    /** Executes a durable attempt with start evidence reported at the executor boundary. */
+    default SandboxResult executeSandboxed(
+            ToolExecutionContext context,
+            Path workspaceRoot,
+            List<String> command,
+            Map<String, String> requiredSecrets,
+            SandboxAttemptLifecycle lifecycle) {
+        return executeSandboxed(context.sessionId(), workspaceRoot, command, requiredSecrets);
+    }
+
+    /** Releases attempt-owned external resources after terminal state is durably stored. */
+    default void releaseSettledAttempt(ToolExecutionContext context) {}
 }

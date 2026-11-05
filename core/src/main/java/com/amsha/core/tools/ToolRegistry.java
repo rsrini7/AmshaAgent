@@ -16,15 +16,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.common.util.PathSanitizer;
-import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.audit.AuditService;
 import com.amsha.core.audit.ComplianceViolationException;
 import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.config.CoreSpiResolutionValidator;
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
@@ -33,10 +34,14 @@ import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.security.AutonomyPolicy;
 import com.amsha.core.skill.SkillRegistry;
 import com.amsha.core.tool.DynamicToolInvoker;
+import com.amsha.core.tool.attempt.ToolAttemptExecutionService;
+import com.amsha.core.tool.attempt.ToolAttemptSandboxLifecycle;
 import com.amsha.core.util.ClassUtils;
-import com.amsha.security.api.AutonomyLevel;
+import com.amsha.persistence.api.ToolAttemptStatus;
 import com.amsha.security.api.RequiresSecret;
 import com.amsha.tool.api.AgentTool;
+import com.amsha.tool.api.DynamicToolDescriptor;
+import com.amsha.tool.api.IdempotencyMode;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolExecutionContext;
 import com.amsha.tool.api.ToolResponse;
@@ -96,6 +101,9 @@ public class ToolRegistry {
     AuditService auditService;
 
     @Inject
+    ToolAttemptExecutionService toolAttemptExecutionService;
+
+    @Inject
     SkillRegistry skillRegistry;
 
     @Inject
@@ -137,119 +145,134 @@ public class ToolRegistry {
         return Optional.ofNullable(discoveryService.getToolIndex().get(toolName));
     }
 
-    private ToolExecutionContext createExecutionContext() {
-        return new ToolExecutionContext(
-                WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "system",
-                WorkspaceContext.getUserIdOrUnknown(),
-                WorkspaceContext.CHAT_ID.isBound() ? WorkspaceContext.CHAT_ID.get() : "system",
-                WorkspaceContext.AGENT_ROLE.isBound()
-                        ? WorkspaceContext.AGENT_ROLE.get()
-                        : AgentRoleEnum.COORDINATOR.id(),
-                WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : AutonomyLevel.SUPERVISED,
-                Span.current().getSpanContext().getTraceId(),
-                WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null,
-                WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null,
-                WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null,
-                WorkspaceContext.SUGGESTED_CRON.isBound() ? WorkspaceContext.SUGGESTED_CRON.get() : null,
-                WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.isBound()
-                        ? WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.get()
-                        : null,
-                WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null,
-                resolveSkillHome(),
-                resolveBrowserPreview());
+    private ToolExecutionContext createExecutionContext(String operationId) {
+        return ToolExecutionContextFactory.create(skillRegistry, operationId);
     }
 
-    /**
-     * Invokes a tool by name after verifying governance constraints.
-     */
     public ToolResponse invokeTool(String toolName, Map<String, Object> params) {
+        return invokeToolWithOperationId(toolName, params, null);
+    }
+
+    /** Invokes a tool while propagating the orchestration-owned operation identity. */
+    public ToolResponse invokeToolWithOperationId(String toolName, Map<String, Object> params, String operationId) {
+        if (operationId == null || operationId.isBlank()) {
+            return toolAttemptExecutionService.sanitizeWithoutAttempt(
+                    toolName, ToolResponse.failure(409, ToolAttemptExecutionService.MISSING_OPERATION_ID_OUTPUT));
+        }
+        String stableOperationId = operationId;
         if (toolName != null && (toolName.startsWith("headroom_") || "headroom".equals(toolName))) {
             log.infof(
                     "Intercepted headroom tool call '%s' - returning empty response to prevent model loop.", toolName);
             return ToolResponse.success("No relevant information found or action completed successfully.");
         }
+
         AgentTool tool = findTool(toolName).orElse(null);
         if (tool == null) {
             if (dynamicToolInvokers != null && !dynamicToolInvokers.isUnsatisfied()) {
                 for (DynamicToolInvoker invoker : dynamicToolInvokers) {
                     var descriptor = invoker.findTool(toolName);
                     if (descriptor.isPresent()) {
-                        ToolExecutionContext context = createExecutionContext();
-                        try {
-                            governanceGuard.verifyAutonomy(
-                                    context, toolName, descriptor.get().requiredOperation(), params);
-                        } catch (SecurityException | IllegalArgumentException e) {
-                            return ToolResponse.failure(403, e.getMessage());
-                        }
-                        auditService.record(
-                                context.sessionId(),
-                                context.userId(),
-                                context.agentRole(),
-                                SecurityEventType.TOOL_INVOKED,
-                                descriptor.get().requiredOperation().name());
-                        return invoker.invoke(toolName, params, context);
+                        return invokeDynamicTool(invoker, descriptor.get(), toolName, params, stableOperationId);
                     }
                 }
             }
             throw new IllegalArgumentException("Unknown tool: " + toolName);
         }
 
-        ToolExecutionContext ctx = new ToolExecutionContext(
-                WorkspaceContext.SESSION_ID.isBound() ? WorkspaceContext.SESSION_ID.get() : "system",
-                WorkspaceContext.getUserIdOrUnknown(),
-                WorkspaceContext.CHAT_ID.isBound() ? WorkspaceContext.CHAT_ID.get() : "system",
-                WorkspaceContext.AGENT_ROLE.isBound()
-                        ? WorkspaceContext.AGENT_ROLE.get()
-                        : AgentRoleEnum.COORDINATOR.id(),
-                WorkspaceContext.AUTONOMY.isBound() ? WorkspaceContext.AUTONOMY.get() : AutonomyLevel.SUPERVISED,
-                Span.current().getSpanContext().getTraceId(),
-                WorkspaceContext.CHANNEL_TYPE.isBound() ? WorkspaceContext.CHANNEL_TYPE.get() : null,
-                WorkspaceContext.CHANNEL_PLATFORM_ID.isBound() ? WorkspaceContext.CHANNEL_PLATFORM_ID.get() : null,
-                WorkspaceContext.RAW_USER_GOAL.isBound() ? WorkspaceContext.RAW_USER_GOAL.get() : null,
-                WorkspaceContext.SUGGESTED_CRON.isBound() ? WorkspaceContext.SUGGESTED_CRON.get() : null,
-                WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.isBound()
-                        ? WorkspaceContext.SUGGESTED_NEXT_FIRE_TIME.get()
-                        : null,
-                WorkspaceContext.SUGGESTED_CRON_SOURCE.isBound() ? WorkspaceContext.SUGGESTED_CRON_SOURCE.get() : null,
-                resolveSkillHome(),
-                resolveBrowserPreview());
-
-        // 1. Governance checks
+        ToolExecutionContext context = createExecutionContext(stableOperationId);
         try {
-            governanceGuard.verifyRoleCapability(ctx, toolName);
-            governanceGuard.verifyAutonomy(ctx, toolName, tool.requiredOperation(), params);
+            governanceGuard.verifyRoleCapability(context, toolName);
+            governanceGuard.verifyAutonomy(context, toolName, tool.requiredOperation(), params);
         } catch (SecurityException | IllegalArgumentException e) {
-            return ToolResponse.failure(403, e.getMessage());
+            return toolAttemptExecutionService.sanitizeWithoutAttempt(
+                    toolName, ToolResponse.failure(403, e.getMessage()));
+        }
+        if (params == null) {
+            return ToolResponse.failure(400, "Tool parameters are required.");
         }
 
-        log.infof("Invoking tool '%s' (operation=%s)", toolName, tool.requiredOperation());
-
-        // Mandatory audit: TOOL_INVOKED (fail-closed compliance)
+        log.infof("Invoking tool '%s' (op=%s)", toolName, tool.requiredOperation());
         auditService.record(
-                ctx.sessionId(),
-                ctx.userId(),
-                ctx.agentRole(),
+                context.sessionId(),
+                context.userId(),
+                context.agentRole(),
                 SecurityEventType.TOOL_INVOKED,
                 "tool=" + toolName + " op=" + tool.requiredOperation());
 
-        // 2. Param stripping
-        Map<String, Object> sanitizedParams;
-        if (tool.shouldStripNullParams()) {
-            sanitizedParams = params.entrySet().stream()
-                    .filter(e -> e.getValue() != null)
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        } else {
-            sanitizedParams = new HashMap<>(params);
+        Map<String, Object> sanitizedParams = sanitizeParameters(tool, params, toolName);
+        String executionKind = tool.requiresSandbox()
+                ? ToolAttemptExecutionService.EXECUTION_KIND_SANDBOX
+                : ToolAttemptExecutionService.EXECUTION_KIND_BUILT_IN;
+        if (ToolCapability.HOST_EXEC.toolName().equals(toolName)) {
+            executionKind = ToolAttemptExecutionService.EXECUTION_KIND_HOST;
         }
+        ToolAttemptExecutionService.Admission admission = toolAttemptExecutionService.admit(
+                context.sessionId(),
+                stableOperationId,
+                toolName,
+                sanitizedParams,
+                tool.idempotencyMode(),
+                executionKind);
+        if (!admission.shouldExecute()) {
+            return admission.immediateResponse();
+        }
+        ToolAttemptExecutionService.AttemptHandle handle = admission.handle();
+        ToolExecutionContext attemptContext = toolAttemptExecutionService.attach(context, handle);
+        return executeAdmitted(
+                handle,
+                toolName,
+                () -> tool.requiresSandbox()
+                        ? invokeSandboxed(attemptContext, tool, sanitizedParams, handle)
+                        : invokeDirect(attemptContext, tool, sanitizedParams, handle));
+    }
 
-        // §Fix: Strictly strip parameters NOT defined in the tool's schema.
-        // LLMs frequently hallucinate extra parameters. While ScheduleTaskTool now supports
-        // 'executionRole', other tools might crash or return a 400 if they receive unknown keys.
+    private ToolResponse invokeDynamicTool(
+            DynamicToolInvoker invoker,
+            DynamicToolDescriptor descriptor,
+            String toolName,
+            Map<String, Object> params,
+            String operationId) {
+        ToolExecutionContext context = createExecutionContext(operationId);
+        try {
+            governanceGuard.verifyAutonomy(context, toolName, descriptor.requiredOperation(), params);
+        } catch (SecurityException | IllegalArgumentException e) {
+            return toolAttemptExecutionService.sanitizeWithoutAttempt(
+                    toolName, ToolResponse.failure(403, e.getMessage()));
+        }
+        auditService.record(
+                context.sessionId(),
+                context.userId(),
+                context.agentRole(),
+                SecurityEventType.TOOL_INVOKED,
+                descriptor.requiredOperation().name());
+        ToolAttemptExecutionService.Admission admission = toolAttemptExecutionService.admit(
+                context.sessionId(),
+                operationId,
+                toolName,
+                params,
+                IdempotencyMode.NON_IDEMPOTENT,
+                ToolAttemptExecutionService.EXECUTION_KIND_DYNAMIC);
+        if (!admission.shouldExecute()) {
+            return admission.immediateResponse();
+        }
+        ToolAttemptExecutionService.AttemptHandle handle = admission.handle();
+        return executeAdmitted(handle, toolName, () -> {
+            toolAttemptExecutionService.launchAndStart(handle);
+            return invoker.invoke(toolName, params, toolAttemptExecutionService.attach(context, handle));
+        });
+    }
+
+    private Map<String, Object> sanitizeParameters(AgentTool tool, Map<String, Object> params, String toolName) {
+        Map<String, Object> sanitized = tool.shouldStripNullParams()
+                ? params.entrySet().stream()
+                        .filter(entry -> entry.getValue() != null)
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
+                : new HashMap<>(params);
         if (tool.parametersSchema() != null
                 && tool.parametersSchema().properties() != null
                 && !tool.parametersSchema().properties().isEmpty()) {
             Set<String> allowedKeys = tool.parametersSchema().properties().keySet();
-            sanitizedParams.keySet().removeIf(key -> {
+            sanitized.keySet().removeIf(key -> {
                 boolean remove = !allowedKeys.contains(key);
                 if (remove) {
                     log.warnf("[ToolRegistry] Stripping unknown param '%s' from tool '%s'", key, toolName);
@@ -257,16 +280,41 @@ public class ToolRegistry {
                 return remove;
             });
         }
+        return sanitized;
+    }
 
-        // 3. Execution Path
-        if (tool.requiresSandbox()) {
-            return invokeSandboxed(ctx, tool, sanitizedParams);
-        } else {
-            return invokeDirect(ctx, tool, sanitizedParams);
+    private ToolResponse executeAdmitted(
+            ToolAttemptExecutionService.AttemptHandle handle, String toolName, Supplier<ToolResponse> executor) {
+        try {
+            return toolAttemptExecutionService.settle(handle, toolName, executor.get());
+        } catch (RuntimeException e) {
+            if (e instanceof ComplianceViolationException complianceViolation) {
+                throw complianceViolation;
+            }
+            log.errorf(
+                    LogUtil.relevantThrowable(e),
+                    "Tool attempt execution failed for '%s': %s",
+                    toolName,
+                    LogUtil.rootMessage(e));
+            try {
+                return toolAttemptExecutionService.settle(
+                        handle, toolName, ToolResponse.infraFailure("Tool execution outcome could not be confirmed."));
+            } catch (RuntimeException settlementFailure) {
+                log.errorf(
+                        LogUtil.relevantThrowable(settlementFailure),
+                        "Tool attempt settlement failed for '%s': %s",
+                        toolName,
+                        LogUtil.rootMessage(settlementFailure));
+                return ToolResponse.infraFailure("Tool result could not be durably settled.");
+            }
         }
     }
 
-    private ToolResponse invokeSandboxed(ToolExecutionContext ctx, AgentTool tool, Map<String, Object> params) {
+    private ToolResponse invokeSandboxed(
+            ToolExecutionContext ctx,
+            AgentTool tool,
+            Map<String, Object> params,
+            ToolAttemptExecutionService.AttemptHandle handle) {
         String toolName = tool.name();
         governanceGuard.recordToolAudit(ctx, toolName);
         var requiredSecrets = secretExtractor.extractRequiredSecrets(tool.getClass(), "sandboxCommand");
@@ -288,12 +336,25 @@ public class ToolRegistry {
             }
 
             var command = tool.sandboxCommand(ctx, params);
+            ToolExecutionContext attemptContext = toolAttemptExecutionService.attach(ctx, handle);
+            SandboxExecutionPort executor = sandboxPort.get();
+            handle.afterSettlement(() -> releaseSettledSandboxAttempt(handle, executor, attemptContext));
+            SandboxAttemptLifecycle lifecycle = new ToolAttemptSandboxLifecycle(toolAttemptExecutionService, handle);
             SandboxResult result =
-                    sandboxPort.get().executeSandboxed(ctx.sessionId(), workspaceRoot, command, requiredSecrets);
+                    executor.executeSandboxed(attemptContext, workspaceRoot, command, requiredSecrets, lifecycle);
 
             if (result == null || result.isInfraFailure()) {
                 log.warnf("Tool '%s' sandbox execution encountered an infrastructure failure.", toolName);
                 return ToolResponse.infraFailure(SandboxFailureMessages.SANDBOX_OFFLINE_MESSAGE);
+            }
+
+            if (result.timedOut()) {
+                return ToolResponse.failure(
+                        124,
+                        result.output(),
+                        ToolAttemptExecutionService.TIMEOUT_ERROR_CODE,
+                        Span.current().getSpanContext().getTraceId(),
+                        "TimeoutException");
             }
 
             if (!result.success()) {
@@ -317,34 +378,42 @@ public class ToolRegistry {
         }
     }
 
-    private String resolveSkillHome() {
-        String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
-        if (agentRole == null || !AgentRoleEnum.isSkillRole(agentRole)) {
-            return null;
+    private void releaseSettledSandboxAttempt(
+            ToolAttemptExecutionService.AttemptHandle handle,
+            SandboxExecutionPort executor,
+            ToolExecutionContext context) {
+        if (!canReleaseSandboxAttempt(handle.status())) {
+            return;
         }
-        String skillName = AgentRoleEnum.skillName(agentRole);
-        return skillRegistry
-                .findByName(skillName)
-                .map(entry -> entry.definition().skillHome())
-                .orElse(null);
+        try {
+            executor.releaseSettledAttempt(context);
+        } catch (RuntimeException e) {
+            log.warnf(
+                    LogUtil.relevantThrowable(e),
+                    "Failed to release settled sandbox attempt: %s",
+                    LogUtil.rootMessage(e));
+        }
     }
 
-    private boolean resolveBrowserPreview() {
-        String agentRole = WorkspaceContext.AGENT_ROLE.isBound() ? WorkspaceContext.AGENT_ROLE.get() : null;
-        if (agentRole == null || !AgentRoleEnum.isSkillRole(agentRole)) return false;
-        String skillName = AgentRoleEnum.skillName(agentRole);
-        return skillRegistry
-                .findByName(skillName)
-                .map(entry -> entry.definition().browserPreview())
-                .orElse(false);
+    static boolean canReleaseSandboxAttempt(ToolAttemptStatus status) {
+        return switch (status) {
+            case SETTLED_SUCCESS, SETTLED_ERROR, TIMED_OUT, CANCELLED_BEFORE_LAUNCH -> true;
+            case ADMITTED, LAUNCH_REQUESTED, RUNNING, INDETERMINATE -> false;
+        };
     }
 
-    private ToolResponse invokeDirect(ToolExecutionContext ctx, AgentTool tool, Map<String, Object> params) {
+    private ToolResponse invokeDirect(
+            ToolExecutionContext ctx,
+            AgentTool tool,
+            Map<String, Object> params,
+            ToolAttemptExecutionService.AttemptHandle handle) {
         String toolName = tool.name();
         log.infof("Invoking tool '%s' directly (sandbox opted out)", toolName);
         governanceGuard.recordToolAudit(ctx, toolName);
 
         try {
+            toolAttemptExecutionService.launchAndStart(handle);
+            ctx = toolAttemptExecutionService.attach(ctx, handle);
             ToolResponse response = tool.execute(ctx, params);
             if (response instanceof ToolResponse.ToolFailure failure) {
                 governanceGuard.recordToolFailureAudit(ctx, toolName, failure);
@@ -382,10 +451,16 @@ public class ToolRegistry {
     }
 
     public ToolResponse invokeTool(String toolName, String paramsJson, String sessionId) {
+        return invokeToolWithOperationId(toolName, paramsJson, sessionId, null);
+    }
+
+    /** Invokes a serialized tool request while propagating its operation identity. */
+    public ToolResponse invokeToolWithOperationId(
+            String toolName, String paramsJson, String sessionId, String operationId) {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> params = objectMapper.readValue(paramsJson, Map.class);
-            return invokeTool(toolName, params);
+            return invokeToolWithOperationId(toolName, params, operationId);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Failed to deserialize tool parameters for " + toolName, e);
         }

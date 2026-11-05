@@ -126,6 +126,12 @@ class ParallelBatchResumeHandler {
                 continue;
             }
 
+            if (call.operationId() == null) {
+                completed.add(call.withResult(
+                        "Tool execution blocked because this checkpoint has no operation identity.", false));
+                continue;
+            }
+
             ParallelToolCall executionCall = call;
             try {
                 String effectiveRole =
@@ -143,17 +149,30 @@ class ParallelBatchResumeHandler {
                 }
                 final String invocationToolName = toolName;
                 final String invocationParamsJson = paramsJson;
+                final String invocationOperationId = call.operationId();
                 if (!invocationToolName.equals(call.toolName())
                         || !Objects.equals(invocationParamsJson, call.paramsJson())) {
                     executionCall = new ParallelToolCall(
-                            call.callId(), invocationToolName, Map.of(), invocationParamsJson, null, false);
+                            call.callId(),
+                            invocationToolName,
+                            Map.of(),
+                            invocationParamsJson,
+                            null,
+                            false,
+                            call.operationId());
                 }
 
                 var parsedParams = invocationParamsJson != null && !invocationParamsJson.isBlank()
                         ? objectMapper.readValue(invocationParamsJson, new TypeReference<Map<String, Object>>() {})
                         : Map.<String, Object>of();
                 executionCall = new ParallelToolCall(
-                        call.callId(), invocationToolName, parsedParams, invocationParamsJson, null, false);
+                        call.callId(),
+                        invocationToolName,
+                        parsedParams,
+                        invocationParamsJson,
+                        null,
+                        false,
+                        call.operationId());
 
                 ToolInvocationGuard.GuardDecision decision =
                         evaluateGuard(context, effectiveRole, invocationToolName, parsedParams, history);
@@ -176,7 +195,8 @@ class ParallelBatchResumeHandler {
                         effectiveRole,
                         channelType,
                         context.channelPlatformId(),
-                        () -> toolRegistry.invokeTool(invocationToolName, invocationParamsJson, context.sessionId()));
+                        () -> toolRegistry.invokeToolWithOperationId(
+                                invocationToolName, invocationParamsJson, context.sessionId(), invocationOperationId));
 
                 completed.add(
                         switch (response) {
@@ -190,26 +210,25 @@ class ParallelBatchResumeHandler {
             }
         }
 
-        Optional<DelegatedPause> delegatedPause = findDelegatedPause(completed);
-        if (delegatedPause.isPresent()) {
-            // A delegated child can pause after the parent batch itself was
-            // approved. Do not turn that pause into a successful `garuda→OK`
-            // result: doing so finalizes the parent while the child is still
-            // waiting and loses the eventual research result.
-            checkpoint.setStatus(CheckpointStatus.AWAITING_APPROVAL);
-            agentStore.save(checkpoint);
-            DelegatedPause pause = delegatedPause.get();
-            return AgentResult.awaitingApproval(
-                    new ApprovalFrame(pause.toolName(), pause.params(), RiskLevel.HIGH),
-                    sessionId,
-                    List.copyOf(history));
+        Optional<AgentResult> delegatedPauseResult = handleDelegatedPause(checkpoint, history, sessionId, completed);
+        if (delegatedPauseResult.isPresent()) {
+            return delegatedPauseResult.get();
         }
+        return completeBatch(checkpoint, history, completed);
+    }
+
+    private AgentResult completeBatch(
+            AgentCheckpoint checkpoint, List<ReasoningStep> history, List<ParallelToolCall> completed) {
         try {
             String completedJson = objectMapper.writeValueAsString(completed);
             String summary = completed.stream()
                     .map(c -> c.toolName() + "→" + (c.success() ? "OK" : "FAIL"))
                     .collect(Collectors.joining(", "));
-            history.add(ReasoningStep.parallelBatch("Human Approved (batch)", Map.of("batch", completedJson), 0, 0)
+            history.add(ReasoningStep.parallelBatch(
+                            "Human Approved (batch)",
+                            Map.of(ReasoningStep.PARALLEL_BATCH_ACTION_INPUT_KEY, completedJson),
+                            0,
+                            0)
                     .withObservation(summary));
             completeInProgressCheckpoint(checkpoint);
             return null;
@@ -240,6 +259,22 @@ class ParallelBatchResumeHandler {
                 history,
                 context.goal(),
                 List.of());
+    }
+
+    private Optional<AgentResult> handleDelegatedPause(
+            AgentCheckpoint checkpoint,
+            List<ReasoningStep> history,
+            String sessionId,
+            List<ParallelToolCall> completed) {
+        Optional<DelegatedPause> delegatedPause = findDelegatedPause(completed);
+        if (delegatedPause.isEmpty()) {
+            return Optional.empty();
+        }
+        checkpoint.setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        agentStore.save(checkpoint);
+        DelegatedPause pause = delegatedPause.get();
+        return Optional.of(AgentResult.awaitingApproval(
+                new ApprovalFrame(pause.toolName(), pause.params(), RiskLevel.HIGH), sessionId, List.copyOf(history)));
     }
 
     private Optional<DelegatedPause> findDelegatedPause(List<ParallelToolCall> completed) {

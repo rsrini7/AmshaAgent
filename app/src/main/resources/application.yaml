@@ -1189,6 +1189,8 @@ amsha:
       retention: "${AMSHA_TOOLS_ATTEMPT_RETENTION:30d}"
       retention-enabled: "${AMSHA_TOOLS_ATTEMPT_RETENTION_ENABLED:true}"
       retention-cron: "${AMSHA_TOOLS_ATTEMPT_RETENTION_CRON:0 0 3 * * ?}"
+      audit-outbox-enabled: "${AMSHA_TOOLS_ATTEMPT_AUDIT_OUTBOX_ENABLED:true}"
+      audit-outbox-cron: "${AMSHA_TOOLS_ATTEMPT_AUDIT_OUTBOX_CRON:0 * * * * ?}"
 
   hitl:
     pre-executable-tools: ""   # (§75-A1) comma-separated tool names

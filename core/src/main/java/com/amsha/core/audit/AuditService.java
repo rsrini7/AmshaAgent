@@ -50,6 +50,27 @@ public class AuditService {
         complianceAuditService.recordMandatory(sessionId, userId, agentRole, type, detail);
     }
 
+    public void recordMandatory(
+            String sessionId,
+            String userId,
+            String agentRole,
+            SecurityEventType type,
+            String detail,
+            String idempotencyKey) {
+        complianceAuditService.recordMandatory(sessionId, userId, agentRole, type, detail, idempotencyKey);
+    }
+
+    public String recordMandatoryWithReceipt(
+            String sessionId,
+            String userId,
+            String agentRole,
+            SecurityEventType type,
+            String detail,
+            String idempotencyKey) {
+        return complianceAuditService.recordMandatoryWithReceipt(
+                sessionId, userId, agentRole, type, detail, idempotencyKey);
+    }
+
     /**
      * Shorthand for mandatory security events (COMPLIANCE tier) without a session context.
      */

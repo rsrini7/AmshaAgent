@@ -56,7 +56,8 @@ public class SequentialToolExecutor {
                         context.agentRole(),
                         context.channelType(),
                         () -> {
-                            ToolResponse response = invoke(call.toolName(), call.params(), context.sessionId());
+                            ToolResponse response =
+                                    invoke(call.toolName(), call.params(), context.sessionId(), call.operationId());
                             return switch (response) {
                                 case ToolResponse.ToolSuccess success -> {
                                     guard.recordToolCall(
@@ -87,9 +88,14 @@ public class SequentialToolExecutor {
      * invisible on the live trace.
      */
     public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId) {
+        return invoke(toolName, params, sessionId, null);
+    }
+
+    /** Executes a parallel call while preserving its operation identity. */
+    public ToolResponse invoke(String toolName, Map<String, Object> params, String sessionId, String operationId) {
         publishToolTrace(TraceStage.TOOL_START, sessionId, toolName, "START");
         try {
-            ToolResponse response = toolInvoker.invoke(toolName, params, sessionId);
+            ToolResponse response = toolInvoker.invoke(toolName, params, sessionId, operationId);
             if (response instanceof ToolResponse.ToolSuccess) {
                 publishToolTrace(TraceStage.TOOL_END, sessionId, toolName, "END");
             } else if (response instanceof ToolResponse.ToolFailure) {

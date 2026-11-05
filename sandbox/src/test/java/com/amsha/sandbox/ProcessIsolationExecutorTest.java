@@ -1,17 +1,22 @@
 package com.amsha.sandbox;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
 import com.amsha.core.sandbox.SandboxFailureMessages;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.scope.WorkspaceScopeHolder;
+import com.amsha.security.api.AutonomyLevel;
+import com.amsha.tool.api.ToolExecutionContext;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +36,65 @@ public class ProcessIsolationExecutorTest {
         executor.secretResolver = new SandboxSecretResolver();
         executor.sandboxStrategy = SandboxStrategy.NONE;
         executor.sandboxEnabled = true;
+    }
+
+    @Test
+    void durableAttemptLifecycleReportsRunningOnlyAfterProcessStart() throws Exception {
+        String operationId = "00000000-0000-0000-0000-000000000001";
+        String attemptId = "00000000-0000-0000-0000-000000000002";
+        ToolExecutionContext context = new ToolExecutionContext(
+                        TEST_SESSION_ID,
+                        "user",
+                        "chat",
+                        "coordinator",
+                        AutonomyLevel.SUPERVISED,
+                        "trace",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        operationId)
+                .withAttempt("workspace-1", attemptId, 1, 1);
+        List<String> events = new ArrayList<>();
+        SandboxAttemptLifecycle lifecycle = new SandboxAttemptLifecycle() {
+            @Override
+            public void launchRequested(String executionHandle) {
+                events.add("requested:" + executionHandle);
+            }
+
+            @Override
+            public void executionStarting() {
+                events.add("starting");
+            }
+
+            @Override
+            public void executorStarted(String processStartIdentity) {
+                events.add("started");
+            }
+
+            @Override
+            public void launchFailedBeforeStart() {
+                events.add("failed");
+            }
+
+            @Override
+            public boolean hasLaunchIntent() {
+                return !events.isEmpty();
+            }
+        };
+        Path workspaceRoot = Files.createTempDirectory("amsha-attempt-ws");
+        try {
+            SandboxResult result =
+                    executor.executeSandboxed(context, workspaceRoot, List.of("java", "-version"), Map.of(), lifecycle);
+            assertTrue(result.success());
+            assertEquals(List.of("requested:process:" + attemptId, "starting", "started"), events);
+        } finally {
+            Files.deleteIfExists(workspaceRoot);
+        }
     }
 
     /**
