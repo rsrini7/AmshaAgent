@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointUpsertResult;
@@ -64,20 +65,23 @@ class FsCheckpointStoreAdapterTest {
 
     @Test
     void testSaveNewCheckpoint() {
-        when(helper.nextId()).thenReturn(100L);
         CheckpointDto dto = createDto(null, "sess-1", "DEFAULT", "IN_PROGRESS");
+        CheckpointDto expected = createDto(100L, "sess-1", "DEFAULT", "IN_PROGRESS");
+        when(helper.upsertCheckpoint(dto, null, false, true)).thenReturn(expected);
 
         CheckpointDto saved = adapter.save(dto);
         assertEquals(100L, saved.id());
-        verify(store).write(eq(List.of("checkpoints", "sess-1", "DEFAULT.json")), any(CheckpointDto.class));
+        verify(helper).upsertCheckpoint(dto, null, false, true);
     }
 
     @Test
     void testSaveExistingCheckpoint() {
         CheckpointDto dto = createDto(100L, "sess-1", "DEFAULT", "IN_PROGRESS");
+        when(helper.upsertCheckpoint(dto, null, false, true)).thenReturn(dto);
+
         CheckpointDto saved = adapter.save(dto);
         assertEquals(100L, saved.id());
-        verify(store).write(eq(List.of("checkpoints", "sess-1", "DEFAULT.json")), any(CheckpointDto.class));
+        verify(helper).upsertCheckpoint(dto, null, false, true);
     }
 
     @Test
@@ -95,7 +99,7 @@ class FsCheckpointStoreAdapterTest {
     @Test
     void testFindByIdAndSessionRole() {
         CheckpointDto cp = createDto(10L, "sess-1", "role-1", "IN_PROGRESS");
-        when(helper.loadAll()).thenReturn(List.of(cp));
+        when(helper.findById(10L)).thenReturn(Optional.of(cp));
         when(helper.findBySessionAndRole("sess-1", "role-1")).thenReturn(Optional.of(cp));
 
         assertTrue(adapter.findById(10L).isPresent());
@@ -106,7 +110,12 @@ class FsCheckpointStoreAdapterTest {
     void testTransitionsAndClaims() {
         CheckpointDto cp = createDto(10L, "sess-1", "role-1", "AWAITING_APPROVAL");
         lenient().when(helper.loadAll()).thenReturn(List.of(cp));
+        lenient().when(helper.findById(10L)).thenReturn(Optional.of(cp));
         when(helper.findBySessionAndRole("sess-1", "role-1")).thenReturn(Optional.of(cp));
+        lenient().when(helper.withCheckpointLock(any())).thenAnswer(inv -> ((Supplier<?>) inv.getArgument(0)).get());
+        lenient()
+                .when(helper.upsertCheckpoint(any(), any(), anyBoolean(), anyBoolean()))
+                .thenReturn(cp);
 
         assertTrue(adapter.atomicTransition(10L, "AWAITING_APPROVAL", "RESUMING"));
         assertTrue(adapter.claimForResume("sess-1", "role-1"));
@@ -124,9 +133,15 @@ class FsCheckpointStoreAdapterTest {
         ReasoningStepDto step =
                 new ReasoningStepDto("thought-1", "action-1", "{}", "obs-1", 100, 50, true, null, null, null);
         CheckpointDto cp = createDto(10L, "sess-1", "role-1", "IN_PROGRESS");
+        FsCheckpointEnvelope env =
+                new FsCheckpointEnvelope(FsCheckpointEnvelope.CURRENT_VERSION, cp, List.of(), List.of());
 
         lenient().when(helper.nextId()).thenReturn(10L);
         lenient().when(helper.loadAll()).thenReturn(List.of(cp));
+        lenient().when(helper.findById(10L)).thenReturn(Optional.of(cp));
+        lenient().when(helper.loadOrCreateEnvelope(cp)).thenReturn(env);
+        lenient().when(helper.withCheckpointLock(any())).thenAnswer(inv -> ((Supplier<?>) inv.getArgument(0)).get());
+        when(helper.upsertCheckpoint(eq(cp), any(), anyBoolean(), anyBoolean())).thenReturn(cp);
 
         adapter.saveCheckpointWithSteps(cp, List.of(step));
         adapter.saveSteps(10L, List.of(step));
@@ -134,13 +149,26 @@ class FsCheckpointStoreAdapterTest {
         adapter.deleteCheckpoint("sess-1", "role-1");
         adapter.purgeOldChatHistory(Instant.now().plusSeconds(3600));
 
+        verify(helper).upsertCheckpoint(eq(cp), eq(List.of(step)), eq(true), eq(true));
         verify(helper, atLeastOnce()).persistSteps(eq(10L), any());
+        verify(helper).deleteSteps(10L);
+        verify(helper).deleteCheckpoint("sess-1", "role-1");
+        verify(helper).purgeOldChatHistory(any());
     }
 
     @Test
     void testUpserts() {
         CheckpointDto cp = createDto(10L, "sess-1", "role-1", "IN_PROGRESS");
         when(helper.findBySessionAndRole("sess-1", "role-1")).thenReturn(Optional.of(cp));
+        lenient()
+                .when(helper.buildUpsertCheckpoint(any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenReturn(cp);
+        lenient()
+                .when(helper.buildFinalizedCheckpoint(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(cp);
+        lenient()
+                .when(helper.upsertCheckpoint(any(), any(), anyBoolean(), anyBoolean()))
+                .thenReturn(cp);
 
         CheckpointUpsertResult res1 = adapter.upsertWithSteps("sess-1", "role-1", "{}", "FULL", 1, "goal", "{}");
         assertFalse(res1.created());
@@ -156,6 +184,9 @@ class FsCheckpointStoreAdapterTest {
         when(helper.loadAll()).thenReturn(List.of(cp));
         when(helper.loadSession("sess-1")).thenReturn(List.of(cp));
         when(helper.findBySessionAndRole("sess-1", "role-1")).thenReturn(Optional.of(cp));
+        lenient()
+                .when(helper.upsertCheckpoint(any(), any(), anyBoolean(), anyBoolean()))
+                .thenReturn(cp);
 
         assertEquals(1, adapter.countByStatusAndSessionIds("AWAITING_APPROVAL", List.of("sess-1")));
         assertEquals(

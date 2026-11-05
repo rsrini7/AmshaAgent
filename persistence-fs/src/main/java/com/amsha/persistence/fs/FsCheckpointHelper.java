@@ -162,6 +162,10 @@ public class FsCheckpointHelper {
         });
     }
 
+    void deleteStepsForSession(String sessionId, String role) {
+        findBySessionAndRole(sessionId, role).ifPresent(cp -> deleteSteps(cp.id()));
+    }
+
     Optional<FsCheckpointEnvelope> loadEnvelope(Long checkpointId) {
         if (checkpointId == null) return Optional.empty();
         return store.readOptional(List.of(DOMAIN, ENVELOPES, checkpointId + ".json"), FsCheckpointEnvelope.class)
@@ -184,6 +188,11 @@ public class FsCheckpointHelper {
 
     List<FsAttemptLink> findAttemptLinks(String workspaceId, String attemptId) {
         return new FsCheckpointLinkIndex(this, store).find(workspaceId, attemptId);
+    }
+
+    Optional<FsAttemptLink> findAttemptLink(String workspaceId, String attemptId) {
+        List<FsAttemptLink> links = findAttemptLinks(workspaceId, attemptId);
+        return links.isEmpty() ? Optional.empty() : Optional.of(links.getFirst());
     }
 
     void saveAttemptLink(FsAttemptLink link) {
