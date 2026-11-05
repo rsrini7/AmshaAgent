@@ -13,6 +13,10 @@
 
   <artifactId>amsha-app</artifactId>
 
+  <properties>
+    <amsha.app.test.fork.heap>3g</amsha.app.test.fork.heap>
+  </properties>
+
   <dependencies>
 
     <dependency>
@@ -431,8 +435,8 @@
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <!-- Quarkus test augmentation for the full app needs more heap than the runner default. -->
-          <argLine>@{argLine} ${maven.surefire.argLine} -Xmx3g</argLine>
+          <!-- build:test overrides this per host so the full app suite has its own heap budget. -->
+          <argLine>@{argLine} ${maven.surefire.argLine} -Xmx${amsha.app.test.fork.heap}</argLine>
         </configuration>
       </plugin>
       <plugin>

@@ -6,17 +6,24 @@ import static org.mockito.Mockito.*;
 
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
+import jakarta.inject.Inject;
+
 import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.app.security.ApiKeyRegistry;
+import com.amsha.core.agent.role.AgentRoleEnum;
+import com.amsha.core.agent.role.CapabilityRegistry;
 import com.amsha.core.persistence.AsyncPersistenceEngine;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.amsha.core.tools.ToolRegistry;
+import com.amsha.security.api.ToolOperation;
 import com.amsha.tool.api.AgentTool;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 
 import org.junit.jupiter.api.*;
+import org.mockito.ArgumentCaptor;
 
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -48,18 +55,23 @@ class McpServerE2ETest {
     @InjectMock
     ToolRegistry toolRegistry;
 
+    @Inject
+    CapabilityRegistry capabilityRegistry;
+
     @BeforeEach
     void setup() {
         when(apiKeyRegistry.isValidKey(anyString())).thenReturn(true);
         when(apiKeyRegistry.isAllowed(anyString())).thenReturn(true);
         doNothing().when(persistenceEngine).submitCritical(any());
-        when(toolRegistry.invokeTool(anyString(), anyString(), anyString()))
+        capabilityRegistry.grant(AgentRoleEnum.COORDINATOR_ID, ToolCapability.RECALL_MEMORY_SEARCH.toolName());
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(ToolResponse.success("mock-tool-result"));
 
         AgentTool mockTool = mock(AgentTool.class);
         JsonObjectSchema schema = JsonObjectSchema.builder().build();
         when(mockTool.parametersSchema()).thenReturn(schema);
         when(mockTool.name()).thenReturn("mock-tool");
+        when(mockTool.requiredOperation()).thenReturn(ToolOperation.READ_FS);
         when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mockTool));
     }
 
@@ -163,6 +175,8 @@ class McpServerE2ETest {
 
         String raw = RestAssured.given()
                 .header("X-Amsha-API-Key", "test-key")
+                .header("X-MCP-Client-ID", "test-client")
+                .header("X-MCP-Session-ID", "test-session")
                 .contentType("application/json")
                 .accept("application/json, text/event-stream")
                 .header("Mcp-Session-Id", mcpSessionId)
@@ -176,11 +190,15 @@ class McpServerE2ETest {
                 .asString();
 
         String json = raw.startsWith("data:") ? raw.substring(5).trim() : raw;
-        assertTrue(
-                json.contains("\"content\"") || json.contains("mock-tool-result"),
-                "tools/call result must contain content. Got: " + json);
+        assertTrue(json.contains("mock-tool-result"), "tools/call should return the tool result. Got: " + json);
 
+        ArgumentCaptor<String> operationId = ArgumentCaptor.forClass(String.class);
         verify(toolRegistry)
-                .invokeTool(eq(ToolCapability.RECALL_MEMORY_SEARCH.toolName()), anyString(), eq("mcp-server"));
+                .invokeToolWithOperationId(
+                        eq(ToolCapability.RECALL_MEMORY_SEARCH.toolName()),
+                        anyString(),
+                        eq("mcp-server"),
+                        operationId.capture());
+        assertDoesNotThrow(() -> ToolOperationIdentity.validateCanonicalUuid(operationId.getValue(), "operationId"));
     }
 }

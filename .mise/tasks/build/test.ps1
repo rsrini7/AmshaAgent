@@ -56,8 +56,9 @@ if ($IsMacOS) {
     $cpu = [int](nproc)
 }
 $jitGB = [Math]::Max(2, [Math]::Floor($availGB * 0.5))
+$appTestHeapGB = [Math]::Min(6, [Math]::Max(3, [Math]::Floor($availGB * 0.2)))
 $threads = [Math]::Max(2, [Math]::Min([Math]::Floor($cpu / 2), 8))
-Write-Host "🧠 ${availGB}G avail, ${cpu} CPUs → JIT heap:${jitGB}G, parallel threads:${threads}"
+Write-Host "🧠 ${availGB}G avail, ${cpu} CPUs → JIT heap:${jitGB}G, app test heap:${appTestHeapGB}G, parallel threads:${threads}"
 
 # --- Shield .env (secrets) from the tests ---
 $envBackup = $null
@@ -142,7 +143,7 @@ if ($srcItem) {
                 $mavenCmd += $args
             }
         }
-        $mavenCmd += @('-Dquarkus.test.profile=test')
+        $mavenCmd += @('-Dquarkus.test.profile=test', "-Damsha.app.test.fork.heap=${appTestHeapGB}g")
         & $mvnw @mavenCmd
         if ($LASTEXITCODE -ne 0) { throw "Test build failed with exit code $LASTEXITCODE." }
         Write-Host '✅  Tests complete.'

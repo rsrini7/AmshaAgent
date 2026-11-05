@@ -28,7 +28,10 @@ import com.tngtech.archunit.lang.ArchRule;
  *       (legal core → memory edge).</li>
  * </ul>
  */
-@AnalyzeClasses(packages = "com.amsha", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(
+        packages = "com.amsha",
+        locations = ProjectModuleLocationProvider.class,
+        importOptions = ImportOption.DoNotIncludeTests.class)
 public class ArchitectureBoundaryTest {
 
     // 1. com.amsha.core does NOT import com.amsha.channel.telegram or com.amsha.channel.web
