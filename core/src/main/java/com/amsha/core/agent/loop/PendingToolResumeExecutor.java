@@ -138,10 +138,14 @@ final class PendingToolResumeExecutor {
             AgentExecutionContext context, List<ReasoningStep> history, AgentCheckpoint checkpoint) {
         List<ReasoningStep> restoredSteps = agentStore.deserializeSteps(checkpoint);
         if (restoredSteps != null && !restoredSteps.isEmpty()) {
-            history.addAll(0, restoredSteps);
-            log.infof(
-                    "[ResumeStrategy] Prepended %d restored steps from checkpoint session %s to preserve HITL context",
-                    restoredSteps.size(), context.sessionId());
+            boolean historyAlreadyRestored = history.size() >= restoredSteps.size()
+                    && history.subList(0, restoredSteps.size()).equals(restoredSteps);
+            if (!historyAlreadyRestored) {
+                history.addAll(0, restoredSteps);
+                log.infof(
+                        "[ResumeStrategy] Prepended %d restored steps from checkpoint session %s to preserve HITL context",
+                        restoredSteps.size(), context.sessionId());
+            }
         }
         context.setCheckpointRestoreOffset(history.size());
     }

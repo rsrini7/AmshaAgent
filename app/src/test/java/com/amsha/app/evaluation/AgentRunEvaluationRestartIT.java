@@ -19,15 +19,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amsha.app.security.ActiveWorkspaceFilter;
 import com.amsha.app.security.ApiKeyRegistry;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.persistence.api.CheckpointCrudPort;
+import com.amsha.persistence.api.IdentityStorePort;
+import com.amsha.tool.api.ToolExecutionContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -65,6 +69,9 @@ class AgentRunEvaluationRestartIT {
     CheckpointCrudPort checkpointCrudPort;
 
     @Inject
+    IdentityStorePort identityStore;
+
+    @Inject
     StatefulAgentStore agentStore;
 
     @Inject
@@ -80,6 +87,7 @@ class AgentRunEvaluationRestartIT {
     @Test
     void recordsStaleApprovalDenialAfterApplicationRestart() throws Exception {
         apiKeyRegistry.register("internal", internalApiKey);
+        AgentRunEvaluationWorkspace.ensureExists(identityStore);
         AgentRunEvaluationCorpusSupport.Corpus corpus =
                 AgentRunEvaluationCorpusSupport.readCorpus(getClass(), objectMapper);
         AgentRunEvaluationCorpusSupport.CorpusCase durableCase = corpus.cases().stream()
@@ -93,10 +101,11 @@ class AgentRunEvaluationRestartIT {
                     return invocation.callRealMethod();
                 })
                 .when(toolRegistry)
-                .invokeTool(anyString(), anyString(), anyString());
+                .invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
 
         long started = System.nanoTime();
         Response decision = given().header(API_KEY_HEADER, internalApiKey)
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, AgentRunEvaluationWorkspace.ID)
                 .contentType(ContentType.JSON)
                 .body(Map.of())
                 .post("/api/v1/sessions/{id}/approve?agentRole=coordinator", sessionId);
@@ -105,6 +114,7 @@ class AgentRunEvaluationRestartIT {
         String decisionErrorCode = safeErrorCode(decision);
 
         Response status = given().header(API_KEY_HEADER, internalApiKey)
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, AgentRunEvaluationWorkspace.ID)
                 .get("/api/v1/sessions/{id}/status/{role}", sessionId, "coordinator");
         JsonNode steps = status.statusCode() == 200
                 ? objectMapper.readTree(status.asString()).path("steps")
@@ -195,7 +205,12 @@ class AgentRunEvaluationRestartIT {
                     return SandboxResult.success("Synthetic repository metadata.");
                 })
                 .when(sandboxExecutionPort)
-                .executeSandboxed(anyString(), any(Path.class), anyList(), anyMap());
+                .executeSandboxed(
+                        any(ToolExecutionContext.class),
+                        any(Path.class),
+                        anyList(),
+                        anyMap(),
+                        any(SandboxAttemptLifecycle.class));
     }
 
     private boolean hasFinishAnswer(JsonNode steps, String expectedAnswer) {

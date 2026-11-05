@@ -135,6 +135,25 @@ public class StatefulAgentStoreImplTest {
     }
 
     @Test
+    public void saveWithStepsSerializesCompleteCheckpointState() {
+        AgentCheckpoint checkpoint = checkpoint();
+        String operationId = "123e4567-e89b-12d3-a456-426614174000";
+        List<ReasoningStep> steps =
+                List.of(ReasoningStep.pending("read", "file_read", Map.of()).withOperationId(operationId));
+        String stateJson = "[{\"operationId\":\"" + operationId + "\"}]";
+        when(serializer.serializeSteps(steps)).thenReturn(stateJson);
+        when(serializer.toDto(steps.getFirst()))
+                .thenReturn(new ReasoningStepDto("\"read\"", "file_read", "{}", null, 0, 0, null, null, null, null));
+        CheckpointDto saved = dto(9L);
+        when(storeAdapter.saveCheckpointWithSteps(any(), anyList())).thenReturn(saved);
+
+        store.saveWithSteps(checkpoint, steps);
+
+        verify(checkpoint).setStateJson(stateJson);
+        verify(storeAdapter).saveCheckpointWithSteps(any(), anyList());
+    }
+
+    @Test
     public void loadMapsEmptyAndPresentResults() {
         assertTrue(store.load("missing", "coder").isEmpty());
 
@@ -162,6 +181,20 @@ public class StatefulAgentStoreImplTest {
         assertEquals(List.of(legacy), store.deserializeSteps(withId));
 
         assertTrue(store.deserializeSteps(null).isEmpty());
+    }
+
+    @Test
+    public void deserializeStepsPreservesOperationIdentityFromCheckpointStateJson() {
+        AgentCheckpoint withId = checkpoint();
+        when(withId.getPendingToolName()).thenReturn("file_read");
+        ReasoningStepDto granularDto = new ReasoningStepDto("t", "file_read", "{}", null, 0, 0, null, null, null, null);
+        ReasoningStep granularStep = ReasoningStep.pending("read", "file_read", Map.of());
+        ReasoningStep stateJsonStep = granularStep.withOperationId("123e4567-e89b-12d3-a456-426614174000");
+        when(storeAdapter.loadSteps(7L)).thenReturn(List.of(granularDto));
+        when(serializer.fromDto(granularDto)).thenReturn(granularStep);
+        when(serializer.deserializeSteps(withId)).thenReturn(List.of(stateJsonStep));
+
+        assertEquals(List.of(stateJsonStep), store.deserializeSteps(withId));
     }
 
     @Test

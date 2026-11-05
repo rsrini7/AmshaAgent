@@ -20,10 +20,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.amsha.core.agent.loop.AgentExecutionContext;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
 
 /** Configures deterministic whole-run model and tool boundary fixtures. */
 final class AgentRunEvaluationScriptedModel {
@@ -69,7 +71,7 @@ final class AgentRunEvaluationScriptedModel {
                     return invocation.callRealMethod();
                 })
                 .when(toolRegistry)
-                .invokeTool(anyString(), anyMap());
+                .invokeToolWithOperationId(anyString(), anyMap(), anyString());
         doAnswer(invocation -> {
                     toolExecutions.incrementAndGet();
                     resumingPendingTool.set(true);
@@ -80,7 +82,7 @@ final class AgentRunEvaluationScriptedModel {
                     }
                 })
                 .when(toolRegistry)
-                .invokeTool(anyString(), anyString(), anyString());
+                .invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
         doAnswer(invocation -> {
                     githubExecutions.incrementAndGet();
                     return "eligible-retry".equals(script)
@@ -88,7 +90,12 @@ final class AgentRunEvaluationScriptedModel {
                             : SandboxResult.failure(FAILURE_SENTINEL);
                 })
                 .when(sandboxExecutionPort)
-                .executeSandboxed(anyString(), any(Path.class), anyList(), anyMap());
+                .executeSandboxed(
+                        any(ToolExecutionContext.class),
+                        any(Path.class),
+                        anyList(),
+                        anyMap(),
+                        any(SandboxAttemptLifecycle.class));
         when(reasoningEngine.nextStep(any(AgentExecutionContext.class), anyString(), anyString(), anyList()))
                 .thenAnswer(invocation -> {
                     modelCalls.incrementAndGet();

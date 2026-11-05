@@ -129,6 +129,15 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
         if (checkpoint == null) return List.of();
 
+        List<ReasoningStep> stateJsonSteps = null;
+        String pendingToolName = checkpoint.getPendingToolName();
+        if (pendingToolName != null && !pendingToolName.isBlank()) {
+            stateJsonSteps = serializer.deserializeSteps(checkpoint);
+            if (hasSerializedPendingOperationIdentity(stateJsonSteps, pendingToolName)) {
+                return stateJsonSteps;
+            }
+        }
+
         // 1. Try granular rows (new way)
         if (checkpoint.getId() != null) {
             List<ReasoningStep> granular = loadSteps(checkpoint.getId());
@@ -136,7 +145,16 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
         }
 
         // 2. Fallback to stateJson (old way)
-        return serializer.deserializeSteps(checkpoint);
+        return stateJsonSteps != null ? stateJsonSteps : serializer.deserializeSteps(checkpoint);
+    }
+
+    private static boolean hasSerializedPendingOperationIdentity(List<ReasoningStep> steps, String pendingToolName) {
+        if (steps.isEmpty()) return false;
+        ReasoningStep lastStep = steps.getLast();
+        return lastStep instanceof ReasoningStep.ToolCallStep call
+                && pendingToolName.equals(call.action())
+                && call.observation() == null
+                && call.operationId() != null;
     }
 
     @Override
@@ -154,9 +172,10 @@ public class StatefulAgentStoreImpl implements StatefulAgentStore {
 
     @Override
     public AgentCheckpoint saveWithSteps(AgentCheckpoint checkpoint, List<ReasoningStep> steps) {
-        List<ReasoningStepDto> dtos = steps == null
-                ? List.of()
-                : steps.stream().map(serializer::toDto).toList();
+        List<ReasoningStep> persistedSteps = steps == null ? List.of() : steps;
+        checkpoint.setStateJson(serializer.serializeSteps(persistedSteps));
+        List<ReasoningStepDto> dtos =
+                persistedSteps.stream().map(serializer::toDto).toList();
         CheckpointDto saved = storeAdapter.saveCheckpointWithSteps(CheckpointMapper.toDto(checkpoint), dtos);
         return CheckpointRecord.fromDto(saved);
     }

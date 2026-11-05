@@ -17,15 +17,17 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
+import com.amsha.app.security.ActiveWorkspaceFilter;
 import com.amsha.app.security.ApiKeyRegistry;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.sandbox.SandboxExecutionPort;
+import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.persistence.api.CheckpointCrudPort;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.security.api.AutonomyLevel;
-import com.amsha.tool.api.ToolCapability;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -63,6 +65,12 @@ class AgentRunEvaluationCorpusIT {
     CheckpointCrudPort checkpointCrudPort;
 
     @Inject
+    StatefulAgentStore agentStore;
+
+    @Inject
+    IdentityStorePort identityStore;
+
+    @Inject
     ObjectMapper objectMapper;
 
     @ConfigProperty(name = "amsha.api.keys.internal")
@@ -73,6 +81,7 @@ class AgentRunEvaluationCorpusIT {
     @Test
     void recordsVersionedWholeRunEvidenceWithoutProviderEgress() throws IOException {
         apiKeyRegistry.register("internal", internalApiKey);
+        AgentRunEvaluationWorkspace.ensureExists(identityStore);
         AgentRunEvaluationCorpusSupport.Corpus corpus =
                 AgentRunEvaluationCorpusSupport.readCorpus(getClass(), objectMapper);
         List<Map<String, Object>> caseResults = new ArrayList<>();
@@ -136,7 +145,7 @@ class AgentRunEvaluationCorpusIT {
             }
             evidence.completeIfPending();
         } catch (Exception | AssertionError failure) {
-            evidence.failed(safeFailureKind(failure));
+            evidence.failed(AgentRunEvaluationDiagnostics.safeFailureKind(failure));
         }
         evidence.measuredLatency(Math.max(1L, (System.nanoTime() - started) / 1_000_000L));
         return evidence.toMap(scriptedModel.modelCalls(), scriptedModel.toolExecutions());
@@ -202,7 +211,8 @@ class AgentRunEvaluationCorpusIT {
                 pauseResponse.statusCode(), safeRunErrorCode(pauseResponse), safeResponseKind(pauseResponse));
         recordStepSummary(sessionId, "coordinator", evidence);
         assertEquals(202, pauseResponse.statusCode(), "Network tool must pause for human approval");
-        assertPersistedApproval(sessionId);
+        AgentRunEvaluationCheckpointAssertions.assertPersistedApproval(
+                checkpointCrudPort, agentStore, objectMapper, sessionId);
         evidence.approvalBehavior("requested");
 
         Response decision = resolveApproval(sessionId, approve);
@@ -211,7 +221,11 @@ class AgentRunEvaluationCorpusIT {
         if (approve) {
             assertEquals(500, decision.statusCode(), "The synthetic tool failure was not reported as a run failure");
             assertEquals("SYSTEM", safeRunErrorCode(decision), "Tool failure code was not represented safely");
-            assertEquals(1, scriptedModel.githubExecutions(), "Approved tool call did not execute exactly once");
+            assertEquals(
+                    1,
+                    scriptedModel.githubExecutions(),
+                    "Approved tool call did not execute; failure category="
+                            + AgentRunEvaluationDiagnostics.safeApprovalFailureCategory(objectMapper, decision));
             assertEquals(1, scriptedModel.toolExecutions(), "The approved tool invocation was not counted");
             assertFalse(decision.asString().contains(FAILURE_SENTINEL), "Raw sandbox output leaked to REST response");
             evidence.approvalBehavior("approved");
@@ -239,7 +253,8 @@ class AgentRunEvaluationCorpusIT {
                 pauseResponse.statusCode(), safeRunErrorCode(pauseResponse), safeResponseKind(pauseResponse));
         recordStepSummary(sessionId, "coordinator", evidence);
         assertEquals(202, pauseResponse.statusCode(), "Durable pause was not created");
-        assertPersistedApproval(sessionId);
+        AgentRunEvaluationCheckpointAssertions.assertPersistedApproval(
+                checkpointCrudPort, agentStore, objectMapper, sessionId);
         evidence.safetyViolations(0);
         evidence.toolBehavior("approval-checkpoint-persisted");
         evidence.approvalBehavior("awaiting-application-restart-phase");
@@ -310,17 +325,10 @@ class AgentRunEvaluationCorpusIT {
     private Response resolveApproval(String sessionId, boolean approve) {
         String action = approve ? "approve" : "deny";
         return given().header(API_KEY_HEADER, internalApiKey)
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, AgentRunEvaluationWorkspace.ID)
                 .contentType(ContentType.JSON)
                 .body(Map.of())
                 .post("/api/v1/sessions/{id}/" + action + "?agentRole=coordinator", sessionId);
-    }
-
-    private void assertPersistedApproval(String sessionId) {
-        CheckpointDto checkpoint = checkpointCrudPort
-                .findBySessionAndRole(sessionId, "coordinator")
-                .orElseThrow();
-        assertEquals("AWAITING_APPROVAL", checkpoint.status());
-        assertEquals(ToolCapability.GITHUB.toolName(), checkpoint.pendingToolName());
     }
 
     private boolean containsFinishAnswer(String sessionId, String role, String expectedAnswer) throws IOException {
@@ -347,6 +355,7 @@ class AgentRunEvaluationCorpusIT {
 
     private JsonNode readStatusSteps(String sessionId, String role) throws IOException {
         String statusJson = given().header(API_KEY_HEADER, internalApiKey)
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, AgentRunEvaluationWorkspace.ID)
                 .get("/api/v1/sessions/{id}/status/{role}", sessionId, role)
                 .then()
                 .statusCode(200)
@@ -396,6 +405,7 @@ class AgentRunEvaluationCorpusIT {
 
     private String createSession(AutonomyLevel autonomyLevel) {
         Response response = given().header(API_KEY_HEADER, internalApiKey)
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, AgentRunEvaluationWorkspace.ID)
                 .contentType(ContentType.JSON)
                 .body(Map.of("autonomyLevel", autonomyLevel.name()))
                 .post("/api/v1/sessions");
@@ -445,6 +455,7 @@ class AgentRunEvaluationCorpusIT {
 
     private Response runSession(String sessionId, String goal) {
         return given().header(API_KEY_HEADER, internalApiKey)
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, AgentRunEvaluationWorkspace.ID)
                 .contentType(ContentType.JSON)
                 .body(Map.of("goal", goal, "agentRole", "coordinator", "maxIterations", 4))
                 .post("/api/v1/sessions/{id}/run", sessionId);
@@ -452,14 +463,10 @@ class AgentRunEvaluationCorpusIT {
 
     private Response runRawSessionRequest(String sessionId, String body) {
         return given().header(API_KEY_HEADER, internalApiKey)
+                .header(ActiveWorkspaceFilter.WORKSPACE_HEADER, AgentRunEvaluationWorkspace.ID)
                 .contentType(ContentType.JSON)
                 .body(body)
                 .post("/api/v1/sessions/{id}/run", sessionId);
-    }
-
-    private String safeFailureKind(Throwable failure) {
-        String simpleName = failure.getClass().getSimpleName();
-        return simpleName.matches("[A-Za-z][A-Za-z0-9]{0,63}") ? simpleName : "harness_error";
     }
 
     public static class CorpusApplicationProfile implements QuarkusTestProfile {

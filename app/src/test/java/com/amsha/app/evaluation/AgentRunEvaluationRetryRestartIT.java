@@ -24,12 +24,15 @@ import com.amsha.core.agent.loop.RateLimitRetryScheduler;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.sandbox.SandboxAttemptLifecycle;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.persistence.api.CheckpointStatus;
+import com.amsha.persistence.api.IdentityStorePort;
 import com.amsha.tool.api.ToolCapability;
+import com.amsha.tool.api.ToolExecutionContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
@@ -65,12 +68,16 @@ class AgentRunEvaluationRetryRestartIT {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    IdentityStorePort identityStore;
+
     private final AtomicInteger modelCalls = new AtomicInteger();
     private final AtomicInteger toolExecutions = new AtomicInteger();
     private final AtomicInteger sandboxExecutions = new AtomicInteger();
 
     @Test
     void recoversEligibleRetryAfterRestartWithoutReplayingReadOnlyTool() throws Exception {
+        AgentRunEvaluationWorkspace.ensureExists(identityStore);
         AgentRunEvaluationCorpusSupport.Corpus corpus =
                 AgentRunEvaluationCorpusSupport.readCorpus(getClass(), objectMapper);
         AgentRunEvaluationCorpusSupport.CorpusCase recoveryCase = corpus.cases().stream()
@@ -93,13 +100,18 @@ class AgentRunEvaluationRetryRestartIT {
                     return invocation.callRealMethod();
                 })
                 .when(toolRegistry)
-                .invokeTool(anyString(), anyString(), anyString());
+                .invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString());
         doAnswer(invocation -> {
                     sandboxExecutions.incrementAndGet();
                     return SandboxResult.success(TOOL_OUTPUT_SENTINEL);
                 })
                 .when(sandboxExecutionPort)
-                .executeSandboxed(anyString(), any(Path.class), anyList(), anyMap());
+                .executeSandboxed(
+                        any(ToolExecutionContext.class),
+                        any(Path.class),
+                        anyList(),
+                        anyMap(),
+                        any(SandboxAttemptLifecycle.class));
 
         long started = System.nanoTime();
         long deadline = started + TimeUnit.SECONDS.toNanos(8);
