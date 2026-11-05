@@ -20,6 +20,11 @@ package com.amsha.persistence.api;
  * @see CheckpointTransitionPort
  * @see CheckpointSessionPort
  * @see CheckpointLifecyclePort
+ * @see CheckpointAppendPort
  */
 public interface CheckpointStorePort
-        extends CheckpointCrudPort, CheckpointTransitionPort, CheckpointSessionPort, CheckpointLifecyclePort {}
+        extends CheckpointCrudPort,
+                CheckpointTransitionPort,
+                CheckpointSessionPort,
+                CheckpointLifecyclePort,
+                CheckpointAppendPort {}

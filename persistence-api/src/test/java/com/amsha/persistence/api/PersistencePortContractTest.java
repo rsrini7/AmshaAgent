@@ -1395,6 +1395,16 @@ class PersistencePortContractTest {
         @Override
         public void stampChannelInfo(Long checkpointId, String channelType, String channelPlatformId) {}
         // Stub: not exercised by current contract tests.
+
+        @Override
+        public CheckpointAppendResult appendResultIfAbsent(
+                String workspaceId,
+                Long checkpointId,
+                int expectedVersion,
+                ReasoningStepDto step,
+                List<String> attemptIds) {
+            return CheckpointAppendResult.APPENDED;
+        }
     }
 
     static class InMemoryCronStore implements CronStorePort {

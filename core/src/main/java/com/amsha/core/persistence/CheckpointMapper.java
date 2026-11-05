@@ -36,6 +36,7 @@ public class CheckpointMapper {
                 entity.getParentCheckpointId(),
                 entity.getDepth(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt());
+                entity.getUpdatedAt(),
+                entity.getVersion() != null ? entity.getVersion() : 0);
     }
 }

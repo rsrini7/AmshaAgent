@@ -6,11 +6,10 @@ import jakarta.inject.Inject;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
-import com.amsha.common.util.LogUtil;
 import com.amsha.common.util.TemporalUtils;
+import com.amsha.persistence.api.CheckpointAppendResult;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointDtoHelper;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -18,9 +17,7 @@ import com.amsha.persistence.api.CheckpointStorePort;
 import com.amsha.persistence.api.CheckpointUpsertResult;
 import com.amsha.persistence.api.PersistenceBackend;
 import com.amsha.persistence.api.ReasoningStepDto;
-import com.amsha.persistence.api.ToolDecision;
 import com.amsha.persistence.sqlite.jdbi.CheckpointJdbiDao;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -46,6 +43,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
     private final JdbiRetryWrapper retryWrapper;
     private final ObjectMapper objectMapper;
     private final int staleClaimMinutes;
+    private final SqliteCheckpointAppendHandler appendHandler;
 
     @Inject
     public SqliteCheckpointStoreAdapter(
@@ -57,6 +55,7 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         this.retryWrapper = retryWrapper;
         this.objectMapper = objectMapper;
         this.staleClaimMinutes = staleClaimMinutes;
+        this.appendHandler = new SqliteCheckpointAppendHandler();
     }
 
     protected SqliteCheckpointStoreAdapter() {
@@ -379,6 +378,16 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
         jdbi.useExtension(CheckpointJdbiDao.class, dao -> dao.deleteSteps(checkpointId));
     }
 
+    @Override
+    public CheckpointAppendResult appendResultIfAbsent(
+            String workspaceId,
+            Long checkpointId,
+            int expectedVersion,
+            ReasoningStepDto step,
+            List<String> attemptIds) {
+        return appendHandler.appendResultIfAbsent(jdbi, workspaceId, checkpointId, expectedVersion, step, attemptIds);
+    }
+
     // ── Batch Operations ───────────────────────────────────────────────────
     @Override
     public boolean atomicUpdateBatchToolDecision(String sessionId, String agentRole, String toolName, String decision) {
@@ -387,50 +396,14 @@ public class SqliteCheckpointStoreAdapter implements CheckpointStorePort {
                 "atomic-update-batch",
                 3,
                 50,
-                () -> jdbi.inTransaction(handle -> {
-                    var dao = handle.attach(CheckpointJdbiDao.class);
-                    // Load current batch_tool_decisions and status
-                    Optional<CheckpointDto> cp = dao.findAnyBySessionAndRole(sessionId, agentRole);
-                    if (cp.isEmpty()) {
-                        log.warnf("[BatchOps] No checkpoint found for session=%s", sessionId);
-                        return false;
-                    }
-                    CheckpointDto dto = cp.get();
-                    if (!CheckpointStatus.AWAITING_APPROVAL.name().equals(dto.status())) {
-                        log.warnf(
-                                "[BatchOps] Checkpoint status is '%s' instead of AWAITING_APPROVAL for session=%s",
-                                dto.status(), sessionId);
-                        return false;
-                    }
-                    String rawJson = dto.batchToolDecisions();
-                    if (rawJson == null || rawJson.isBlank()) {
-                        log.warnf("[BatchOps] batchToolDecisions is null for session=%s", sessionId);
-                        return false;
-                    }
-                    try {
-                        Map<String, ToolDecision> map =
-                                objectMapper.readValue(rawJson, new TypeReference<Map<String, ToolDecision>>() {});
-                        if (!map.containsKey(toolName)) {
-                            log.warnf(
-                                    "[BatchOps] Tool '%s' not in batch for session %s. Available keys: %s",
-                                    toolName, sessionId, map.keySet());
-                            return false;
-                        }
-                        if (map.get(toolName) != ToolDecision.PENDING) {
-                            log.infof("[BatchOps] Tool '%s' is already decided for session=%s", toolName, sessionId);
-                            return false;
-                        }
-                        map.put(toolName, ToolDecision.valueOf(decision));
-                        String updatedJson = objectMapper.writeValueAsString(map);
-                        String now = TemporalUtils.formatIsoLex(Instant.now());
-                        return dao.atomicUpdateBatchDecision(sessionId, agentRole, updatedJson, rawJson, now);
-                    } catch (Exception e) {
-                        log.errorf(
-                                "[BatchOps] Failed to update batch tool decision for session=%s tool=%s: %s",
-                                sessionId, toolName, LogUtil.rootMessage(e));
-                        return false;
-                    }
-                }));
+                () -> jdbi.inTransaction(handle -> SqliteCheckpointHelper.updateBatchToolDecision(
+                        handle.attach(CheckpointJdbiDao.class),
+                        sessionId,
+                        agentRole,
+                        toolName,
+                        decision,
+                        objectMapper,
+                        log)));
     }
 
     // ── Cleanup ────────────────────────────────────────────────────────────

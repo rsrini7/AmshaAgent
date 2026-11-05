@@ -53,6 +53,7 @@ public final class CheckpointRecord implements AgentCheckpoint {
     public static CheckpointRecord fromDto(CheckpointDto dto) {
         CheckpointRecord r = new CheckpointRecord();
         r.id = dto.id();
+        r.version = dto.version();
         r.sessionId = dto.sessionId();
         r.agentRole = dto.agentRole();
         r.status = dto.status() != null ? CheckpointStatus.valueOf(dto.status()) : null;

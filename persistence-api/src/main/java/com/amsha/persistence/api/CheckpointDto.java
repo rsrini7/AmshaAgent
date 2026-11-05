@@ -1,5 +1,6 @@
 package com.amsha.persistence.api;
 
+import java.beans.ConstructorProperties;
 import java.time.Instant;
 
 /**
@@ -34,7 +35,107 @@ public record CheckpointDto(
         Long parentCheckpointId,
         int depth,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        Integer version) {
+
+    @ConstructorProperties({
+        "id",
+        "sessionId",
+        "agentRole",
+        "status",
+        "autonomyLevel",
+        "stateJson",
+        "channelPlatformId",
+        "channelType",
+        "originalGoal",
+        "failedAt",
+        "completedAt",
+        "failReason",
+        "pendingToolName",
+        "batchToolDecisions",
+        "pendingToolParametersJson",
+        "preExecutedResults",
+        "maxIterations",
+        "iterationsUsed",
+        "retryAfterMs",
+        "systemNote",
+        "contextDataJson",
+        "errorCode",
+        "traceId",
+        "rootCauseClass",
+        "parentCheckpointId",
+        "depth",
+        "createdAt",
+        "updatedAt",
+        "version"
+    })
+    public CheckpointDto {
+        if (version == null) {
+            version = 0;
+        }
+    }
+
+    public CheckpointDto(
+            Long id,
+            String sessionId,
+            String agentRole,
+            String status,
+            String autonomyLevel,
+            String stateJson,
+            String channelPlatformId,
+            String channelType,
+            String originalGoal,
+            Instant failedAt,
+            Instant completedAt,
+            String failReason,
+            String pendingToolName,
+            String batchToolDecisions,
+            String pendingToolParametersJson,
+            String preExecutedResults,
+            Integer maxIterations,
+            int iterationsUsed,
+            Integer retryAfterMs,
+            String systemNote,
+            String contextDataJson,
+            String errorCode,
+            String traceId,
+            String rootCauseClass,
+            Long parentCheckpointId,
+            int depth,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                sessionId,
+                agentRole,
+                status,
+                autonomyLevel,
+                stateJson,
+                channelPlatformId,
+                channelType,
+                originalGoal,
+                failedAt,
+                completedAt,
+                failReason,
+                pendingToolName,
+                batchToolDecisions,
+                pendingToolParametersJson,
+                preExecutedResults,
+                maxIterations,
+                iterationsUsed,
+                retryAfterMs,
+                systemNote,
+                contextDataJson,
+                errorCode,
+                traceId,
+                rootCauseClass,
+                parentCheckpointId,
+                depth,
+                createdAt,
+                updatedAt,
+                0);
+    }
+
     public CheckpointDto withBatchToolDecisions(String batchToolDecisions) {
         return new CheckpointDto(
                 id,
@@ -64,7 +165,8 @@ public record CheckpointDto(
                 parentCheckpointId,
                 depth,
                 createdAt,
-                updatedAt);
+                updatedAt,
+                version);
     }
 
     @SuppressWarnings("ReferenceEquality") // intentional identity check for short-circuit optimization
@@ -100,6 +202,7 @@ public record CheckpointDto(
                 parentCheckpointId,
                 depth,
                 c,
-                u);
+                u,
+                version);
     }
 }

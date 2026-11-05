@@ -5,6 +5,7 @@ import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.ChatMemoryDto;
+import com.amsha.persistence.api.CheckpointAppendResult;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.CronRunDto;
@@ -70,6 +71,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         targets = {
             // JDBI DTOs (replaced JPA entities)
             CheckpointDto.class,
+            CheckpointAppendResult.class,
             AgentCronDto.class,
             AuditEventDto.class,
             ChatMemoryDto.class,
@@ -143,6 +145,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             SqliteAuditEventStoreAdapter.class,
             SqliteChatMemoryStoreAdapter.class,
             SqliteCheckpointStoreAdapter.class,
+            SqliteCheckpointAppendHandler.class,
+            CheckpointJdbiDao.AttemptSessionRow.class,
+            CheckpointJdbiDao.AttemptLinkRow.class,
             SqliteCompactionStoreAdapter.class,
             SqliteCoreMemoryStore.class,
             SqliteRecallMemoryStore.class,

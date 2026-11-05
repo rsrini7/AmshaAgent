@@ -398,10 +398,10 @@ CheckpointDto gains the existing agent_checkpoint.version value, mapped by SQLit
 
 The append operation requires a non-empty, duplicate-free attempt ID list. In one backend transaction, insert the reasoning step, insert each reasoning_step_attempt link, and compare-and-set the checkpoint version. On filesystem persistence, perform the equivalent update in the single checkpoint-envelope replacement described in §12.4.
 
-- If none of the supplied attempt IDs is linked, insert the step and all links, then increment the version and return APPENDED.
-- If every supplied ID is already linked to the same step, return ALREADY_PRESENT without changing history or version.
-- If IDs are split across steps, belong to another checkpoint, conflict with another operation, or refer to an unknown attempt, return CONFLICT and block resume for operator review.
-- If expectedVersion is stale, return STALE; core reloads and retries a bounded number of times.
+- Replay precedence: evaluate idempotency prior to CAS version verification. If every supplied attempt ID is already linked to the same reasoning step within the target checkpoint and the stored step matches the incoming step across all persisted fields (including thought, action, input, observation, token counts, success, error code, trace ID, and root cause class), return ALREADY_PRESENT immediately without modifying checkpoint state, history, or version, even if expectedVersion does not match current checkpoint version.
+- If expectedVersion is stale (does not match current checkpoint version), return STALE; core reloads the checkpoint and retries a bounded number of times.
+- If none of the supplied attempt IDs is linked, insert the step and all links, compare-and-set/increment the version, and return APPENDED.
+- If IDs are split across steps, belong to another checkpoint or workspace, conflict with another operation, contain mismatched step content, or refer to an unknown attempt, return CONFLICT and block resume for operator review.
 
 Sequential pending operation identity remains in checkpoint pending-call data. ParallelToolCall stores one operationId per call. The join table connects settled attempts to the resulting reasoning step without adding execution identity to ReasoningStepDto.
 

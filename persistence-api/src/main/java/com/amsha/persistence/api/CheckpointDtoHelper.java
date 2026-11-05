@@ -40,7 +40,8 @@ public final class CheckpointDtoHelper {
                 cp.parentCheckpointId(),
                 cp.depth(),
                 cp.createdAt(),
-                Instant.now());
+                Instant.now(),
+                cp.version());
     }
 
     /** Copy with new status, failedAt, and failReason. */
@@ -80,7 +81,8 @@ public final class CheckpointDtoHelper {
                 cp.parentCheckpointId(),
                 cp.depth(),
                 cp.createdAt(),
-                Instant.now());
+                Instant.now(),
+                cp.version());
     }
 
     /** Copy with new status and completedAt. */
@@ -113,7 +115,8 @@ public final class CheckpointDtoHelper {
                 cp.parentCheckpointId(),
                 cp.depth(),
                 cp.createdAt(),
-                Instant.now());
+                Instant.now(),
+                cp.version());
     }
 
     /** Copy with new batchToolDecisions. */
@@ -146,7 +149,8 @@ public final class CheckpointDtoHelper {
                 cp.parentCheckpointId(),
                 cp.depth(),
                 cp.createdAt(),
-                Instant.now());
+                Instant.now(),
+                cp.version());
     }
 
     /** Copy with new channel info. */
@@ -179,7 +183,8 @@ public final class CheckpointDtoHelper {
                 cp.parentCheckpointId(),
                 cp.depth(),
                 cp.createdAt(),
-                Instant.now());
+                Instant.now(),
+                cp.version());
     }
 
     /** Create a new checkpoint with minimal fields (most null/default). */
@@ -221,7 +226,8 @@ public final class CheckpointDtoHelper {
                 null,
                 0,
                 now,
-                now);
+                now,
+                0);
     }
 
     /** Copy with reset fail/error fields (for retry). */
@@ -254,7 +260,8 @@ public final class CheckpointDtoHelper {
                 cp.parentCheckpointId(),
                 cp.depth(),
                 cp.createdAt(),
-                Instant.now());
+                Instant.now(),
+                cp.version());
     }
 
     /** Copy with new Orphan reason. */
@@ -287,6 +294,75 @@ public final class CheckpointDtoHelper {
                 cp.parentCheckpointId(),
                 cp.depth(),
                 cp.createdAt(),
-                Instant.now());
+                Instant.now(),
+                cp.version());
+    }
+
+    /** Copy with new version. */
+    public static CheckpointDto withVersion(CheckpointDto cp, Integer version) {
+        return new CheckpointDto(
+                cp.id(),
+                cp.sessionId(),
+                cp.agentRole(),
+                cp.status(),
+                cp.autonomyLevel(),
+                cp.stateJson(),
+                cp.channelPlatformId(),
+                cp.channelType(),
+                cp.originalGoal(),
+                cp.failedAt(),
+                cp.completedAt(),
+                cp.failReason(),
+                cp.pendingToolName(),
+                cp.batchToolDecisions(),
+                cp.pendingToolParametersJson(),
+                cp.preExecutedResults(),
+                cp.maxIterations(),
+                cp.iterationsUsed(),
+                cp.retryAfterMs(),
+                cp.systemNote(),
+                cp.contextDataJson(),
+                cp.errorCode(),
+                cp.traceId(),
+                cp.rootCauseClass(),
+                cp.parentCheckpointId(),
+                cp.depth(),
+                cp.createdAt(),
+                Instant.now(),
+                version);
+    }
+
+    /** Copy with new persistence identity and version. */
+    public static CheckpointDto withIdAndVersion(CheckpointDto cp, Long checkpointId, Integer version) {
+        return new CheckpointDto(
+                checkpointId,
+                cp.sessionId(),
+                cp.agentRole(),
+                cp.status(),
+                cp.autonomyLevel(),
+                cp.stateJson(),
+                cp.channelPlatformId(),
+                cp.channelType(),
+                cp.originalGoal(),
+                cp.failedAt(),
+                cp.completedAt(),
+                cp.failReason(),
+                cp.pendingToolName(),
+                cp.batchToolDecisions(),
+                cp.pendingToolParametersJson(),
+                cp.preExecutedResults(),
+                cp.maxIterations(),
+                cp.iterationsUsed(),
+                cp.retryAfterMs(),
+                cp.systemNote(),
+                cp.contextDataJson(),
+                cp.errorCode(),
+                cp.traceId(),
+                cp.rootCauseClass(),
+                cp.parentCheckpointId(),
+                cp.depth(),
+                cp.createdAt(),
+                cp.updatedAt(),
+                version);
     }
 }

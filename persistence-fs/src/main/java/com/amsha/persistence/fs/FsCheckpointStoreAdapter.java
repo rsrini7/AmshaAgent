@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import com.amsha.persistence.api.CheckpointAppendResult;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CheckpointDtoHelper;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -39,56 +40,34 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
     @Inject
     FsCheckpointHelper helper;
 
+    @Inject
+    FsToolAttemptHelper toolAttemptHelper;
+
+    private FsCheckpointAppendHandler appendHandler;
+
+    public FsCheckpointStoreAdapter() {}
+
+    public FsCheckpointStoreAdapter(
+            FilesystemFileStore store, FsCheckpointHelper helper, FsToolAttemptHelper toolAttemptHelper) {
+        this.store = store;
+        this.helper = helper;
+        this.toolAttemptHelper = toolAttemptHelper;
+        this.appendHandler = new FsCheckpointAppendHandler(helper, toolAttemptHelper);
+    }
+
     @Override
     public CheckpointDto save(CheckpointDto dto) {
-        String session = dto.sessionId();
-        String role = dto.agentRole();
-        String fileName = FsCheckpointHelper.sanitizeRole(role) + ".json";
-        CheckpointDto toSave = dto.id() == null
-                ? new CheckpointDto(
-                        helper.nextId(),
-                        session,
-                        role,
-                        dto.status(),
-                        dto.autonomyLevel(),
-                        dto.stateJson(),
-                        dto.channelPlatformId(),
-                        dto.channelType(),
-                        dto.originalGoal(),
-                        dto.failedAt(),
-                        dto.completedAt(),
-                        dto.failReason(),
-                        dto.pendingToolName(),
-                        dto.batchToolDecisions(),
-                        dto.pendingToolParametersJson(),
-                        dto.preExecutedResults(),
-                        dto.maxIterations(),
-                        dto.iterationsUsed(),
-                        dto.retryAfterMs(),
-                        dto.systemNote(),
-                        dto.contextDataJson(),
-                        dto.errorCode(),
-                        dto.traceId(),
-                        dto.rootCauseClass(),
-                        dto.parentCheckpointId(),
-                        dto.depth(),
-                        dto.createdAt() != null ? dto.createdAt() : Instant.now(),
-                        Instant.now())
-                : CheckpointDtoHelper.withStatus(dto, dto.status());
-        store.write(List.of(FsCheckpointHelper.DOMAIN, session, fileName), toSave);
-        return toSave;
+        return helper.upsertCheckpoint(dto, null, false, true);
     }
 
     @Override
     public CheckpointDto saveCheckpointWithSteps(CheckpointDto checkpoint, List<ReasoningStepDto> steps) {
-        CheckpointDto saved = save(checkpoint);
-        helper.persistSteps(saved.id(), steps);
-        return saved;
+        return helper.upsertCheckpoint(checkpoint, steps, true, true);
     }
 
     @Override
     public Optional<CheckpointDto> findById(Long id) {
-        return helper.loadAll().stream().filter(c -> id.equals(c.id())).findFirst();
+        return helper.findById(id);
     }
 
     @Override
@@ -138,33 +117,46 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public void transitionStatus(Long id, String newStatus) {
-        findById(id).ifPresent(cp -> save(withNewStatus(cp, newStatus)));
+        findById(id)
+                .ifPresent(checkpoint ->
+                        helper.upsertCheckpoint(withNewStatus(checkpoint, newStatus), null, false, false));
     }
 
     @Override
     public boolean atomicTransition(Long id, String expectedStatus, String newStatus) {
-        Optional<CheckpointDto> existing = findById(id);
-        if (existing.isEmpty() || !expectedStatus.equals(existing.get().status())) return false;
-        transitionStatus(id, newStatus);
-        return true;
+        return helper.withCheckpointLock(() -> {
+            Optional<CheckpointDto> existing = findById(id);
+            if (existing.isEmpty() || !expectedStatus.equals(existing.get().status())) return false;
+            helper.upsertCheckpoint(withNewStatus(existing.get(), newStatus), null, false, false);
+            return true;
+        });
     }
 
     @Override
     public boolean claimForResume(String sessionId, String agentRole) {
-        Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
-        if (existing.isEmpty()) return false;
-        CheckpointDto cp = existing.get();
-        if (!CheckpointStatus.IN_PROGRESS.name().equals(cp.status())
-                && !CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status())) return false;
-        save(withNewStatus(cp, CheckpointStatus.RESUMING.name()));
-        return true;
+        return helper.withCheckpointLock(() -> {
+            Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
+            if (existing.isEmpty()) return false;
+            CheckpointDto checkpoint = existing.get();
+            if (!CheckpointStatus.IN_PROGRESS.name().equals(checkpoint.status())
+                    && !CheckpointStatus.AWAITING_APPROVAL.name().equals(checkpoint.status())) {
+                return false;
+            }
+            helper.upsertCheckpoint(withNewStatus(checkpoint, CheckpointStatus.RESUMING.name()), null, false, false);
+            return true;
+        });
     }
 
     @Override
     public void releaseResumeClaim(String sessionId, String agentRole) {
-        findBySessionAndRole(sessionId, agentRole).ifPresent(cp -> {
-            if (CheckpointStatus.RESUMING.name().equals(cp.status()))
-                save(withNewStatus(cp, CheckpointStatus.IN_PROGRESS.name()));
+        helper.withCheckpointLock(() -> {
+            findBySessionAndRole(sessionId, agentRole).ifPresent(checkpoint -> {
+                if (CheckpointStatus.RESUMING.name().equals(checkpoint.status())) {
+                    helper.upsertCheckpoint(
+                            withNewStatus(checkpoint, CheckpointStatus.IN_PROGRESS.name()), null, false, false);
+                }
+            });
+            return null;
         });
     }
 
@@ -213,23 +205,41 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public void saveSteps(Long checkpointId, List<ReasoningStepDto> steps) {
-        helper.persistSteps(checkpointId, steps);
+        helper.withCheckpointLock(() -> {
+            CheckpointDto checkpoint =
+                    findById(checkpointId).orElseThrow(() -> new IllegalArgumentException("Checkpoint does not exist"));
+            FsCheckpointEnvelope current = helper.loadOrCreateEnvelope(checkpoint);
+            List<ReasoningStepDto> replacement = steps == null ? List.of() : List.copyOf(steps);
+            helper.saveEnvelope(new FsCheckpointEnvelope(
+                    FsCheckpointEnvelope.CURRENT_VERSION, current.checkpoint(), replacement, List.of()));
+            current.attemptLinks().forEach(link -> helper.deleteAttemptLink(link.workspaceId(), link.attemptId()));
+            helper.persistSteps(checkpointId, replacement);
+            return null;
+        });
     }
 
     @Override
     public List<ReasoningStepDto> loadSteps(Long checkpointId) {
-        String cpIdStr = checkpointId.toString();
-        return store.list(List.of(FsCheckpointHelper.DOMAIN, FsCheckpointHelper.STEPS, cpIdStr), ".json").stream()
-                .sorted(Comparator.naturalOrder())
-                .map(f -> store.read(
-                        List.of(FsCheckpointHelper.DOMAIN, FsCheckpointHelper.STEPS, cpIdStr, f),
-                        ReasoningStepDto.class))
-                .toList();
+        return helper.loadSteps(checkpointId);
+    }
+
+    @Override
+    public CheckpointAppendResult appendResultIfAbsent(
+            String workspaceId,
+            Long checkpointId,
+            int expectedVersion,
+            ReasoningStepDto step,
+            List<String> attemptIds) {
+        if (appendHandler == null) {
+            appendHandler = new FsCheckpointAppendHandler(
+                    helper, toolAttemptHelper != null ? toolAttemptHelper : new FsToolAttemptHelper(store));
+        }
+        return appendHandler.appendResultIfAbsent(workspaceId, checkpointId, expectedVersion, step, attemptIds);
     }
 
     @Override
     public void deleteSteps(Long checkpointId) {
-        store.deleteDirectory(List.of(FsCheckpointHelper.DOMAIN, FsCheckpointHelper.STEPS, checkpointId.toString()));
+        helper.deleteSteps(checkpointId);
     }
 
     @Override
@@ -305,24 +315,12 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
 
     @Override
     public void deleteCheckpoint(String sessionId, String role) {
-        store.delete(List.of(FsCheckpointHelper.DOMAIN, sessionId, FsCheckpointHelper.sanitizeRole(role) + ".json"));
-        helper.deleteStepsForSession(sessionId, role);
+        helper.deleteCheckpoint(sessionId, role);
     }
 
     @Override
     public void purgeOldChatHistory(Instant cutoff) {
-        for (CheckpointDto cp : helper.loadAll()) {
-            if (cp.updatedAt() != null && cp.updatedAt().isBefore(cutoff)) {
-                store.delete(List.of(
-                        FsCheckpointHelper.DOMAIN,
-                        cp.sessionId(),
-                        FsCheckpointHelper.sanitizeRole(cp.agentRole()) + ".json"));
-                store.deleteDirectory(List.of(
-                        FsCheckpointHelper.DOMAIN,
-                        FsCheckpointHelper.STEPS,
-                        cp.id().toString()));
-            }
-        }
+        helper.purgeOldChatHistory(cutoff);
     }
 
     @Override
@@ -377,47 +375,16 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             String contextDataJson) {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         boolean created = existing.isEmpty();
-        CheckpointDto cp = existing.orElse(null);
-
-        boolean preserveAwaiting = cp != null
-                && (CheckpointStatus.AWAITING_APPROVAL.name().equals(cp.status())
-                        || CheckpointStatus.RESUMING.name().equals(cp.status()));
-        String status = preserveAwaiting ? cp.status() : CheckpointStatus.IN_PROGRESS.name();
-        String batchDecisions = preserveAwaiting ? cp.batchToolDecisions() : null;
-        String goal = (originalGoal != null && !originalGoal.isBlank())
-                ? originalGoal
-                : (cp != null ? cp.originalGoal() : null);
-
-        CheckpointDto saved = save(new CheckpointDto(
-                cp != null ? cp.id() : null,
+        CheckpointDto toSave = helper.buildUpsertCheckpoint(
+                existing.orElse(null),
                 sessionId,
                 agentRole,
-                status,
                 autonomy,
                 stateJson,
-                cp != null ? cp.channelPlatformId() : null,
-                cp != null ? cp.channelType() : null,
-                goal,
-                null,
-                null,
-                null,
-                null,
-                batchDecisions,
-                null,
-                null,
-                null,
                 iterationsUsed,
-                null,
-                null,
-                contextDataJson,
-                null,
-                null,
-                null,
-                cp != null ? cp.parentCheckpointId() : null,
-                cp != null ? cp.depth() : 0,
-                cp != null ? cp.createdAt() : Instant.now(),
-                Instant.now()));
-        return new CheckpointUpsertResult(saved, created);
+                originalGoal,
+                contextDataJson);
+        return new CheckpointUpsertResult(save(toSave), created);
     }
 
     @Override
@@ -431,45 +398,9 @@ public class FsCheckpointStoreAdapter implements CheckpointStorePort {
             String contextDataJson) {
         Optional<CheckpointDto> existing = findBySessionAndRole(sessionId, agentRole);
         boolean created = existing.isEmpty();
-        CheckpointDto cp = existing.orElse(null);
-
-        Instant now = Instant.now();
-        Instant completedAt = CheckpointStatus.COMPLETED.name().equals(finalStatus) ? now : null;
-        Instant failedAt = CheckpointStatus.FAILED.name().equals(finalStatus) ? now : null;
-        String goal = (originalGoal != null && !originalGoal.isBlank())
-                ? originalGoal
-                : (cp != null ? cp.originalGoal() : null);
-
-        CheckpointDto saved = save(new CheckpointDto(
-                cp != null ? cp.id() : null,
-                sessionId,
-                agentRole,
-                finalStatus,
-                cp != null ? cp.autonomyLevel() : null,
-                stateJson,
-                cp != null ? cp.channelPlatformId() : null,
-                cp != null ? cp.channelType() : null,
-                goal,
-                failedAt,
-                completedAt,
-                null,
-                null,
-                null,
-                null,
-                null,
-                cp != null ? cp.maxIterations() : null,
-                cp != null ? cp.iterationsUsed() : 0,
-                null,
-                null,
-                contextDataJson,
-                null,
-                null,
-                null,
-                cp != null ? cp.parentCheckpointId() : null,
-                cp != null ? cp.depth() : 0,
-                cp != null ? cp.createdAt() : now,
-                now));
-        helper.persistSteps(saved.id(), steps);
+        CheckpointDto toSave = helper.buildFinalizedCheckpoint(
+                existing.orElse(null), sessionId, agentRole, stateJson, finalStatus, originalGoal, contextDataJson);
+        CheckpointDto saved = saveCheckpointWithSteps(toSave, steps);
         return new CheckpointUpsertResult(saved, created);
     }
 

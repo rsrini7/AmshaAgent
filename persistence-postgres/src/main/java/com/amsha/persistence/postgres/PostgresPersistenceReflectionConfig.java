@@ -5,6 +5,7 @@ import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.AuditEventDto;
 import com.amsha.persistence.api.BootstrapStateDto;
 import com.amsha.persistence.api.ChatMemoryDto;
+import com.amsha.persistence.api.CheckpointAppendResult;
 import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CompactionSummaryDto;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
@@ -72,6 +73,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         targets = {
             // JDBI DTOs (used by @RegisterConstructorMapper)
             CheckpointDto.class,
+            CheckpointAppendResult.class,
             AgentCronDto.class,
             AuditEventDto.class,
             ChatMemoryDto.class,
@@ -147,6 +149,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             PostgresChatMemoryStoreAdapter.class,
             PostgresCoreMemoryStore.class,
             PostgresCheckpointStoreAdapter.class,
+            PostgresCheckpointAppendHandler.class,
+            CheckpointJdbiDao.AttemptSessionRow.class,
+            CheckpointJdbiDao.AttemptLinkRow.class,
             PostgresCompactionStoreAdapter.class,
             PostgresCronStoreAdapter.class,
             PostgresCronRunStoreAdapter.class,

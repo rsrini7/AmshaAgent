@@ -1,5 +1,6 @@
 package com.amsha.persistence.sqlite.jdbi;
 
+import java.beans.ConstructorProperties;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,7 +52,8 @@ public interface CheckpointJdbiDao {
             parent_checkpoint_id AS "parentCheckpointId",
             depth,
             created_at AS "createdAt",
-            updated_at AS "updatedAt"
+            updated_at AS "updatedAt",
+            version AS "version"
             """;
 
     @SqlQuery("SELECT " + ALL_COLUMNS + " FROM agent_checkpoint WHERE checkpoint_id = :id")
@@ -325,4 +327,63 @@ public interface CheckpointJdbiDao {
             "SELECT thoughtJson AS \"thoughtJson\", action, actionInputJson AS \"actionInputJson\", observation, input_tokens AS \"inputTokens\", output_tokens AS \"outputTokens\", success, error_code AS \"errorCode\", trace_id AS \"traceId\", root_cause_class AS \"rootCauseClass\" FROM reasoning_step WHERE checkpoint_id = :checkpointId ORDER BY sequence_num ASC")
     @RegisterConstructorMapper(ReasoningStepDto.class)
     List<ReasoningStepDto> loadSteps(@Bind("checkpointId") Long checkpointId);
+
+    // ── Checkpoint Append & CAS (Proposal §12.6) ──────────────────────────
+
+    @SqlUpdate(
+            "UPDATE agent_checkpoint SET version = version + 1, updated_at = :now WHERE checkpoint_id = :id AND version = :expectedVersion")
+    int casVersion(@Bind("id") Long id, @Bind("expectedVersion") int expectedVersion, @Bind("now") String now);
+
+    @SqlQuery("SELECT attempt_id AS \"attemptId\", session_id AS \"sessionId\", workspace_id AS \"workspaceId\" "
+            + "FROM tool_attempt WHERE workspace_id = :workspaceId AND attempt_id IN (<attemptIds>)")
+    @RegisterConstructorMapper(AttemptSessionRow.class)
+    List<AttemptSessionRow> findAttemptSessions(
+            @Bind("workspaceId") String workspaceId, @BindList("attemptIds") List<String> attemptIds);
+
+    @SqlQuery("SELECT checkpoint_id AS \"checkpointId\", attempt_id AS \"attemptId\", session_id AS \"sessionId\", "
+            + "workspace_id AS \"workspaceId\", reasoning_step_id AS \"reasoningStepId\" "
+            + "FROM reasoning_step_attempt WHERE workspace_id = :workspaceId AND attempt_id IN (<attemptIds>)")
+    @RegisterConstructorMapper(AttemptLinkRow.class)
+    List<AttemptLinkRow> findLinksByAttemptIds(
+            @Bind("workspaceId") String workspaceId, @BindList("attemptIds") List<String> attemptIds);
+
+    @SqlQuery("SELECT thoughtJson AS \"thoughtJson\", action, actionInputJson AS \"actionInputJson\", "
+            + "observation, input_tokens AS \"inputTokens\", output_tokens AS \"outputTokens\", success, "
+            + "error_code AS \"errorCode\", trace_id AS \"traceId\", root_cause_class AS \"rootCauseClass\" "
+            + "FROM reasoning_step WHERE checkpoint_id = :checkpointId AND id = :stepId")
+    @RegisterConstructorMapper(ReasoningStepDto.class)
+    Optional<ReasoningStepDto> findStepById(@Bind("checkpointId") Long checkpointId, @Bind("stepId") Long stepId);
+
+    @SqlQuery("SELECT COALESCE(MAX(sequence_num) + 1, 0) FROM reasoning_step WHERE checkpoint_id = :checkpointId")
+    int nextSequenceNum(@Bind("checkpointId") Long checkpointId);
+
+    @SqlQuery("INSERT INTO reasoning_step (checkpoint_id, sequence_num, thoughtJson, action, actionInputJson, "
+            + "observation, input_tokens, output_tokens, success, error_code, trace_id, root_cause_class) "
+            + "VALUES (:checkpointId, :sequenceNum, :thoughtJson, :action, :actionInputJson, :observation, "
+            + ":inputTokens, :outputTokens, :success, :errorCode, :traceId, :rootCauseClass) RETURNING id")
+    long insertStepReturningId(
+            @Bind("checkpointId") Long checkpointId,
+            @Bind("sequenceNum") int sequenceNum,
+            @BindMethods ReasoningStepDto step);
+
+    @SqlUpdate(
+            "INSERT INTO reasoning_step_attempt (checkpoint_id, attempt_id, session_id, workspace_id, reasoning_step_id) "
+                    + "VALUES (:checkpointId, :attemptId, :sessionId, :workspaceId, :reasoningStepId)")
+    void insertAttemptLink(
+            @Bind("checkpointId") Long checkpointId,
+            @Bind("attemptId") String attemptId,
+            @Bind("sessionId") String sessionId,
+            @Bind("workspaceId") String workspaceId,
+            @Bind("reasoningStepId") Long reasoningStepId);
+
+    record AttemptSessionRow(String attemptId, String sessionId, String workspaceId) {
+        @ConstructorProperties({"attemptId", "sessionId", "workspaceId"})
+        public AttemptSessionRow {}
+    }
+
+    record AttemptLinkRow(
+            Long checkpointId, String attemptId, String sessionId, String workspaceId, Long reasoningStepId) {
+        @ConstructorProperties({"checkpointId", "attemptId", "sessionId", "workspaceId", "reasoningStepId"})
+        public AttemptLinkRow {}
+    }
 }

@@ -3,6 +3,8 @@ package com.amsha.persistence.fs;
 import com.amsha.persistence.api.ApiCredentialDto;
 import com.amsha.persistence.api.ArchivalChunkDto;
 import com.amsha.persistence.api.BootstrapStateDto;
+import com.amsha.persistence.api.CheckpointAppendResult;
+import com.amsha.persistence.api.CheckpointDto;
 import com.amsha.persistence.api.CoreMemoryBlockDto;
 import com.amsha.persistence.api.ExecutionRunSummaryDto;
 import com.amsha.persistence.api.ExecutionTraceDto;
@@ -51,6 +53,11 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
             FsCronRunStoreAdapter.class,
             FsCheckpointStoreAdapter.class,
             FsCheckpointHelper.class,
+            FsCheckpointAppendHandler.class,
+            FsCheckpointEnvelope.class,
+            FsAttemptLink.class,
+            CheckpointDto.class,
+            CheckpointAppendResult.class,
             FsMemoryRetrievalAdapter.class,
             FsVectorIndexMetadataAdapter.class,
             FsPersistenceAdapter.class,

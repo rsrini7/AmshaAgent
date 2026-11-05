@@ -1,15 +1,21 @@
 package com.amsha.persistence.sqlite;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.amsha.common.util.LogUtil;
+import com.amsha.common.util.TemporalUtils;
 import com.amsha.persistence.api.CheckpointDto;
+import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.ReasoningStepDto;
 import com.amsha.persistence.api.ToolDecision;
+import com.amsha.persistence.sqlite.jdbi.CheckpointJdbiDao;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jboss.logging.Logger;
 import org.jdbi.v3.core.Handle;
 
 import io.quarkus.logging.Log;
@@ -75,5 +81,55 @@ final class SqliteCheckpointHelper {
                     "Failed to merge batch decisions for session %s: %s", managed.sessionId(), LogUtil.rootMessage(e));
         }
         return incoming;
+    }
+
+    static boolean updateBatchToolDecision(
+            CheckpointJdbiDao dao,
+            String sessionId,
+            String agentRole,
+            String toolName,
+            String decision,
+            ObjectMapper objectMapper,
+            Logger log) {
+        Optional<CheckpointDto> cp = dao.findAnyBySessionAndRole(sessionId, agentRole);
+        if (cp.isEmpty()) {
+            log.warnf("[BatchOps] No checkpoint found for session=%s", sessionId);
+            return false;
+        }
+        CheckpointDto dto = cp.get();
+        if (!CheckpointStatus.AWAITING_APPROVAL.name().equals(dto.status())) {
+            log.warnf(
+                    "[BatchOps] Checkpoint status is '%s' instead of AWAITING_APPROVAL for session=%s",
+                    dto.status(), sessionId);
+            return false;
+        }
+        String rawJson = dto.batchToolDecisions();
+        if (rawJson == null || rawJson.isBlank()) {
+            log.warnf("[BatchOps] batchToolDecisions is null for session=%s", sessionId);
+            return false;
+        }
+        try {
+            Map<String, ToolDecision> map =
+                    objectMapper.readValue(rawJson, new TypeReference<Map<String, ToolDecision>>() {});
+            if (!map.containsKey(toolName)) {
+                log.warnf(
+                        "[BatchOps] Tool '%s' not in batch for session %s. Available keys: %s",
+                        toolName, sessionId, map.keySet());
+                return false;
+            }
+            if (map.get(toolName) != ToolDecision.PENDING) {
+                log.infof("[BatchOps] Tool '%s' is already decided for session=%s", toolName, sessionId);
+                return false;
+            }
+            map.put(toolName, ToolDecision.valueOf(decision));
+            String updatedJson = objectMapper.writeValueAsString(map);
+            String now = TemporalUtils.formatIsoLex(Instant.now());
+            return dao.atomicUpdateBatchDecision(sessionId, agentRole, updatedJson, rawJson, now);
+        } catch (Exception e) {
+            log.errorf(
+                    "[BatchOps] Failed to update batch tool decision for session=%s tool=%s: %s",
+                    sessionId, toolName, LogUtil.rootMessage(e));
+            return false;
+        }
     }
 }
