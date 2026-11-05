@@ -282,7 +282,8 @@ class AgentStateMachineRunnerRegressionTest {
         when(toolRegistry.findTool("valid-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
-        when(invoker.invoke(anyString(), anyMap(), anyString())).thenReturn(ToolResponse.success("output"));
+        when(invoker.invoke(anyString(), anyMap(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("output"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
                 "s1",

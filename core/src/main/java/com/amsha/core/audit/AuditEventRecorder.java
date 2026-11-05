@@ -38,7 +38,11 @@ public class AuditEventRecorder {
             AuditEventDto finalized = auditStore.appendChained(toDto(event), (seed, sequence, previousHash) -> {
                 AuditEventRecord chained = AuditEventRecord.fromDto(seed);
                 chained.setSequence(sequence);
-                hashUtil.calculateChainFields(chained, previousHash, resolvedKey);
+                if (resolvedKey == null) {
+                    hashUtil.calculateChainFields(chained, previousHash);
+                } else {
+                    hashUtil.calculateChainFields(chained, previousHash, resolvedKey);
+                }
                 validateBeforePersist(chained);
                 return toDto(chained);
             });
@@ -47,7 +51,9 @@ public class AuditEventRecorder {
             event.setHmacHash(finalized.hmacHash());
             return finalized.id().toString();
         } finally {
-            Arrays.fill(resolvedKey, (byte) 0);
+            if (resolvedKey != null) {
+                Arrays.fill(resolvedKey, (byte) 0);
+            }
         }
     }
 

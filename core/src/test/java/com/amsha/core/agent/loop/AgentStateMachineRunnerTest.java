@@ -267,7 +267,8 @@ class AgentStateMachineRunnerTest {
         when(toolRegistry.findTool(anyString())).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
-        when(invoker.invoke(anyString(), anyMap(), anyString())).thenReturn(ToolResponse.success("output"));
+        when(invoker.invoke(anyString(), anyMap(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("output"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
                 "s1",
@@ -410,7 +411,8 @@ class AgentStateMachineRunnerTest {
         when(toolRegistry.findTool("broken-tool")).thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
-        when(invoker.invoke(anyString(), anyMap(), anyString())).thenReturn(ToolResponse.failure(1, "error"));
+        when(invoker.invoke(anyString(), anyMap(), anyString(), anyString()))
+                .thenReturn(ToolResponse.failure(1, "error"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
                 "s1",
@@ -430,7 +432,7 @@ class AgentStateMachineRunnerTest {
 
         assertInstanceOf(AgentResult.Finished.class, result);
         assertTrue(((AgentResult.Finished) result).answer().contains("❌"));
-        verify(invoker, times(3)).invoke(anyString(), anyMap(), anyString());
+        verify(invoker, times(3)).invoke(anyString(), anyMap(), anyString(), anyString());
     }
 
     @Test
@@ -472,7 +474,8 @@ class AgentStateMachineRunnerTest {
                 .thenReturn(Optional.of(mock(AgentTool.class)));
         when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(), anyList(), anyString(), anyList()))
                 .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
-        when(invoker.invoke(anyString(), anyMap(), anyString())).thenReturn(ToolResponse.success("Scheduled cleaning"));
+        when(invoker.invoke(anyString(), anyMap(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("Scheduled cleaning"));
 
         AgentExecutionContext ctx = new AgentExecutionContext(
                 "s1",

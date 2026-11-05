@@ -20,6 +20,7 @@ import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.trace.AgentTraceEvent;
 import com.amsha.core.agent.trace.TracePublisher;
 import com.amsha.core.agent.trace.TraceStage;
+import com.amsha.core.tool.attempt.ToolOperationIdentity;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.security.api.AutonomyLevel;
 import com.amsha.tool.api.ToolResponse;
@@ -31,6 +32,7 @@ import org.mockito.ArgumentCaptor;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 class ToolFailureRetryTraceTest {
+    private static final String OPERATION_ID = ToolOperationIdentity.generateCanonicalUuid();
 
     private final TracePublisher tracePublisher = mock(TracePublisher.class);
     private final ArgumentCaptor<AgentTraceEvent> captor = ArgumentCaptor.forClass(AgentTraceEvent.class);
@@ -91,8 +93,9 @@ class ToolFailureRetryTraceTest {
 
     @Test
     void failingToolEmitsToolStartAndToolError() {
-        ReasoningStep step = ReasoningStep.pending("thought", "some_tool", Map.of(), 0, 0);
-        when(invoker.invoke(anyString(), any(), anyString())).thenReturn(ToolResponse.failure(1, "boom"));
+        ReasoningStep step =
+                ReasoningStep.pending("thought", "some_tool", Map.of(), 0, 0).withOperationId(OPERATION_ID);
+        when(invoker.invoke(anyString(), any(), anyString(), anyString())).thenReturn(ToolResponse.failure(1, "boom"));
         when(recoveryService.shouldAttemptRecovery(anyString(), anyString(), any()))
                 .thenReturn(false);
         when(escalationHandler.attemptGenericEscalation(any(), anyString(), any(), any()))
@@ -110,9 +113,10 @@ class ToolFailureRetryTraceTest {
 
     @Test
     void recoveryEmitsRetryThenToolEnd() {
-        ReasoningStep step =
-                ReasoningStep.pending("thought", "sandbox_exec", Map.of("code", "x", "language", "python"), 0, 0);
-        when(invoker.invoke(anyString(), any(), anyString()))
+        ReasoningStep step = ReasoningStep.pending(
+                        "thought", "sandbox_exec", Map.of("code", "x", "language", "python"), 0, 0)
+                .withOperationId(OPERATION_ID);
+        when(invoker.invoke(anyString(), any(), anyString(), anyString()))
                 .thenReturn(ToolResponse.failure(1, "boom"))
                 .thenReturn(ToolResponse.success("ok"));
         when(recoveryService.shouldAttemptRecovery(anyString(), anyString(), any()))

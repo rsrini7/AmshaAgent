@@ -67,7 +67,9 @@ class ReasoningStepSuccessNullSafetyTest {
             // Uses Boolean.FALSE.equals() — null-safe
             "com.amsha.core.agent.loop.ToolStepHandler",
             // Uses Boolean.FALSE.equals() — null-safe
-            "com.amsha.core.agent.reasoning.ReasoningRecoveryHandler");
+            "com.amsha.core.agent.reasoning.ReasoningRecoveryHandler",
+            // Copies nullable success state into records without unboxing it.
+            "com.amsha.core.agent.reasoning.ReasoningStepSupport");
 
     /**
      * Enumerates all classes that call {@code ReasoningStep.success()} and verifies

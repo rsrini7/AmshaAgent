@@ -79,7 +79,7 @@ public class AuditHashUtil {
         return result.clone();
     }
 
-    public byte[] copyHmacKeyForLocalAppend() {
+    byte[] copyHmacKeyForLocalAppend() {
         return getHmacKey();
     }
 
@@ -144,10 +144,14 @@ public class AuditHashUtil {
      * @param lastHash The HMAC hash of the previous event in the session chain (nullable for genesis).
      */
     public void calculateChainFields(AuditEvent event, String lastHash) {
-        calculateChainFields(event, lastHash, null);
+        calculateChainFieldsInternal(event, lastHash, null);
     }
 
     public void calculateChainFields(AuditEvent event, String lastHash, byte[] resolvedKey) {
+        calculateChainFieldsInternal(event, lastHash, resolvedKey);
+    }
+
+    private void calculateChainFieldsInternal(AuditEvent event, String lastHash, byte[] resolvedKey) {
         String prevHash = lastHash;
         if (prevHash == null) {
             prevHash = sha256hex("GENESIS:" + event.getSessionId());

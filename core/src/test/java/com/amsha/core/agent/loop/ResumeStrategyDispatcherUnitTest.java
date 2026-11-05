@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.amsha.core.agent.reasoning.ReasoningEngine;
@@ -34,6 +35,7 @@ import org.mockito.quality.Strictness;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ResumeStrategyDispatcherUnitTest {
+    private static final String OPERATION_ID = "123e4567-e89b-12d3-a456-426614174000";
 
     @Mock
     StatefulAgentStore agentStore;
@@ -72,6 +74,14 @@ class ResumeStrategyDispatcherUnitTest {
                 escalationService,
                 new ToolDelegationResolver(),
                 guard);
+        when(guard.evaluate(anyString(), anyString(), any(), anyString(), anyMap(), anyList(), any(), anyList()))
+                .thenReturn(new ToolInvocationGuard.GuardDecision.Allow());
+    }
+
+    private static List<ReasoningStep> pendingHistory(String toolName, Map<String, Object> parameters) {
+        ReasoningStep pending = ReasoningStep.pending("pending resume", toolName, parameters, 0, 0)
+                .withOperationId(OPERATION_ID);
+        return new ArrayList<>(List.of(pending));
     }
 
     @Test
@@ -130,13 +140,18 @@ class ResumeStrategyDispatcherUnitTest {
         when(cp.getPendingToolName()).thenReturn("test_tool");
         when(cp.getPendingToolParametersJson()).thenReturn("{\"param\":\"val\"}");
 
-        when(toolRegistry.invokeTool(eq("test_tool"), eq("{\"param\":\"val\"}"), eq("sess-tool")))
+        when(toolRegistry.invokeToolWithOperationId(
+                        eq("test_tool"), eq("{\"param\":\"val\"}"), eq("sess-tool"), eq(OPERATION_ID)))
                 .thenReturn(ToolResponse.success("Tool succeeded"));
         when(stateMachineRunner.runFinishPass(any(), eq(reasoningEngine), anyList()))
                 .thenReturn(AgentResult.finished("Final output", List.of()));
 
-        AgentResult result =
-                dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
+        AgentResult result = dispatcher.handle(
+                ctx,
+                pendingHistory("test_tool", Map.of("param", "val")),
+                mock(MessageContext.class),
+                stateMachineRunner,
+                cp);
         assertTrue(result instanceof AgentResult.Finished);
         verify(cp).setStatus(CheckpointStatus.IN_PROGRESS);
     }
@@ -150,10 +165,12 @@ class ResumeStrategyDispatcherUnitTest {
         AgentCheckpoint cp = mock(AgentCheckpoint.class);
         when(cp.getPendingToolName()).thenReturn(ToolCapability.BROWSER_NAVIGATE.toolName());
         when(cp.getPendingToolParametersJson()).thenReturn("{\"url\":\"https://example.com\"}");
-        when(toolRegistry.invokeTool(eq(ToolCapability.DELEGATE_TO_AGENT.toolName()), anyString(), eq("sess-browser")))
+        when(toolRegistry.invokeToolWithOperationId(
+                        eq(ToolCapability.DELEGATE_TO_AGENT.toolName()), anyString(), eq("sess-browser"), anyString()))
                 .thenReturn(ToolResponse.success("Researcher navigated the page"));
 
-        List<ReasoningStep> history = new ArrayList<>();
+        List<ReasoningStep> history =
+                pendingHistory(ToolCapability.BROWSER_NAVIGATE.toolName(), Map.of("url", "https://example.com"));
         AgentResult result = dispatcher.handle(ctx, history, mock(MessageContext.class), stateMachineRunner, cp);
 
         assertTrue(result instanceof AgentResult.Finished);
@@ -171,12 +188,17 @@ class ResumeStrategyDispatcherUnitTest {
         AgentCheckpoint cp = mock(AgentCheckpoint.class);
         when(cp.getPendingToolName()).thenReturn(ToolCapability.INGEST_DOCUMENT.toolName());
         when(cp.getPendingToolParametersJson()).thenReturn("{\"text\":\"remember this\"}");
-        when(toolRegistry.invokeTool(eq(ToolCapability.INGEST_DOCUMENT.toolName()), anyString(), eq("sess-ingest")))
+        when(toolRegistry.invokeToolWithOperationId(
+                        eq(ToolCapability.INGEST_DOCUMENT.toolName()),
+                        anyString(),
+                        eq("sess-ingest"),
+                        eq(OPERATION_ID)))
                 .thenReturn(ToolResponse.success("Stored"));
         when(stateMachineRunner.runFinishPass(any(), eq(reasoningEngine), anyList()))
                 .thenReturn(AgentResult.finished("Final output", List.of()));
 
-        List<ReasoningStep> history = new ArrayList<>();
+        List<ReasoningStep> history =
+                pendingHistory(ToolCapability.INGEST_DOCUMENT.toolName(), Map.of("text", "remember this"));
         AgentResult result = dispatcher.handle(ctx, history, mock(MessageContext.class), stateMachineRunner, cp);
 
         assertTrue(result instanceof AgentResult.Finished);
@@ -194,10 +216,11 @@ class ResumeStrategyDispatcherUnitTest {
         when(cp.getPendingToolName()).thenReturn("test_tool");
         when(cp.getPendingToolParametersJson()).thenReturn("{}");
 
-        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.infraFailure("Podman offline"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.infraFailure("Podman offline"));
 
-        AgentResult result =
-                dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
+        AgentResult result = dispatcher.handle(
+                ctx, pendingHistory("test_tool", Map.of()), mock(MessageContext.class), stateMachineRunner, cp);
         assertTrue(result instanceof AgentResult.Failed);
     }
 
@@ -210,10 +233,15 @@ class ResumeStrategyDispatcherUnitTest {
         when(cp.getPendingToolName()).thenReturn(ToolCapability.DELEGATE_TO_AGENT.toolName());
         when(cp.getPendingToolParametersJson()).thenReturn("{}");
 
-        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.success("Subagent finished"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.success("Subagent finished"));
 
-        AgentResult result =
-                dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
+        AgentResult result = dispatcher.handle(
+                ctx,
+                pendingHistory(ToolCapability.DELEGATE_TO_AGENT.toolName(), Map.of()),
+                mock(MessageContext.class),
+                stateMachineRunner,
+                cp);
         assertTrue(result instanceof AgentResult.Finished);
         assertEquals("Subagent finished", ((AgentResult.Finished) result).answer());
     }
@@ -228,17 +256,22 @@ class ResumeStrategyDispatcherUnitTest {
         when(cp.getPendingToolName()).thenReturn(ToolCapability.WEB_FETCH.toolName());
         when(cp.getPendingToolParametersJson()).thenReturn("{\"url\":\"https://example.com\"}");
 
-        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.failure(403, "403 Forbidden"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.failure(403, "403 Forbidden"));
         when(stateMachineRunner.run(any(), any(), any()))
                 .thenReturn(AgentResult.finished("Fallback navigated", List.of()));
 
-        AgentResult result =
-                dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
+        AgentResult result = dispatcher.handle(
+                ctx,
+                pendingHistory(ToolCapability.WEB_FETCH.toolName(), Map.of("url", "https://example.com")),
+                mock(MessageContext.class),
+                stateMachineRunner,
+                cp);
         assertTrue(result instanceof AgentResult.Finished);
     }
 
     @Test
-    void testAutoHealSuccess() {
+    void testAutoHealPersistsReplacementForApprovalWithoutAutoReplay() {
         AgentExecutionContext ctx = mock(AgentExecutionContext.class);
         mockContext(ctx, "exec script", "sess-heal");
 
@@ -247,8 +280,11 @@ class ResumeStrategyDispatcherUnitTest {
         when(cp.getPendingToolParametersJson()).thenReturn("{\"code\":\"bad code\",\"language\":\"python\"}");
 
         ToolResponse initialFailure = ToolResponse.failure(1, "SyntaxError: invalid syntax");
-        when(toolRegistry.invokeTool(
-                        eq("sandbox_exec"), eq("{\"code\":\"bad code\",\"language\":\"python\"}"), eq("sess-heal")))
+        when(toolRegistry.invokeToolWithOperationId(
+                        eq("sandbox_exec"),
+                        eq("{\"code\":\"bad code\",\"language\":\"python\"}"),
+                        eq("sess-heal"),
+                        anyString()))
                 .thenReturn(initialFailure);
 
         when(recoveryService.shouldAttemptRecovery(any(), eq("sandbox_exec"), eq(initialFailure)))
@@ -258,16 +294,31 @@ class ResumeStrategyDispatcherUnitTest {
                 .thenReturn(ExecutionFailureRecoveryService.RecoveryResult.success("fixed code", 1));
         when(recoveryService.validateForExecution("fixed code", "python")).thenReturn(null);
 
-        ToolResponse fixedSuccess = ToolResponse.success("Fixed output");
-        when(toolRegistry.invokeTool(
-                        eq("sandbox_exec"), eq("{\"code\":\"fixed code\",\"language\":\"python\"}"), eq("sess-heal")))
-                .thenReturn(fixedSuccess);
         when(stateMachineRunner.runFinishPass(any(), eq(reasoningEngine), anyList()))
                 .thenReturn(AgentResult.finished("Final healed output", List.of()));
 
-        AgentResult result =
-                dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
-        assertTrue(result instanceof AgentResult.Finished);
+        List<ReasoningStep> history = pendingHistory("sandbox_exec", Map.of("code", "bad code", "language", "python"));
+        AgentResult result = dispatcher.handle(ctx, history, mock(MessageContext.class), stateMachineRunner, cp);
+
+        AgentResult.AwaitingApproval awaitingApproval = assertInstanceOf(AgentResult.AwaitingApproval.class, result);
+        assertEquals("sess-heal", awaitingApproval.sessionId());
+        verify(cp).setStatus(CheckpointStatus.AWAITING_APPROVAL);
+        verify(cp).setPendingToolParametersJson("{\"code\":\"fixed code\",\"language\":\"python\"}");
+        verify(agentStore).saveWithSteps(eq(cp), anyList());
+        ReasoningStep replacement = history.getLast();
+        assertEquals("sandbox_exec", replacement.action());
+        assertEquals("fixed code", replacement.actionInput().get("code"));
+        assertNotNull(replacement.operationId());
+        assertNotEquals(OPERATION_ID, replacement.operationId());
+        verify(toolRegistry)
+                .invokeToolWithOperationId(
+                        "sandbox_exec", "{\"code\":\"bad code\",\"language\":\"python\"}", "sess-heal", OPERATION_ID);
+        verify(toolRegistry, never())
+                .invokeToolWithOperationId(
+                        "sandbox_exec",
+                        "{\"code\":\"fixed code\",\"language\":\"python\"}",
+                        "sess-heal",
+                        replacement.operationId());
     }
 
     @Test
@@ -280,7 +331,8 @@ class ResumeStrategyDispatcherUnitTest {
         when(cp.getPendingToolParametersJson()).thenReturn("{}");
 
         ToolResponse initialFailure = ToolResponse.failure(1, "Complex error requires expert role");
-        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(initialFailure);
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(initialFailure);
 
         when(recoveryService.shouldAttemptRecovery(any(), any(), any())).thenReturn(false);
         when(escalationService.shouldAttemptEscalation(any(), eq("custom_tool"), eq(initialFailure)))
@@ -292,8 +344,8 @@ class ResumeStrategyDispatcherUnitTest {
         when(stateMachineRunner.runFinishPass(any(), eq(reasoningEngine), anyList()))
                 .thenReturn(AgentResult.finished("Escalated response", List.of()));
 
-        AgentResult result =
-                dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
+        AgentResult result = dispatcher.handle(
+                ctx, pendingHistory("custom_tool", Map.of()), mock(MessageContext.class), stateMachineRunner, cp);
         assertTrue(result instanceof AgentResult.Finished);
     }
 
@@ -306,12 +358,13 @@ class ResumeStrategyDispatcherUnitTest {
         when(cp.getPendingToolName()).thenReturn("custom_tool");
         when(cp.getPendingToolParametersJson()).thenReturn("{}");
 
-        when(toolRegistry.invokeTool(any(), any(), any())).thenReturn(ToolResponse.failure(1, "Command failed"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(ToolResponse.failure(1, "Command failed"));
         when(recoveryService.shouldAttemptRecovery(any(), any(), any())).thenReturn(false);
         when(escalationService.shouldAttemptEscalation(any(), any(), any())).thenReturn(false);
 
-        AgentResult result =
-                dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
+        AgentResult result = dispatcher.handle(
+                ctx, pendingHistory("custom_tool", Map.of()), mock(MessageContext.class), stateMachineRunner, cp);
         assertTrue(result instanceof AgentResult.Failed);
     }
 
@@ -324,10 +377,11 @@ class ResumeStrategyDispatcherUnitTest {
         when(cp.getPendingToolName()).thenReturn("custom_tool");
         when(cp.getPendingToolParametersJson()).thenReturn("{}");
 
-        when(toolRegistry.invokeTool(any(), any(), any())).thenThrow(new RuntimeException("Unexpected error"));
+        when(toolRegistry.invokeToolWithOperationId(anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("Unexpected error"));
 
-        AgentResult result =
-                dispatcher.handle(ctx, new ArrayList<>(), mock(MessageContext.class), stateMachineRunner, cp);
+        AgentResult result = dispatcher.handle(
+                ctx, pendingHistory("custom_tool", Map.of()), mock(MessageContext.class), stateMachineRunner, cp);
         assertTrue(result instanceof AgentResult.Failed);
         verify(cp).setStatus(CheckpointStatus.FAILED);
     }

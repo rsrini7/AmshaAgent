@@ -1,6 +1,7 @@
 package com.amsha.core.agent.loop;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -112,7 +113,8 @@ class CheckpointResumeHandlerPreExecTest {
 
         var calls = List.of(
                 new ParallelToolCall("c1", "safe", Map.of(), "{}", null, true),
-                new ParallelToolCall("c2", "unsafe", Map.of(), "{}", null, true));
+                new ParallelToolCall("c2", "unsafe", Map.of(), "{}", null, true)
+                        .withOperationId("123e4567-e89b-12d3-a456-426614174000"));
         cp.setPendingToolParametersJson(objectMapper.writeValueAsString(calls));
 
         // Mock pre-executed result for 'safe'
@@ -128,7 +130,7 @@ class CheckpointResumeHandlerPreExecTest {
         when(agentStore.load(sessionId, agentRole)).thenReturn(Optional.of(cp));
 
         // Mock actual execution of 'unsafe'
-        when(toolRegistry.invokeTool(eq("unsafe"), any(), eq(sessionId)))
+        when(toolRegistry.invokeToolWithOperationId(eq("unsafe"), anyString(), eq(sessionId), anyString()))
                 .thenReturn(ToolResponse.success("unsafe-output"));
 
         ChannelUser user = new ChannelUser("user1", "chat1", "TestUser", ChannelType.TELEGRAM);
@@ -143,7 +145,7 @@ class CheckpointResumeHandlerPreExecTest {
         });
 
         // Verify toolRegistry.invokeTool was ONLY called for 'unsafe', NOT for 'safe'
-        verify(toolRegistry, never()).invokeTool(eq("safe"), any(), any());
-        verify(toolRegistry, times(1)).invokeTool(eq("unsafe"), any(), any());
+        verify(toolRegistry, never()).invokeToolWithOperationId(eq("safe"), anyString(), anyString(), anyString());
+        verify(toolRegistry, times(1)).invokeToolWithOperationId(eq("unsafe"), anyString(), eq(sessionId), anyString());
     }
 }
