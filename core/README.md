@@ -433,6 +433,14 @@ Expired trace records are pruned periodically by `TraceRetentionReaper` via Quar
 | `amsha.trace.retention.max-runs-per-session` | `AMSHA_TRACE_RETENTION_MAX_RUNS_PER_SESSION` | `50` | Maximum number of runs retained per session before oldest runs are pruned. |
 | `amsha.trace.retention.interval` | `AMSHA_TRACE_RETENTION_INTERVAL` | `24h` | Interval between scheduled trace retention pruning sweeps. |
 
+## Startup Attempt Recovery (Proposal Phase C / C.5)
+
+Startup reconciliation reconciles active and in-flight tool attempts across JVM restarts.
+
+| Property | Environment variable | Default | Description |
+|---|---|---|---|
+| `amsha.recovery.single-instance` | `AMSHA_RECOVERY_SINGLE_INSTANCE` | `false` | When true, enforces single-instance ownership assumption to safely reconcile active attempts across JVM restarts. Default is false (multi-instance safe) so shared databases like PostgreSQL do not assume single-node ownership without explicit operator configuration. |
+
 ## Testing
 
 Run core tests:

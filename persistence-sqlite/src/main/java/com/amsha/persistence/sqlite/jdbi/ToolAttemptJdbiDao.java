@@ -184,6 +184,11 @@ public interface ToolAttemptJdbiDao {
 
     @SqlQuery(
             "SELECT " + ATTEMPT_COLUMNS
+                    + " FROM tool_attempt WHERE workspace_id = :workspaceId AND status IN ('ADMITTED', 'LAUNCH_REQUESTED', 'RUNNING') ORDER BY created_at ASC, attempt_number ASC, attempt_id ASC")
+    List<ToolAttemptDto> findActiveAttempts(@Bind("workspaceId") String workspaceId);
+
+    @SqlQuery(
+            "SELECT " + ATTEMPT_COLUMNS
                     + " FROM tool_attempt WHERE workspace_id = :workspaceId AND operation_id = :operationId ORDER BY attempt_number ASC")
     List<ToolAttemptDto> findAttemptsByOperation(
             @Bind("workspaceId") String workspaceId, @Bind("operationId") String operationId);

@@ -6,14 +6,17 @@ import jakarta.inject.Inject;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.amsha.core.sandbox.SandboxAttemptLifecycle;
 import com.amsha.core.sandbox.SandboxExecutionPort;
 import com.amsha.core.sandbox.SandboxFailureMessages;
+import com.amsha.core.sandbox.SandboxRecoveryEvidence;
 import com.amsha.core.sandbox.SandboxResult;
 import com.amsha.sandbox.SandboxCircuitBreaker.CircuitBreakerState;
 import com.amsha.tool.api.ToolExecutionContext;
@@ -124,6 +127,128 @@ public class ProcessIsolationExecutor implements SandboxExecutionPort {
     @Override
     public void releaseSettledAttempt(ToolExecutionContext context) {
         podmanExecutor.releaseSettledAttempt(context);
+    }
+
+    @Override
+    public SandboxRecoveryEvidence inspectAttempt(
+            String workspaceId, String attemptId, String executionHandle, String processStartIdentity) {
+        if (executionHandle == null || executionHandle.isBlank()) {
+            return new SandboxRecoveryEvidence.Missing("No execution handle recorded");
+        }
+        if (executionHandle.startsWith("podman-container:")) {
+            String containerName = executionHandle.substring("podman-container:".length());
+            String expectedContainerId = null;
+            if (processStartIdentity != null && processStartIdentity.startsWith("container:")) {
+                expectedContainerId = processStartIdentity.substring("container:".length());
+            }
+            return PodmanAttemptContainerSupport.inspectRecoveryEvidence(
+                    podmanPath, containerName, workspaceId, attemptId, expectedContainerId);
+        }
+        if (executionHandle.startsWith("process:")) {
+            if (attemptId != null && !executionHandle.equals("process:" + attemptId)) {
+                return new SandboxRecoveryEvidence.OwnershipMismatch(
+                        "Process execution handle '" + executionHandle + "' does not match attempt ID " + attemptId);
+            }
+            return inspectProcessAttempt(executionHandle, processStartIdentity);
+        }
+        return new SandboxRecoveryEvidence.Inconclusive("Unsupported execution handle format: " + executionHandle);
+    }
+
+    private SandboxRecoveryEvidence inspectProcessAttempt(String executionHandle, String processStartIdentity) {
+        if (processStartIdentity == null || !processStartIdentity.startsWith("pid:")) {
+            return new SandboxRecoveryEvidence.Inconclusive(
+                    "Missing or invalid process start identity: " + processStartIdentity);
+        }
+        String[] parts = processStartIdentity.split(";");
+        long pid;
+        long startEpoch;
+        try {
+            pid = Long.parseLong(parts[0].substring("pid:".length()));
+            if (parts.length > 1 && parts[1].startsWith("start:")) {
+                startEpoch = Long.parseLong(parts[1].substring("start:".length()));
+            } else {
+                return new SandboxRecoveryEvidence.Inconclusive("Missing start timestamp in process identity");
+            }
+        } catch (NumberFormatException | StringIndexOutOfBoundsException e) {
+            return new SandboxRecoveryEvidence.Inconclusive("Malformed process identity: " + processStartIdentity);
+        }
+
+        Optional<ProcessHandle> phOpt = ProcessHandle.of(pid);
+        if (phOpt.isEmpty()) {
+            return new SandboxRecoveryEvidence.Missing("PID " + pid + " does not exist");
+        }
+        ProcessHandle handle = phOpt.get();
+        if (!handle.isAlive()) {
+            return new SandboxRecoveryEvidence.Missing("PID " + pid + " is not alive");
+        }
+        Optional<Instant> startInstantOpt = handle.info().startInstant();
+        if (startInstantOpt.isEmpty() || startInstantOpt.get().toEpochMilli() != startEpoch) {
+            return new SandboxRecoveryEvidence.OwnershipMismatch(
+                    "PID " + pid + " start time does not match recorded identity");
+        }
+        return new SandboxRecoveryEvidence.RunningVerified(executionHandle, processStartIdentity);
+    }
+
+    @Override
+    public boolean terminateRunningAttempt(
+            String workspaceId, String attemptId, String executionHandle, String processStartIdentity) {
+        if (executionHandle == null || executionHandle.isBlank()) {
+            return true;
+        }
+        if (executionHandle.startsWith("podman-container:")) {
+            String containerName = executionHandle.substring("podman-container:".length());
+            String expectedContainerId = null;
+            if (processStartIdentity != null && processStartIdentity.startsWith("container:")) {
+                expectedContainerId = processStartIdentity.substring("container:".length());
+            }
+            return PodmanAttemptContainerSupport.terminateContainer(
+                    podmanPath, containerName, workspaceId, attemptId, expectedContainerId);
+        }
+        if (executionHandle.startsWith("process:")) {
+            if (attemptId != null && !executionHandle.equals("process:" + attemptId)) {
+                return false;
+            }
+            return terminateProcessAttempt(processStartIdentity);
+        }
+        return false;
+    }
+
+    private boolean terminateProcessAttempt(String processStartIdentity) {
+        if (processStartIdentity == null || !processStartIdentity.startsWith("pid:")) {
+            return true;
+        }
+        String[] parts = processStartIdentity.split(";");
+        long pid;
+        long startEpoch;
+        try {
+            pid = Long.parseLong(parts[0].substring("pid:".length()));
+            if (parts.length > 1 && parts[1].startsWith("start:")) {
+                startEpoch = Long.parseLong(parts[1].substring("start:".length()));
+            } else {
+                return true;
+            }
+        } catch (Exception _) {
+            return true;
+        }
+        Optional<ProcessHandle> phOpt = ProcessHandle.of(pid);
+        if (phOpt.isEmpty()) {
+            return true;
+        }
+        ProcessHandle handle = phOpt.get();
+        if (!handle.isAlive()) {
+            return true;
+        }
+        Optional<Instant> startInstantOpt = handle.info().startInstant();
+        if (startInstantOpt.isPresent() && startInstantOpt.get().toEpochMilli() == startEpoch) {
+            handle.destroyForcibly();
+            try {
+                handle.onExit().get(5, TimeUnit.SECONDS);
+            } catch (Exception _) {
+                // ignore
+            }
+            return !handle.isAlive();
+        }
+        return true;
     }
 
     private SandboxResult executeSandboxedInternal(

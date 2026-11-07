@@ -65,7 +65,7 @@ class DirectiveFeedbackLoopGuardTest {
 
         directiveFeedbackPort = mock(DirectiveFeedbackPort.class);
         directiveFeedbackPortInstance = mock(Instance.class);
-        when(directiveFeedbackPortInstance.isUnsatisfied()).thenReturn(false);
+        when(directiveFeedbackPortInstance.isResolvable()).thenReturn(true);
         when(directiveFeedbackPortInstance.get()).thenReturn(directiveFeedbackPort);
 
         when(sessionLifecycleCoordinator.setupMdc(any(), any(), any())).thenReturn("user");

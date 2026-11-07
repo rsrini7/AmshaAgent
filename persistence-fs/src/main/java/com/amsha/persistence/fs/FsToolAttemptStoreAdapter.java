@@ -245,6 +245,24 @@ public class FsToolAttemptStoreAdapter implements ToolAttemptStorePort {
     }
 
     @Override
+    public List<ToolAttemptDto> findActiveAttempts(String workspaceId) {
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new IllegalArgumentException("workspaceId must not be blank");
+        }
+        return helper.withWorkspaceLock(
+                workspaceId,
+                () -> helper.loadAllEnvelopes(workspaceId).stream()
+                        .map(FsToolAttemptEnvelope::attempt)
+                        .filter(a -> a.status() == ToolAttemptStatus.ADMITTED
+                                || a.status() == ToolAttemptStatus.LAUNCH_REQUESTED
+                                || a.status() == ToolAttemptStatus.RUNNING)
+                        .sorted(Comparator.comparing(ToolAttemptDto::createdAt)
+                                .thenComparingInt(ToolAttemptDto::attemptNumber)
+                                .thenComparing(ToolAttemptDto::attemptId))
+                        .toList());
+    }
+
+    @Override
     public Optional<DurableActionLockDto> findActiveLock(String workspaceId, String lockId) {
         return helper.withWorkspaceLock(
                 workspaceId,

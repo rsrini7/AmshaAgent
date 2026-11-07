@@ -17,6 +17,7 @@ import com.amsha.persistence.api.ToolAttemptAdmissionRequest;
 import com.amsha.persistence.api.ToolAttemptAdmissionResult;
 import com.amsha.persistence.api.ToolAttemptAdmissionResult.AdmissionStatus;
 import com.amsha.persistence.api.ToolAttemptAuditEventKind;
+import com.amsha.persistence.api.ToolAttemptDto;
 import com.amsha.persistence.api.ToolAttemptFingerprintFormat;
 import com.amsha.persistence.api.ToolAttemptIdempotencyMode;
 import com.amsha.persistence.api.ToolAttemptSettlementFields;
@@ -120,24 +121,18 @@ class FsToolAttemptStoreContractTest {
         ToolAttemptAdmissionResult initialRes = store.admit(initialReq);
         String attempt1Id = initialRes.attempt().attemptId();
 
-        store.transition(
-                workspaceId,
+        transition(
                 attempt1Id,
                 ToolAttemptStatus.ADMITTED,
                 0L,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
-                ToolAttemptSettlementFields.forLaunch(Instant.now()),
-                null,
-                List.of());
-        store.transition(
-                workspaceId,
+                ToolAttemptSettlementFields.forLaunch(Instant.now()));
+        transition(
                 attempt1Id,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
                 1L,
                 ToolAttemptStatus.SETTLED_SUCCESS,
-                ToolAttemptSettlementFields.forSuccess(Instant.now(), "h1", "ok"),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forSuccess(Instant.now(), "h1", "ok"));
 
         ToolAttemptAdmissionRequest retrySuccessReq =
                 createRequest(opId, attempt1Id, ToolAttemptIdempotencyMode.IDEMPOTENT);
@@ -148,15 +143,12 @@ class FsToolAttemptStoreContractTest {
         ToolAttemptAdmissionResult atMostOnceRes = store.admit(atMostOnceReq);
         String amoAttempt1Id = atMostOnceRes.attempt().attemptId();
 
-        store.transition(
-                workspaceId,
+        transition(
                 amoAttempt1Id,
                 ToolAttemptStatus.ADMITTED,
                 0L,
                 ToolAttemptStatus.CANCELLED_BEFORE_LAUNCH,
-                ToolAttemptSettlementFields.empty(Instant.now()),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.empty(Instant.now()));
 
         ToolAttemptAdmissionRequest amoRetryReq =
                 createRequest(op2Id, amoAttempt1Id, ToolAttemptIdempotencyMode.AT_MOST_ONCE);
@@ -182,24 +174,18 @@ class FsToolAttemptStoreContractTest {
         ToolAttemptAdmissionResult res2 = store.admit(req2);
         assertEquals(AdmissionStatus.CONFLICT, res2.status());
 
-        store.transition(
-                workspaceId,
+        transition(
                 res1.attempt().attemptId(),
                 ToolAttemptStatus.ADMITTED,
                 0L,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
-                ToolAttemptSettlementFields.forLaunch(Instant.now()),
-                null,
-                List.of());
-        store.transition(
-                workspaceId,
+                ToolAttemptSettlementFields.forLaunch(Instant.now()));
+        transition(
                 res1.attempt().attemptId(),
                 ToolAttemptStatus.LAUNCH_REQUESTED,
                 1L,
                 ToolAttemptStatus.SETTLED_SUCCESS,
-                ToolAttemptSettlementFields.forSuccess(Instant.now(), "h", "obs"),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forSuccess(Instant.now(), "h", "obs"));
 
         String op3Id = UUID.randomUUID().toString();
         ToolAttemptAdmissionRequest req3 = createRequest(op3Id, null, ToolAttemptIdempotencyMode.AT_MOST_ONCE);
@@ -214,50 +200,38 @@ class FsToolAttemptStoreContractTest {
                 store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
         String attemptId = res.attempt().attemptId();
 
-        ToolAttemptTransitionResult t1 = store.transition(
-                workspaceId,
+        ToolAttemptTransitionResult t1 = transition(
                 attemptId,
                 ToolAttemptStatus.ADMITTED,
                 0L,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
-                ToolAttemptSettlementFields.forLaunch(Instant.now()),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forLaunch(Instant.now()));
         assertEquals(TransitionStatus.APPLIED, t1.status());
         assertEquals(1L, t1.updatedAttempt().fencingToken());
         assertEquals(ToolAttemptStatus.LAUNCH_REQUESTED, t1.updatedAttempt().status());
 
-        ToolAttemptTransitionResult staleToken = store.transition(
-                workspaceId,
+        ToolAttemptTransitionResult staleToken = transition(
                 attemptId,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
                 0L,
                 ToolAttemptStatus.RUNNING,
-                ToolAttemptSettlementFields.forRunning(Instant.now(), "h", "pid"),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forRunning(Instant.now(), "h", "pid"));
         assertEquals(TransitionStatus.STALE, staleToken.status());
 
-        ToolAttemptTransitionResult staleStatus = store.transition(
-                workspaceId,
+        ToolAttemptTransitionResult staleStatus = transition(
                 attemptId,
                 ToolAttemptStatus.ADMITTED,
                 1L,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
-                ToolAttemptSettlementFields.forLaunch(Instant.now()),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forLaunch(Instant.now()));
         assertEquals(TransitionStatus.STALE, staleStatus.status());
 
-        ToolAttemptTransitionResult t2 = store.transition(
-                workspaceId,
+        ToolAttemptTransitionResult t2 = transition(
                 attemptId,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
                 1L,
                 ToolAttemptStatus.RUNNING,
-                ToolAttemptSettlementFields.forRunning(Instant.now(), "h", "pid"),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forRunning(Instant.now(), "h", "pid"));
         assertEquals(TransitionStatus.APPLIED, t2.status());
         assertEquals(2L, t2.updatedAttempt().fencingToken());
     }
@@ -268,34 +242,25 @@ class FsToolAttemptStoreContractTest {
                 store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
         String attemptId = res.attempt().attemptId();
 
-        store.transition(
-                workspaceId,
+        transition(
                 attemptId,
                 ToolAttemptStatus.ADMITTED,
                 0L,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
-                ToolAttemptSettlementFields.forLaunch(Instant.now()),
-                null,
-                List.of());
-        store.transition(
-                workspaceId,
+                ToolAttemptSettlementFields.forLaunch(Instant.now()));
+        transition(
                 attemptId,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
                 1L,
                 ToolAttemptStatus.SETTLED_SUCCESS,
-                ToolAttemptSettlementFields.forSuccess(Instant.now(), "h", "obs"),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forSuccess(Instant.now(), "h", "obs"));
 
-        ToolAttemptTransitionResult postTerminal = store.transition(
-                workspaceId,
+        ToolAttemptTransitionResult postTerminal = transition(
                 attemptId,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
                 2L,
                 ToolAttemptStatus.RUNNING,
-                ToolAttemptSettlementFields.forRunning(Instant.now(), "h", "pid"),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forRunning(Instant.now(), "h", "pid"));
         assertEquals(TransitionStatus.CONFLICT, postTerminal.status());
     }
 
@@ -303,10 +268,18 @@ class FsToolAttemptStoreContractTest {
     void deleteClaimsBySessionPreservesOtherSessions() {
         String deletedSession = "s1-" + UUID.randomUUID();
         String retainedSession = "s2-" + UUID.randomUUID();
-        store.admit(createRequestForSession(
-                deletedSession, UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.AT_MOST_ONCE));
-        store.admit(createRequestForSession(
-                retainedSession, UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.AT_MOST_ONCE));
+        store.admit(createRequest(
+                workspaceId,
+                deletedSession,
+                UUID.randomUUID().toString(),
+                null,
+                ToolAttemptIdempotencyMode.AT_MOST_ONCE));
+        store.admit(createRequest(
+                workspaceId,
+                retainedSession,
+                UUID.randomUUID().toString(),
+                null,
+                ToolAttemptIdempotencyMode.AT_MOST_ONCE));
 
         assertEquals(1L, store.deleteClaimsBySession(workspaceId, deletedSession));
         assertTrue(store.findClaim(workspaceId, deletedSession, "testTool", 1, ACTION_FINGERPRINT)
@@ -323,15 +296,12 @@ class FsToolAttemptStoreContractTest {
         assertTrue(store.findClaim(workspaceId, sessionId, "testTool", 1, ACTION_FINGERPRINT)
                 .isPresent());
 
-        store.transition(
-                workspaceId,
+        transition(
                 attemptId,
                 ToolAttemptStatus.ADMITTED,
                 0L,
                 ToolAttemptStatus.CANCELLED_BEFORE_LAUNCH,
-                ToolAttemptSettlementFields.empty(Instant.now()),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.empty(Instant.now()));
         assertTrue(store.findClaim(workspaceId, sessionId, "testTool", 1, ACTION_FINGERPRINT)
                 .isEmpty());
     }
@@ -346,17 +316,7 @@ class FsToolAttemptStoreContractTest {
     @Test
     void fsCrashRecoveryDanglingClaimPurge() {
         String absentAttemptId = UUID.randomUUID().toString();
-        ToolActionClaimDto danglingClaim = new ToolActionClaimDto(
-                workspaceId,
-                sessionId,
-                "toolX",
-                1,
-                ACTION_FINGERPRINT,
-                ActionClaimStatus.RESERVED,
-                UUID.randomUUID().toString(),
-                absentAttemptId,
-                Instant.now(),
-                null);
+        ToolActionClaimDto danglingClaim = claim("toolX", UUID.randomUUID().toString(), absentAttemptId);
 
         helper.withWorkspaceLock(workspaceId, () -> {
             helper.saveClaimsEnvelope(new FsWorkspaceClaimsEnvelope(1, workspaceId, List.of(danglingClaim)));
@@ -379,38 +339,22 @@ class FsToolAttemptStoreContractTest {
                 store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.AT_MOST_ONCE));
         String attemptId = res.attempt().attemptId();
 
-        store.transition(
-                workspaceId,
+        transition(
                 attemptId,
                 ToolAttemptStatus.ADMITTED,
                 0L,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
-                ToolAttemptSettlementFields.forLaunch(Instant.now()),
-                null,
-                List.of());
-        store.transition(
-                workspaceId,
+                ToolAttemptSettlementFields.forLaunch(Instant.now()));
+        transition(
                 attemptId,
                 ToolAttemptStatus.LAUNCH_REQUESTED,
                 1L,
                 ToolAttemptStatus.SETTLED_SUCCESS,
-                ToolAttemptSettlementFields.forSuccess(Instant.now(), "h", "obs"),
-                null,
-                List.of());
+                ToolAttemptSettlementFields.forSuccess(Instant.now(), "h", "obs"));
 
         // Revert claims envelope to RESERVED to simulate crash after attempt write but before claim update
         helper.withWorkspaceLock(workspaceId, () -> {
-            ToolActionClaimDto reserved = new ToolActionClaimDto(
-                    workspaceId,
-                    sessionId,
-                    "testTool",
-                    1,
-                    ACTION_FINGERPRINT,
-                    ActionClaimStatus.RESERVED,
-                    res.attempt().operationId(),
-                    attemptId,
-                    Instant.now(),
-                    null);
+            ToolActionClaimDto reserved = claim("testTool", res.attempt().operationId(), attemptId);
             helper.saveClaimsEnvelope(new FsWorkspaceClaimsEnvelope(1, workspaceId, List.of(reserved)));
             return null;
         });
@@ -430,32 +374,10 @@ class FsToolAttemptStoreContractTest {
     void workspaceIdInjectiveEncodingSeparatesSpecialCharacters() {
         String ws1 = "alpha/beta";
         String ws2 = "alpha_beta";
-        ToolAttemptAdmissionRequest req1 = new ToolAttemptAdmissionRequest(
-                ws1,
-                sessionId,
-                UUID.randomUUID().toString(),
-                null,
-                "testTool",
-                ACTION_FINGERPRINT,
-                1,
-                TARGET_FINGERPRINT,
-                ToolAttemptIdempotencyMode.IDEMPOTENT,
-                "DIRECT",
-                "{}",
-                Instant.now());
-        ToolAttemptAdmissionRequest req2 = new ToolAttemptAdmissionRequest(
-                ws2,
-                sessionId,
-                UUID.randomUUID().toString(),
-                null,
-                "testTool",
-                ACTION_FINGERPRINT,
-                1,
-                TARGET_FINGERPRINT,
-                ToolAttemptIdempotencyMode.IDEMPOTENT,
-                "DIRECT",
-                "{}",
-                Instant.now());
+        ToolAttemptAdmissionRequest req1 = createRequest(
+                ws1, sessionId, UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT);
+        ToolAttemptAdmissionRequest req2 = createRequest(
+                ws2, sessionId, UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT);
         store.admit(req1);
         store.admit(req2);
 
@@ -466,15 +388,97 @@ class FsToolAttemptStoreContractTest {
         assertNotEquals(helper.attemptsDir("alpha/beta"), helper.attemptsDir("alpha_beta"));
     }
 
-    private ToolAttemptAdmissionRequest createRequest(
-            String opId, String retryOfAttemptId, ToolAttemptIdempotencyMode mode) {
-        return createRequestForSession(sessionId, opId, retryOfAttemptId, mode);
+    @Test
+    void findActiveAttemptsReturnsOnlyActiveInDeterministicOrderWithWorkspaceIsolation() {
+        var a1 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        var a2 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        transition(
+                a2.attempt().attemptId(),
+                ToolAttemptStatus.ADMITTED,
+                0L,
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                ToolAttemptSettlementFields.forLaunch(Instant.now(), "podman-container:c2"));
+
+        var a3 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        transition(
+                a3.attempt().attemptId(),
+                ToolAttemptStatus.ADMITTED,
+                0L,
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                ToolAttemptSettlementFields.forLaunch(Instant.now(), "podman-container:c3"));
+        transition(
+                a3.attempt().attemptId(),
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                1L,
+                ToolAttemptStatus.RUNNING,
+                ToolAttemptSettlementFields.forRunning(Instant.now(), "podman-container:c3", "container:c3"));
+
+        var a4 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        transition(
+                a4.attempt().attemptId(),
+                ToolAttemptStatus.ADMITTED,
+                0L,
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                ToolAttemptSettlementFields.forLaunch(Instant.now(), "podman-container:c4"));
+        transition(
+                a4.attempt().attemptId(),
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                1L,
+                ToolAttemptStatus.SETTLED_SUCCESS,
+                ToolAttemptSettlementFields.forSuccess(Instant.now(), "podman-container:c4", "done"));
+
+        var a5 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        transition(
+                a5.attempt().attemptId(),
+                ToolAttemptStatus.ADMITTED,
+                0L,
+                ToolAttemptStatus.CANCELLED_BEFORE_LAUNCH,
+                ToolAttemptSettlementFields.empty(Instant.now()));
+
+        List<ToolAttemptDto> active = store.findActiveAttempts(workspaceId);
+        assertEquals(3, active.size());
+        assertEquals(a1.attempt().attemptId(), active.get(0).attemptId());
+        assertEquals(a2.attempt().attemptId(), active.get(1).attemptId());
+        assertEquals(a3.attempt().attemptId(), active.get(2).attemptId());
+        assertEquals(ToolAttemptStatus.ADMITTED, active.get(0).status());
+        assertEquals(ToolAttemptStatus.LAUNCH_REQUESTED, active.get(1).status());
+        assertEquals(ToolAttemptStatus.RUNNING, active.get(2).status());
+
+        assertThrows(IllegalArgumentException.class, () -> store.findActiveAttempts(null));
+        assertThrows(IllegalArgumentException.class, () -> store.findActiveAttempts("   "));
     }
 
-    private ToolAttemptAdmissionRequest createRequestForSession(
-            String requestedSessionId, String opId, String retryOfAttemptId, ToolAttemptIdempotencyMode mode) {
-        return new ToolAttemptAdmissionRequest(
+    private ToolAttemptTransitionResult transition(
+            String attemptId,
+            ToolAttemptStatus from,
+            long token,
+            ToolAttemptStatus to,
+            ToolAttemptSettlementFields fields) {
+        return store.transition(workspaceId, attemptId, from, token, to, fields, null, List.of());
+    }
+
+    private ToolActionClaimDto claim(String tool, String opId, String attemptId) {
+        return new ToolActionClaimDto(
                 workspaceId,
+                sessionId,
+                tool,
+                1,
+                ACTION_FINGERPRINT,
+                ActionClaimStatus.RESERVED,
+                opId,
+                attemptId,
+                Instant.now(),
+                null);
+    }
+
+    private ToolAttemptAdmissionRequest createRequest(
+            String requestedWorkspaceId,
+            String requestedSessionId,
+            String opId,
+            String retryOfAttemptId,
+            ToolAttemptIdempotencyMode mode) {
+        return new ToolAttemptAdmissionRequest(
+                requestedWorkspaceId,
                 requestedSessionId,
                 opId,
                 retryOfAttemptId,
@@ -486,5 +490,10 @@ class FsToolAttemptStoreContractTest {
                 "DIRECT",
                 "{}",
                 Instant.now());
+    }
+
+    private ToolAttemptAdmissionRequest createRequest(
+            String opId, String retryOfAttemptId, ToolAttemptIdempotencyMode mode) {
+        return createRequest(workspaceId, sessionId, opId, retryOfAttemptId, mode);
     }
 }

@@ -34,8 +34,12 @@ public class CheckpointSerializer {
     /** Static field - never re-constructed per call (§9.1). */
     private static final TypeReference<List<ReasoningStep>> STEPS_TYPE = new TypeReference<>() {};
 
+    private final ObjectMapper objectMapper;
+
     @Inject
-    ObjectMapper objectMapper;
+    public CheckpointSerializer(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     // ── Checkpoint state JSON ─────────────────────────────────────────────────
 
@@ -57,20 +61,25 @@ public class CheckpointSerializer {
      * <p>Returns an empty list on null/blank JSON or parse failure - never throws.
      */
     public List<ReasoningStep> deserializeSteps(AgentCheckpoint checkpoint) {
-        if (checkpoint == null
-                || checkpoint.getStateJson() == null
-                || checkpoint.getStateJson().isBlank()) {
+        if (checkpoint == null) {
+            return List.of();
+        }
+        return deserializeSteps(checkpoint.getId(), checkpoint.getStateJson());
+    }
+
+    /** Deserializes checkpoint history without requiring a domain checkpoint wrapper. */
+    public List<ReasoningStep> deserializeSteps(Long checkpointId, String stateJson) {
+        if (stateJson == null || stateJson.isBlank()) {
             return List.of();
         }
         try {
-            return objectMapper.readValue(checkpoint.getStateJson(), STEPS_TYPE);
+            return objectMapper.readValue(stateJson, STEPS_TYPE);
         } catch (JsonProcessingException e) {
             log.errorf(
-                    "Failed to deserialize stateJson for checkpoint id=%d: %s",
-                    checkpoint.getId(), LogUtil.rootMessage(e));
+                    "Failed to deserialize stateJson for checkpoint id=%d: %s", checkpointId, LogUtil.rootMessage(e));
             log.debugf(
                     "Full stacktrace for deserialization failure of checkpoint id=%d:\n%s",
-                    checkpoint.getId(), LogUtil.trimmedStack(e));
+                    checkpointId, LogUtil.trimmedStack(e));
             return List.of();
         }
     }

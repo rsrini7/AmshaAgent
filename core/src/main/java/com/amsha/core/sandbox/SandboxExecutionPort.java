@@ -37,4 +37,21 @@ public interface SandboxExecutionPort {
 
     /** Releases attempt-owned external resources after terminal state is durably stored. */
     default void releaseSettledAttempt(ToolExecutionContext context) {}
+
+    /**
+     * Inspects the execution state of an active attempt to verify ownership and progress.
+     */
+    default SandboxRecoveryEvidence inspectAttempt(
+            String workspaceId, String attemptId, String executionHandle, String processStartIdentity) {
+        return new SandboxRecoveryEvidence.Inconclusive("Inspect not supported by this sandbox provider");
+    }
+
+    /**
+     * Safely terminates a verified running attempt before recording an indeterminate settlement.
+     * Returns true if the executor confirmed the attempt stopped or exited.
+     */
+    default boolean terminateRunningAttempt(
+            String workspaceId, String attemptId, String executionHandle, String processStartIdentity) {
+        return false;
+    }
 }

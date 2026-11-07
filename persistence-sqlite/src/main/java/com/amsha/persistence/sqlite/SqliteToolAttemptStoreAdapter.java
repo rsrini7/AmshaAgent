@@ -258,6 +258,14 @@ public class SqliteToolAttemptStoreAdapter implements ToolAttemptStorePort {
     }
 
     @Override
+    public List<ToolAttemptDto> findActiveAttempts(String workspaceId) {
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new IllegalArgumentException("workspaceId must not be blank");
+        }
+        return jdbi.withHandle(handle -> handle.attach(ToolAttemptJdbiDao.class).findActiveAttempts(workspaceId));
+    }
+
+    @Override
     public Optional<DurableActionLockDto> findActiveLock(String workspaceId, String lockId) {
         return jdbi.withHandle(handle -> handle.attach(ToolAttemptJdbiDao.class).findActiveLock(workspaceId, lockId));
     }

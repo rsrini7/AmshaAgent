@@ -13,6 +13,7 @@ import com.amsha.persistence.api.ToolAttemptAdmissionRequest;
 import com.amsha.persistence.api.ToolAttemptAdmissionResult;
 import com.amsha.persistence.api.ToolAttemptAdmissionResult.AdmissionStatus;
 import com.amsha.persistence.api.ToolAttemptAuditEventKind;
+import com.amsha.persistence.api.ToolAttemptDto;
 import com.amsha.persistence.api.ToolAttemptFingerprintFormat;
 import com.amsha.persistence.api.ToolAttemptIdempotencyMode;
 import com.amsha.persistence.api.ToolAttemptSettlementFields;
@@ -287,6 +288,84 @@ class PostgresToolAttemptStoreContractTest {
         store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
         Set<String> workspaces = store.listWorkspaceIds();
         assertTrue(workspaces.contains(workspaceId));
+    }
+
+    @Test
+    void findActiveAttemptsReturnsOnlyActiveInDeterministicOrderWithWorkspaceIsolation() {
+        var a1 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        var a2 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        store.transition(
+                workspaceId,
+                a2.attempt().attemptId(),
+                ToolAttemptStatus.ADMITTED,
+                0L,
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                ToolAttemptSettlementFields.forLaunch(Instant.now(), "podman-container:c2"),
+                null,
+                List.of());
+
+        var a3 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        store.transition(
+                workspaceId,
+                a3.attempt().attemptId(),
+                ToolAttemptStatus.ADMITTED,
+                0L,
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                ToolAttemptSettlementFields.forLaunch(Instant.now(), "podman-container:c3"),
+                null,
+                List.of());
+        store.transition(
+                workspaceId,
+                a3.attempt().attemptId(),
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                1L,
+                ToolAttemptStatus.RUNNING,
+                ToolAttemptSettlementFields.forRunning(Instant.now(), "podman-container:c3", "container:c3"),
+                null,
+                List.of());
+
+        var a4 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        store.transition(
+                workspaceId,
+                a4.attempt().attemptId(),
+                ToolAttemptStatus.ADMITTED,
+                0L,
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                ToolAttemptSettlementFields.forLaunch(Instant.now(), "podman-container:c4"),
+                null,
+                List.of());
+        store.transition(
+                workspaceId,
+                a4.attempt().attemptId(),
+                ToolAttemptStatus.LAUNCH_REQUESTED,
+                1L,
+                ToolAttemptStatus.SETTLED_SUCCESS,
+                ToolAttemptSettlementFields.forSuccess(Instant.now(), "podman-container:c4", "done"),
+                null,
+                List.of());
+
+        var a5 = store.admit(createRequest(UUID.randomUUID().toString(), null, ToolAttemptIdempotencyMode.IDEMPOTENT));
+        store.transition(
+                workspaceId,
+                a5.attempt().attemptId(),
+                ToolAttemptStatus.ADMITTED,
+                0L,
+                ToolAttemptStatus.CANCELLED_BEFORE_LAUNCH,
+                ToolAttemptSettlementFields.empty(Instant.now()),
+                null,
+                List.of());
+
+        List<ToolAttemptDto> active = store.findActiveAttempts(workspaceId);
+        assertEquals(3, active.size());
+        assertEquals(a1.attempt().attemptId(), active.get(0).attemptId());
+        assertEquals(a2.attempt().attemptId(), active.get(1).attemptId());
+        assertEquals(a3.attempt().attemptId(), active.get(2).attemptId());
+        assertEquals(ToolAttemptStatus.ADMITTED, active.get(0).status());
+        assertEquals(ToolAttemptStatus.LAUNCH_REQUESTED, active.get(1).status());
+        assertEquals(ToolAttemptStatus.RUNNING, active.get(2).status());
+
+        assertThrows(IllegalArgumentException.class, () -> store.findActiveAttempts(null));
+        assertThrows(IllegalArgumentException.class, () -> store.findActiveAttempts("   "));
     }
 
     private ToolAttemptAdmissionRequest createRequest(

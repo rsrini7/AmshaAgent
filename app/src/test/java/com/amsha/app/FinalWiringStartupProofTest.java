@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import com.amsha.app.recovery.StartupAttemptReconciliationObserver;
+import com.amsha.core.agent.loop.StartupAttemptReconciler;
 import com.amsha.core.agent.reasoning.PromptTemplateEngine;
 import com.amsha.core.agent.role.AgentRoleEnum;
 import com.amsha.core.agent.role.CapabilityRegistry;
@@ -53,6 +55,12 @@ class FinalWiringStartupProofTest {
 
     @Inject
     CoreMemoryService coreMemoryService;
+
+    @Inject
+    StartupAttemptReconciler startupAttemptReconciler;
+
+    @Inject
+    StartupAttemptReconciliationObserver startupAttemptReconciliationObserver;
 
     @Inject
     RecallMemoryService recallMemoryService;
@@ -237,5 +245,13 @@ class FinalWiringStartupProofTest {
         assertTrue(skillAwareIntentDetector
                 .findSkillMatch("Save this report to memory and summarize it")
                 .isPresent());
+    }
+
+    @Test
+    void startupAttemptRecoveryWiringResolves() {
+        assertNotNull(startupAttemptReconciler, "StartupAttemptReconciler must resolve in CDI production context");
+        assertNotNull(
+                startupAttemptReconciliationObserver,
+                "StartupAttemptReconciliationObserver must resolve in CDI production context");
     }
 }

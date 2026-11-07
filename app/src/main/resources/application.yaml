@@ -1262,6 +1262,7 @@ amsha:
 
   recovery:
     stalled-threshold-minutes: 15
+    single-instance: ${AMSHA_RECOVERY_SINGLE_INSTANCE:false}
 
   resumption:
     stale-mark-seconds: ${AMSHA_RESUMPTION_STALE_MARK_SECONDS:60}

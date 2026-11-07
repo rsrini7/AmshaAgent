@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.amsha.core.sandbox.SandboxRecoveryEvidence;
 import com.amsha.tool.api.ToolExecutionContext;
 
 /** Owns inspection and cleanup operations for attempt-labeled Podman containers. */
@@ -99,6 +100,102 @@ final class PodmanAttemptContainerSupport {
         }
         CommandResult removed = runPodmanCommand(List.of(podmanPath, "rm", containerName), 10);
         return removed.finished() && removed.exitCode() == 0;
+    }
+
+    static SandboxRecoveryEvidence inspectRecoveryEvidence(
+            String podmanPath, String containerName, String workspaceId, String attemptId, String expectedContainerId) {
+        String template = "{{.Id}}|{{.State.Status}}|{{.State.ExitCode}}|"
+                + "{{index .Config.Labels \"amsha.workspace-id\"}}|"
+                + "{{index .Config.Labels \"amsha.tool-attempt-id\"}}";
+        CommandResult result;
+        try {
+            result = runPodmanCommand(List.of(podmanPath, "inspect", "--format", template, containerName), 5);
+        } catch (Exception e) {
+            return new SandboxRecoveryEvidence.Inconclusive("Failed to inspect Podman container: " + e.getMessage());
+        }
+        if (!result.finished() || result.exitCode() != 0) {
+            return new SandboxRecoveryEvidence.Missing("Container not found: " + containerName);
+        }
+        String[] values = result.output().trim().split("\\|", -1);
+        if (values.length != 5) {
+            return new SandboxRecoveryEvidence.Inconclusive("Unexpected inspect format: " + result.output());
+        }
+        String actualId = values[0];
+        String actualStatus = values[1];
+        String actualExitCodeStr = values[2];
+        String actualWorkspaceLabel = values[3];
+        String actualAttemptLabel = values[4];
+
+        if (actualWorkspaceLabel == null
+                || actualWorkspaceLabel.isBlank()
+                || actualAttemptLabel == null
+                || actualAttemptLabel.isBlank()) {
+            return new SandboxRecoveryEvidence.OwnershipMismatch("Container lacks Amsha attempt ownership labels");
+        }
+        if (workspaceId != null && !encodeLabel(workspaceId).equals(actualWorkspaceLabel)) {
+            return new SandboxRecoveryEvidence.OwnershipMismatch("Container workspace label does not match expected");
+        }
+        if (attemptId != null && !attemptId.equals(actualAttemptLabel)) {
+            return new SandboxRecoveryEvidence.OwnershipMismatch("Container attempt label does not match expected");
+        }
+        if (expectedContainerId != null && !expectedContainerId.isBlank() && !actualId.equals(expectedContainerId)) {
+            return new SandboxRecoveryEvidence.OwnershipMismatch("Container ID does not match processStartIdentity");
+        }
+
+        String executionHandle = "podman-container:" + containerName;
+        String startIdentity = "container:" + actualId;
+
+        if ("running".equalsIgnoreCase(actualStatus)) {
+            return new SandboxRecoveryEvidence.RunningVerified(executionHandle, startIdentity);
+        }
+        if ("exited".equalsIgnoreCase(actualStatus) || "stopped".equalsIgnoreCase(actualStatus)) {
+            int exitCode;
+            try {
+                exitCode = Integer.parseInt(actualExitCodeStr.trim());
+            } catch (NumberFormatException e) {
+                return new SandboxRecoveryEvidence.Inconclusive(
+                        "Unparseable container exit code '" + actualExitCodeStr + "': " + e.getMessage());
+            }
+            String logs;
+            try {
+                logs = readContainerLogs(podmanPath, actualId);
+            } catch (Exception e) {
+                return new SandboxRecoveryEvidence.Inconclusive("Unable to read container logs: " + e.getMessage());
+            }
+            return new SandboxRecoveryEvidence.ExitedVerified(executionHandle, startIdentity, exitCode, logs);
+        }
+        return new SandboxRecoveryEvidence.Inconclusive("Container in unhandled state: " + actualStatus);
+    }
+
+    static boolean terminateContainer(
+            String podmanPath, String containerName, String workspaceId, String attemptId, String expectedContainerId) {
+        SandboxRecoveryEvidence evidence =
+                inspectRecoveryEvidence(podmanPath, containerName, workspaceId, attemptId, expectedContainerId);
+        if (evidence instanceof SandboxRecoveryEvidence.OwnershipMismatch) {
+            return false;
+        }
+        if (!(evidence instanceof SandboxRecoveryEvidence.RunningVerified running)) {
+            return true;
+        }
+        String actualId = running.processStartIdentity().startsWith("container:")
+                ? running.processStartIdentity().substring("container:".length())
+                : containerName;
+        try {
+            SandboxRecoveryEvidence revalidated =
+                    inspectRecoveryEvidence(podmanPath, actualId, workspaceId, attemptId, actualId);
+            if (!(revalidated instanceof SandboxRecoveryEvidence.RunningVerified)) {
+                return !(revalidated instanceof SandboxRecoveryEvidence.OwnershipMismatch);
+            }
+            CommandResult stopResult = runPodmanCommand(List.of(podmanPath, "stop", "--time", "5", actualId), 10);
+            if (!stopResult.finished() || stopResult.exitCode() != 0) {
+                runPodmanCommand(List.of(podmanPath, "kill", actualId), 5);
+            }
+            SandboxRecoveryEvidence after =
+                    inspectRecoveryEvidence(podmanPath, actualId, workspaceId, attemptId, actualId);
+            return !(after instanceof SandboxRecoveryEvidence.RunningVerified);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static String stopAndCollectOutput(String podmanPath, String containerName, ToolExecutionContext context)

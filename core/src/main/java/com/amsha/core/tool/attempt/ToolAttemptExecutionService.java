@@ -15,7 +15,6 @@ import java.util.UUID;
 import com.amsha.core.agent.loop.ToolObservationSanitizer;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.persistence.api.DurableActionLockDto;
-import com.amsha.persistence.api.DurableActionLockStatus;
 import com.amsha.persistence.api.ToolAttemptAdmissionRequest;
 import com.amsha.persistence.api.ToolAttemptAdmissionResult;
 import com.amsha.persistence.api.ToolAttemptAuditEventKind;
@@ -368,22 +367,7 @@ public class ToolAttemptExecutionService {
     }
 
     private static DurableActionLockDto lock(AttemptHandle handle, String reason, Instant timestamp) {
-        ToolAttemptDto attempt = handle.attempt();
-        ToolTargetResolution target = handle.target();
-        return new DurableActionLockDto(
-                UUID.randomUUID().toString(),
-                attempt.workspaceId(),
-                attempt.sessionId(),
-                attempt.operationId(),
-                attempt.attemptId(),
-                attempt.actionFingerprint(),
-                target.targetFingerprint(),
-                target.scope(),
-                reason,
-                DurableActionLockStatus.ACTIVE,
-                timestamp,
-                null,
-                null);
+        return ToolAttemptLockPolicy.createLock(handle.attempt(), handle.target(), reason, timestamp);
     }
 
     private ToolAttemptAuditOutboxDto event(

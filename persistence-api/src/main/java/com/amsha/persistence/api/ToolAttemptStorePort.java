@@ -60,6 +60,17 @@ public interface ToolAttemptStorePort {
     List<ToolAttemptDto> findAttemptsBySession(String workspaceId, String sessionId);
 
     /**
+     * Finds all active (non-terminal) attempts in a workspace, ordered deterministically by
+     * creation time, attempt number, and attempt ID. Returns only attempts with status
+     * {@link ToolAttemptStatus#ADMITTED}, {@link ToolAttemptStatus#LAUNCH_REQUESTED}, or
+     * {@link ToolAttemptStatus#RUNNING}.
+     *
+     * @param workspaceId the workspace identifier
+     * @return list of active attempts in deterministic order
+     */
+    List<ToolAttemptDto> findActiveAttempts(String workspaceId);
+
+    /**
      * Finds an active durable action lock by lock ID.
      */
     Optional<DurableActionLockDto> findActiveLock(String workspaceId, String lockId);
