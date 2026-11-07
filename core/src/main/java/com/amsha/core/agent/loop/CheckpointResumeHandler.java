@@ -5,6 +5,7 @@ import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.RejectedExecutionException;
 
 import com.amsha.channel.api.ChannelPlugin;
@@ -292,6 +293,9 @@ public class CheckpointResumeHandler {
         try {
             int budget = calculateResumeBudget(cp);
             log.infof("Resuming session=%s budget=%d", cp.getSessionId(), budget);
+            String activeWorkspaceId = WorkspaceContext.activeWorkspaceId().orElse(null);
+            Callable<AgentResult> runTask = () -> agentLoop.run(
+                    cp.getSessionId(), cp.getAgentRole(), goal, cp.getSystemNote(), reasoningEngine, budget, context);
 
             return WorkspaceContext.run(
                     cp.getSessionId(),
@@ -301,14 +305,9 @@ public class CheckpointResumeHandler {
                     cp.getAgentRole(),
                     context.getUser().channel().id(),
                     context.getUser().platformId(),
-                    () -> agentLoop.run(
-                            cp.getSessionId(),
-                            cp.getAgentRole(),
-                            goal,
-                            cp.getSystemNote(),
-                            reasoningEngine,
-                            budget,
-                            context));
+                    () -> activeWorkspaceId != null
+                            ? WorkspaceContext.callWithActiveWorkspace(activeWorkspaceId, runTask)
+                            : runTask.call());
         } catch (Exception e) {
             handleResumeFailure(cp.getSessionId(), context, e);
             throw new RuntimeException("Failed to resume session", e);
@@ -407,8 +406,11 @@ public class CheckpointResumeHandler {
                     chatId, user, cType, resumeGoal, checkpoint, objectMapper);
 
             int budget = calculateResumeBudget(checkpoint);
-
             log.infof("Synchronously resuming session=%s budget=%d", sessionId, budget);
+
+            String activeWorkspaceId = WorkspaceContext.activeWorkspaceId().orElse(null);
+            Callable<AgentResult> runTask = () -> agentLoop.run(
+                    sessionId, agentRole, resumeGoal, checkpoint.getSystemNote(), reasoningEngine, budget, context);
 
             // §F9 fix: same rule as runResumeLoop — resume at the checkpoint's own autonomy.
             AgentResult result = WorkspaceContext.run(
@@ -419,14 +421,9 @@ public class CheckpointResumeHandler {
                     agentRole,
                     cType.id(),
                     userId,
-                    () -> agentLoop.run(
-                            sessionId,
-                            agentRole,
-                            resumeGoal,
-                            checkpoint.getSystemNote(),
-                            reasoningEngine,
-                            budget,
-                            context));
+                    () -> activeWorkspaceId != null
+                            ? WorkspaceContext.callWithActiveWorkspace(activeWorkspaceId, runTask)
+                            : runTask.call());
 
             var handoff = new DelegatedCompletionHandoff(agentStore, objectMapper).capture(sessionId, result);
             if (handoff.isPresent() && handoff.get().ready()) {

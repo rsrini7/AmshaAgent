@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 
 import com.amsha.common.util.LogUtil;
@@ -104,20 +105,25 @@ public class CronDecisionRouter {
                     ? Math.max(3, pendingCheckpoint.getMaxIterations())
                     : 3;
 
+            String activeWorkspaceId = WorkspaceContext.activeWorkspaceId().orElse(null);
+            Callable<AgentResult> runTask = () -> agentLoop.run(
+                    cronSessionId,
+                    finalRole,
+                    goal,
+                    pendingCheckpoint.getSystemNote(),
+                    reasoningEngine,
+                    budget,
+                    ctx.context);
+
             result = WorkspaceContext.run(
                     cronSessionId,
                     cron.getUserId(),
                     cron.getChatId(),
                     AutonomyLevel.SUPERVISED,
                     finalRole,
-                    () -> agentLoop.run(
-                            cronSessionId,
-                            finalRole,
-                            goal,
-                            pendingCheckpoint.getSystemNote(),
-                            reasoningEngine,
-                            budget,
-                            ctx.context));
+                    () -> activeWorkspaceId != null
+                            ? WorkspaceContext.callWithActiveWorkspace(activeWorkspaceId, runTask)
+                            : runTask.call());
 
             if (result == null) {
                 markCronFailedIfOwner(cron.getId(), deliveryId, "Cron approval resume returned no result");

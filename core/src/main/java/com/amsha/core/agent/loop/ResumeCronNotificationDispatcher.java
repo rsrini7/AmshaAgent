@@ -55,6 +55,10 @@ public class ResumeCronNotificationDispatcher {
         if (!isCronSession(sessionId) || cronStore == null) {
             return false;
         }
+        if (result instanceof AgentResult.AwaitingRetry) {
+            log.debugf("Skipping cron notification dispatch for session %s in AwaitingRetry", sessionId);
+            return false;
+        }
 
         String sub = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
         if (sub.length() < 36) {

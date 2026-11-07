@@ -6,12 +6,9 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
-import com.amsha.channel.api.MediaAttachment;
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.IntentClassificationService;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
@@ -29,7 +26,6 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.governance.BudgetExceededException;
 import com.amsha.core.governance.BudgetWarningException;
 import com.amsha.core.pipeline.MessageContext;
-import com.amsha.core.pipeline.TurnDispatchService;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.state.StatefulAgentStore;
@@ -39,7 +35,6 @@ import com.amsha.core.util.ClassUtils;
 import com.amsha.core.util.MdcManaged;
 import com.amsha.llm.api.StructuredOutputMode;
 import com.amsha.memory.tiered.DirectiveFeedbackPort;
-import com.amsha.security.api.AutonomyLevel;
 
 import org.jboss.logging.Logger;
 
@@ -121,7 +116,12 @@ public class AgentLoop {
 
     @ActivateRequestContext
     public AgentResult resume(String sessionId, String agentRole, String goal) {
-        return run(sessionId, agentRole, goal, reasoningEngine, DEFAULT_MAX_ITERATIONS);
+        return resume(sessionId, agentRole, goal, null);
+    }
+
+    @ActivateRequestContext
+    public AgentResult resume(String sessionId, String agentRole, String goal, MessageContext context) {
+        return run(sessionId, agentRole, goal, null, reasoningEngine, DEFAULT_MAX_ITERATIONS, context);
     }
 
     @ActivateRequestContext
@@ -131,19 +131,18 @@ public class AgentLoop {
 
     @ActivateRequestContext
     public AgentResult run(String sessionId, String agentRole, String goal, ReasoningEngine engine, int maxIterations) {
-        int budget = maxIterations;
-        if (goal != null) {
-            String lower = goal.toLowerCase(Locale.ROOT);
-            if (lower.contains("store")
-                    || lower.contains("remember")
-                    || lower.contains("call me")
-                    || lower.contains("my name is")
-                    || lower.contains("refer to me as")
-                    || lower.contains("address me as")) {
-                budget = Math.max(budget, 3);
-            }
-        }
+        int budget = (goal != null && containsMemoryKeyword(goal)) ? Math.max(maxIterations, 3) : maxIterations;
         return run(sessionId, agentRole, goal, null, engine, budget, null);
+    }
+
+    private static boolean containsMemoryKeyword(String goal) {
+        String lower = goal.toLowerCase(Locale.ROOT);
+        return lower.contains("store")
+                || lower.contains("remember")
+                || lower.contains("call me")
+                || lower.contains("my name is")
+                || lower.contains("refer to me as")
+                || lower.contains("address me as");
     }
 
     @ActivateRequestContext
@@ -256,7 +255,7 @@ public class AgentLoop {
                                 ? structuredOutputModeInstance.get()
                                 : StructuredOutputMode.NATIVE;
 
-                AgentExecutionContext agentExecutionContext = createExecutionContext(
+                AgentExecutionContext agentExecutionContext = AgentLoopTraceHelper.createExecutionContext(
                         sessionId,
                         capturedUserId,
                         effectiveRole,
@@ -265,7 +264,9 @@ public class AgentLoop {
                         maxIterations,
                         context,
                         decision,
-                        mode);
+                        mode,
+                        agentStore,
+                        intentClassificationService);
 
                 result = executeWithinScopes(
                         agentExecutionContext,
@@ -311,14 +312,7 @@ public class AgentLoop {
 
             } catch (BudgetExceededException e) {
                 exceptionCaught = true;
-                meterRegistry
-                        .counter(
-                                "amsha.agent.loop.failure",
-                                "role",
-                                canonicalRole != null ? canonicalRole : "unknown",
-                                "exception",
-                                ClassUtils.getCleanName(e))
-                        .increment();
+                recordFailureMetric(canonicalRole, e);
                 throw e;
 
             } catch (BudgetWarningException e) {
@@ -332,14 +326,7 @@ public class AgentLoop {
 
             } catch (Exception e) {
                 exceptionCaught = true;
-                meterRegistry
-                        .counter(
-                                "amsha.agent.loop.failure",
-                                "role",
-                                canonicalRole != null ? canonicalRole : "unknown",
-                                "exception",
-                                ClassUtils.getCleanName(e))
-                        .increment();
+                recordFailureMetric(canonicalRole, e);
                 result = getLoopResultHandler().handleSystemError(sessionId, canonicalRole, e);
                 return result;
 
@@ -368,77 +355,6 @@ public class AgentLoop {
                 }
             }
         }
-    }
-
-    private AgentExecutionContext createExecutionContext(
-            String sessionId,
-            String capturedUserId,
-            String effectiveRole,
-            String goal,
-            String systemNote,
-            int maxIterations,
-            MessageContext context,
-            CheckpointResumeCoordinator.ResumeDecision decision,
-            StructuredOutputMode mode) {
-
-        Map<String, Object> mergedData = new HashMap<>();
-        if (context != null) {
-            mergedData.putAll(context.getData());
-        }
-        if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r
-                && r.contextDataJson() != null) {
-            Map<String, Object> restored = agentStore.deserializeContextData(r.contextDataJson());
-            if (restored != null) {
-                mergedData.putAll(restored);
-            }
-        }
-        if (TurnDispatchService.hasInboundAudio(context)) {
-            mergedData.put(TurnDispatchService.DATA_INBOUND_AUDIO, true);
-        }
-
-        String chatId = context != null && context.getChatId() != null ? context.getChatId() : sessionId;
-        AutonomyLevel autonomy = context != null && context.getAutonomyLevel().isPresent()
-                ? context.getAutonomyLevel().get()
-                : (WorkspaceContext.AUTONOMY.isBound() && WorkspaceContext.AUTONOMY.get() != null
-                        ? WorkspaceContext.AUTONOMY.get()
-                        : AutonomyLevel.SUPERVISED);
-        String channelTypeStr = context != null && context.getChannelType() != null
-                ? context.getChannelType().name()
-                : WorkspaceContext.channelType().orElse(null);
-        String channelPlatformId = context != null && context.getUser() != null
-                ? context.getUser().platformId()
-                : WorkspaceContext.channelPlatformId();
-
-        int startingIteration = 0;
-        if (decision instanceof CheckpointResumeCoordinator.ResumeDecision.ResumedHistory r) {
-            if (intentClassificationService.isResumeCommand(goal)
-                    || isContinuationRequest(context)
-                    || (context != null && context.isResumeSignal())) {
-                startingIteration = r.iterationsUsed();
-            }
-        }
-
-        List<MediaAttachment> attachments = (context != null
-                        && context.getMessage() != null
-                        && context.getMessage().attachments() != null)
-                ? context.getMessage().attachments()
-                : List.of();
-
-        return new AgentExecutionContext(
-                sessionId,
-                capturedUserId,
-                chatId,
-                effectiveRole,
-                goal,
-                autonomy,
-                mode,
-                maxIterations,
-                startingIteration,
-                channelTypeStr,
-                channelPlatformId,
-                systemNote,
-                mergedData,
-                attachments);
     }
 
     private AgentResult executeWithinScopes(
@@ -492,26 +408,37 @@ public class AgentLoop {
         return run(sessionId, AgentRoleEnum.COORDINATOR.toScopedName(), goal, engine, maxIterations);
     }
 
+    private void recordFailureMetric(String role, Exception e) {
+        meterRegistry
+                .counter(
+                        "amsha.agent.loop.failure",
+                        "role",
+                        role != null ? role : "unknown",
+                        "exception",
+                        ClassUtils.getCleanName(e))
+                .increment();
+    }
+
     private boolean isContinuationRequest(MessageContext context) {
-        if (context == null || context.getMessage() == null) {
-            return false;
-        }
-        String text = context.getMessage().text();
-        return text != null && !text.isBlank() && intentClassificationService.isContinuationCommand(text);
+        return context != null
+                && context.getMessage() != null
+                && context.getMessage().text() != null
+                && !context.getMessage().text().isBlank()
+                && intentClassificationService.isContinuationCommand(
+                        context.getMessage().text());
     }
 
     private void recordDirectiveOutcome(String sessionId, String userId, boolean success) {
-        if (directiveFeedbackPortInstance == null
-                || directiveFeedbackPortInstance.isUnsatisfied()
-                || sessionId == null
-                || userId == null
-                || userId.isBlank()) {
-            return;
-        }
-        try {
-            directiveFeedbackPortInstance.get().recordSessionOutcome(sessionId, userId, success);
-        } catch (Exception e) {
-            log.debugf("Directive feedback skipped for session %s: %s", sessionId, LogUtil.rootMessage(e));
+        if (directiveFeedbackPortInstance != null
+                && directiveFeedbackPortInstance.isResolvable()
+                && sessionId != null
+                && userId != null
+                && !userId.isBlank()) {
+            try {
+                directiveFeedbackPortInstance.get().recordSessionOutcome(sessionId, userId, success);
+            } catch (Exception e) {
+                log.debugf("Directive feedback skipped for session %s: %s", sessionId, LogUtil.rootMessage(e));
+            }
         }
     }
 

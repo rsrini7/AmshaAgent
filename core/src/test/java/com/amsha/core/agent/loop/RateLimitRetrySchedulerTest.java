@@ -18,6 +18,7 @@ import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.governance.ApprovalFrame;
+import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -68,6 +69,9 @@ class RateLimitRetrySchedulerTest {
     @Mock
     SessionCatalogStore sessionCatalogStore;
 
+    @Mock
+    ResumeCronNotificationDispatcher cronNotificationDispatcher;
+
     @Spy
     MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
@@ -88,19 +92,105 @@ class RateLimitRetrySchedulerTest {
 
     @Test
     void testProcessPendingRetriesReadyToResume() {
-        AgentCheckpointRecord cp = new AgentCheckpointRecord();
-        cp.setId(100L);
-        cp.setSessionId("sess-retry");
-        cp.setAgentRole("coder");
-        cp.setOriginalGoal("do task");
-        cp.setUpdatedAt(Instant.now().minusSeconds(10));
-        cp.setRetryAfterMs(1000);
-
+        AgentCheckpointRecord cp = readyRetryCheckpoint("sess-retry", 100L, "do task", "user-1");
         when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
         when(agentStore.claimForRetry(100L)).thenReturn(true);
 
         assertDoesNotThrow(() -> scheduler.processPendingRetries());
-        verify(agentLoop).resume("sess-retry", "coder", "do task");
+        verify(agentLoop).resume(eq("sess-retry"), eq("coder"), eq("do task"), any(MessageContext.class));
+    }
+
+    @Test
+    void testProcessPendingRetriesFailsClosedWhenOriginalGoalMissing() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("sess-no-goal", 101L, null, "user-1");
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(101L)).thenReturn(true);
+
+        assertDoesNotThrow(() -> scheduler.processPendingRetries());
+        verify(agentStore).markFailed(101L, "Missing original goal or owner identity for retry resume");
+        verify(agentLoop, never()).resume(any(), any(), any(), any());
+    }
+
+    @Test
+    void testProcessPendingRetriesFailsClosedWhenOwnerUnresolvable() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("sess-no-owner", 102L, "do task", null);
+        when(sessionCatalogStore.bySessionId("sess-no-owner")).thenReturn(Optional.empty());
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(102L)).thenReturn(true);
+
+        assertDoesNotThrow(() -> scheduler.processPendingRetries());
+        verify(agentStore).markFailed(102L, "Missing original goal or owner identity for retry resume");
+        verify(agentLoop, never()).resume(any(), any(), any(), any());
+    }
+
+    @Test
+    void testProcessPendingRetriesFailsClosedForCronSessionWhenGoalMissing() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("cron-" + JOB_ID + "-" + DELIVERY_ID, 105L, null, null);
+        AgentCronDto dto = new AgentCronDto(
+                JOB_ID, null, "user-1", null, null, null, null, null, false, null, null, null, null, null, null, null,
+                null, null);
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(105L)).thenReturn(true);
+        when(cronStore.claimForResume(JOB_ID, DELIVERY_ID)).thenReturn(true);
+        when(cronStore.findById(JOB_ID)).thenReturn(Optional.of(dto));
+        when(cronStore.markFailedIfOwner(eq(JOB_ID), eq(DELIVERY_ID), anyString()))
+                .thenReturn(true);
+
+        assertDoesNotThrow(() -> scheduler.processPendingRetries());
+
+        verify(cronStore)
+                .markFailedIfOwner(
+                        eq(JOB_ID),
+                        eq(DELIVERY_ID),
+                        contains("Missing original goal or owner identity for retry resume"));
+        verify(agentStore).markFailed(105L, "Missing original goal or owner identity for retry resume");
+        verify(cronNotificationDispatcher).dispatch(eq(cp.getSessionId()), any(AgentResult.Failed.class));
+        verify(agentLoop, never()).resume(any(), any(), any(), any());
+    }
+
+    @Test
+    void testProcessPendingRetriesFailsClosedForCronSessionWhenOwnerMissing() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("cron-" + JOB_ID + "-" + DELIVERY_ID, 106L, "do task", null);
+        AgentCronDto dtoWithoutUser = new AgentCronDto(
+                JOB_ID, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, null,
+                null);
+        when(sessionCatalogStore.bySessionId(cp.getSessionId())).thenReturn(Optional.empty());
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(106L)).thenReturn(true);
+        when(cronStore.claimForResume(JOB_ID, DELIVERY_ID)).thenReturn(true);
+        when(cronStore.findById(JOB_ID)).thenReturn(Optional.of(dtoWithoutUser));
+        when(cronStore.markFailedIfOwner(eq(JOB_ID), eq(DELIVERY_ID), anyString()))
+                .thenReturn(true);
+
+        assertDoesNotThrow(() -> scheduler.processPendingRetries());
+
+        verify(cronStore)
+                .markFailedIfOwner(
+                        eq(JOB_ID),
+                        eq(DELIVERY_ID),
+                        contains("Missing original goal or owner identity for retry resume"));
+        verify(agentStore).markFailed(106L, "Missing original goal or owner identity for retry resume");
+        verify(cronNotificationDispatcher).dispatch(eq(cp.getSessionId()), any(AgentResult.Failed.class));
+        verify(agentLoop, never()).resume(any(), any(), any(), any());
+    }
+
+    @Test
+    void testProcessPendingRetriesFailsClosedForCronSessionWhenLeaseLostDuringTerminalSync() {
+        AgentCheckpointRecord cp = readyRetryCheckpoint("cron-" + JOB_ID + "-" + DELIVERY_ID, 107L, null, null);
+        AgentCronDto dto = new AgentCronDto(
+                JOB_ID, null, "user-1", null, null, null, null, null, false, null, null, null, null, null, null, null,
+                null, null);
+        when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
+        when(agentStore.claimForRetry(107L)).thenReturn(true);
+        when(cronStore.claimForResume(JOB_ID, DELIVERY_ID)).thenReturn(true);
+        when(cronStore.findById(JOB_ID)).thenReturn(Optional.of(dto));
+        when(cronStore.markFailedIfOwner(eq(JOB_ID), eq(DELIVERY_ID), anyString()))
+                .thenReturn(false);
+
+        assertDoesNotThrow(() -> scheduler.processPendingRetries());
+
+        verify(agentStore).markFailed(107L, "Cron lease lost during retry resume");
+        verify(cronNotificationDispatcher, never()).dispatch(any(), any());
     }
 
     @Test
@@ -109,7 +199,7 @@ class RateLimitRetrySchedulerTest {
         stubNotificationRoute(cp.getSessionId(), ChannelType.CLI, "cli-owner", "cli-chat");
         when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
         when(agentStore.claimForRetry(cp.getId())).thenReturn(true);
-        when(agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()))
+        when(agentLoop.resume(eq(cp.getSessionId()), eq(cp.getAgentRole()), eq(cp.getOriginalGoal()), any()))
                 .thenReturn(new AgentResult.Finished("The retry completed.", List.of(), 0, 0));
 
         scheduler.processPendingRetries();
@@ -126,7 +216,7 @@ class RateLimitRetrySchedulerTest {
         stubNotificationRoute(cp.getSessionId(), ChannelType.TELEGRAM, "telegram-user", "telegram-chat");
         when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
         when(agentStore.claimForRetry(cp.getId())).thenReturn(true);
-        when(agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()))
+        when(agentLoop.resume(eq(cp.getSessionId()), eq(cp.getAgentRole()), eq(cp.getOriginalGoal()), any()))
                 .thenReturn(new AgentResult.AwaitingApproval(
                         new ApprovalFrame("execute_shell", Map.of("command", "ls"), RiskLevel.HIGH),
                         cp.getSessionId(),
@@ -151,7 +241,7 @@ class RateLimitRetrySchedulerTest {
         stubNotificationRoute(cp.getSessionId(), ChannelType.TELEGRAM, "telegram-user", "telegram-chat");
         when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
         when(agentStore.claimForRetry(cp.getId())).thenReturn(true);
-        when(agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()))
+        when(agentLoop.resume(eq(cp.getSessionId()), eq(cp.getAgentRole()), eq(cp.getOriginalGoal()), any()))
                 .thenReturn(new AgentResult.AwaitingRetry(cp.getSessionId(), 5000, List.of(), 0, 0));
 
         scheduler.processPendingRetries();
@@ -168,7 +258,7 @@ class RateLimitRetrySchedulerTest {
         stubNotificationRoute(cp.getSessionId(), ChannelType.TELEGRAM, "telegram-user", "telegram-chat");
         when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
         when(agentStore.claimForRetry(cp.getId())).thenReturn(true);
-        when(agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()))
+        when(agentLoop.resume(eq(cp.getSessionId()), eq(cp.getAgentRole()), eq(cp.getOriginalGoal()), any()))
                 .thenThrow(new RuntimeException("provider unavailable"));
 
         scheduler.processPendingRetries();
@@ -190,7 +280,7 @@ class RateLimitRetrySchedulerTest {
         when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
 
         assertDoesNotThrow(() -> scheduler.processPendingRetries());
-        verify(agentLoop, never()).resume(any(), any(), any());
+        verify(agentLoop, never()).resume(any(), any(), any(), any());
     }
 
     @Test
@@ -233,7 +323,7 @@ class RateLimitRetrySchedulerTest {
         scheduler.processPendingRetries();
 
         verify(agentStore).markFailed(eq(100L), contains("Cron lease lost before retry resume"));
-        verify(agentLoop, never()).resume(any(), any(), any());
+        verify(agentLoop, never()).resume(any(), any(), any(), any());
     }
 
     @Test
@@ -247,15 +337,15 @@ class RateLimitRetrySchedulerTest {
         cp.setRetryAfterMs(1000);
 
         AgentCronDto dto = new AgentCronDto(
-                JOB_ID, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, null,
-                null);
+                JOB_ID, null, "user-1", null, null, null, null, null, false, null, null, null, null, null, null, null,
+                null, null);
         when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
         when(agentStore.claimForRetry(101L)).thenReturn(true);
         when(cronStore.claimForResume(JOB_ID, DELIVERY_ID)).thenReturn(true);
         when(cronStore.findById(JOB_ID)).thenReturn(Optional.of(dto));
         when(cronStore.markFailedIfOwner(eq(JOB_ID), eq(DELIVERY_ID), anyString()))
                 .thenReturn(false);
-        when(agentLoop.resume(any(), any(), any()))
+        when(agentLoop.resume(any(), any(), any(), any()))
                 .thenReturn(AgentResult.failed("x", AgentResult.FailureCategory.SYSTEM_ERROR, List.of()));
 
         scheduler.processPendingRetries();
@@ -270,12 +360,13 @@ class RateLimitRetrySchedulerTest {
         cp.setSessionId("sess-retry");
         cp.setAgentRole("coder");
         cp.setOriginalGoal("do task");
+        cp.setChannelPlatformId("user-1");
         cp.setUpdatedAt(Instant.now().minusSeconds(10));
         cp.setRetryAfterMs(1000);
 
         when(agentStore.findByStatus(CheckpointStatus.AWAITING_RETRY)).thenReturn(List.of(cp));
         when(agentStore.claimForRetry(102L)).thenReturn(true);
-        when(agentLoop.resume(any(), any(), any())).thenThrow(new RuntimeException("background boom"));
+        when(agentLoop.resume(any(), any(), any(), any())).thenThrow(new RuntimeException("background boom"));
 
         scheduler.processPendingRetries();
 
@@ -295,7 +386,7 @@ class RateLimitRetrySchedulerTest {
 
         scheduler.processPendingRetries();
 
-        verify(agentLoop, never()).resume(any(), any(), any());
+        verify(agentLoop, never()).resume(any(), any(), any(), any());
     }
 
     @Test
@@ -331,11 +422,17 @@ class RateLimitRetrySchedulerTest {
     }
 
     private static AgentCheckpointRecord readyRetryCheckpoint(String sessionId) {
+        return readyRetryCheckpoint(sessionId, 300L, "complete the task", null);
+    }
+
+    private static AgentCheckpointRecord readyRetryCheckpoint(
+            String sessionId, Long id, String goal, String platformId) {
         AgentCheckpointRecord checkpoint = new AgentCheckpointRecord();
-        checkpoint.setId(300L);
+        checkpoint.setId(id);
         checkpoint.setSessionId(sessionId);
-        checkpoint.setAgentRole("coordinator");
-        checkpoint.setOriginalGoal("complete the task");
+        checkpoint.setAgentRole("coder");
+        checkpoint.setOriginalGoal(goal);
+        checkpoint.setChannelPlatformId(platformId);
         checkpoint.setUpdatedAt(Instant.now().minusSeconds(10));
         checkpoint.setRetryAfterMs(1000);
         return checkpoint;

@@ -1,6 +1,8 @@
 package com.amsha.app.ui;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.amsha.core.agent.hitl.CheckpointApprovalService;
@@ -21,6 +24,8 @@ import com.amsha.core.domain.model.CheckpointRecord;
 import com.amsha.core.lifecycle.SessionHeartbeatTracker;
 import com.amsha.core.observability.AgentOTelConstants;
 import com.amsha.core.observability.AgentOtelContext;
+import com.amsha.core.scope.ActiveWorkspaceContext;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.SessionTree;
 import com.amsha.core.util.BatchDecisionUtil;
 import com.amsha.persistence.api.AccessRoles;
@@ -59,6 +64,9 @@ public class HitlService {
 
     @Inject
     SessionHeartbeatTracker heartbeatTracker;
+
+    @Inject
+    Instance<ActiveWorkspaceContext> activeWorkspaceContextInstance;
 
     private static final int MAX_LIMIT = 50;
 
@@ -167,19 +175,14 @@ public class HitlService {
     }
 
     private List<String> expandWithActiveChildren(List<String> rootSessionIds) {
-        if (rootSessionIds == null || rootSessionIds.isEmpty()) {
-            return List.of();
-        }
-        LinkedHashSet<String> allSessionIds = new LinkedHashSet<>(rootSessionIds);
+        if (rootSessionIds == null || rootSessionIds.isEmpty()) return List.of();
+        LinkedHashSet<String> all = new LinkedHashSet<>(rootSessionIds);
         for (String rootId : rootSessionIds) {
-            List<CheckpointDto> treeCheckpoints = checkpointStorePort.findActiveBySessionTree(rootId);
-            for (CheckpointDto cp : treeCheckpoints) {
-                if (cp != null && cp.sessionId() != null) {
-                    allSessionIds.add(cp.sessionId());
-                }
+            for (CheckpointDto cp : checkpointStorePort.findActiveBySessionTree(rootId)) {
+                if (cp != null && cp.sessionId() != null) all.add(cp.sessionId());
             }
         }
-        return List.copyOf(allSessionIds);
+        return List.copyOf(all);
     }
 
     private static String cronIdFromSession(String sessionId) {
@@ -189,11 +192,14 @@ public class HitlService {
     }
 
     private boolean isCronOwnedBy(String cronId, String userId) {
-        if (cronId == null || userId == null || userId.isBlank() || cronStorePort == null) return false;
-        return cronStorePort
-                .findById(cronId)
-                .map(cron -> userId.equals(cron.userId()))
-                .orElse(false);
+        return cronId != null
+                && userId != null
+                && !userId.isBlank()
+                && cronStorePort != null
+                && cronStorePort
+                        .findById(cronId)
+                        .map(cron -> userId.equals(cron.userId()))
+                        .orElse(false);
     }
 
     private static boolean isCronSession(String sessionId) {
@@ -224,7 +230,7 @@ public class HitlService {
             AgentCheckpoint resolvedCp = executeResolveDecision(cp, approved, toolName, reason);
 
             if (resolvedCp != null) {
-                checkpointApprovalService.triggerResume(resolvedCp);
+                triggerResumeWithWorkspace(resolvedCp);
             }
 
             if (span != null) span.setStatus(StatusCode.OK);
@@ -290,18 +296,12 @@ public class HitlService {
         } catch (NumberFormatException _) {
             // taskId is not a numeric checkpoint ID; look up by sessionId
         }
-        if (dto == null) {
-            dto = checkpointStorePort.findLatestAwaitingApproval(taskId).orElse(null);
-        }
-        if (dto == null) {
-            dto = checkpointStorePort
-                    .findLatestAwaitingApprovalBySessionContaining(taskId)
-                    .orElse(null);
-        }
-        if (dto == null) {
-            dto = checkpointStorePort.findLatestBySession(taskId).orElse(null);
-        }
-        return dto;
+        if (dto != null) return dto;
+        return checkpointStorePort
+                .findLatestAwaitingApproval(taskId)
+                .or(() -> checkpointStorePort.findLatestAwaitingApprovalBySessionContaining(taskId))
+                .or(() -> checkpointStorePort.findLatestBySession(taskId))
+                .orElse(null);
     }
 
     private boolean replayedAfterRace(AgentCheckpoint original, String taskId, String toolName, boolean approved) {
@@ -339,14 +339,14 @@ public class HitlService {
             return false;
         }
         String normalizedTool = BatchDecisionUtil.normalizeToolName(toolName);
-        boolean isParallelBatch = toolName != null && toolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
         Map<String, ToolDecision> decisions = readBatchDecisions(cp, taskId);
         ToolDecision requested = approved ? ToolDecision.APPROVED : ToolDecision.DENIED;
         ToolDecision opposite = approved ? ToolDecision.DENIED : ToolDecision.APPROVED;
-        if (isParallelBatch
+        boolean isAll = (toolName != null && toolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX))
                 || normalizedTool == null
                 || normalizedTool.isBlank()
-                || "all".equalsIgnoreCase(normalizedTool)) {
+                || "all".equalsIgnoreCase(normalizedTool);
+        if (isAll) {
             if (decisions.values().stream().anyMatch(opposite::equals)) {
                 throw contradictoryDecision(taskId, approved);
             }
@@ -385,16 +385,9 @@ public class HitlService {
     }
 
     private ToolDecision uniformFinalDecision(Map<String, ToolDecision> decisions) {
-        ToolDecision first = null;
-        for (ToolDecision decision : decisions.values()) {
-            if (decision == ToolDecision.PENDING) return null;
-            if (first == null) {
-                first = decision;
-            } else if (first != decision) {
-                return null;
-            }
-        }
-        return first;
+        if (decisions == null || decisions.isEmpty() || decisions.values().contains(ToolDecision.PENDING)) return null;
+        ToolDecision first = decisions.values().iterator().next();
+        return decisions.values().stream().allMatch(first::equals) ? first : null;
     }
 
     private Map<String, ToolDecision> readBatchDecisions(AgentCheckpoint cp, String taskId) {
@@ -414,30 +407,35 @@ public class HitlService {
         }
     }
 
+    private static final Set<CheckpointStatus> ACCEPTED_STATUSES = Set.of(
+            CheckpointStatus.APPROVED,
+            CheckpointStatus.RESUMING,
+            CheckpointStatus.IN_PROGRESS,
+            CheckpointStatus.AWAITING_RETRY,
+            CheckpointStatus.COMPLETED,
+            CheckpointStatus.LOOP_EXCEEDED);
+
     private static boolean isAcceptedStatus(CheckpointStatus status) {
-        return status == CheckpointStatus.APPROVED
-                || status == CheckpointStatus.RESUMING
-                || status == CheckpointStatus.IN_PROGRESS
-                || status == CheckpointStatus.AWAITING_RETRY
-                || status == CheckpointStatus.COMPLETED
-                || status == CheckpointStatus.LOOP_EXCEEDED;
+        return ACCEPTED_STATUSES.contains(status);
     }
 
     private static boolean isDenialFailure(String failReason) {
-        if (failReason == null || failReason.isBlank()) return false;
-        String normalized = failReason.toLowerCase(Locale.ROOT);
-        return normalized.contains("denied") || normalized.contains("rejected");
+        return failReason != null
+                && !failReason.isBlank()
+                && (failReason.toLowerCase(Locale.ROOT).contains("denied")
+                        || failReason.toLowerCase(Locale.ROOT).contains("rejected"));
     }
 
     private static boolean isResolutionRace(Exception error) {
-        String message = error.getMessage();
-        return message != null && (message.contains("already resolved") || message.contains("No pending checkpoint"));
+        return error != null
+                && error.getMessage() != null
+                && (error.getMessage().contains("already resolved")
+                        || error.getMessage().contains("No pending checkpoint"));
     }
 
     private static IllegalStateException contradictoryDecision(String taskId, boolean approved) {
-        String action = approved ? "approve" : "deny";
-        return new IllegalStateException(
-                "Approval decision already resolved for ID: " + taskId + "; cannot " + action + " it");
+        return new IllegalStateException("Approval decision already resolved for ID: " + taskId + "; cannot "
+                + (approved ? "approve" : "deny") + " it");
     }
 
     private static IllegalStateException unsafeApprovalState(String taskId, String detail) {
@@ -445,29 +443,49 @@ public class HitlService {
                 + taskId + " (" + detail + ")");
     }
 
+    private void triggerResumeWithWorkspace(AgentCheckpoint checkpoint) {
+        String ws = resolveActiveWorkspaceId().orElse(null);
+        if (ws != null && !ws.isBlank()) {
+            WorkspaceContext.runWithActiveWorkspace(ws, () -> checkpointApprovalService.triggerResume(checkpoint));
+        } else {
+            checkpointApprovalService.triggerResume(checkpoint);
+        }
+    }
+
+    private Optional<String> resolveActiveWorkspaceId() {
+        Optional<String> propagated = WorkspaceContext.activeWorkspaceId();
+        if (propagated.isPresent()) return propagated;
+        if (activeWorkspaceContextInstance != null && activeWorkspaceContextInstance.isResolvable()) {
+            try {
+                return activeWorkspaceContextInstance.get().workspaceId();
+            } catch (ContextNotActiveException _) {
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
+    }
+
     private AgentCheckpoint executeResolveDecision(
             AgentCheckpoint cp, boolean approved, String toolName, String reason) {
         boolean isParallel = toolName != null && toolName.startsWith(ReasoningStep.PARALLEL_SENTINEL_PIPE_PREFIX);
         String normalizedTool = isParallel ? "all" : BatchDecisionUtil.normalizeToolName(toolName);
-        if (approved) {
-            if (normalizedTool != null && !normalizedTool.isBlank() && !"all".equalsIgnoreCase(normalizedTool)) {
-                return checkpointApprovalService.approveTool(cp.getSessionId(), normalizedTool, reason);
-            }
+        boolean hasTool =
+                normalizedTool != null && !normalizedTool.isBlank() && !"all".equalsIgnoreCase(normalizedTool);
+        String target = hasTool ? normalizedTool : null;
+        if (target == null) {
             List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
             if (pending.size() == 1) {
-                return checkpointApprovalService.approveTool(cp.getSessionId(), pending.get(0), reason);
+                target = pending.get(0);
             }
-            return checkpointApprovalService.approveAll(cp.getSessionId(), reason);
-        } else {
-            if (normalizedTool != null && !normalizedTool.isBlank() && !"all".equalsIgnoreCase(normalizedTool)) {
-                return checkpointApprovalService.denyTool(cp.getSessionId(), normalizedTool, reason);
-            }
-            List<String> pending = BatchDecisionUtil.pendingToolNames(cp, objectMapper);
-            if (pending.size() == 1) {
-                return checkpointApprovalService.denyTool(cp.getSessionId(), pending.get(0), reason);
-            }
-            return checkpointApprovalService.denyAll(cp.getSessionId(), reason);
         }
+        if (approved) {
+            return target != null
+                    ? checkpointApprovalService.approveTool(cp.getSessionId(), target, reason)
+                    : checkpointApprovalService.approveAll(cp.getSessionId(), reason);
+        }
+        return target != null
+                ? checkpointApprovalService.denyTool(cp.getSessionId(), target, reason)
+                : checkpointApprovalService.denyAll(cp.getSessionId(), reason);
     }
 
     public record PendingApproval(

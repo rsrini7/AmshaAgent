@@ -11,9 +11,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.amsha.channel.api.ApprovalPrompt;
+import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelPlugin;
 import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
@@ -22,11 +24,14 @@ import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpoint;
+import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.core.util.DatabaseSafetyGuard;
+import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
@@ -70,6 +75,9 @@ public class RateLimitRetryScheduler {
 
     @Inject
     SessionCatalogStore sessionCatalogStore;
+
+    @Inject
+    ResumeCronNotificationDispatcher cronNotificationDispatcher;
 
     @ConfigProperty(name = "amsha.retry.default-delay-ms", defaultValue = "30000")
     long defaultRetryDelayMs;
@@ -134,44 +142,7 @@ public class RateLimitRetryScheduler {
                     log.infof(
                             "Resuming rate-limited session %s (retryAfterMs=%d, age=%ds)",
                             cp.getSessionId(), retryAfterMs, ageSec);
-
-                    // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the
-                    // adapter
-                    if (agentStore.claimForRetry(cp.getId())) {
-                        try {
-                            // Offload to background thread via AgentLoop.resume
-                            if (!CronSessionStatusSync.syncRunning(cp.getSessionId(), cronStore)) {
-                                agentStore.markFailed(cp.getId(), "Cron lease lost before retry resume");
-                                continue;
-                            }
-
-                            AgentResult result = WorkspaceScopeHolder.call(
-                                    cp.getSessionId(),
-                                    () -> agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), cp.getOriginalGoal()));
-                            if (!CronSessionStatusSync.syncTerminal(
-                                    cp.getSessionId(), result, cronStore, cronRunStore)) {
-                                agentStore.markFailed(cp.getId(), "Cron lease lost during retry resume");
-                            } else {
-                                notifyRetryOutcome(cp, result, null);
-                            }
-                        } catch (Exception e) {
-                            log.errorf(
-                                    "Failed to resume rate-limited session %s:\n%s",
-                                    cp.getSessionId(), LogUtil.trimmedStack(e));
-                            CronSessionStatusSync.syncTerminal(
-                                    cp.getSessionId(),
-                                    AgentResult.failed(
-                                            "Background retry failed: " + LogUtil.rootMessage(e),
-                                            AgentResult.FailureCategory.SYSTEM_ERROR,
-                                            List.of()),
-                                    cronStore,
-                                    cronRunStore);
-                            agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
-                            notifyRetryOutcome(cp, null, retryFailureMessage(e));
-                        }
-                    } else {
-                        log.debugf("Session %s was already claimed by another thread, skipping", cp.getSessionId());
-                    }
+                    resumeCheckpoint(cp);
                 } else {
                     long remaining = Duration.between(now, readyAt).toSeconds();
                     log.debugf("Session %s still in backoff (%ds remaining)", cp.getSessionId(), remaining);
@@ -196,10 +167,81 @@ public class RateLimitRetryScheduler {
         }
     }
 
+    private void resumeCheckpoint(AgentCheckpoint cp) {
+        // 🟢 ATOMIC CLAIM: Transition to IN_PROGRESS in a fresh transaction inside the adapter
+        if (!agentStore.claimForRetry(cp.getId())) {
+            log.debugf("Session %s was already claimed by another thread, skipping", cp.getSessionId());
+            return;
+        }
+
+        try {
+            // Offload to background thread via AgentLoop.resume
+            if (!CronSessionStatusSync.syncRunning(cp.getSessionId(), cronStore)) {
+                agentStore.markFailed(cp.getId(), "Cron lease lost before retry resume");
+                return;
+            }
+
+            MessageContext retryContext = createRetryContext(cp);
+            if (retryContext == null) {
+                String failureReason = "Missing original goal or owner identity for retry resume";
+                AgentResult failedResult =
+                        AgentResult.failed(failureReason, AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+                if (!CronSessionStatusSync.syncTerminal(cp.getSessionId(), failedResult, cronStore, cronRunStore)) {
+                    agentStore.markFailed(cp.getId(), "Cron lease lost during retry resume");
+                } else {
+                    agentStore.markFailed(cp.getId(), failureReason);
+                    notifyRetryOutcome(cp, failedResult, failureReason);
+                }
+                return;
+            }
+
+            String activeWorkspaceId = WorkspaceContext.activeWorkspaceId().orElse(null);
+            Callable<AgentResult> resumeTask =
+                    () -> agentLoop.resume(cp.getSessionId(), cp.getAgentRole(), retryContext.getGoal(), retryContext);
+
+            AgentResult result = WorkspaceScopeHolder.call(
+                    cp.getSessionId(),
+                    () -> activeWorkspaceId != null
+                            ? WorkspaceContext.callWithActiveWorkspace(activeWorkspaceId, resumeTask)
+                            : resumeTask.call());
+            if (!CronSessionStatusSync.syncTerminal(cp.getSessionId(), result, cronStore, cronRunStore)) {
+                agentStore.markFailed(cp.getId(), "Cron lease lost during retry resume");
+            } else {
+                notifyRetryOutcome(cp, result, null);
+            }
+        } catch (Exception e) {
+            log.errorf("Failed to resume rate-limited session %s:\n%s", cp.getSessionId(), LogUtil.trimmedStack(e));
+            CronSessionStatusSync.syncTerminal(
+                    cp.getSessionId(),
+                    AgentResult.failed(
+                            "Background retry failed: " + LogUtil.rootMessage(e),
+                            AgentResult.FailureCategory.SYSTEM_ERROR,
+                            List.of()),
+                    cronStore,
+                    cronRunStore);
+            agentStore.markFailed(cp.getId(), "Background retry failed: " + e.getMessage());
+            notifyRetryOutcome(cp, null, retryFailureMessage(e));
+        }
+    }
+
     private void notifyRetryOutcome(AgentCheckpoint checkpoint, AgentResult result, String failureMessage) {
-        if (checkpoint == null
-                || checkpoint.getSessionId() == null
-                || ResumeCronNotificationDispatcher.isCronSession(checkpoint.getSessionId())) {
+        if (checkpoint == null || checkpoint.getSessionId() == null) {
+            return;
+        }
+
+        if (ResumeCronNotificationDispatcher.isCronSession(checkpoint.getSessionId())) {
+            if (cronNotificationDispatcher != null) {
+                if (result instanceof AgentResult.AwaitingRetry) {
+                    return;
+                }
+                AgentResult outcome = result;
+                if (outcome == null && failureMessage != null) {
+                    outcome = AgentResult.failed(failureMessage, AgentResult.FailureCategory.SYSTEM_ERROR, List.of());
+                }
+                if (outcome != null) {
+                    cronNotificationDispatcher.dispatch(checkpoint.getSessionId(), outcome);
+                }
+            }
             return;
         }
 
@@ -233,6 +275,60 @@ public class RateLimitRetryScheduler {
                     "Failed to notify channel about automatic retry for session %s: %s",
                     checkpoint.getSessionId(), LogUtil.rootMessage(e));
         }
+    }
+
+    private MessageContext createRetryContext(AgentCheckpoint cp) {
+        String goal = cp.getOriginalGoal();
+        if (goal == null || goal.isBlank()) {
+            log.warnf(
+                    "Cannot retry checkpoint %d for session %s: original goal is missing",
+                    cp.getId(), cp.getSessionId());
+            return null;
+        }
+
+        SessionCatalogEntry session = sessionCatalogStore != null
+                ? sessionCatalogStore.bySessionId(cp.getSessionId()).orElse(null)
+                : null;
+        ChannelType channelType = resolveNotificationChannelType(cp, session);
+        if (channelType == null) {
+            channelType = ChannelType.CLI;
+        }
+
+        String userId = cp.getChannelPlatformId();
+        if ((userId == null || userId.isBlank()) && session != null) {
+            userId = session.ownerKey();
+        }
+        if ((userId == null || userId.isBlank()) && ResumeCronNotificationDispatcher.isCronSession(cp.getSessionId())) {
+            String jobId = extractCronJobId(cp.getSessionId());
+            if (jobId != null && cronStore != null) {
+                userId = cronStore.findById(jobId).map(AgentCronDto::userId).orElse(null);
+            }
+        }
+        if (userId == null || userId.isBlank()) {
+            log.warnf(
+                    "Cannot retry checkpoint %d for session %s: real owner identity could not be resolved",
+                    cp.getId(), cp.getSessionId());
+            return null;
+        }
+
+        String chatId = session != null ? session.channelId() : cp.getSessionId();
+        if (chatId == null || chatId.isBlank()) {
+            chatId = cp.getSessionId();
+        }
+        ChannelUser user = new ChannelUser(userId, chatId, "User", channelType);
+        ChannelMessage msg = new ChannelMessage.GenericChannelMessage(user, goal, chatId, Instant.now(), channelType);
+        MessageContext context = new MessageContext(chatId, user, msg);
+        context.setResumeSignal(true);
+        context.setGoal(goal);
+        return context;
+    }
+
+    private static String extractCronJobId(String sessionId) {
+        if (!ResumeCronNotificationDispatcher.isCronSession(sessionId)) {
+            return null;
+        }
+        String sub = sessionId.substring(AgentSentinels.CRON_SESSION_PREFIX.length());
+        return sub.length() >= 36 ? sub.substring(0, 36) : null;
     }
 
     private ChannelType resolveNotificationChannelType(AgentCheckpoint checkpoint, SessionCatalogEntry session) {

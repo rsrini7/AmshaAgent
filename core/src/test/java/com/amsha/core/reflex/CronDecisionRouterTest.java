@@ -26,6 +26,7 @@ import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.lifecycle.WorkspaceManager;
 import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.reflex.CronDecisionRouter.CronContext;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.AgentCronDto;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -306,5 +307,25 @@ public class CronDecisionRouterTest {
 
         assertEquals("already processing", response);
         assertFalse(decisionMutated[0]);
+    }
+
+    @Test
+    public void propagatesActiveWorkspaceToAgentLoop() throws Exception {
+        when(statefulAgentStore.isSessionActive(anyString())).thenReturn(false);
+        when(statefulAgentStore.findLatestAwaitingApprovalBySessionContaining(anyString()))
+                .thenReturn(Optional.empty());
+        when(cronStore.findById(CRON_ID)).thenReturn(Optional.of(cronDto()));
+        when(statefulAgentStore.claimForResume(anyString(), anyString())).thenReturn(true);
+
+        AtomicReference<String> observedWs = new AtomicReference<>();
+        when(agentLoop.run(any(), any(), any(), any(), any(), anyInt(), any())).thenAnswer(inv -> {
+            observedWs.set(WorkspaceContext.activeWorkspaceId().orElse(null));
+            return new AgentResult.Finished("done", List.of(), 0, 0);
+        });
+
+        CronContext ctx = context(checkpoint(), "approve");
+        WorkspaceContext.callWithActiveWorkspace("ws-cron-reflex", () -> router.execute(ctx));
+
+        assertEquals("ws-cron-reflex", observedWs.get());
     }
 }
