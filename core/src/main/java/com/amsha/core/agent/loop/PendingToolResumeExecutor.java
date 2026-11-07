@@ -2,7 +2,6 @@ package com.amsha.core.agent.loop;
 
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalInt;
 
 import com.amsha.core.agent.reasoning.ReasoningEngine;
 import com.amsha.core.agent.reasoning.ReasoningStep;
@@ -19,7 +18,6 @@ import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.RiskLevel;
 import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jboss.logging.Logger;
@@ -32,12 +30,12 @@ final class PendingToolResumeExecutor {
 
     private final StatefulAgentStore agentStore;
     private final ToolRegistry toolRegistry;
-    private final ObjectMapper objectMapper;
     private final PendingToolResumeSupport resumeSupport;
     private final ReasoningEngine reasoningEngine;
     private final ToolDelegationResolver delegationResolver;
     private final ToolInvocationGuard guard;
     private final PendingToolFailureHandler failureHandler;
+    private final SequentialAttemptReconciler attemptReconciler;
 
     PendingToolResumeExecutor(
             StatefulAgentStore agentStore,
@@ -48,15 +46,37 @@ final class PendingToolResumeExecutor {
             PersonaEscalationService escalationService,
             ToolDelegationResolver delegationResolver,
             ToolInvocationGuard guard) {
+        this(
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                delegationResolver,
+                guard,
+                null);
+    }
+
+    PendingToolResumeExecutor(
+            StatefulAgentStore agentStore,
+            ToolRegistry toolRegistry,
+            ObjectMapper objectMapper,
+            ReasoningEngine reasoningEngine,
+            ExecutionFailureRecoveryService recoveryService,
+            PersonaEscalationService escalationService,
+            ToolDelegationResolver delegationResolver,
+            ToolInvocationGuard guard,
+            SequentialAttemptReconciler attemptReconciler) {
         this.agentStore = agentStore;
         this.toolRegistry = toolRegistry;
-        this.objectMapper = objectMapper;
         this.resumeSupport = new PendingToolResumeSupport(objectMapper, agentStore);
         this.reasoningEngine = reasoningEngine;
         this.delegationResolver = delegationResolver;
         this.guard = guard;
         this.failureHandler =
                 new PendingToolFailureHandler(objectMapper, reasoningEngine, recoveryService, escalationService, this);
+        this.attemptReconciler = attemptReconciler;
     }
 
     AgentResult execute(
@@ -119,6 +139,22 @@ final class PendingToolResumeExecutor {
         log.infof(
                 "[ResumeStrategy] Resuming session %s executing pending tool %s as role %s",
                 sessionId, toolName, effectiveRole);
+
+        if (attemptReconciler != null) {
+            SequentialAttemptReconciler.ReconciliationOutcome outcome =
+                    attemptReconciler.reconcile(context, checkpoint, history, toolName, paramsJson, operationId);
+            if (outcome instanceof SequentialAttemptReconciler.ReconciliationOutcome.Reconciled reconciled) {
+                log.infof(
+                        "[ResumeStrategy] Reconciled settled attempt for session %s op %s (indeterminate=%b)",
+                        sessionId, operationId, reconciled.indeterminate());
+                return runFinishPassWithRetry(stateMachineRunner, context, history, sessionId, toolName);
+            }
+            if (outcome instanceof SequentialAttemptReconciler.ReconciliationOutcome.Blocked blocked) {
+                String reason = blocked.reason();
+                agentStore.markFailed(checkpoint, reason);
+                return AgentResult.failed(reason, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(history));
+            }
+        }
 
         return executeWithRetries(new PendingToolRequest(
                 context,
@@ -304,66 +340,7 @@ final class PendingToolResumeExecutor {
                     request.sessionId(),
                     request.toolName());
         }
-        return handleFailure(request, response);
-    }
-
-    /**
-     * Keep the sequential parent alive while its child owns the approval.
-     * The parent delegation was already approved; storing it as IN_PROGRESS
-     * prevents stale-approval cleanup and a second parent approval from
-     * launching a duplicate child. The child checkpoint remains the source of
-     * truth for the pending tool approval.
-     */
-    private AgentResult handleFailure(PendingToolRequest request, ToolResponse response) {
-        String url = resumeSupport.extractUrlFromParams(request.paramsJson());
-        if (response != null && !response.success() && url != null && !url.isBlank()) {
-            String fallbackGoal = null;
-            String fallbackMessage = null;
-            if (WebRetrievalFallbackPolicy.isBrowser(request.toolName())) {
-                fallbackGoal = WebRetrievalFallbackPolicy.browserToFetchGoal(url, response.output());
-                fallbackMessage = "Browser navigation failed, falling back to web_fetch.";
-                request.history()
-                        .add(ReasoningStep.observeStep(
-                                ToolCapability.BROWSER_NAVIGATE.toolName(),
-                                WebRetrievalFallbackPolicy.browserFailureMarker(url)
-                                        + ". Tool execution failed: "
-                                        + response.output()
-                                        + ". Fallback: "
-                                        + fallbackGoal,
-                                fallbackMessage));
-            } else if (WebRetrievalFallbackPolicy.isWebFetch(request.toolName())) {
-                boolean browserFailed = WebRetrievalFallbackPolicy.browserAttemptFailed(request.history(), url);
-                fallbackGoal = browserFailed
-                        ? WebRetrievalFallbackPolicy.fetchToSearchGoal(url, response.output())
-                        : WebRetrievalFallbackPolicy.fetchToBrowserGoal(url, response.output());
-                fallbackMessage = browserFailed
-                        ? "Browser and web_fetch failed, falling back to one search."
-                        : "web_fetch failed, falling back to browser_navigate.";
-                request.history()
-                        .add(ReasoningStep.observeStep(
-                                ToolCapability.WEB_FETCH.toolName(),
-                                "Tool execution failed: " + response.output() + ". Fallback: " + fallbackGoal,
-                                fallbackMessage));
-            }
-            if (fallbackGoal != null) {
-                log.infof(
-                        "[ResumeStrategy] %s failed for %s - falling back with bounded retrieval policy",
-                        request.toolName(), url);
-                completeInProgressCheckpoint(request.checkpoint());
-                return request.stateMachineRunner()
-                        .run(request.context().withGoal(fallbackGoal), reasoningEngine, request.history());
-            }
-        }
-        AgentResult healResult = failureHandler.tryAutoHeal(request, response);
-        if (healResult != null) {
-            return healResult;
-        }
-        AgentResult escalationResult = failureHandler.tryEscalation(request, response);
-        if (escalationResult != null) {
-            return escalationResult;
-        }
-        String failMsg = response.output() != null ? response.output() : "Tool execution failed";
-        return AgentResult.failed(failMsg, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(request.history()));
+        return failureHandler.handleFailure(request, response, resumeSupport);
     }
 
     private void failIfHalted(String sessionId) {
@@ -415,7 +392,7 @@ final class PendingToolResumeExecutor {
             boolean success,
             List<ReasoningStep> history,
             String sessionId) {
-        recordReasoningStep(tool, paramsJson, output, success, null, null, history, sessionId);
+        resumeSupport.recordReasoningStep(tool, paramsJson, output, success, null, null, history, sessionId);
     }
 
     void recordReasoningStep(
@@ -426,7 +403,7 @@ final class PendingToolResumeExecutor {
             String errorCode,
             List<ReasoningStep> history,
             String sessionId) {
-        recordReasoningStep(tool, paramsJson, output, success, errorCode, null, history, sessionId);
+        resumeSupport.recordReasoningStep(tool, paramsJson, output, success, errorCode, null, history, sessionId);
     }
 
     void recordReasoningStep(
@@ -438,35 +415,12 @@ final class PendingToolResumeExecutor {
             String operationId,
             List<ReasoningStep> history,
             String sessionId) {
-        Map<String, Object> params = Map.of();
-        try {
-            if (paramsJson != null && !paramsJson.isBlank()) {
-                params = objectMapper.readValue(paramsJson, new TypeReference<Map<String, Object>>() {});
-            }
-        } catch (Exception e) {
-            log.warnf("Failed to parse resumed tool params for session %s", sessionId);
-        }
-        ReasoningStep pending =
-                ReasoningStep.pending("Executing " + tool + " after human approval.", tool, params, 0, 0);
-        if (operationId != null) {
-            pending = pending.withOperationId(operationId);
-        }
-        ReasoningStep completed = pending.withDiagnostics(output, success, errorCode, null, null);
-        if (operationId != null) {
-            OptionalInt pendingIndex = PendingToolOperationIdLookup.findUniquePendingIndex(history, operationId);
-            if (pendingIndex.isPresent()) {
-                history.set(pendingIndex.getAsInt(), completed);
-                return;
-            }
-        }
-        history.add(completed);
+        resumeSupport.recordReasoningStep(
+                tool, paramsJson, output, success, errorCode, operationId, history, sessionId);
     }
 
     void completeInProgressCheckpoint(AgentCheckpoint checkpoint) {
-        checkpoint.setPendingToolName(null);
-        checkpoint.setPendingToolParametersJson(null);
-        checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
-        agentStore.save(checkpoint);
+        resumeSupport.completeInProgressCheckpoint(checkpoint);
     }
 
     PendingToolResumeSupport.Replacement persistReplacementOperation(

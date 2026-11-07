@@ -60,10 +60,56 @@ class ResumeStrategyDispatcher {
             PersonaEscalationService escalationService,
             ToolDelegationResolver delegationResolver,
             ToolInvocationGuard guard) {
+        this(
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                delegationResolver,
+                guard,
+                null);
+    }
+
+    ResumeStrategyDispatcher(
+            StatefulAgentStore agentStore,
+            ToolRegistry toolRegistry,
+            ObjectMapper objectMapper,
+            ReasoningEngine reasoningEngine,
+            ExecutionFailureRecoveryService recoveryService,
+            PersonaEscalationService escalationService,
+            ToolDelegationResolver delegationResolver,
+            ToolInvocationGuard guard,
+            SequentialAttemptReconciler attemptReconciler) {
+        this(
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                reasoningEngine,
+                recoveryService,
+                escalationService,
+                delegationResolver,
+                guard,
+                attemptReconciler,
+                null);
+    }
+
+    ResumeStrategyDispatcher(
+            StatefulAgentStore agentStore,
+            ToolRegistry toolRegistry,
+            ObjectMapper objectMapper,
+            ReasoningEngine reasoningEngine,
+            ExecutionFailureRecoveryService recoveryService,
+            PersonaEscalationService escalationService,
+            ToolDelegationResolver delegationResolver,
+            ToolInvocationGuard guard,
+            SequentialAttemptReconciler attemptReconciler,
+            ParallelBatchAttemptReconciler batchReconciler) {
         this.agentStore = agentStore;
         this.objectMapper = objectMapper;
-        this.parallelBatchHandler =
-                new ParallelBatchResumeHandler(agentStore, toolRegistry, objectMapper, delegationResolver, guard);
+        this.parallelBatchHandler = new ParallelBatchResumeHandler(
+                agentStore, toolRegistry, objectMapper, delegationResolver, guard, batchReconciler);
         this.pendingToolExecutor = new PendingToolResumeExecutor(
                 agentStore,
                 toolRegistry,
@@ -72,7 +118,8 @@ class ResumeStrategyDispatcher {
                 recoveryService,
                 escalationService,
                 delegationResolver,
-                guard);
+                guard,
+                attemptReconciler);
     }
 
     AgentResult handle(

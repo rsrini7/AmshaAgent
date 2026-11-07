@@ -175,5 +175,55 @@ final class PendingToolResumeSupport {
                 List.copyOf(request.history()));
     }
 
+    void completeInProgressCheckpoint(AgentCheckpoint checkpoint) {
+        checkpoint.setPendingToolName(null);
+        checkpoint.setPendingToolParametersJson(null);
+        checkpoint.setStatus(CheckpointStatus.IN_PROGRESS);
+        agentStore.save(checkpoint);
+    }
+
+    void recordReasoningStep(
+            String tool,
+            String paramsJson,
+            String output,
+            boolean success,
+            String errorCode,
+            String operationId,
+            List<ReasoningStep> history,
+            String sessionId) {
+        OptionalInt pendingIndex = (operationId != null)
+                ? PendingToolOperationIdLookup.findUniquePendingIndex(history, operationId)
+                : OptionalInt.empty();
+
+        final ReasoningStep completed;
+        if (pendingIndex.isPresent()) {
+            ReasoningStep pending = history.get(pendingIndex.getAsInt());
+            completed = new ReasoningStep.ToolCallStep(
+                            pending.thought(),
+                            pending.action(),
+                            pending.actionInput(),
+                            output,
+                            pending.inputTokens(),
+                            pending.outputTokens(),
+                            success,
+                            errorCode,
+                            pending.traceId(),
+                            pending.rootCauseClass(),
+                            pending.isFastPath(),
+                            pending.isTruncationRecovery())
+                    .withOperationId(operationId);
+            history.set(pendingIndex.getAsInt(), completed);
+        } else {
+            Map<String, Object> params = parsePausedParams(paramsJson);
+            ReasoningStep pending = ReasoningStep.pending(
+                    "Executing " + tool + " after human approval.", tool, params != null ? params : Map.of(), 0, 0);
+            if (operationId != null) {
+                pending = pending.withOperationId(operationId);
+            }
+            completed = pending.withDiagnostics(output, success, errorCode, null, null);
+            history.add(completed);
+        }
+    }
+
     record Replacement(String operationId, Map<String, Object> params) {}
 }

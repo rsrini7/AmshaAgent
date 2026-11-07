@@ -15,6 +15,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpointRecord;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.persistence.api.CheckpointStatus;
 
@@ -201,5 +202,23 @@ class CheckpointResumeCoordinatorTest {
         assertTrue(decision instanceof ResumeDecision.FreshStart);
         // Role mismatch + non-resumable status → fast-path FreshStart, no archive
         verify(agentStore, never()).save(any());
+    }
+
+    @Test
+    void resolveResumePath_WhenAwaitingApprovalWithNewMessage_cancelsAbandonedAttempt() throws Exception {
+        WorkspaceContext.callWithActiveWorkspace("ws-test", () -> {
+            var cp = checkpoint("sess-1", "coordinator", CheckpointStatus.AWAITING_APPROVAL);
+            cp.setPendingToolName("shell_exec");
+            when(agentStore.findLatestNonArchivedCheckpoint("sess-1")).thenReturn(Optional.of(cp));
+
+            SequentialAttemptReconciler reconciler = mock(SequentialAttemptReconciler.class);
+            coordinator.attemptReconciler = reconciler;
+
+            ResumeDecision decision = coordinator.resolveResumePath("sess-1", "coordinator", "user-1", null);
+
+            assertTrue(decision instanceof ResumeDecision.AbortedStale);
+            verify(reconciler).cancelAbandonedAttemptIfAdmitted("ws-test", cp);
+            return null;
+        });
     }
 }

@@ -4,15 +4,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 
-import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.RejectedExecutionException;
 
-import com.amsha.channel.api.ApprovalPrompt;
-import com.amsha.channel.api.ChannelMessage;
 import com.amsha.channel.api.ChannelPlugin;
-import com.amsha.channel.api.ChannelSender;
 import com.amsha.channel.api.ChannelType;
 import com.amsha.channel.api.ChannelUser;
 import com.amsha.common.util.LogUtil;
@@ -25,17 +20,14 @@ import com.amsha.core.pipeline.MessageContext;
 import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.scope.WorkspaceScopeHolder;
 import com.amsha.core.speech.SpeechDeliveryService;
-import com.amsha.core.state.SessionTree;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.tools.ToolRegistry;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.core.util.AgentGuards;
-import com.amsha.core.util.AgentResultFormatter;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.persistence.api.CronRunStorePort;
 import com.amsha.persistence.api.CronStorePort;
 import com.amsha.security.api.AutonomyLevel;
-import com.amsha.tool.api.AgentSentinels;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -56,15 +48,15 @@ public class CheckpointResumeHandler {
     private final AgentLoop agentLoop;
     private final ReasoningEngine reasoningEngine;
     private final ChannelPluginRegistry channelPluginRegistry;
-    private final CliResultBridge cliResultBridge;
     private final CronStorePort cronStore;
     private final CronRunStorePort cronRunStore;
     private final ObjectMapper objectMapper;
     private final ResumeStrategyDispatcher strategyDispatcher;
+    private final CheckpointResumeResultDispatcher resultDispatcher;
     ResumeCronNotificationDispatcher cronNotificationDispatcher;
 
     protected CheckpointResumeHandler() {
-        this(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        this(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public CheckpointResumeHandler(
@@ -93,6 +85,42 @@ public class CheckpointResumeHandler {
                 escalationService,
                 new ToolDelegationResolver(),
                 null,
+                null,
+                null,
+                null);
+    }
+
+    public CheckpointResumeHandler(
+            StatefulAgentStore agentStore,
+            ToolRegistry toolRegistry,
+            ObjectMapper objectMapper,
+            AgentLoop agentLoop,
+            ReasoningEngine reasoningEngine,
+            ChannelPluginRegistry channelPluginRegistry,
+            CronStorePort cronStore,
+            CronRunStorePort cronRunStore,
+            CliResultBridge cliResultBridge,
+            ExecutionFailureRecoveryService recoveryService,
+            PersonaEscalationService escalationService,
+            ToolDelegationResolver delegationResolver,
+            ToolInvocationGuard guard,
+            ResumeCronNotificationDispatcher cronNotificationDispatcher) {
+        this(
+                agentStore,
+                toolRegistry,
+                objectMapper,
+                agentLoop,
+                reasoningEngine,
+                channelPluginRegistry,
+                cronStore,
+                cronRunStore,
+                cliResultBridge,
+                recoveryService,
+                escalationService,
+                delegationResolver,
+                guard,
+                cronNotificationDispatcher,
+                null,
                 null);
     }
 
@@ -111,12 +139,13 @@ public class CheckpointResumeHandler {
             PersonaEscalationService escalationService,
             ToolDelegationResolver delegationResolver,
             ToolInvocationGuard guard,
-            ResumeCronNotificationDispatcher cronNotificationDispatcher) {
+            ResumeCronNotificationDispatcher cronNotificationDispatcher,
+            SequentialAttemptReconciler attemptReconciler,
+            ParallelBatchAttemptReconciler batchReconciler) {
         this.agentStore = agentStore;
         this.agentLoop = agentLoop;
         this.reasoningEngine = reasoningEngine;
         this.channelPluginRegistry = channelPluginRegistry;
-        this.cliResultBridge = cliResultBridge;
         this.cronStore = cronStore;
         this.cronRunStore = cronRunStore;
         this.objectMapper = objectMapper;
@@ -125,6 +154,13 @@ public class CheckpointResumeHandler {
                 : (cronStore == null
                         ? null
                         : new ResumeCronNotificationDispatcher(cronStore, channelPluginRegistry, null));
+        this.resultDispatcher = new CheckpointResumeResultDispatcher(
+                cronStore,
+                cronRunStore,
+                () -> this.cronNotificationDispatcher,
+                cliResultBridge,
+                channelPluginRegistry,
+                () -> speechDeliveryService);
         this.strategyDispatcher = (agentStore == null || toolRegistry == null)
                 ? null
                 : new ResumeStrategyDispatcher(
@@ -135,7 +171,9 @@ public class CheckpointResumeHandler {
                         recoveryService,
                         escalationService,
                         delegationResolver,
-                        guard);
+                        guard,
+                        attemptReconciler,
+                        batchReconciler);
     }
 
     @Inject
@@ -164,15 +202,13 @@ public class CheckpointResumeHandler {
         AgentCheckpoint checkpoint = agentStore.load(sessionId, agentRole).orElse(null);
         if (checkpoint == null) {
             log.warnf("[RESUME-GUARD] checkpoint null after claim for session=%s - releasing DB state.", sessionId);
-            agentStore.releaseResumeClaim(sessionId, agentRole);
-            agentStore.clearBatchResuming(sessionId);
+            releaseResumeClaimSafely(sessionId, agentRole);
             return false;
         }
 
         try {
             if (!CronSessionStatusSync.syncRunning(sessionId, cronStore)) {
-                agentStore.releaseResumeClaim(sessionId, agentRole);
-                agentStore.clearBatchResuming(sessionId);
+                releaseResumeClaimSafely(sessionId, agentRole);
                 return false;
             }
             WorkspaceScopeHolder.run(
@@ -193,26 +229,12 @@ public class CheckpointResumeHandler {
                                             ? ChannelType.WEBSOCKET
                                             : ChannelType.of(channelType);
                                     ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
-                                    context = prepareResumeMessageContext(chatId, user, cType, resumeGoal, checkpoint);
+                                    context = resultDispatcher.prepareResumeMessageContext(
+                                            chatId, user, cType, resumeGoal, checkpoint, objectMapper);
 
                                     String toolInfo = ResumeToolInfoFormatter.format(checkpoint, objectMapper);
                                     AgentResult result = runResumeLoop(context, checkpoint, resumeGoal);
-                                    var handoff = new DelegatedCompletionHandoff(agentStore, objectMapper)
-                                            .capture(sessionId, result);
-                                    if (handoff.isPresent()) {
-                                        DelegatedCompletionHandoff.ParentResume parent = handoff.get();
-                                        if (parent.ready()) {
-                                            log.infof(
-                                                    "[DELEGATION] Resuming parent %s after child %s completed",
-                                                    parent.sessionId(), sessionId);
-                                            resumeAfterBatchDecision(
-                                                    parent.sessionId(),
-                                                    parent.agentRole(),
-                                                    parent.userId(),
-                                                    parent.chatId(),
-                                                    parent.channelType());
-                                        }
-                                    } else if (result != null) {
+                                    if (!tryResumeDelegatingParent(sessionId, result) && result != null) {
                                         dispatchResumeResult(context, result, cType, user, sessionId, toolInfo);
                                     }
                                 }
@@ -243,6 +265,17 @@ public class CheckpointResumeHandler {
         }
     }
 
+    private boolean tryResumeDelegatingParent(String sessionId, AgentResult result) {
+        var handoff = new DelegatedCompletionHandoff(agentStore, objectMapper).capture(sessionId, result);
+        if (handoff.isPresent() && handoff.get().ready()) {
+            DelegatedCompletionHandoff.ParentResume p = handoff.get();
+            log.infof("[DELEGATION] Resuming parent %s after child %s completed", p.sessionId(), sessionId);
+            resumeAfterBatchDecision(p.sessionId(), p.agentRole(), p.userId(), p.chatId(), p.channelType());
+            return true;
+        }
+        return false;
+    }
+
     private void releaseResumeClaimSafely(String sessionId, String agentRole) {
         try {
             agentStore.releaseResumeClaim(sessionId, agentRole);
@@ -253,32 +286,6 @@ public class CheckpointResumeHandler {
         } finally {
             agentStore.clearBatchResuming(sessionId);
         }
-    }
-
-    private MessageContext prepareResumeMessageContext(
-            String chatId, ChannelUser user, ChannelType cType, String goal, AgentCheckpoint checkpoint) {
-        ChannelMessage msg =
-                switch (cType.id()) {
-                    case "telegram" -> new ChannelMessage.TelegramMessage(user, goal, chatId, Instant.now());
-                    case "discord" -> new ChannelMessage.DiscordMessage(user, goal, chatId, chatId, Instant.now());
-                    case "rest_api" -> new ChannelMessage.RestApiMessage(user, goal, chatId, Instant.now());
-                    case "cli" -> new ChannelMessage.CliMessage(user, goal, chatId, Instant.now());
-                    case "websocket" -> new ChannelMessage.WebSocketMessage(user, goal, chatId, Instant.now());
-                    default -> new ChannelMessage.GenericChannelMessage(user, goal, chatId, Instant.now(), cType);
-                };
-        MessageContext context = new MessageContext(chatId, user, msg);
-        context.setResumeSignal(true);
-        context.setGoal(goal);
-        if (checkpoint != null && checkpoint.getContextDataJson() != null) {
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> data = objectMapper.readValue(checkpoint.getContextDataJson(), Map.class);
-                if (data != null) data.forEach(context::setData);
-            } catch (Exception e) {
-                log.debugf("Restore context data (non-fatal): %s", LogUtil.rootMessage(e));
-            }
-        }
-        return context;
     }
 
     private AgentResult runResumeLoop(MessageContext context, AgentCheckpoint cp, String goal) {
@@ -343,81 +350,12 @@ public class CheckpointResumeHandler {
             ChannelUser user,
             String sessionId,
             String toolInfo) {
-        if (!CronSessionStatusSync.syncTerminal(sessionId, result, cronStore, cronRunStore)) {
-            log.warnf("Skipping resume notification for session %s because cron ownership was lost", sessionId);
-            return;
-        }
-
-        if (ResumeCronNotificationDispatcher.isCronSession(sessionId)) {
-            if (cronNotificationDispatcher != null) {
-                cronNotificationDispatcher.dispatch(sessionId, result);
-            }
-            return;
-        }
-
-        boolean isCli = (cType != null && ChannelType.CLI.id().equalsIgnoreCase(cType.id()))
-                || (sessionId != null && sessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX));
-        if (isCli) {
-            String bridgeSid = SessionTree.rootOf(sessionId);
-            log.debugf(
-                    "CheckpointResumeHandler: delivering async CLI result via bridge for session %s (bridge: %s)",
-                    sessionId, bridgeSid);
-            if (result instanceof AgentResult.AwaitingApproval) {
-                // Wake the CLI waiter with the new approval frame. Re-arming the
-                // pending flag alone leaves it blocked on the previous future.
-                cliResultBridge.complete(bridgeSid, result);
-                return;
-            }
-            cliResultBridge.complete(bridgeSid, result);
-            return;
-        }
-
-        String baseOutput = AgentResultFormatter.format(result);
-        String finalOutput = (toolInfo != null && !toolInfo.isBlank())
-                ? "---\n"
-                        + (baseOutput.contains("denied") || baseOutput.contains("cancelled")
-                                ? "❌ Denied"
-                                : "✅ Approved")
-                        + " — " + toolInfo + "\n---\n\n" + baseOutput
-                : baseOutput;
-        channelPluginRegistry
-                .find(cType.id())
-                .map(ChannelPlugin::sender)
-                .ifPresentOrElse(
-                        s -> sendFormattedResult(s, user, result, finalOutput, sessionId, context),
-                        () -> fallbackResultDispatch(sessionId, result, cType));
+        resultDispatcher.dispatchResumeResult(context, result, cType, user, sessionId, toolInfo);
     }
 
-    private void sendFormattedResult(
-            ChannelSender s,
-            ChannelUser user,
-            AgentResult result,
-            String output,
-            String sessionId,
-            MessageContext context) {
-        if (result instanceof AgentResult.AwaitingApproval aa) {
-            s.send(user, List.of(new ApprovalPrompt(aa.toolName(), aa.displayParamsJson(), sessionId)));
-            return;
-        }
-        if (speechDeliveryService != null) {
-            speechDeliveryService.deliver(context, s, user, result, output);
-        } else {
-            s.sendRaw(user, output);
-        }
-    }
-
-    private void fallbackResultDispatch(String sessionId, AgentResult result, ChannelType cType) {
-        log.debugf("CheckpointResumeHandler: no sender for type %s", cType != null ? cType.id() : "null");
-        boolean isCli = (cType != null && ChannelType.CLI.id().equalsIgnoreCase(cType.id()))
-                || (sessionId != null && sessionId.startsWith(AgentSentinels.CLI_SESSION_PREFIX));
-        if (isCli) {
-            String bridgeSid = SessionTree.rootOf(sessionId);
-            if (result instanceof AgentResult.AwaitingApproval) {
-                cliResultBridge.complete(bridgeSid, result);
-                return;
-            }
-            cliResultBridge.complete(bridgeSid, result);
-        }
+    MessageContext prepareResumeMessageContext(
+            String chatId, ChannelUser user, ChannelType cType, String resumeGoal, AgentCheckpoint checkpoint) {
+        return resultDispatcher.prepareResumeMessageContext(chatId, user, cType, resumeGoal, checkpoint, objectMapper);
     }
 
     String buildToolInfoPart(AgentCheckpoint checkpoint) {
@@ -465,11 +403,8 @@ public class CheckpointResumeHandler {
 
             ChannelType cType = ChannelType.fromString(channelType).orElse(ChannelType.CLI);
             ChannelUser user = new ChannelUser(userId, chatId, "Operator", cType);
-
-            MessageContext context = new MessageContext(
-                    chatId, user, new ChannelMessage.CliMessage(user, resumeGoal, chatId, Instant.now()));
-            context.setResumeSignal(true);
-            context.setGoal(resumeGoal);
+            MessageContext context = resultDispatcher.prepareResumeMessageContext(
+                    chatId, user, cType, resumeGoal, checkpoint, objectMapper);
 
             int budget = calculateResumeBudget(checkpoint);
 
@@ -494,20 +429,16 @@ public class CheckpointResumeHandler {
                             context));
 
             var handoff = new DelegatedCompletionHandoff(agentStore, objectMapper).capture(sessionId, result);
-            if (handoff.isPresent()) {
-                DelegatedCompletionHandoff.ParentResume parent = handoff.get();
-                if (parent.ready()) {
-                    log.infof(
-                            "[DELEGATION-SYNC] Resuming parent %s after child %s completed",
-                            parent.sessionId(), sessionId);
-                    releaseResumeClaimSafely(sessionId, agentRole);
-                    return resumeAfterBatchDecisionSync(
-                            parent.sessionId(),
-                            parent.agentRole(),
-                            parent.userId(),
-                            parent.chatId(),
-                            parent.channelType() != null ? parent.channelType() : channelType);
-                }
+            if (handoff.isPresent() && handoff.get().ready()) {
+                DelegatedCompletionHandoff.ParentResume p = handoff.get();
+                log.infof("[DELEGATION-SYNC] Resuming parent %s after child %s completed", p.sessionId(), sessionId);
+                releaseResumeClaimSafely(sessionId, agentRole);
+                return resumeAfterBatchDecisionSync(
+                        p.sessionId(),
+                        p.agentRole(),
+                        p.userId(),
+                        p.chatId(),
+                        p.channelType() != null ? p.channelType() : channelType);
             }
             return result;
 

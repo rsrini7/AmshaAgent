@@ -5,11 +5,13 @@ import java.util.Map;
 
 import com.amsha.common.util.LogUtil;
 import com.amsha.core.agent.reasoning.ReasoningEngine;
+import com.amsha.core.agent.reasoning.ReasoningStep;
 import com.amsha.core.agent.result.AgentResult;
 import com.amsha.core.governance.ApprovalFrame;
 import com.amsha.core.message.UserMessages;
 import com.amsha.persistence.api.CheckpointStatus;
 import com.amsha.security.api.RiskLevel;
+import com.amsha.tool.api.ToolCapability;
 import com.amsha.tool.api.ToolResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -147,6 +149,61 @@ final class PendingToolFailureHandler {
                 "[PersonaEscalation-Resume] Escalation failed: %s, returning original failure",
                 escalation.errorIfFailed());
         return null;
+    }
+
+    AgentResult handleFailure(
+            PendingToolResumeExecutor.PendingToolRequest request,
+            ToolResponse response,
+            PendingToolResumeSupport resumeSupport) {
+        String url = resumeSupport.extractUrlFromParams(request.paramsJson());
+        if (response != null && !response.success() && url != null && !url.isBlank()) {
+            String fallbackGoal = null;
+            String fallbackMessage = null;
+            if (WebRetrievalFallbackPolicy.isBrowser(request.toolName())) {
+                fallbackGoal = WebRetrievalFallbackPolicy.browserToFetchGoal(url, response.output());
+                fallbackMessage = "Browser navigation failed, falling back to web_fetch.";
+                request.history()
+                        .add(ReasoningStep.observeStep(
+                                ToolCapability.BROWSER_NAVIGATE.toolName(),
+                                WebRetrievalFallbackPolicy.browserFailureMarker(url)
+                                        + ". Tool execution failed: "
+                                        + response.output()
+                                        + ". Fallback: "
+                                        + fallbackGoal,
+                                fallbackMessage));
+            } else if (WebRetrievalFallbackPolicy.isWebFetch(request.toolName())) {
+                boolean browserFailed = WebRetrievalFallbackPolicy.browserAttemptFailed(request.history(), url);
+                fallbackGoal = browserFailed
+                        ? WebRetrievalFallbackPolicy.fetchToSearchGoal(url, response.output())
+                        : WebRetrievalFallbackPolicy.fetchToBrowserGoal(url, response.output());
+                fallbackMessage = browserFailed
+                        ? "Browser and web_fetch failed, falling back to one search."
+                        : "web_fetch failed, falling back to browser_navigate.";
+                request.history()
+                        .add(ReasoningStep.observeStep(
+                                ToolCapability.WEB_FETCH.toolName(),
+                                "Tool execution failed: " + response.output() + ". Fallback: " + fallbackGoal,
+                                fallbackMessage));
+            }
+            if (fallbackGoal != null) {
+                log.infof(
+                        "[ResumeStrategy] %s failed for %s - falling back with bounded retrieval policy",
+                        request.toolName(), url);
+                executor.completeInProgressCheckpoint(request.checkpoint());
+                return request.stateMachineRunner()
+                        .run(request.context().withGoal(fallbackGoal), reasoningEngine, request.history());
+            }
+        }
+        AgentResult healResult = tryAutoHeal(request, response);
+        if (healResult != null) {
+            return healResult;
+        }
+        AgentResult escalationResult = tryEscalation(request, response);
+        if (escalationResult != null) {
+            return escalationResult;
+        }
+        String failMsg = response.output() != null ? response.output() : "Tool execution failed";
+        return AgentResult.failed(failMsg, AgentResult.FailureCategory.SYSTEM_ERROR, List.copyOf(request.history()));
     }
 
     /**

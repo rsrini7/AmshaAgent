@@ -15,6 +15,7 @@ import com.amsha.core.audit.SecurityEventType;
 import com.amsha.core.channel.ChannelPluginRegistry;
 import com.amsha.core.domain.model.AgentCheckpoint;
 import com.amsha.core.pipeline.MessageContext;
+import com.amsha.core.scope.WorkspaceContext;
 import com.amsha.core.state.StatefulAgentStore;
 import com.amsha.core.util.AgentErrorMessageUtil;
 import com.amsha.persistence.api.CheckpointStatus;
@@ -72,6 +73,9 @@ public class CheckpointResumeCoordinator {
 
     @Inject
     ChatMemoryWriter chatMemoryWriter;
+
+    @Inject
+    SequentialAttemptReconciler attemptReconciler;
 
     /**
      * Decision outcome for the checkpoint load phase.
@@ -221,6 +225,11 @@ public class CheckpointResumeCoordinator {
                 "CheckpointResumeCoordinator: STALE-APPROVAL session=%s had pending tool '%s' "
                         + "but received new message. Archiving and starting fresh.",
                 sessionId, staleTool);
+
+        String workspaceId = WorkspaceContext.activeWorkspaceId().orElse(null);
+        if (attemptReconciler != null && workspaceId != null) {
+            attemptReconciler.cancelAbandonedAttemptIfAdmitted(workspaceId, checkpoint);
+        }
 
         // 🟢 FIX Bug 3: Scrub unfulfilled tool calls from ChatMemoryStore.
         // This ensures the discarded tool call doesn't re-surface in the next turn's history
