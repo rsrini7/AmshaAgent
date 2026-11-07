@@ -95,7 +95,7 @@
     <commons-lang3.version>3.21.0</commons-lang3.version>
     <commons-text.version>1.15.0</commons-text.version>
     <cron-utils.version>9.2.1</cron-utils.version>
-    <owasp-sanitizer.version>20260313.1</owasp-sanitizer.version>
+    <owasp-sanitizer.version>20261103.2</owasp-sanitizer.version>
     <openinference-langchain4j.version>0.1.8</openinference-langchain4j.version>
     <embedded-postgres.version>2.2.2</embedded-postgres.version>
     <bucket4j.version>8.16.1</bucket4j.version>
