@@ -100,6 +100,7 @@ Decisions that define the system structure and operational boundaries:
 - [ADR-approval-lease-for-parallel-batches](adr/architecture/ADR-approval-lease-for-parallel-batches.md) — Approval lease semantics for concurrent batch operations (Status: Accepted).
 - [ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries](adr/architecture/ADR-LangChain4j-Capability-Adoption-and-Amsha-Boundaries.md) — Capability adoption boundaries for LangChain4j (Status: Accepted).
 - [ADR-jev-decision-plane](adr/architecture/ADR-jev-decision-plane.md) — Typed decision seam for Jev-compatible judgments and Amsha-owned policy (Status: Deferred).
+- [ADR-Local-Tool-Decisions-Research-Reference-and-Amsha-Integration](adr/architecture/ADR-Local-Tool-Decisions-Research-Reference-and-Amsha-Integration.md) — Use the local tool decisions project as a research reference and define main/P133 integration paths (Status: Proposed).
 - [ADR-onboarding-route-assignments](adr/architecture/ADR-onboarding-route-assignments.md) — Onboarding route assignments and model profile mapping (Status: Accepted).
 - [ADR-schedule-task-hitl-under-supervised](adr/architecture/ADR-schedule-task-hitl-under-supervised.md) — Scheduled task HITL governance under supervised autonomy (Status: Accepted).
 - [ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline](adr/architecture/ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline.md) — One-time reset-only exception for the tool-attempt journal baseline (Status: Accepted).
