@@ -455,7 +455,7 @@ The agent loop has three cooperative guards that MUST remain in place (see `AGEN
 - Regular entity-table evolution is entity-driven.
 - Raw DDL is reserved for virtual tables, triggers, and indexes.
 - Do not introduce ad hoc migration scripts for normal table changes unless the architecture policy is explicitly changed repository-wide.
-- Scoped reset-only exception (2026-11-01): the tool-attempt settlement feature may edit the paired `V1__execution.sql` clean-install baselines and requires a fresh database and filesystem root. This is not a precedent for other features; see `docs/adr/architecture/ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline.md`.
+- Scoped reset-only exceptions: (1) the tool-attempt settlement feature may edit the paired `V1__execution.sql` clean-install baselines, as recorded in `docs/adr/architecture/ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline.md`; and (2) the autonomous cron workspace decision may add only the named `workspace_id` fields to the paired V2 scheduling baselines, as recorded in `docs/adr/architecture/ADR-Autonomous-Cron-Workspace-Identity-and-Reset-Rollout.md`. Both require a fresh datastore reset. These exceptions do not establish a precedent for other features or unrelated baseline edits.
 
 ### 5.3 Repository style
 - Core repositories MUST NOT use JDBI `Handle`/`Jdbi` directly (§1.2).

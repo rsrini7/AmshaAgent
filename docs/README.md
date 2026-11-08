@@ -103,6 +103,7 @@ Decisions that define the system structure and operational boundaries:
 - [ADR-onboarding-route-assignments](adr/architecture/ADR-onboarding-route-assignments.md) — Onboarding route assignments and model profile mapping (Status: Accepted).
 - [ADR-schedule-task-hitl-under-supervised](adr/architecture/ADR-schedule-task-hitl-under-supervised.md) — Scheduled task HITL governance under supervised autonomy (Status: Accepted).
 - [ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline](adr/architecture/ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline.md) — One-time reset-only exception for the tool-attempt journal baseline (Status: Accepted).
+- [ADR-Autonomous-Cron-Workspace-Identity-and-Reset-Rollout](adr/architecture/ADR-Autonomous-Cron-Workspace-Identity-and-Reset-Rollout.md) — Autonomous cron workspace identity and datastore reset rollout decision (Status: Accepted; implementation pending).
 
 ### Provider Decisions (`docs/adr/providers/`)
 - [ADR-LLM-Provider-Extraction-and-Modularization](adr/providers/ADR-LLM-Provider-Extraction-and-Modularization.md) — Master provider modularization ADR (Status: Implemented).

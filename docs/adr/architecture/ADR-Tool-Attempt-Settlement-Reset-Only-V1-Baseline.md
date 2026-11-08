@@ -21,12 +21,14 @@ Add the same schema-contract marker to both V1 files. An eager startup guard che
 
 The project author approved this scoped exception on 2026-11-01. Implementation may edit the paired V1 baselines for this feature; no data migration, backfill, or old-checkpoint conversion is required. The general migration policy remains unchanged for all other features, and Architecture Invariants §5.2 names this scoped exception.
 
+A separate, narrowly scoped exception was accepted on 2026-11-07 in [ADR-Autonomous-Cron-Workspace-Identity-and-Reset-Rollout](ADR-Autonomous-Cron-Workspace-Identity-and-Reset-Rollout.md): the clean-install V2 scheduling baselines may add the `workspace_id` fields for cron jobs and runs, with the clean datastore reset required by that ADR. This extends the reset-only policy for those named fields only; it does not authorize unrelated changes to V1 or V2 baselines.
+
 ## 3. Consequences
 
 - All data in the reset stores is lost, including sessions, checkpoints, memories, audit rows, and vault metadata. Operators must recreate any required local configuration or credentials through the normal setup paths.
 - Existing Flyway histories are unsupported for this rollout. V1 checksum validation failures are expected and must not be bypassed or repaired automatically.
 - The startup marker catches the `baseline-on-migrate` case where Flyway records a baseline but skips the modified V1 script. On the supported fresh-install path the marker is present; the guard is a fail-fast reset check, not a data migration. The guard must be proven to run after migration and before service readiness.
-- The exception applies only to the paired tool-attempt baseline DDL. It does not establish a general precedent for editing applied migrations.
+- The 2026-11-01 exception applies only to paired tool-attempt V1 baseline DDL. The separate 2026-11-07 exception applies only to the named cron workspace fields in V2. Neither exception establishes a general precedent for editing applied migrations.
 - Verification must cover a clean V1 install, a non-empty schema with no Flyway history, existing Flyway history, marker mismatch, and filesystem marker failures.
 
 ## 4. Alternatives considered
@@ -37,4 +39,4 @@ The project author approved this scoped exception on 2026-11-01. Implementation 
 
 ## 5. Implementation gate
 
-This ADR is accepted. Implementation may edit the paired V1 baselines for this feature. It must keep SQLite and PostgreSQL DDL equivalent, include the startup reset guard and filesystem marker, and retain the no-backfill/no-automatic-repair behavior defined in the proposal.
+This ADR is accepted. Implementation may edit the paired V1 baselines for the tool-attempt journal; the separate cron-workspace V2 exception is recorded in the linked ADR. It must keep SQLite and PostgreSQL DDL equivalent, include the startup reset guard and filesystem marker, and retain the no-backfill/no-automatic-repair behavior defined in the proposal.

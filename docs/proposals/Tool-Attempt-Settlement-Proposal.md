@@ -285,7 +285,7 @@ The default, test, and PostgreSQL profile configurations currently set baseline-
 
 Filesystem persistence uses an equivalent versioned schema-contract manifest. An empty data root may be initialized atomically with the current marker. A non-empty root with no marker, malformed marker, or unsupported version fails closed.
 
-Record the one-time V1 checksum/reset exception in the [reset-only rollout ADR](../adr/architecture/ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline.md). The project author approved this scoped exception on 2026-11-01; implementation may edit the paired V1 baselines without a further migration or backfill. Architecture Invariants §5.2 names the scoped exception, and the ADR does not change the general migration policy.
+Record the one-time V1 checksum/reset exception in the [reset-only rollout ADR](../adr/architecture/ADR-Tool-Attempt-Settlement-Reset-Only-V1-Baseline.md). The project author approved this scoped exception on 2026-11-01; implementation may edit the paired V1 baselines without a further migration or backfill. The separate [autonomous cron workspace ADR](../adr/architecture/ADR-Autonomous-Cron-Workspace-Identity-and-Reset-Rollout.md) authorizes only the named cron `workspace_id` fields in the V2 scheduling baselines and requires the same clean-reset rollout. Architecture Invariants §5.2 records both narrow exceptions; neither changes the general migration policy.
 
 ### 12.2 Invocation identity and target fingerprint
 
