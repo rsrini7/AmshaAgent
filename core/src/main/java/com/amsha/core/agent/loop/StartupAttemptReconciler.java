@@ -257,12 +257,9 @@ public class StartupAttemptReconciler {
 
     private void reconcileActiveAttempt(String workspaceId, ToolAttemptDto attempt, Instant now) {
         if (!singleInstance) {
-            handleIndeterminateTransition(
-                    workspaceId,
-                    attempt,
-                    "Executor ownership cannot be verified in multi-instance mode; state indeterminate",
-                    now);
-            return;
+            throw new IllegalStateException(
+                    "Multi-instance reconciliation not supported: attempt " + attempt.attemptId() + " in "
+                            + attempt.status() + " status cannot be verified without local ownership");
         }
         if ("IN_PROCESS".equalsIgnoreCase(attempt.executionKind()) || attempt.executionHandle() == null) {
             handleIndeterminateTransition(workspaceId, attempt, "In-process execution died on JVM restart", now);

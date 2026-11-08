@@ -3,9 +3,6 @@ package com.amsha.core.agent.loop;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -24,7 +21,6 @@ import com.amsha.persistence.api.ToolAttemptFingerprintFormat;
 import com.amsha.persistence.api.ToolAttemptIdempotencyMode;
 import com.amsha.persistence.api.ToolAttemptStatus;
 import com.amsha.persistence.api.ToolAttemptStorePort;
-import com.amsha.persistence.api.ToolAttemptTransitionResult;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,45 +57,25 @@ class StartupAttemptReconcilerMultiInstanceTest {
     }
 
     @Test
-    void launchedAttemptsSettleIndeterminateWithLocksWithoutInspectingPeers() {
+    void launchedAttemptsHaltWithoutSingleInstanceOwnership() {
         String workspaceId = "ws-1";
         ToolAttemptDto launchRequested = createAttempt(workspaceId, ToolAttemptStatus.LAUNCH_REQUESTED, 1L);
-        ToolAttemptDto running = createAttempt(workspaceId, ToolAttemptStatus.RUNNING, 2L);
-        List<ToolAttemptDto> attempts = List.of(launchRequested, running);
-        stubWorkspaces(attempts);
-        when(attemptStore.transition(anyString(), anyString(), any(), anyLong(), any(), any(), any(), any()))
-                .thenAnswer(invocation -> {
-                    String attemptId = invocation.getArgument(1);
-                    ToolAttemptDto attempt = attempts.stream()
-                            .filter(candidate -> candidate.attemptId().equals(attemptId))
-                            .findFirst()
-                            .orElseThrow();
-                    return ToolAttemptTransitionResult.applied(attempt);
-                });
+        stubWorkspaces(List.of(launchRequested));
 
-        reconciler(false).reconcileAllWorkspaces();
-
+        assertThrows(IllegalStateException.class, () -> reconciler(false).reconcileAllWorkspaces());
         verifyNoInteractions(sandboxPort);
-        verify(attemptStore)
-                .transition(
-                        eq(workspaceId),
-                        eq(launchRequested.attemptId()),
-                        eq(ToolAttemptStatus.LAUNCH_REQUESTED),
-                        eq(1L),
-                        eq(ToolAttemptStatus.INDETERMINATE),
-                        any(),
-                        notNull(),
-                        any());
-        verify(attemptStore)
-                .transition(
-                        eq(workspaceId),
-                        eq(running.attemptId()),
-                        eq(ToolAttemptStatus.RUNNING),
-                        eq(2L),
-                        eq(ToolAttemptStatus.INDETERMINATE),
-                        any(),
-                        notNull(),
-                        any());
+        verify(attemptStore, Mockito.never()).transition(any(), any(), any(), anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void runningAttemptHaltsWithoutSingleInstanceOwnership() {
+        String workspaceId = "ws-1";
+        ToolAttemptDto running = createAttempt(workspaceId, ToolAttemptStatus.RUNNING, 2L);
+        stubWorkspaces(List.of(running));
+
+        assertThrows(IllegalStateException.class, () -> reconciler(false).reconcileAllWorkspaces());
+        verifyNoInteractions(sandboxPort);
+        verify(attemptStore, Mockito.never()).transition(any(), any(), any(), anyLong(), any(), any(), any(), any());
     }
 
     private void stubWorkspaces(List<ToolAttemptDto> attempts) {

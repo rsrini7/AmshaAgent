@@ -21,6 +21,9 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Code-owned resolver for trusted target identity per Proposal §4.2 and §12.2.
@@ -36,6 +39,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
  */
 @ApplicationScoped
 public class ToolTargetResolver {
+
+    private static final Logger log = Logger.getLogger(ToolTargetResolver.class);
 
     public static final String TARGET_FINGERPRINT_VERSION = ToolAttemptFingerprintFormat.TARGET_FINGERPRINT_VERSION;
     public static final String TARGET_PREFIX = ToolAttemptFingerprintFormat.TARGET_V1_PREFIX;
@@ -61,6 +66,7 @@ public class ToolTargetResolver {
     }
 
     private final String workspaceRootDir;
+    private final MeterRegistry meterRegistry;
 
     public ToolTargetResolver() {
         this(new ObjectMapper());
@@ -70,14 +76,23 @@ public class ToolTargetResolver {
         this(objectMapper, "./data/workspaces");
     }
 
-    @Inject
     public ToolTargetResolver(
             ObjectMapper objectMapper,
             @ConfigProperty(name = "amsha.workspace.root-dir", defaultValue = "./data/workspaces")
                     String workspaceRootDir) {
+        this(objectMapper, workspaceRootDir, null);
+    }
+
+    @Inject
+    public ToolTargetResolver(
+            ObjectMapper objectMapper,
+            @ConfigProperty(name = "amsha.workspace.root-dir", defaultValue = "./data/workspaces")
+                    String workspaceRootDir,
+            MeterRegistry meterRegistry) {
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
         this.workspaceRootDir =
                 (workspaceRootDir != null && !workspaceRootDir.isBlank()) ? workspaceRootDir : "./data/workspaces";
+        this.meterRegistry = meterRegistry;
         this.extractors = Collections.unmodifiableMap(buildExtractors());
     }
 
@@ -118,13 +133,13 @@ public class ToolTargetResolver {
 
         TargetExtractor extractor = extractors.get(toolName);
         if (extractor == null || parameters == null || parameters.isNull() || !parameters.isObject()) {
-            return ToolTargetResolution.sessionMutations();
+            return fallback(toolName);
         }
 
         try {
             Optional<TargetResource> optTarget = extractor.extract(parameters);
             if (optTarget.isEmpty()) {
-                return ToolTargetResolution.sessionMutations();
+                return fallback(toolName);
             }
 
             TargetResource target = optTarget.get();
@@ -135,8 +150,37 @@ public class ToolTargetResolver {
                     targetFingerprint, target.resourceType(), target.canonicalResourceIdentity());
         } catch (Exception _) {
             // Fail closed to SESSION_MUTATIONS on any resolution failure
-            return ToolTargetResolution.sessionMutations();
+            return fallback(toolName);
         }
+    }
+
+    private ToolTargetResolution fallback(String toolName) {
+        if (meterRegistry != null) {
+            meterRegistry
+                    .counter("amsha.tool.target.fallback", "tool", metricLabel(toolName))
+                    .increment();
+        }
+        log.debugf(
+                "Tool target resolution fell back to SESSION_MUTATIONS for tool '%s'",
+                sanitizeToolNameForLog(toolName));
+        return ToolTargetResolution.sessionMutations();
+    }
+
+    private static String metricLabel(String toolName) {
+        return ToolCapability.fromToolName(toolName)
+                .map(ToolCapability::toolName)
+                .orElse("unresolved");
+    }
+
+    private static String sanitizeToolNameForLog(String toolName) {
+        if (toolName == null) {
+            return "null";
+        }
+        String sanitized = toolName.replaceAll("[\\p{C}\\s]+", "_");
+        if (sanitized.length() > 64) {
+            return sanitized.substring(0, 64);
+        }
+        return sanitized;
     }
 
     /**

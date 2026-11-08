@@ -439,7 +439,7 @@ Startup reconciliation reconciles active and in-flight tool attempts across JVM 
 
 | Property | Environment variable | Default | Description |
 |---|---|---|---|
-| `amsha.recovery.single-instance` | `AMSHA_RECOVERY_SINGLE_INSTANCE` | `false` | When true, enforces single-instance ownership assumption to safely reconcile active attempts across JVM restarts. Default is false (multi-instance safe) so shared databases like PostgreSQL do not assume single-node ownership without explicit operator configuration. |
+| `amsha.recovery.single-instance` | `AMSHA_RECOVERY_SINGLE_INSTANCE` | `false` | Setting `true` is an operator assertion that only one application node runs against the database; it is not fenced ownership. In single-instance mode, prior-run attempts are reconciled after restart according to local evidence: in-process or missing-handle attempts become `INDETERMINATE`, running sandbox attempts are inspected and settle as `SETTLED_SUCCESS`/`SETTLED_ERROR` (verified exit evidence) or `INDETERMINATE` (running/missing/mismatched/inconclusive evidence), with a durable action lock where the outcome requires one. Default `false` fails closed: startup reconciliation halts without mutating any active attempt (`ADMITTED`, `LAUNCH_REQUESTED`, or `RUNNING`) when local ownership cannot be verified, so multi-node deployments against a shared database must not run startup reconciliation until fenced ownership exists. Set to `true` only in deployments where a single application node runs against the database. |
 
 ## Testing
 

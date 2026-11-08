@@ -9,6 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+
 import jakarta.inject.Inject;
 
 import java.util.HashMap;
@@ -89,6 +91,27 @@ class NullParamStrippingTest {
             verify(mockTool).execute(any(), argThat(params -> {
                 assertTrue(params.containsKey("keep"));
                 assertFalse(params.containsKey("strip"));
+                return true;
+            }));
+        });
+    }
+
+    @Test
+    void testSchemaStripping_RemovesUnknownKeys() {
+        when(mockTool.shouldStripNullParams()).thenReturn(false);
+        when(mockTool.parametersSchema())
+                .thenReturn(JsonObjectSchema.builder().addStringProperty("keep").build());
+
+        Map<String, Object> inputParams = new HashMap<>();
+        inputParams.put("keep", "value");
+        inputParams.put("unknown", "hallucinated");
+
+        WorkspaceContext.run("s1", "user", "chat", AutonomyLevel.FULL, "coordinator", () -> {
+            registry.invokeToolWithOperationId("test-tool", inputParams, ToolOperationIdentity.generateCanonicalUuid());
+
+            verify(mockTool).execute(any(), argThat(params -> {
+                assertTrue(params.containsKey("keep"));
+                assertFalse(params.containsKey("unknown"));
                 return true;
             }));
         });
